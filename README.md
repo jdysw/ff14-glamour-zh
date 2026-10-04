@@ -74,16 +74,17 @@ ff14-glamour-zh/
 │   ├── ronka-items.txt    — 韩文名对照（Ronka 用）
 │   ├── ff14-series.txt    — 系列/副本名
 │   ├── ff14-dyes2.txt     — 染剂表
-│   └── acl-cfc.txt        — 副本名（fc/collection 用）
-├── src/                   ★ 脚本模板（外置数据版母版）
+│   ├── acl-cfc.txt        — 副本名（fc/collection 用）
+│   └── huiji-icon.b64     — 灰机 wiki 图标（构建时内嵌进脚本）
+├── src/                   ★ 脚本模板（发布母版）
 │   └── ff14-glamour-zh.external.user.js
-├── build/
+├── build/                 — 构建脚本
 │   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板
-│   ├── make_embedded5.py  — 内嵌版构建器（备存，当前流程未启用）
 │   ├── extract_dicts.py   — 反向提取：src/ 模板 → dict/*.json（同步用）
 │   └── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
 ├── dist/                  — 构建产物（生成物，不手改）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
+├── legacy/                — 历史归档（旧独立版 ronka、历代生成器等，不参与构建）
 └── build.sh               — 一键全链构建
 ```
 
