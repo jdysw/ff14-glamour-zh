@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.0.0
+// @version      1.1.0
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -1185,42 +1185,8 @@
   function tryEnToZh(en) {
     if (!en) return null;
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
-    let out = null;
-    // 1) 染剂表：行形如「e|英文名|中文名」或「j|日文名|中文名」
-    if (typeof NAME_TEXT === 'string' && NAME_TEXT) {
-      const needle = '|' + en + '|';
-      let from = 0;
-      while (true) {
-        const at = NAME_TEXT.indexOf(needle, from);
-        if (at < 0) break;
-        const ls = NAME_TEXT.lastIndexOf('\n', at) + 1;
-        const line = NAME_TEXT.slice(ls, at);
-        if (line === 'e' || line === 'j') {
-          const st = at + needle.length;
-          const e2 = NAME_TEXT.indexOf('\n', st);
-          out = (NAME_TEXT.slice(st, e2 < 0 ? undefined : e2).trim()) || null;
-          break;
-        }
-        from = at + 1;
-      }
-    }
-    // 2) 主表：行形如「hash|中文名|英文名[|EC_ID]」，英文名在第 3 列
-    if (!out && typeof ITEM_DB_TEXT === 'string' && ITEM_DB_TEXT) {
-      let from = 0;
-      while (true) {
-        const at = ITEM_DB_TEXT.indexOf('|' + en, from);
-        if (at < 0) break;
-        const afterIdx = at + en.length + 1;
-        const after = ITEM_DB_TEXT.charCodeAt(afterIdx);
-        if (after === 10 || after === 124 || !(after >= 0)) {   // \n、| 或行尾
-          const ls = ITEM_DB_TEXT.lastIndexOf('\n', at) + 1;
-          const line = ITEM_DB_TEXT.slice(ls, afterIdx);
-          const parts = line.split('|');
-          if (parts.length >= 3 && parts[2] === en && parts[1]) { out = parts[1]; break; }
-        }
-        from = at + 1;
-      }
-    }
+    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 buildTables 展开）
+    const out = (nameMap && nameMap[en]) || null;
     _en2zhCache.set(en, out);
     return out;
   }
@@ -1566,15 +1532,9 @@
     return t;
   }
 
-  // 中文名 → 韩文名（Ronka 装备表反查；表行格式「韩文名|中文名」）
+  // 中文名 → 韩文名（Ronka 反查；构建自物品总表）
   function ronkaKoByZh(zh) {
-    if (!zh || typeof RONKA_ITEM_TEXT !== 'string') return null;
-    const key = '|' + zh + '\n';
-    const at = RONKA_ITEM_TEXT.indexOf(key);
-    if (at < 0) return null;
-    const ls = RONKA_ITEM_TEXT.lastIndexOf('\n', at) + 1;
-    const ko = RONKA_ITEM_TEXT.slice(ls, at).trim();
-    return ko || null;
+    return (zh && koByZh && koByZh[zh]) ? koByZh[zh] : null;
   }
 
   // 装备栏目（部位）
@@ -2609,23 +2569,12 @@
   });
 
 
-  // 日文 → 中文 单条查找（表形如「日文名|中文名」，由生成器内嵌）
+  // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
   const _jp2zhCache = new Map();
   function lookupJp2Zh(jp) {
     if (!jp || jp.length > 80) return null;   // v1.12.0 放宽
     if (_jp2zhCache.has(jp)) return _jp2zhCache.get(jp);
-    let out = null;
-    if (typeof JP2ZH_TEXT === 'string' && JP2ZH_TEXT) {
-      // 表格式「日文名|中文名」，日文名在行首：用「\n日文名|」锚定
-      const key = '\n' + jp + '|';
-      const at = JP2ZH_TEXT.indexOf(key);
-      if (at >= 0) {
-        let s = at + key.length;
-        let e = JP2ZH_TEXT.indexOf('\n', s);
-        if (e < 0) e = JP2ZH_TEXT.length;
-        out = JP2ZH_TEXT.slice(s, e).trim() || null;
-      }
-    }
+    const out = (nameMap && nameMap[jp]) || null;
     _jp2zhCache.set(jp, out);
     return out;
   }
@@ -3033,7 +2982,7 @@
   /* ===================================================================== */
   /* =====================================================================
    * ffxivcollection.com（FFXIV ARMOURY COLLECTION，日文装备图鉴站）— 全站汉化
-   * 界面/筛选器走 DICT_ACL；装备名单件走 JP2ZH_TEXT（日文→国服名，单条查找）；
+   * 界面/筛选器走 DICT_ACL；装备名单件走物品总表统一索引（日文→国服名，单条查找）；
    * 套装名按「系列・职能アタイア[RE]」组合规则生成（系列/职能词在 DICT_ACL）。
    * 站为 WordPress 服务端渲染（jQuery 增强），observer 覆盖筛选/懒加载。
    */
@@ -3366,8 +3315,7 @@
   /* ===================================================================== */
   /* =====================================================================
    * ronka（lookbook.ronkacloset.com，韩语幻化站）— 全站汉化
-   * 界面/染剂走 DICT_RONKA；装备名走 RONKA_ITEM_TEXT（韩文→国服名，
-   * 由物品 ID→日文名→国服译名链路离线生成，内嵌于脚本）。
+   * 界面/染剂走 DICT_RONKA；装备名走物品总表统一索引（韩文→国服名）。
    * 站点为 Next.js SPA（React 拆文本节点、频繁重渲染），observer 覆盖
    * childList 与 characterData；翻译幂等（不含韩文即跳过）防循环。
    * ===================================================================== */
@@ -3375,21 +3323,12 @@
   const RONKA_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip';
   const RONKA_KR = /[\uac00-\ud7a3]/;
 
-  // 装备名单条查找（缓存 + indexOf，不作整表解析）
+  // 装备名单条查找（缓存 + 名称索引直查）
   const RONKA_ITEM_CACHE = Object.create(null);
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
     if (ko in RONKA_ITEM_CACHE) return RONKA_ITEM_CACHE[ko];
-    let v = null;
-    if (typeof RONKA_ITEM_TEXT === 'string' && RONKA_ITEM_TEXT.length > 100) {
-      const key = '\n' + ko + '|';
-      const at = RONKA_ITEM_TEXT.indexOf(key);
-      if (at >= 0) {
-        const s = at + key.length;
-        const e = RONKA_ITEM_TEXT.indexOf('\n', s);
-        v = RONKA_ITEM_TEXT.slice(s, e < 0 ? undefined : e) || null;
-      }
-    }
+    const v = (nameMap && nameMap[ko]) || null;
     RONKA_ITEM_CACHE[ko] = v;
     return v;
   }
@@ -3593,8 +3532,8 @@
 
   /* =====================================================================
    * 第四部分：装备名 / 染剂名 → 国服中文名 + 国服 wiki 物品页
-   * 对照数据生成自灰机 FF14 中文维基的物品数据（Data:Item/*.json）等公开
-   * 来源，以纯文本数据文件（非可执行代码）托管在 zhixia-data.pages.dev；
+   * 对照数据以四语 datamining（中/英/日/韩）为权威源融合生成，以纯文本
+   * 数据文件（非可执行代码）托管在 zhixia-data.pages.dev；
    * 按站点所需下载，并按版本缓存于用户脚本管理器本地存储（跨站共享、
    * 每日至多检查一次更新）。脚本只读数据，不上传任何用户信息。
    * 两站装备链接都带 class="eorzeadb_link"、href 内含 Lodestone hash：
@@ -3636,62 +3575,64 @@
   /* ── 外置数据版（Greasy Fork 发布版）：按需下载 + 版本化本地缓存 ──
      内嵌自用版由 build/make_embedded5.py 把本区块整体替换为内嵌数据。 */
   const DATA_REMOTE = true;
-  const DATA_BASE = 'https://zhixia-data.pages.dev/ff14/v1/';
+  const DATA_BASE = 'https://zhixia-data.pages.dev/ff14/v2/';
   const DATA_FILES = {
-    main: 'main.txt',     // 「hash|国服中文名|英文名[|EC_ID]」
-    jp2zh: 'jp2zh.txt',   // 「日文名|国服中文名」
-    ecid: 'ecid.txt',     // 「国服中文名|Eorzea Collection 装备 ID」
-    ronka: 'ronka.txt',   // 「韩文名|国服中文名」
+    items: 'items.tsv',   // 「key|中|英|日|韩|hash|EC_ID|别名」（制表符分隔，一物品一行）
     series: 'series.txt', // 「日文系列名|国服中文名」
-    dyes: 'dyes.txt',     // 「e|英文名|中文名」或「j|日文名|中文名」
     acl: 'acl.txt',       // 「日文副本名|国服中文名」
   };
   // 站点 → 按需下载的数据表（首访只拉本站所需，之后走本地缓存）
   const SITE_TABLES = {
-    mirapri: ['main', 'dyes'],
-    ec: ['main', 'dyes'],
-    fc: ['jp2zh', 'series'],
-    ronka: ['ronka'],
-    wiki: ['ecid', 'ronka'],
-    collection: ['jp2zh', 'series', 'acl'],
+    mirapri: ['items'],
+    ec: ['items'],
+    fc: ['items', 'series'],
+    ronka: ['items'],
+    wiki: ['items'],
+    collection: ['items', 'series', 'acl'],
   };
 
   let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过
-  let NAME_TEXT = '';
-  let EC_TEXT = '';
-  let JP2ZH_TEXT = '';
   let SERIES_TEXT = '';
-  let RONKA_ITEM_TEXT = '';
   let ACL_CFC_TEXT = '';
 
   let itemHash = null;   // hash -> 中文名（EC / mirapri 用）
-  let nameMap = null;    // 英文名 / 日文名 -> 中文名（EC / mirapri 用）
+  let ecidMap = null;    // 中文名 -> EC_ID（wiki / EC 链接用）
+  let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用）
+  let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用）
 
-  // EC 装备 ID 单条查找：在 EC_TEXT 里定位「中文名|EC_ID」行；查不到返回 null
+  // EC 装备 ID 单条查找（中文名 → EC_ID 映射，构建自物品总表）
   function lookupEcIdByZh(zh) {
-    if (!zh || typeof EC_TEXT !== 'string' || !EC_TEXT) return null;
-    const key = '\n' + zh + '|';
-    const at = EC_TEXT.indexOf(key);
-    if (at < 0) return null;
-    const s = at + 1 + zh.length + 1;
-    const e = EC_TEXT.indexOf('\n', s);
-    const v = EC_TEXT.slice(s, e < 0 ? undefined : e).trim();
-    return /^\d+$/.test(v) ? v : null;
+    return (zh && ecidMap && ecidMap[zh]) ? String(ecidMap[zh]) : null;
   }
   function buildTables() {
-    itemHash = {}; nameMap = {};
+    itemHash = {}; ecidMap = {}; nameMap = {}; koByZh = {};
     const lines = ITEM_DB_TEXT.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const p = lines[i].split('|');
-      if (p.length < 3) continue;
-      if (p[0]) itemHash[p[0]] = p[1];
-      if (p[2]) nameMap[p[2]] = p[1];
+      const ln = lines[i];
+      if (!ln) continue;
+      const c0 = ln.charCodeAt(0);
+      if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;   // 仅「数字」或「-」开头的行（跳过表头）
+      const p = ln.split('\t');
+      if (p.length < 5) continue;
+      const zh = p[1] || '', en = p[2] || '', ja = p[3] || '', ko = p[4] || '';
+      if (p[0] !== '-') {
+        if (p[5] && itemHash[p[5]] === undefined) itemHash[p[5]] = zh;    // hash -> 中文名
+        if (p[6] && ecidMap[zh] === undefined) ecidMap[zh] = p[6];        // 中文名 -> EC_ID
+      }
+      if (en && nameMap[en] === undefined) nameMap[en] = zh;
+      if (ja && nameMap[ja] === undefined) nameMap[ja] = zh;
+      if (ko && nameMap[ko] === undefined) nameMap[ko] = zh;
+      if (zh && ko && koByZh[zh] === undefined) koByZh[zh] = ko;
     }
-    const dl = NAME_TEXT.split('\n');
-    for (let i = 0; i < dl.length; i++) {
-      const p = dl[i].split('|');
-      if (p.length >= 3 && p[1]) nameMap[p[1]] = p[2];
+    // 染剂色名回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」（仅当 Xxx 未被其他名占用）
+    const extra = [];
+    for (const k in nameMap) {
+      if (k.length > 4 && k.slice(-4) === ' Dye') {
+        const base = k.slice(0, -4);
+        if (nameMap[base] === undefined) extra.push(base, nameMap[k]);
+      }
     }
+    for (let i = 0; i < extra.length; i += 2) nameMap[extra[i]] = extra[i + 1];
   }
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
@@ -3786,12 +3727,8 @@
   function applyTable(name, txt) {
     if (typeof txt !== 'string' || !txt) return;
     switch (name) {
-      case 'main':   ITEM_DB_TEXT = txt; break;        // 主表直接使用
-      case 'jp2zh':  JP2ZH_TEXT = '\n' + txt; break;   // 行首锚定查找需要前导换行
-      case 'ecid':   EC_TEXT = '\n' + txt; break;
-      case 'ronka':  RONKA_ITEM_TEXT = '\n' + txt; break;
-      case 'series': SERIES_TEXT = '\n' + txt; break;
-      case 'dyes':   NAME_TEXT = txt; break;
+      case 'items':  ITEM_DB_TEXT = txt; break;        // 物品总表（8 列，制表符分隔）
+      case 'series': SERIES_TEXT = '\n' + txt; break;  // 行首锚定查找需要前导换行
       case 'acl':    ACL_CFC_TEXT = '\n' + txt; break;
     }
   }
@@ -3832,7 +3769,7 @@
       // ② 拉版本清单；失败不致命（有缓存用缓存，无缓存盲拉）
       let ver = null;
       try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
-      const vfps = (ver && ver.tables && typeof ver.tables === 'object') ? ver.tables : null;
+      const vfps = (ver && ver.files && typeof ver.files === 'object') ? ver.files : null;
       // ③ 逐表：指纹一致 → 缓存；不一致 / 缺失 → 下载（失败时回退旧缓存）
       let okCount = 0;
       await Promise.all(need.map(async (t) => {
@@ -3843,7 +3780,7 @@
           if (!fp && cached) { applyTable(t, cached.tx); okCount++; return; }   // 无版本信息时不盲刷
           let txt = null;
           try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
-          if (txt && txt.length > 100 && txt.indexOf('|') >= 0) {
+          if (txt && txt.length > 100 && (txt.indexOf('\t') >= 0 || txt.indexOf('|') >= 0)) {
             applyTable(t, txt);
             _writeCachedTable(t, fp, txt);
             okCount++;
@@ -3864,10 +3801,9 @@
         try { buildTables(); } catch (e) {}
         try { _fireTablesReady(); } catch (e) {}
         try {
-          console.info('幻化数据就绪 → 主表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
-            + ' / 日文表 ' + (JP2ZH_TEXT ? JP2ZH_TEXT.length : 0)
-            + ' / 韩文表 ' + (RONKA_ITEM_TEXT ? RONKA_ITEM_TEXT.length : 0)
-            + ' / EC 表 ' + (EC_TEXT ? EC_TEXT.length : 0)
+          console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
+            + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
+            + ' / 副本表 ' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
             + ' / 数据版本 ' + (DATA_VER || '未记录'));
         } catch (e) {}
         resolve();
@@ -3889,7 +3825,7 @@
       if (m && itemHash && itemHash[m[1]]) return itemHash[m[1]];
     }
     if (nameMap && nameMap[name]) return nameMap[name];
-    const zhAuto = tryEnToZh(name);           // ★ 英文名自动查主表/染剂表
+    const zhAuto = tryEnToZh(name);           // ★ 外文名自动查物品总表
     if (zhAuto) return zhAuto;
     return null;
   }
@@ -4222,7 +4158,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.0.0 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.0 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (host.endsWith('mirapri.com')) { startMirapri(); startItems(); }
