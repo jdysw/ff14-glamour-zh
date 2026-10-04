@@ -79,11 +79,10 @@ ff14-glamour-zh/
 │   └── ff14-glamour-zh.external.user.js
 ├── build/
 │   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板
-│   ├── make_embedded5.py  — 内嵌生成：src/ + data/ → dist/ 内嵌版
+│   ├── make_embedded5.py  — 内嵌版构建器（备存，当前流程未启用）
 │   ├── extract_dicts.py   — 反向提取：src/ 模板 → dict/*.json（同步用）
-│   └── verify_dicts.js    — 词典一致性校验（src vs dist）
+│   └── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
 ├── dist/                  — 构建产物（生成物，不手改）
-│   ├── ff14-glamour-zh.user.js            — 内嵌版（7 表全内嵌，自用推送）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 └── build.sh               — 一键全链构建
 ```
@@ -92,8 +91,7 @@ ff14-glamour-zh/
 
 | 产物 | 体积 | 用途 |
 |---|---|---|
-| `dist/ff14-glamour-zh.user.js` | ~8.06 MB | 内嵌版：数据全打包，自用（TMUpd2 推送安装） |
-| `dist/ff14-glamour-zh.greasyfork.user.js` | ~192 KB | GF 版：数据运行时按需加载（Greasy Fork ≤2MB 合规） |
+| `dist/ff14-glamour-zh.greasyfork.user.js` | ~192 KB | GF 发布版：数据运行时按需加载（Greasy Fork ≤2MB 合规） |
 
 **GF 版数据流**：按站点从 `https://zhixia-data.pages.dev/ff14/v1/` **按需**拉取（7 张表中仅本站所需，
 如 fc 只拉 jp2zh+series）→ 缓存到本地（GM 存储）→ **每日至多一次**版本检查
@@ -151,8 +149,8 @@ bash build.sh
 
 - `dist/` 是生成物，不手改。
 - 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
-- 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 与 dist 词典逐条一致。
-- **GF 版走的 Go 路径**：src 模板即外置数据母版；`make_embedded5.py` 只把「数据加载器块」替换成内嵌数据块生成内嵌版。修改数据层时只动 src，两版行为一致。
+- 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 内词典与 dict/*.json 源逐条一致。
+- **GF 版数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备/染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
 
 </details>
 
