@@ -7,3 +7,6 @@ dist/ff14-glamour-zh.user.js
 *.tmp
 .DS_Store
 node_modules/
+
+# 数据重建下载缓存（不入库）
+build/.cache/

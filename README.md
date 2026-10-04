@@ -67,13 +67,9 @@ ff14-glamour-zh/
 │   ├── dict-fc.json       — ff14-fc.com 界面词
 │   ├── dict-ronka.json    — Ronka LookBook 界面词
 │   └── dict-acl.json      — FFXIV ARMOURY COLLECTION 界面词
-├── data/                  ★ 数据表（装备/染剂对照）
-│   ├── ff14-main.txt      — 主表: hash|中文名|英文名|EC_ID（44,310 行）
-│   ├── ff14-jp2zh.txt     — 日文名→中文名（50,615 条）
-│   ├── ff14-ecid.txt      — 中文名→EC_ID
-│   ├── ronka-items.txt    — 韩文名对照（Ronka 用）
+├── data/                  ★ 数据表
+│   ├── ff14-items.tsv     — 物品总表（8 列：key|中|英|日|韩|hash|EC_ID|别名；51,225 物品）
 │   ├── ff14-series.txt    — 系列/副本名
-│   ├── ff14-dyes2.txt     — 染剂表
 │   ├── acl-cfc.txt        — 副本名（fc/collection 用）
 │   └── huiji-icon.b64     — 灰机 wiki 图标（构建时内嵌进脚本）
 ├── src/                   ★ 脚本模板（发布母版）
@@ -81,7 +77,8 @@ ff14-glamour-zh/
 ├── build/                 — 构建脚本
 │   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板
 │   ├── extract_dicts.py   — 反向提取：src/ 模板 → dict/*.json（同步用）
-│   └── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
+│   ├── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
+│   └── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
 ├── dist/                  — 构建产物（生成物，不手改）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 ├── legacy/                — 历史归档（旧独立版 ronka、历代生成器等，不参与构建）
@@ -94,11 +91,11 @@ ff14-glamour-zh/
 |---|---|---|
 | `dist/ff14-glamour-zh.greasyfork.user.js` | ~192 KB | GF 发布版：数据运行时按需加载（Greasy Fork ≤2MB 合规） |
 
-**GF 版数据流**：按站点从 `https://zhixia-data.pages.dev/ff14/v1/` **按需**拉取（7 张表中仅本站所需，
-如 fc 只拉 jp2zh+series）→ 缓存到本地（GM 存储）→ **每日至多一次**版本检查
-（sha256 指纹比对，变化才重新下载）。数据为只读纯文本（非可执行代码）。
+**GF 版数据流**：装备/染剂数据从 `https://zhixia-data.pages.dev/` **按需**拉取（单文件合表
+`ff14/v2/items.tsv`：中英日韩名、光之收藏家 hash、Eorzea Collection ID 一表全含）→ 缓存到本地
+（GM 存储）→ **每日至多一次**版本检查（sha256 指纹比对，变化才重新下载）。数据为只读纯文本（非可执行代码）。
 
-> 站点 → 数据表映射见 src 里 `SITE_TABLES`；站点-表若有调整，两边同步。
+> 过渡期说明：数据站同时保留 `ff14/v1/` 旧多表结构，为 v1.0 版脚本继续服务；1.1 版起切换单文件。
 
 ### 更新链路（一次修改，两条分发线）
 
@@ -110,22 +107,22 @@ Raw 源（Greasy Fork「Sync」用）：
 bash build.sh
 # ② 上传 GitHub
 git add -A && git commit -m "..." && git push
-# ③ 数据站（词库/数据变动时）
-python3 ~/zhixia-data/update-data.py --deploy
+# ③ 数据站（数据变动时）
+python3 build/rebuild-db.py && python3 ~/zhixia-data/update-data.py --deploy
 # ④ 脚本（代码变动时）——GF 端 Sync 拉取最新版
 ```
 
 - 只改**词库数据** → 走 ①③；只改**脚本代码** → 走 ①②④。
 
-### 数据站更新流程（改完词/表并构建后）
+### 数据更新流程（游戏版本更新后 / 数据表变动后）
 
 ```bash
-bash build.sh                                   # 1. 本地构建（含 GF 发布件再生）
-python3 ~/zhixia-data/update-data.py            # 2. 同步 7 个数据文件 + 重建 version.json
+python3 build/rebuild-db.py                     # 1. 重建物品总表（自动下载四语权威源；--csv-dir 可离线）
+python3 ~/zhixia-data/update-data.py            # 2. 同步数据文件 + 重建 version.json
 python3 ~/zhixia-data/update-data.py --deploy   # 3. 部署到 CF Pages
-#   （或手动：cd ~/zhixia-data && wrangler pages deploy . --project-name=zhixia-data --branch=main --commit-dirty=true）
 ```
 
+- 源数据＝四语 datamining Item.csv（中/英/日/韩）；hash/EC_ID/别名由本表继承，不因重建丢失。
 - 指纹 = `sha256(文件内容) 前 12 位`，由 update-data.py 自动计算写入 version.json。
 - **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
 - GF 发布件需重新同步的场景只有：**脚本代码变动**。
@@ -140,7 +137,7 @@ bash build.sh
 # 3. （自用可选）经自建链路推送到本机脚本管理器；开源使用可跳过此步
 ```
 
-**改装备表**：编辑 `data/*.txt` → `bash build.sh`（无需注入步骤改动词典）；若要用户拿到新数据 → 走「数据站更新流程」。
+**更新装备数据**：`python3 build/rebuild-db.py` 重建物品总表（四语权威源自动下载，跟随游戏版本）；分发给用户走「数据更新流程」。
 
 **同步方向注意**：
 - **常规：只改 JSON**（dict/），模板里的词典由 inject 覆盖生成，手改模板词典会被下次构建抹掉。
