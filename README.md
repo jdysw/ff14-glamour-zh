@@ -159,6 +159,6 @@ bash build.sh
 
 ## 📄 许可与声明
 
-- 本项目以 **GPL-3.0** 许可开源（见 [LICENSE](LICENSE)）。Copyright © 2026 栀夏（https://zhixia.uk）。
+- 本项目以 **GPL-3.0** 许可开源（见 [LICENSE](LICENSE)）。
 - 词库与对照数据整理自公开游戏资料与社区协作，仅供学习交流。
 - 本脚本与 SQUARE ENIX 及所涉站点均无隶属关系；「FINAL FANTASY XIV」及相关素材版权归 SQUARE ENIX 所有。
