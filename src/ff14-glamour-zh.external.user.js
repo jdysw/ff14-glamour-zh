@@ -1,11 +1,9 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
-// @name:en      FFXIV Glamour Sites Chinese Localization · Two-way Lookup with the Chinese FF14 Wiki
-// @namespace    https://zhixia.uk/
+// @namespace    https://github.com/jdysw/ff14-glamour-zh
 // @version      1.0.0
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
-// @description:en Chinese localization for FF14 glamour sites (Mirapri, Eorzea Collection, FF14-FC, Ronka LookBook, FFXIV ARMOURY COLLECTION): UI, item & dye names display in Chinese with one-click links to the Chinese FF14 wiki; wiki item pages gain a two-way glamour lookup block back to those sites. Read-only glossary data is downloaded on demand and cached locally (check at most once a day); nothing is collected or uploaded.
-// @author       栀夏
+// @author       zhixia
 // @license      GPL-3.0
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -1475,7 +1473,6 @@
 
   const MIRAPRI_BASE = 'https://mirapri.com/';
   const RONKA_BASE = 'https://lookbook.ronkacloset.com/';
-  const EC_HOME = 'https://ffxiv.eorzeacollection.com/glamours';
   const EC_BASE = 'https://ffxiv.eorzeacollection.com/glamours?';
 
   // wiki 装备栏目 → Eorzea Collection 的部位筛选参数
@@ -1521,29 +1518,6 @@
     }
     const second = block.querySelectorAll('li')[1];
     return second ? second.textContent.replace(/\s+/g, ' ').trim() : null;
-  }
-
-  function itemNameCn() {
-    const h = document.querySelector('#firstHeading .mw-page-title-main, .mw-page-title-main, #firstHeading, h1.firstHeading');
-    if (!h) return '';
-    let t = (h.textContent || '').replace(/^\s*(物品|道具|Item)[:：]\s*/i, '');
-    t = t.split(/\n|\r|于.{0,8}(?:前|ago)修改|修改了此页面/)[0];
-    return t.replace(/\s+/g, ' ').trim();
-  }
-
-  // 「各语言名称」里的英文名
-  function getEnglishName() {
-    const block = blockByTitle('各语言名称');
-    if (!block) return null;
-    for (const li of block.querySelectorAll('li')) {
-      const img = li.querySelector('img');
-      const key = (img && (img.getAttribute('alt') || img.getAttribute('src'))) || '';
-      if (/flag[_\s-]?(us|en|gb)/i.test(key)) {
-        const txt = li.textContent.replace(/\s+/g, ' ').trim();
-        if (txt) return txt;
-      }
-    }
-    return null;
   }
 
   // 物品 ID：取自「其他站点链接」里的 Garland / 光之收藏家 链接
@@ -1621,52 +1595,6 @@
     if (!ecId) { cb(null); return; }
     cb({ href: EC_BASE + encodeURIComponent('filter[' + slot.key + ']') + '=' + ecId,
          why: slot.label + ' · ' + zh });
-  }
-
-  function makeLi(href, iconText, labelText, titleText) {
-    const li = document.createElement('li');
-    const a = document.createElement('a');
-    a.href = href;
-    a.target = '_blank';
-    a.rel = 'nofollow noreferrer noopener';
-    a.title = titleText;
-    a.style.cssText = 'display:inline-flex;align-items:center;gap:4px;';
-    const icon = document.createElement('span');
-    icon.textContent = iconText;
-    icon.style.cssText = 'font-size:14px;line-height:1;';
-    const label = document.createElement('span');
-    label.textContent = labelText;
-    a.appendChild(icon);
-    a.appendChild(label);
-    li.appendChild(a);
-    return li;
-  }
-
-  // 灰机新版物品页已不再有「其他站点链接」区块，需要逐级找挂载点：
-  // 1) 原区块（老页面） 2) 物品信息 infobox 3) 正文顶部
-  function wikiButtonAnchor() {
-    const t = blockByTitle('其他站点链接');
-    if (t && t.querySelector('ul')) return t.querySelector('ul');
-    const info = document.querySelector('.infobox, [class*="infobox"]');
-    if (info) {
-      let ul = info.querySelector('ul');
-      if (!ul) {
-        ul = document.createElement('ul');
-        ul.className = 'zhixia-wiki-actions';
-        info.appendChild(ul);
-      }
-      return ul;
-    }
-    const content = document.querySelector('#mw-content-text, .mw-parser-output, #content');
-    if (content) {
-      const box = document.createElement('div');
-      box.className = 'zhixia-wiki-actions';
-      const ul = document.createElement('ul');
-      box.appendChild(ul);
-      content.insertBefore(box, content.firstChild);
-      return ul;
-    }
-    return null;
   }
 
   // 「幻化装备反查链接」四站（一条一行，与「其他站点链接」同款区块样式）
@@ -3308,17 +3236,17 @@
     p.setAttribute('title', '点击查看灰机 wiki 物品页');
   }
 
-  function ensureACLItemStyle() {
-    if (document.getElementById('zhx-acl-item-style')) return;
+  function ensureZhxItemStyle(id) {
+    if (document.getElementById(id)) return;
     const st = document.createElement('style');
-    st.id = 'zhx-acl-item-style';
+    st.id = id;
     st.textContent = '[data-zhx-item]{cursor:pointer;transition:text-decoration-color .15s}[data-zhx-item]:hover{text-decoration:underline;text-underline-offset:3px}';
     (document.head || document.documentElement).appendChild(st);
   }
 
-  function bindACLItemClick() {
-    if (window.__zhxAclItemBound) return;
-    window.__zhxAclItemBound = true;
+  function bindZhxItemClick(flag) {
+    if (window[flag]) return;
+    window[flag] = true;
     document.addEventListener('click', (e) => {
       const el = e.target && e.target.closest ? e.target.closest('[data-zhx-item]') : null;
       if (!el) return;
@@ -3420,8 +3348,8 @@
   }
 
   function startACL() {
-    ensureACLItemStyle();
-    bindACLItemClick();
+    ensureZhxItemStyle('zhx-acl-item-style');
+    bindZhxItemClick('__zhxAclItemBound');
     safe(translateACLPage, 'ACL 全扫')();
     safe(translateACLTitle, 'ACL 标题')();
     observeLocal((nodes) => {
@@ -3520,28 +3448,6 @@
     p.setAttribute('title', '点击查看灰机 wiki 物品页');
   }
 
-  function ensureRonkaItemStyle() {
-    if (document.getElementById('zhx-ronka-item-style')) return;
-    const st = document.createElement('style');
-    st.id = 'zhx-ronka-item-style';
-    st.textContent = '[data-zhx-item]{cursor:pointer;transition:text-decoration-color .15s}[data-zhx-item]:hover{text-decoration:underline;text-underline-offset:3px}';
-    (document.head || document.documentElement).appendChild(st);
-  }
-
-  function bindRonkaItemClick() {
-    if (window.__zhxRonkaItemBound) return;
-    window.__zhxRonkaItemBound = true;
-    document.addEventListener('click', (e) => {
-      const el = e.target && e.target.closest ? e.target.closest('[data-zhx-item]') : null;
-      if (!el) return;
-      const zh = el.getAttribute('data-zhx-item');
-      if (!zh) return;
-      e.preventDefault();
-      e.stopPropagation();
-      window.open(WIKI_ITEM + encodeURIComponent(zh), '_blank', 'noopener');
-    }, true);
-  }
-
   // 装备块 lodestone（官方指南）链接 → 灰机 wiki（图标 + 中文物品页）
   // 选择器只匹配 href 含 lodestone 的 <a>，替换后不再匹配 → 天然幂等；
   // React 若恢复原 href 会自动再次命中重替换。装备中文名来自同块 [data-zhx-item]。
@@ -3638,8 +3544,8 @@
   }
 
   function startRonka() {
-    ensureRonkaItemStyle();
-    bindRonkaItemClick();
+    ensureZhxItemStyle('zhx-ronka-item-style');
+    bindZhxItemClick('__zhxRonkaItemBound');
     safe(translateRonkaPage, 'Ronka 全扫')();
     safe(translateRonkaTitle, 'Ronka 标题')();
     let rkTimer = null;
@@ -3761,17 +3667,6 @@
   let itemHash = null;   // hash -> 中文名（EC / mirapri 用）
   let nameMap = null;    // 英文名 / 日文名 -> 中文名（EC / mirapri 用）
 
-  // 单条查找：不建表，直接在主表里定位（与内嵌版同款实现，约 1ms）
-  function lookupEnByZh(zh) {
-    if (!zh || typeof ITEM_DB_TEXT !== 'string' || !ITEM_DB_TEXT) return null;
-    const key = '|' + zh + '|';
-    const at = ITEM_DB_TEXT.indexOf(key);
-    if (at < 0) return null;
-    const s = at + key.length;
-    const e = ITEM_DB_TEXT.indexOf('\n', s);
-    const v = ITEM_DB_TEXT.slice(s, e < 0 ? undefined : e);
-    return v || null;
-  }
   // EC 装备 ID 单条查找：在 EC_TEXT 里定位「中文名|EC_ID」行；查不到返回 null
   function lookupEcIdByZh(zh) {
     if (!zh || typeof EC_TEXT !== 'string' || !EC_TEXT) return null;
