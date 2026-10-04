@@ -1,10 +1,63 @@
-# ff14-glamour-zh —— FF14 幻化站中文化脚本 · 词库与构建工作区
+# FF14 幻化站中文化 · 与灰机 wiki 双向互查
 
-栀夏维护的 FF14 幻化站中文化油猴脚本（mirapri.com / ffxiv.eorzeacollection.com / ff14-fc.com /
-灰机 wiki / lookbook.ronkacloset.com / ffxivcollection.com）的**词库源文件**与**构建流水线**。
-本目录是唯一源，改词只动这里。
+> **把 FF14 的幻化/穿搭网站变成中文** —— 装备名、染剂色名自动显示为国服中文，还能和灰机 wiki 双向互查。
 
-## 目录结构
+*Chinese localization for FFXIV glamour sites, with two-way lookup to the Chinese FF14 wiki.*
+
+## ✨ 这个脚本能做什么
+
+逛幻化站时最头疼的，是满屏日语 / 韩语装备名——想查国服对应的名字还得手动搜。装上这个脚本，常见幻化站**全部变中文**：
+
+- 🌐 **全站中文化** —— 界面、装备名、染剂色名、副本名自动显示为国服中文
+- 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名可点击，直接跳转灰机 wiki 物品页：查国服名称、获取途径，一步到位
+- 🔄 **双向互查** —— 灰机 wiki 物品页也会多出「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），从 wiki 一键找到同款幻化
+- ⚡ **无感翻译** —— 词典本地索引，毫秒级查询；安装即用、无需配置
+- 🔒 **纯本地运行** —— 词库按需下载、本地缓存；不收集、不上传任何用户信息
+
+## 🌏 支持站点
+
+| 站点 | 地区 | 汉化内容 |
+|---|---|---|
+| [Mirapri](https://mirapri.com) | 日服 | 界面 + 装备 / 染剂名 |
+| [Eorzea Collection](https://ffxiv.eorzeacollection.com) | 国际服 | 界面 + 装备 / 染剂名 |
+| [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服 | 界面 + 装备 / 副本名 |
+| [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服 | 界面 + 装备 / 染剂名 |
+| [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 收藏站 | 界面 + 装备名 |
+| [灰机 wiki](https://ff14.huijiwiki.com) | 中文 | 物品页新增「幻化反查」区块 |
+
+## 📦 安装
+
+1. 先安装一个用户脚本管理器（任选其一）：
+   - [Tampermonkey](https://www.tampermonkey.net/)（推荐）
+   - [Violentmonkey](https://violentmonkey.github.io/)
+2. 安装脚本：
+   - **从 Greasy Fork 安装** → *（即将上架，发布后补充链接）*
+   - **从 GitHub 直接安装** → [**点击安装**](https://raw.githubusercontent.com/jdysw/ff14-glamour-zh/main/src/ff14-glamour-zh.external.user.js)
+3. 打开任意支持站点，自动生效。
+
+## 💡 使用说明
+
+- 汉化后的装备名 / 染剂名**可以点击** → 跳转灰机 wiki 查国服名称与获取方式。
+- 灰机 wiki 物品页会多出「幻化反查」区块 → 一键跳去各幻化站看同款穿搭。
+- 词库数据每天至多自动检查一次更新，无需任何手动操作。
+
+## ❓ 常见问题
+
+**Q：会影响网站正常功能吗？**
+不会。脚本只做「文本替换」和「附加链接」，不修改站点数据、不触碰你的账号与操作。
+
+**Q：需要特殊网络环境吗？**
+不需要。词库托管在 Cloudflare 静态站、按站点按需加载（单站首次约 0.3~1MB，压缩传输后 2~3 秒完成），之后全部走本地缓存。
+
+**Q：发现了翻译缺漏或错误？**
+欢迎到 [Issues](https://github.com/jdysw/ff14-glamour-zh/issues) 反馈：说明「哪个站、什么词、正确译文」即可。
+
+## 🛠 开发与构建
+
+<details>
+<summary><b>点击展开：目录结构 / 构建流水线 / 发布流程（开发者向）</b></summary>
+
+### 目录结构
 
 ```
 ff14-glamour-zh/
@@ -36,7 +89,7 @@ ff14-glamour-zh/
 └── build.sh               — 一键全链构建
 ```
 
-## 发布形态（v1.0.0+）
+### 发布形态
 
 | 产物 | 体积 | 用途 |
 |---|---|---|
@@ -49,14 +102,10 @@ ff14-glamour-zh/
 
 > 站点 → 数据表映射见 src 里 `SITE_TABLES`；站点-表若有调整，两边同步。
 
-## 开源仓库与更新链路（GitHub）
+### 更新链路（一次修改，两条分发线）
 
-- 全部源码、词库与构建脚本开源在 GitHub 仓库 **ff14-glamour-zh**。
-- **Greasy Fork 脚本从仓库自动同步**——Raw 源：
-  `https://raw.githubusercontent.com/jdysw/ff14-glamour-zh/main/src/ff14-glamour-zh.external.user.js`
-  （一次性设置：GF 脚本页 → Sync → 填入上述 URL；之后每次发布点一下 Sync，或配 webhook 自动触发）
-
-**一次修改，两条分发线：**
+Raw 源（Greasy Fork「Sync」用）：
+`https://raw.githubusercontent.com/jdysw/ff14-glamour-zh/main/src/ff14-glamour-zh.external.user.js`
 
 ```bash
 # ① 构建 + 校验（改词库或改代码后都先跑）
@@ -70,7 +119,7 @@ python3 ~/zhixia-data/update-data.py --deploy
 
 - 只改**词库数据** → 走 ①③；只改**脚本代码** → 走 ①②④。
 
-## 数据站更新流程（改完词/表并构建后）
+### 数据站更新流程（改完词/表并构建后）
 
 ```bash
 bash build.sh                                   # 1. 本地构建（含 GF 发布件再生）
@@ -80,36 +129,36 @@ python3 ~/zhixia-data/update-data.py --deploy   # 3. 部署到 CF Pages
 ```
 
 - 指纹 = `sha256(文件内容) 前 12 位`，由 update-data.py 自动计算写入 version.json。
-- **数据更新与脚本版本解耦**：数据变了不必发新脚本版，GF 用户次日自动取到新数据。
-- GF 发布件需重新上传 Greasy Fork 的场景只有：**脚本代码变动**。
+- **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
+- GF 发布件需重新同步的场景只有：**脚本代码变动**。
 
-## 日常维护流程
+### 日常维护
 
 **改界面词**（最常见）：
 ```bash
 # 1. 直接编辑 dict/dict-*.json（JSON: {"kind":"kv","entries":{"原文":"译文"}}）
 # 2. 一键构建 + 验证
 bash build.sh
-# 3. 推送安装
-# （自用可选）经自建链路推送到本机脚本管理器；开源使用可跳过此步
-# 4. 主人刷新页面即生效
+# 3. （自用可选）经自建链路推送到本机脚本管理器；开源使用可跳过此步
 ```
 
-**改装备表**：编辑 `data/*.txt` → `bash build.sh`（无需注入步骤改动词典）；若要 GF 用户拿到新数据 → 走「数据站更新流程」。
+**改装备表**：编辑 `data/*.txt` → `bash build.sh`（无需注入步骤改动词典）；若要用户拿到新数据 → 走「数据站更新流程」。
 
 **同步方向注意**：
 - **常规：只改 JSON**（dict/），模板里的词典由 inject 覆盖生成，手改模板词典会被下次构建抹掉。
 - 如已在模板里改了词，用 `python3 build/extract_dicts.py` 反向提取回 JSON。
 
-## 规则
+### 规则
 
 - `dist/` 是生成物，不手改。
 - 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
-- 生成器与数据路径已全部指向本目录；不再依赖 /tmp 或 workspace 副本。
 - 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 与 dist 词典逐条一致。
-- **Greasy Fork 版走的 Go 路径**：src 模板即外置数据母版；`make_embedded5.py` 只把「数据加载器块」替换成内嵌数据块生成内嵌版。修改数据层时只动 src，两版行为一致。
+- **GF 版走的 Go 路径**：src 模板即外置数据母版；`make_embedded5.py` 只把「数据加载器块」替换成内嵌数据块生成内嵌版。修改数据层时只动 src，两版行为一致。
 
-## 许可
+</details>
 
-GNU General Public License v3.0（见 [LICENSE](LICENSE)）。Copyright © 2026 栀夏（https://zhixia.uk）。
-词库与对照数据整理自公开游戏资料与社区协作。
+## 📄 许可与声明
+
+- 本项目以 **GPL-3.0** 许可开源（见 [LICENSE](LICENSE)）。Copyright © 2026 栀夏（https://zhixia.uk）。
+- 词库与对照数据整理自公开游戏资料与社区协作，仅供学习交流。
+- 本脚本与 SQUARE ENIX 及所涉站点均无隶属关系；「FINAL FANTASY XIV」及相关素材版权归 SQUARE ENIX 所有。
