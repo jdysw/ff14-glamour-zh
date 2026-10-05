@@ -19,8 +19,23 @@ function safeResolve(p, label) {
   return rp;
 }
 
-// ── 受控解析：本构建体系生成的纯 KV 对象字面量（不执行代码）──
+// ── 受控解析：本构建体系生成的纯 KV 对象字面量（不执行任何代码）──
 // 支持 `{ ...DICT_COMMON, 'k': 'v', ... }`（单/双引号、\x 转义、\uXXXX）。
+const ESC_MAP = { n: '\n', r: '\r', t: '\t' };
+
+// 单个转义序列 → { ch, next }
+function scanEscape(s, i) {
+  const n = s[i + 1];
+  if (ESC_MAP[n] !== undefined) return { ch: ESC_MAP[n], next: i + 2 };
+  if (n === 'u') {
+    const hex = s.slice(i + 2, i + 6);
+    const code = hex.length === 4 ? Number.parseInt(hex, 16) : Number.NaN;
+    const ch = Number.isNaN(code) ? 'u' : String.fromCodePoint(code);
+    return { ch, next: i + 6 };
+  }
+  return { ch: n, next: i + 2 };
+}
+
 function scanString(s, i) {
   const q = s[i];
   if (q !== "'" && q !== '"') return null;
@@ -29,16 +44,14 @@ function scanString(s, i) {
   while (i < s.length) {
     const c = s[i];
     if (c === '\\') {
-      const n = s[i + 1];
-      if (n === 'n') out += '\n';
-      else if (n === 'r') out += '\r';
-      else if (n === 't') out += '\t';
-      else if (n === 'u') { out += String.fromCharCode(Number.parseInt(s.slice(i + 2, i + 6), 16)); i += 6; continue; }
-      else out += n;
-      i += 2; continue;
+      const e = scanEscape(s, i);
+      out += e.ch;
+      i = e.next;
+      continue;
     }
     if (c === q) return { str: out, next: i + 1 };
-    out += c; i += 1;
+    out += c;
+    i += 1;
   }
   return null;
 }

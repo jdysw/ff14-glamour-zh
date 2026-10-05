@@ -8,8 +8,39 @@ DICT_DIR = '/home/ubuntu/zhixia-glamour/dict'
 shutil.copy(SRC, SRC + '.bak-dictsplit')
 s = open(SRC, encoding='utf-8').read()
 
+def _skip_string(s, i):
+    """i 指向 ' 处；跳过字符串（含转义）；返回闭合引号的位置。"""
+    i += 1
+    while i < len(s) and s[i] != "'":
+        if s[i] == '\\':
+            i += 1
+        i += 1
+    return i
+
+
+def _scan_bracket(s, i, open_ch, close_ch):
+    """从 i（开括号之后）扫描到配平；返回闭合括号之后的位置。"""
+    depth = 1
+    while i < len(s) and depth > 0:
+        c = s[i]
+        if c == open_ch:
+            depth += 1
+        elif c == close_ch:
+            depth -= 1
+        elif c == "'":
+            i = _skip_string(s, i)
+        elif c == '/' and i + 1 < len(s) and s[i + 1] == '/':
+            while i < len(s) and s[i] != '\n':
+                i += 1
+        elif c == '/' and i + 1 < len(s) and s[i + 1] == '*':
+            i = s.find('*/', i) + 1
+        i += 1
+    return i
+
+
 def find_block(s, name):
-    """定位 const <name> = { 或 [ 到匹配的 }; 或 ];，返回 (start, end, body)"""
+    """定位 const <name> = ... 起始的 { 或 [ 块（兼容 Object.assign 前缀），
+    返回 (start, end, body, open_ch, close_ch)"""
     m = re.search(r'\n  const ' + re.escape(name) + r' = ', s)
     if not m:
         return None
@@ -21,26 +52,8 @@ def find_block(s, name):
         return None
     close_ch = '}' if open_ch == '{' else ']'
     start = m.start() + 1  # 跳过前导换行
-    # 从开括号之后开始数括号平衡
-    depth = 1
-    i = m.end() + off + 1
-    while i < len(s) and depth > 0:
-        c = s[i]
-        if c == open_ch: depth += 1
-        elif c == close_ch: depth -= 1
-        elif c == "'":
-            # 跳过字符串
-            i += 1
-            while i < len(s) and s[i] != "'":
-                if s[i] == '\\': i += 1
-                i += 1
-        elif c == '/' and i+1 < len(s) and s[i+1] == '/':
-            while i < len(s) and s[i] != '\n': i += 1
-        elif c == '/' and i+1 < len(s) and s[i+1] == '*':
-            i = s.find('*/', i) + 1
-        i += 1
-    end = i  # 指向 close_ch 之后
-    body = s[m.end() + off + 1:i-1]  # 不含外层括号
+    end = _scan_bracket(s, m.end() + off + 1, open_ch, close_ch)
+    body = s[m.end() + off + 1:end - 1]  # 不含外层括号
     return (start, end, body, open_ch, close_ch)
 
 def scan_js_string(s, i):
