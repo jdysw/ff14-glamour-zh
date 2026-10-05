@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.9
+// @version      1.2.8
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -4180,37 +4180,36 @@
     return 0;
   }
 
-  function ensureTables() {
-    if (_ensurePromise) return _ensurePromise;
-    _ensurePromise = (async () => {
-      const need = neededTables();
-      if (!need.length) return;
-      // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
-      const local = await _ensureReadLocal(need);
-      let meta = null;
-      try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
-      const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
-      const allCached = need.every((t) => !!local[t]);
-      if (allCached && fresh) {
-        for (const t of need) applyTable(t, local[t].tx);
-        DATA_VER = (meta.v ? String(meta.v) : '');
-        return;
-      }
-      // ② 拉版本清单；失败不致命（有缓存用缓存，无缓存盲拉）
-      let ver = null;
-      try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
-      const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
-      // ③ 逐表：指纹一致 → 缓存；不一致 / 缺失 → 下载（失败时回退旧缓存）
-      let okCount = 0;
-      (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch(() => 0)))).forEach((v) => { okCount += v; });
-      // ④ 全部表可用且拿到版本清单时记录检查时间：当天不再重复探测
-      //（数据更新次日生效；未记录时下次访问自动重试）
-      if (ver?.v) DATA_VER = String(ver.v);
-      if (ver && okCount === need.length) {
-        storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
-      }
-    })().catch(() => {}).then(() => new Promise((resolve) => {
-      // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
+  // v1.2.x：主体抽为具名函数（匿名 IIFE 会把复杂度并入 ensureTables 度量）
+  // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
+  async function _ensureTryFast(need) {
+    const local = await _ensureReadLocal(need);
+    let meta = null;
+    try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
+    const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
+    const allCached = need.every((t) => !!local[t]);
+    if (!allCached || !fresh) return { local };
+    for (const t of need) applyTable(t, local[t].tx);
+    DATA_VER = (meta.v ? String(meta.v) : '');
+    return null;
+  }
+
+  // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
+  async function _ensureFetchAll(need, local) {
+    let ver = null;
+    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
+    const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
+    let okCount = 0;
+    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch(() => 0)))).forEach((v) => { okCount += v; });
+    if (ver?.v) DATA_VER = String(ver.v);
+    if (ver && okCount === need.length) {
+      storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
+    }
+  }
+
+  // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
+  function _ensureFinalize() {
+    return new Promise((resolve) => {
       const go = () => {
         try { buildTables(); } catch (e) {}
         try { _fireTablesReady(); } catch (e) {}
@@ -4224,7 +4223,20 @@
       };
       if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 });
       else setTimeout(go, 50);
-    }));
+    });
+  }
+
+  async function _ensureMain() {
+    const need = neededTables();
+    if (!need.length) return;
+    const fast = await _ensureTryFast(need);
+    if (!fast) return;
+    await _ensureFetchAll(need, fast.local);
+  }
+
+  function ensureTables() {
+    if (_ensurePromise) return _ensurePromise;
+    _ensurePromise = _ensureMain().catch(() => {}).then(_ensureFinalize);
     return _ensurePromise;
   }
   function itemDbReady(cb) {
