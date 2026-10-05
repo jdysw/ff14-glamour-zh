@@ -3341,56 +3341,69 @@
     'AF': '校服',
   };
 
-  function trACL(text) {
-    if (!text) return text;
-    const t0 = text.trim();
-    if (!t0) return text;
-    if (t0.length > 120) return text;
-
-    // ① 词典精确（含空白归一化回退）
+  // v1.2.x：四步链拆为子步骤（降认知复杂度）
+  // ① 词典精确（含空白归一化回退）
+  function _trACLExact(text, t0) {
     let hit = DICT_ACL[t0];
     if (!hit) {
       const norm = t0.replace(/[ \t\u00a0]+/g, ' ').trim();
       if (norm !== t0) hit = DICT_ACL[norm];
     }
-    if (hit) {
-      const i = text.indexOf(t0);
-      return text.slice(0, i) + hit + text.slice(i + t0.length);
-    }
+    if (!hit) return null;
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + hit + text.slice(i + t0.length);
+  }
 
-    // ② 套装名规则：系列・职能アタイア[RE] → （改良型）系列职能套装
-    //    优先 lookupSeries（与主站系列表口径一致：方舟天使御敌），兜底 DICT_ACL 逐词
+  // ② 套装名规则：系列・职能アタイア[RE] → （改良型）系列职能套装
+  //    优先 lookupSeries（与主站系列表口径一致：方舟天使御敌），兜底 DICT_ACL 逐词
+  function _trACLSet(text, t0) {
     const m = t0.match(ACL_SET_RE);
-    if (m) {
-      const series = lookupSeries(m[1] + '・' + m[2])
-        || ((DICT_ACL[m[1]] || m[1]) + (DICT_ACL[m[2]] || m[2]));
-      const zh = (m[3] ? '改良型' : '') + series + '套装';
-      const i = text.indexOf(t0);
-      return text.slice(0, i) + zh + text.slice(i + t0.length);
-    }
+    if (!m) return null;
+    const series = lookupSeries(m[1] + '・' + m[2])
+      || ((DICT_ACL[m[1]] || m[1]) + (DICT_ACL[m[2]] || m[2]));
+    const zh = (m[3] ? '改良型' : '') + series + '套装';
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + zh + text.slice(i + t0.length);
+  }
 
-    // ③ 日文装备名（JP2ZH 对照表单条查找）
-    // v1.2.1：判定前剥【…】标记（与 trFC 同修；「纯汉字+全角标记」名此前不查表）
+  // ③ 日文装备名（JP2ZH 对照表单条查找）
+  // v1.2.1：判定前剥【…】标记（与 trFC 同修；「纯汉字+全角标记」名此前不查表）
+  function _trACLItem(text, t0) {
     const core = (t0.replace(ACL_DECOR_HEAD, '').replace(ACL_DECOR_TAIL, '')).trim() || t0;
     const corep = core.replace(/【[^【】]*】/g, '').trim() || core;
-    if (/[\u3040-\u30ff]/.test(corep) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(corep) && corep.length >= 2 && corep.length <= 30)) {
-      const zh = lookupJp2Zh(core);
-      if (zh && zh !== core) {
-        const i = text.indexOf(t0);
-        return text.slice(0, i) + zh + text.slice(i + t0.length);
-      }
-    }
+    const isKana = /[\u3040-\u30ff]/.test(corep);
+    const isKanji = /^[\u3005\u3006\u4e00-\u9fff]+$/.test(corep) && corep.length >= 2 && corep.length <= 30;
+    if (!isKana && !isKanji) return null;
+    const zh = lookupJp2Zh(core);
+    if (!zh || zh === core) return null;
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + zh + text.slice(i + t0.length);
+  }
 
-    // ④ 副本名（保留「Lv.NN 」前缀，查 ACL_CFC 表）
+  // ④ 副本名（保留「Lv.NN 」前缀，查 ACL_CFC 表）
+  function _trACLCfc(text, t0) {
     const mLv = t0.match(/^(Lv\.\d+ )(.+)$/);
-    if (mLv) {
-      const zh = lookupAclCfc(mLv[2]);
-      if (zh && zh !== mLv[2]) {
-        const zhFull = mLv[1] + zh;
-        const i = text.indexOf(t0);
-        return text.slice(0, i) + zhFull + text.slice(i + t0.length);
-      }
-    }
+    if (!mLv) return null;
+    const zh = lookupAclCfc(mLv[2]);
+    if (!zh || zh === mLv[2]) return null;
+    const zhFull = mLv[1] + zh;
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + zhFull + text.slice(i + t0.length);
+  }
+
+  function trACL(text) {
+    if (!text) return text;
+    const t0 = text.trim();
+    if (!t0) return text;
+    if (t0.length > 120) return text;
+    const s1 = _trACLExact(text, t0);
+    if (s1 !== null) return s1;
+    const s2 = _trACLSet(text, t0);
+    if (s2 !== null) return s2;
+    const s3 = _trACLItem(text, t0);
+    if (s3 !== null) return s3;
+    const s4 = _trACLCfc(text, t0);
+    if (s4 !== null) return s4;
     return text;
   }
 
@@ -3448,41 +3461,53 @@
   // 装备块的 The Lodestone 图标链接 → 灰机 wiki（图标 + 中文物品页）
   // 站点每个装备条目带 a.item-link-1（日服 Lodestone）与 a.item-link-2（MIRAPRI）。
   // 选择器只匹配 href 含 lodestone 的链接 → 替换后不再命中，天然幂等。
+  // v1.2.x：子步骤拆出（降认知复杂度）
+  function _aclItemNameEl(box) {
+    for (const p of box.querySelectorAll('p')) if (!p.classList.contains('region-name')) return p;
+    return null;
+  }
+
+  function _aclZhName(nameEl) {
+    const cached = nameEl.dataset.zhxItem;
+    if (cached) return cached;
+    const t0 = (nameEl.textContent || '').trim();
+    if (!t0) return null;
+    const t1 = trACL(t0);
+    if (!t1 || t1 === t0) return null;   // 未获得中文名则跳过（保守）
+    return t1;
+  }
+
+  function _aclSwapIcon(a, zh) {
+    a.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
+    a.setAttribute('title', '灰机 wiki：' + zh);
+    const img = a.querySelector('img');
+    if (img) {
+      img.removeAttribute('loading');   // 原图 lazy，data URI 无需延迟（未滚动时懒加载不解码）
+      img.setAttribute('src', ZHX_WIKI_ICON);
+      img.setAttribute('alt', '灰机 wiki');
+      img.style.width = '18px';
+      img.style.height = '18px';
+      img.style.objectFit = 'contain';
+    }
+    if (!a.querySelector('.zhx-wiki-text')) {
+      const lb = document.createElement('span');
+      lb.className = 'zhx-wiki-text';
+      lb.textContent = '灰机 wiki';
+      lb.style.cssText = 'margin-left:4px;font-size:12px;vertical-align:middle;color:inherit';
+      a.appendChild(lb);
+    }
+  }
+
   function replaceACLLodestone() {
     const links = document.querySelectorAll('a.item-link-1[href*="lodestone"]');
     for (const a of links) {
       const box = a.closest('.item-name');
       if (!box) continue;
-      const ps = box.querySelectorAll('p');
-      let nameEl = null;
-      for (const p of ps) if (!p.classList.contains('region-name')) { nameEl = p; break; }
+      const nameEl = _aclItemNameEl(box);
       if (!nameEl) continue;
-      let zh = nameEl.dataset.zhxItem;
-      if (!zh) {
-        const t0 = (nameEl.textContent || '').trim();
-        if (!t0) continue;
-        const t1 = trACL(t0);
-        if (!t1 || t1 === t0) continue;   // 未获得中文名则跳过（保守）
-        zh = t1;
-      }
-      a.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
-      a.setAttribute('title', '灰机 wiki：' + zh);
-      const img = a.querySelector('img');
-      if (img) {
-        img.removeAttribute('loading');   // 原图 lazy，data URI 无需延迟（未滚动时懒加载不解码）
-        img.setAttribute('src', ZHX_WIKI_ICON);
-        img.setAttribute('alt', '灰机 wiki');
-        img.style.width = '18px';
-        img.style.height = '18px';
-        img.style.objectFit = 'contain';
-      }
-      if (!a.querySelector('.zhx-wiki-text')) {
-        const lb = document.createElement('span');
-        lb.className = 'zhx-wiki-text';
-        lb.textContent = '灰机 wiki';
-        lb.style.cssText = 'margin-left:4px;font-size:12px;vertical-align:middle;color:inherit';
-        a.appendChild(lb);
-      }
+      const zh = _aclZhName(nameEl);
+      if (!zh) continue;
+      _aclSwapIcon(a, zh);
     }
   }
 
@@ -3498,31 +3523,38 @@
     }
   }
 
+  // v1.2.x：节点分派拆为子步骤（降认知复杂度）
+  function _aclAcceptNode(n) {
+    if (n.nodeType === 1) {
+      if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
+      if (n.closest?.(ACL_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+    }
+    return NodeFilter.FILTER_ACCEPT;
+  }
+
+  function _procACLNode(n) {
+    if (n.nodeType === 3) { trimACLNode(n); return; }
+    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
+      const ph = n.getAttribute('placeholder');
+      if (ph) { const nn = trACL(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+      return;
+    }
+    if (n.hasAttribute?.('title')) {
+      const ti = n.getAttribute('title');
+      if (ti && /[\u3040-\u30ff]/.test(ti)) { const nn = trACL(ti); if (nn !== ti) n.setAttribute('title', nn); }
+    }
+  }
+
   function translateACLPage(rootArg) {
     if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
     const root = rootArg || document.body;
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: (n) => {
-        if (n.nodeType === 1) {
-          if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-          if (n.closest?.(ACL_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      },
+      acceptNode: _aclAcceptNode,
     });
     const batch = [];
     while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) {
-      if (n.nodeType === 3) trimACLNode(n);
-      else if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
-        const ph = n.getAttribute('placeholder');
-        if (ph) { const nn = trACL(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-      } else if (n.hasAttribute?.('title')) {
-        const ti = n.getAttribute('title');
-        if (ti && /[\u3040-\u30ff]/.test(ti)) { const nn = trACL(ti); if (nn !== ti) n.setAttribute('title', nn); }
-      }
-    }
+    for (const n of batch) _procACLNode(n);
     safe(replaceACLLodestone, 'ACL lodestone 替换')();
   }
 
@@ -3572,6 +3604,30 @@
   }
 
   // 逐条翻译：UI/染剂精确 → "N-染剂" → 装备名 → "X아이콘" → 版本前缀 → 空白归一化
+  // v1.2.x：子步骤拆出（降认知复杂度）——② 染剂 "N-名称"
+  function _trRonkaDye(t0) {
+    const m = t0.match(/^([1-9])-(.+)$/);
+    if (!m) return null;
+    const s = DICT_RONKA[m[2].trim()];
+    if (!s) return null;
+    return m[1] + '-' + s;
+  }
+
+  // ④ "X아이콘" 组合（img alt，如 "머리 방어구아이콘"）
+  function _trRonkaIcon(t0) {
+    if (t0.length <= 3 || t0.slice(-3) !== '아이콘') return null;
+    const base = t0.slice(0, -3).trim();
+    const bz = DICT_RONKA[base] || ronkaItemLookup(base);
+    if (!bz) return null;
+    return bz + '图标';
+  }
+
+  // ⑤ 补丁版本前缀
+  function _trRonkaPatch(t0) {
+    if (t0.indexOf('현재 적용된 패치 데이터 버전') !== 0) return null;
+    return t0.replace('현재 적용된 패치 데이터 버전(KOR): ', '当前应用的补丁数据版本(KOR): ');
+  }
+
   function trRonka(text) {
     if (!text) return text;
     const t0 = text.trim();
@@ -3581,25 +3637,13 @@
     if (!hasKR) return DICT_RONKA[t0] || text;
     let zh = DICT_RONKA[t0] || null;
     // ② 染剂 "N-名称"（如 "1-하얀눈색"；React 拆分时 "하얀눈색" 单独命中 ①）
-    if (zh == null) {
-      const m = t0.match(/^([1-9])-(.+)$/);
-      if (m) {
-        const s = DICT_RONKA[m[2].trim()];
-        if (s) zh = m[1] + '-' + s;
-      }
-    }
+    if (zh == null) zh = _trRonkaDye(t0);
     // ③ 装备名（韩文 → 国服名）
     if (zh == null) zh = ronkaItemLookup(t0);
-    // ④ "X아이콘" 组合（img alt，如 "머리 방어구아이콘"）
-    if (zh == null && t0.length > 3 && t0.slice(-3) === '아이콘') {
-      const base = t0.slice(0, -3).trim();
-      const bz = DICT_RONKA[base] || ronkaItemLookup(base);
-      if (bz) zh = bz + '图标';
-    }
+    // ④ "X아이콘" 组合
+    if (zh == null) zh = _trRonkaIcon(t0);
     // ⑤ 补丁版本前缀
-    if (zh == null && t0.indexOf('현재 적용된 패치 데이터 버전') === 0) {
-      zh = t0.replace('현재 적용된 패치 데이터 버전(KOR): ', '当前应用的补丁数据版本(KOR): ');
-    }
+    if (zh == null) zh = _trRonkaPatch(t0);
     // ⑥ 空白归一化回退
     if (zh == null) {
       const norm = t0.replace(/[ \t\u00a0]+/g, ' ');
@@ -3676,40 +3720,53 @@
     }
   }
 
+  // v1.2.x：节点分派拆为子步骤（降认知复杂度）
+  function _ronkaAcceptNode(n) {
+    if (n.nodeType === 1) {
+      if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
+      if (n.closest?.(RONKA_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+    }
+    return NodeFilter.FILTER_ACCEPT;
+  }
+
+  function _ronkaInput(n) {
+    const ph = n.getAttribute('placeholder');
+    if (ph) { const nn = trRonka(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+  }
+
+  function _ronkaImgAlt(n) {
+    const alt = n.getAttribute('alt');
+    if (alt && alt.length >= 2 && alt.length <= 90) {
+      const nn = trRonka(alt);
+      if (nn !== alt && !n.dataset.zhixiaRonkaAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaRonkaAlt = '1'; }
+    }
+    const ti = n.getAttribute('title');
+    if (ti) { const nn = trRonka(ti); if (nn !== ti) n.setAttribute('title', nn); }
+  }
+
+  function _ronkaAria(n) {
+    const al = n.getAttribute('aria-label');
+    if (al) { const nn = trRonka(al); if (nn !== al) n.setAttribute('aria-label', nn); }
+  }
+
+  function _procRonkaNode(n) {
+    if (n.nodeType === 3) { trimRonkaNode(n); return; }
+    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') { _ronkaInput(n); return; }
+    if (n.tagName === 'IMG' || n.hasAttribute('alt')) { _ronkaImgAlt(n); return; }
+    if (n.hasAttribute?.('aria-label')) _ronkaAria(n);
+  }
+
   function translateRonkaPage(rootArg) {
     if (rootArg?.nodeType === 3) { trimRonkaNode(rootArg); return; }
     if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
     const root = rootArg || document.body;
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: (n) => {
-        if (n.nodeType === 1) {
-          if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-          if (n.closest?.(RONKA_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      },
+      acceptNode: _ronkaAcceptNode,
     });
     const batch = [];
     while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) {
-      if (n.nodeType === 3) trimRonkaNode(n);
-      else if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
-        const ph = n.getAttribute('placeholder');
-        if (ph) { const nn = trRonka(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-      } else if (n.tagName === 'IMG' || n.hasAttribute('alt')) {
-        const alt = n.getAttribute('alt');
-        if (alt && alt.length >= 2 && alt.length <= 90) {
-          const nn = trRonka(alt);
-          if (nn !== alt && !n.dataset.zhixiaRonkaAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaRonkaAlt = '1'; }
-        }
-        const ti = n.getAttribute('title');
-        if (ti) { const nn = trRonka(ti); if (nn !== ti) n.setAttribute('title', nn); }
-      } else if (n.hasAttribute?.('aria-label')) {
-        const al = n.getAttribute('aria-label');
-        if (al) { const nn = trRonka(al); if (nn !== al) n.setAttribute('aria-label', nn); }
-      }
-    }
+    for (const n of batch) _procRonkaNode(n);
     safe(replaceRonkaLodestone, 'Ronka lodestone 替换')();
   }
 
