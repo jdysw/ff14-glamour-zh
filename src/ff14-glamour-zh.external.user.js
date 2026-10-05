@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.4
+// @version      1.1.5
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2716,10 +2716,12 @@
     if (_tablesReady && (core || t0).length >= 2 && /[^\x00-\x7F]/.test(t0)) {
       let out = text;
       let changed = false;
-      // 长词优先，避免短词先替换
-      for (const k of FC_SUBSTR_KEYS) {
+      // 长词优先，避免短词先替换（v1.1.5：含动态推导的系列前缀）
+      for (const k of _getSubstrKeysAll()) {
         if (!out.includes(k)) continue;
-        out = out.split(k).join(DICT_FC[k]);
+        const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k);
+        if (v == null) continue;
+        out = out.split(k).join(v);
         changed = true;
       }
       if (changed) return out;
@@ -2731,6 +2733,45 @@
   const FC_SUBSTR_KEYS = Object.keys(DICT_FC)
     .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k))
     .sort((a, b) => b.length - a.length);
+
+  // v1.1.5：系列名前缀推导（从系列表「系列・职业」条目反推「系列→系列译」）
+  // 用途：长标题等「裸前缀」场景（如 H1「ファントムヴィジョン・法系装备」）；严格双验证：
+  //   ① 条目尾部是已知职业词（FC_ROLE_ZH）② 译文以该职业译名结尾 → 切出前缀译
+  //   仅当同一前缀所有样本译名一致（set.size === 1）才启用；带缓存，数据就绪后懒构建。
+  let _seriesPfxCache = null;
+  let _allKeysCache = null;
+  function _getSeriesPfx() {
+    if (_seriesPfxCache) return _seriesPfxCache;
+    _seriesPfxCache = new Map();
+    try {
+      const map = _getSeriesMap();
+      if (map.size) {
+        const cand = new Map();
+        for (const [jp, zh] of map) {
+          const di = jp.lastIndexOf('・');
+          if (di <= 0) continue;
+          const roleZh = FC_ROLE_ZH[jp.slice(di + 1)];
+          if (!roleZh || !zh.endsWith(roleZh)) continue;
+          const zhHead = zh.slice(0, zh.length - roleZh.length);
+          if (zhHead.length < 2) continue;
+          const key = jp.slice(0, di);
+          if (key.length < 3) continue;
+          if (!cand.has(key)) cand.set(key, new Set());
+          cand.get(key).add(zhHead);
+        }
+        for (const [key, set] of cand) if (set.size === 1) _seriesPfxCache.set(key, [...set][0]);
+      }
+    } catch (e) {}
+    return _seriesPfxCache;
+  }
+  function _getSubstrKeysAll() {
+    if (_allKeysCache) return _allKeysCache;
+    const keys = FC_SUBSTR_KEYS.slice();
+    for (const k of _getSeriesPfx().keys()) if (!DICT_FC[k]) keys.push(k);
+    keys.sort((a, b) => b.length - a.length);
+    _allKeysCache = keys;
+    return keys;
+  }
 
   const FC_SKIP_SEL = 'script, style, noscript, textarea, .sns, .twitter, .line';
 
@@ -3587,6 +3628,8 @@
     try { _en2zhCache.clear(); } catch (e) {}
     try { _jp2zhCache.clear(); } catch (e) {}
     try { _seriesMap = null; } catch (e) {}
+    try { _seriesPfxCache = null; } catch (e) {}
+    try { _allKeysCache = null; } catch (e) {}
     try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) {}
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) {} }
@@ -4182,7 +4225,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.4 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.5 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (onHost(host, 'mirapri.com')) { startMirapri(); startItems(); }
