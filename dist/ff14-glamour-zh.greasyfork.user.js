@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.3
+// @version      1.2.4
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -482,7 +482,7 @@
     '흰색': '白',
   };
 
-  const DICT = Object.assign({}, DICT_COMMON, {
+  const DICT = { ...DICT_COMMON,
     'ファッションチェック': '时尚品鉴',
     '投稿ガイドライン': '投稿指南',
     '新規会員登録': '注册新会员',
@@ -594,7 +594,7 @@
     '※チェックを入れると、お名前等がブラウザに記録されます。次回投稿時に入力が省けます。': '※勾选后，名称等会记录在浏览器中，下次投稿时无需再次输入。',
     '«　前のミラプリ': '«　上一个幻化',
     '次のミラプリ　»': '下一个幻化　»',
-  });
+  };
 
   /* =====================================================================
    * 第二部分：Eorzea Collection（ffxiv.eorzeacollection.com）界面汉化
@@ -602,7 +602,7 @@
    * 采用「整段精确匹配」，用户产出的标题/作者/描述不会被误翻
    * ===================================================================== */
 
-  const DICT_EC = Object.assign({}, DICT_COMMON, {
+  const DICT_EC = { ...DICT_COMMON,
     ', all about glamour.': '，一切都关于幻化。',
     'A Pair of Wings': '双翼',
     'A Realm Reborn': '重生之境',
@@ -1100,7 +1100,7 @@
     '— Recently Popular —': '— 最近流行 —',
     'FINAL FANTASY XIV Online Store': '最终幻想 XIV 在线商店',
     'Online Store': '在线商店',
-  });
+  };
 
   // EC 上会变动的文本（数量、时间、页数…）
   const PATTERNS_EC = [
@@ -1133,7 +1133,7 @@
     // 时间中文化：3:00 PM -> 15:00；12:30 AM -> 00:30
     [/\b(\d{1,2}):(\d{2})\s*(AM|PM)\b/gi,
       (m0, h, mi, ap) => {
-        let hh = parseInt(h, 10) % 12;
+        let hh = Number.parseInt(h, 10) % 12;
         if (/pm/i.test(ap)) hh += 12;
         return (hh < 10 ? '0' + hh : String(hh)) + ':' + mi;
       }],
@@ -1186,7 +1186,7 @@
     if (!en) return null;
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
     // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 buildTables 展开）
-    const out = (nameMap && nameMap[en]) || null;
+    const out = nameMap?.[en] || null;
     _en2zhCache.set(en, out);
     return out;
   }
@@ -1203,7 +1203,7 @@
       return text.slice(0, i) + hit + text.slice(i + t.length);
     }
     // 纯英文短串（字母开头，含有限符号）→ 查主表/染剂表拿国服中文名
-    if (/^[A-Za-z]/.test(t) && /^[A-Za-z0-9'\-\.,:&!? ()（）'']+$/.test(t)) {
+    if (/^[A-Za-z]/.test(t) && /^[A-Za-z0-9'\-.,:&!? ()（）]+$/.test(t)) {
       const zhName = tryEnToZh(t);
       if (zhName && zhName !== t) {
         const i2 = text.indexOf(t);
@@ -1217,15 +1217,15 @@
 
   function trimECNode(node) {
     const raw = node.nodeValue;
-    if (!raw || !raw.trim()) return;
+    if (!raw?.trim()) return;
     const p = node.parentElement;
-    if (p && p.closest && p.closest(EC_SKIP_SEL)) return;
+    if (p?.closest?.(EC_SKIP_SEL)) return;
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
-    if (p && p.closest && p.closest(EC_ITEM_SKIP_SEL)) return;
+    if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
     const next = trEC(raw);
     if (next !== raw) {
-      if (p && !p.title) { p.title = raw.trim(); if (typeof _zhixiaTitleKeep !== 'undefined') _zhixiaTitleKeep.add(p); }
+      if (p && !p.title) { p.title = raw.trim(); _zhixiaTitleKeep.add(p); }
       node.nodeValue = next;
     }
   }
@@ -1237,7 +1237,7 @@
   const _zhixiaTitleKeep = new WeakSet();
 
   function translateECAttrs(rootArg) {
-    const attrRoot = rootArg && rootArg.querySelectorAll ? rootArg : document;
+    const attrRoot = rootArg?.querySelectorAll ? rootArg : document;
     ['alt', 'aria-label'].forEach((attr) => {
       attrRoot.querySelectorAll('[' + attr + ']').forEach((el) => {
         const flag = 'zhixiaA' + (attr === 'alt' ? 'lt' : 'Lbl');
@@ -1275,9 +1275,9 @@
           if (n.nodeType === 1) {
             if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
             // 选择器级剪枝：忽略区域整棵子树不再进入（v1.11.1，借 github-chinese FILTER_REJECT）
-            if (n.closest && n.closest(EC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+            if (n.closest?.(EC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
             // 同 trimECNode：物品链管辖的子树（装备名 / 卡片）不在文本链处理
-            if (n.closest && n.closest(EC_ITEM_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+            if (n.closest?.(EC_ITEM_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
           }
           return NodeFilter.FILTER_ACCEPT;
         },
@@ -1316,7 +1316,7 @@
     document.querySelectorAll('a > img[src*="/pages/header/banner-"]').forEach((img) => {
       const a = img.parentElement;
       if (!a || a.dataset.zhixiaPiece) return;
-      const m = (img.getAttribute('src') || '').match(/banner-[\w-]+\.png/);
+      const m = /banner-[\w-]+\.png/.exec(img.getAttribute('src') || '');
       const zh = m && EC_PIECE_TILES[m[0]];
       if (!zh) return;
       a.dataset.zhixiaPiece = '1';
@@ -1374,11 +1374,11 @@
 
   function trNode(node) {
     const raw = node.nodeValue;
-    if (!raw || !raw.trim() || raw.trim().length > 200) return;
+    if (!raw?.trim() || raw.trim().length > 200) return;
     const next = tr(raw);
     if (next !== raw) {
       const p = node.parentElement;
-      if (p && !p.title) { p.title = raw.trim(); if (typeof _zhixiaTitleKeep !== 'undefined') _zhixiaTitleKeep.add(p); }
+      if (p && !p.title) { p.title = raw.trim(); _zhixiaTitleKeep.add(p); }
       node.nodeValue = next;
     }
   }
@@ -1492,7 +1492,7 @@
       'a[href*="garlandtools"], a[href*="ff14risingstones"], a[href*="risingstones"]');
     for (const a of as) {
       const h = a.getAttribute('href') || '';
-      const m = h.match(/#item\/(\d+)/) || h.match(/[?&]equipmentid=(\d+)/) || m_last(h);
+      const m = /#item\/(\d+)/.exec(h) || /[?&]equipmentid=(\d+)/.exec(h) || m_last(h);
       if (m) return typeof m === 'string' ? m : m[1];
     }
     return null;
@@ -1522,11 +1522,11 @@
     const h = document.querySelector('#firstHeading, h1.firstHeading, h1');
     if (!t && h) {
       const it = h.innerText || '';
-      const firstLine = it.split('\n').map((x) => x.trim()).filter(Boolean)[0] || '';
+      const firstLine = it.split('\n').map((x) => x.trim()).find(Boolean) || '';
       t = ok(firstLine) || ok(h.textContent);
     }
     if (!t) {
-      const m = (document.title || '').match(/^\s*(?:物品|道具|Item)\s*[:：]\s*([^\-|]{1,40})/i);
+      const m = /^\s*(?:物品|道具|Item)\s*[:：]\s*([^\-|]{1,40})/i.exec(document.title || '');
       if (m) t = ok(m[1]);
     }
     return t;
@@ -1534,7 +1534,7 @@
 
   // 中文名 → 韩文名（Ronka 反查；构建自物品总表）
   function ronkaKoByZh(zh) {
-    return (zh && koByZh && koByZh[zh]) ? koByZh[zh] : null;
+    return (zh && koByZh?.[zh]) ? koByZh[zh] : null;
   }
 
   // 装备栏目（部位）
@@ -1579,7 +1579,7 @@
   function injectWikiButton() {
     // 幂等重建：数据晚到时刷新会先移除上一版区块再重建
     const prev = document.querySelector('.zhixia-reverse-block');
-    if (prev && prev.parentElement) prev.parentElement.removeChild(prev);
+    if (prev) prev.remove();
 
     // 仅在装备页注入：页面 infobox 部位类目须属于幻化装备（与 EC 链接同一判定）。
     // 非装备页（消耗品/素材/家具/任务/NPC 等）直接退出——既不注入反查区块，
@@ -1589,9 +1589,9 @@
     // 原「其他站点链接」列表里的光之收藏家移除（新块内已有，避免重复）
     const src = blockByTitle('其他站点链接');
     if (src) {
-      for (const a of [...src.querySelectorAll('a')]) {
+      for (const a of src.querySelectorAll('a')) {
         const h = a.getAttribute('href') || '';
-        if (/risingstones/i.test(h) || (a.textContent || '').indexOf('光之收藏家') >= 0) {
+        if (/risingstones/i.test(h) || (a.textContent || '').includes('光之收藏家')) {
           const li = a.closest('li');
           (li || a).remove();
         }
@@ -1623,11 +1623,11 @@
     block.appendChild(ul);
 
     // 位置：「其他站点链接」区块之后；无该区块时退回 infobox / 正文顶
-    if (src && src.parentElement) {
+    if (src?.parentElement) {
       src.parentElement.insertBefore(block, src.nextSibling);
     } else {
       const info = document.querySelector('.infobox, [class*="infobox"]');
-      if (info && info.parentElement) {
+      if (info?.parentElement) {
         info.parentElement.insertBefore(block, info.nextSibling);
       } else {
         const content = document.querySelector('#mw-content-text, .mw-parser-output, #content');
@@ -1642,7 +1642,7 @@
    * ===================================================================== */
 
   // 界面词表（日文 → 中文），按 FF14 国服官方译名
-  const DICT_FC = Object.assign({}, DICT_COMMON, {
+  const DICT_FC = { ...DICT_COMMON,
     '部位別': '按部位',
     'シリーズ': '系列',
     'ヘアカタログ': '发型图鉴',
@@ -2335,10 +2335,10 @@
     'ヤ': '雅',
     'シュトラ': '修特拉',
     'ヨルハ': '寄叶',
-  });
+  };
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 dict/dict-ronka.json 注入）
-  const DICT_RONKA = Object.assign({}, DICT_COMMON, {
+  const DICT_RONKA = { ...DICT_COMMON,
     '기본색': '基础色',
     '하얀눈색': '素雪白',
     '구부 회색': '古菩灰',
@@ -2600,7 +2600,7 @@
     '게시물 중': '帖子中',
     '게시물 중 ': '帖子中 ',
     '파이널판타지14 운영정책': '最终幻想14 运营政策',
-  });
+  };
 
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
@@ -2608,7 +2608,7 @@
   function lookupJp2Zh(jp) {
     if (!jp || jp.length > 80) return null;   // v1.12.0 放宽
     if (_jp2zhCache.has(jp)) return _jp2zhCache.get(jp);
-    const out = (nameMap && nameMap[jp]) || null;
+    const out = nameMap?.[jp] || null;
     _jp2zhCache.set(jp, out);
     return out;
   }
@@ -2664,7 +2664,7 @@
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
   function trFCSegments(t) {
-    if (!t || t.indexOf('・') < 0) return null;
+    if (!t || !t.includes('・')) return null;
     const parts = t.split('・');
     if (parts.length < 2 || parts.length > 5) return null;
     let hit = 0;
@@ -2788,7 +2788,7 @@
         }
         for (const [key, set] of cand) if (set.size === 1) _seriesPfxCache.set(key, [...set][0]);
       }
-    } catch (e) {}
+    } catch (e) { /* 忽略：系列前缀推导 best-effort，失败返回空表 */ }
     return _seriesPfxCache;
   }
   function _getSubstrKeysAll() {
@@ -2827,7 +2827,7 @@
         const sub = _lcs90(list);
         if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
       }
-    } catch (e) {}
+    } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
   }
   function _lcs90(list) {
@@ -2840,7 +2840,7 @@
       for (let i = 0; i + len <= shortest.length; i++) {
         const sub = shortest.slice(i, i + len);
         let c = 0;
-        for (const x of list) if (x.indexOf(sub) !== -1) c++;
+        for (const x of list) if (x.includes(sub)) c++;
         if (c >= need) return sub;
       }
     }
@@ -2851,9 +2851,9 @@
 
   function trimFCNode(node) {
     const raw = node.nodeValue;
-    if (!raw || !raw.trim()) return;
+    if (!raw?.trim()) return;
     const p = node.parentElement;
-    if (p && p.closest && p.closest(FC_SKIP_SEL)) return;
+    if (p?.closest?.(FC_SKIP_SEL)) return;
     const next = trFC(raw);
     if (next !== raw) node.nodeValue = next;
   }
@@ -2865,14 +2865,14 @@
       window.__zhixiaFcBusy = true;
     }
     try {
-      if (rootArg && rootArg.nodeType === 3) { trimFCNode(rootArg); return; }
+      if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
       const root = rootArg || document.body;
       if (!root) return;
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
           if (n.nodeType === 1) {
             if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-            if (n.closest && n.closest(FC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+            if (n.closest?.(FC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
           }
           return NodeFilter.FILTER_ACCEPT;
         },
@@ -2928,7 +2928,7 @@
     if (!t || t.length < 2 || t.length > 60) return null;
     // v1.2.1：① Lodestone hash 直查（hash→物品表中文名，不受文本侧子串替换污染，如「春日护手【想】」）
     const hm = (a.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-    if (hm && itemHash && itemHash[hm[1]]) {
+    if (hm && itemHash?.[hm[1]]) {
       const z = itemHash[hm[1]];
       if (z && z !== t) return z;
     }
@@ -2939,7 +2939,7 @@
       if (z && z !== t) return z;
     }
     // 已是中文（或中日共用汉字）→ 去掉空格直接用
-    if (/^[\u4e00-\u9fff·・\u3040-\u30ffA-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) {
+    if (/^[\u4e00-\u9fff·\u3040-\u30ffA-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) {
       return t;
     }
     return null;
@@ -2974,7 +2974,7 @@
     window.__zhixiaFcJump = true;
     document.addEventListener('click', (e) => {
       const el0 = e.target;
-      if (!el0 || !el0.closest) return;
+      if (!el0?.closest) return;
       // ① 站内导航/卡片链接放行（非外服）
       if (el0.closest('a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/summary/"], a[href*="/fashion_accessories/"], a[href*="/modern_aesthetics/"]')) return;
       // ② 已是灰机的链接放行
@@ -2994,7 +2994,7 @@
           // v1.2.1：① Lodestone hash 直查（不受文本污染）
           if (probe.tagName === 'A') {
             const hm = (probe.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-            if (hm && itemHash && itemHash[hm[1]]) z = itemHash[hm[1]];
+            if (hm && itemHash?.[hm[1]]) z = itemHash[hm[1]];
           }
           // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
           if (!z) {
@@ -3041,7 +3041,7 @@
     { match: /banner_005|weapon_search|武器シリーズ/i, zh: '武器系列' },
   ];
   function fcBannerMatch(a, img) {
-    const probe = ((img && (img.getAttribute('data-src') || img.getAttribute('src') || img.getAttribute('title') || img.getAttribute('alt'))) || '') + ' ' + (a.getAttribute('href') || '');
+    const probe = ((img && (img.dataset.src || img.getAttribute('src') || img.getAttribute('title') || img.getAttribute('alt'))) || '') + ' ' + (a.getAttribute('href') || '');
     for (const r of FC_BANNER_RULES) if (r.match.test(probe)) return r;
     return null;
   }
@@ -3084,7 +3084,7 @@
       const img = a.querySelector('img');
       if (!img) return;
       const href = a.getAttribute('href') || '';
-      const mm = href.match(/weapon_search\/([a-z_0-9]+)\//);
+      const mm = /weapon_search\/([a-z_0-9]+)\//.exec(href);
       if (!mm) return;
       const zh = FC_WEAPON_CARDS[mm[1]];
       if (!zh) return;
@@ -3143,7 +3143,7 @@
   const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]+$/;
   const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;
 
-  const DICT_ACL = Object.assign({}, DICT_COMMON, {
+  const DICT_ACL = { ...DICT_COMMON,
     'クラス / ジョブ': '职业 / 特职',
     'アイテム': '物品',
     '広告': '广告',
@@ -3255,7 +3255,7 @@
     '詩学': '诗学',
     'ゲーム開発を学ぶ': '学习游戏开发',
     'AF': '校服',
-  });
+  };
 
   function trACL(text) {
     if (!text) return text;
@@ -3329,13 +3329,13 @@
   function markACLItem(node, translated) {
     if (!translated || translated.length > 50) return;
     const p = node.parentElement;
-    if (!p || p.tagName !== 'P') return;
+    if (p?.tagName !== 'P') return;
     const wrap = p.parentElement;
-    if (!wrap || !wrap.classList || !wrap.classList.contains('item-name')) return;
+    if (!wrap?.classList?.contains('item-name')) return;
     // 排除部位名（<p class="region-name">頭防具</p>），只标记装备名
     if (p.classList.contains('region-name')) return;
-    if (p.getAttribute('data-zhx-item') === translated) return;
-    p.setAttribute('data-zhx-item', translated);
+    if (p.dataset.zhxItem === translated) return;
+    p.dataset.zhxItem = translated;
     p.setAttribute('title', '点击查看灰机 wiki 物品页');
   }
 
@@ -3351,9 +3351,9 @@
     if (window[flag]) return;
     window[flag] = true;
     document.addEventListener('click', (e) => {
-      const el = e.target && e.target.closest ? e.target.closest('[data-zhx-item]') : null;
+      const el = e.target?.closest?.('[data-zhx-item]') ?? null;
       if (!el) return;
-      const zh = el.getAttribute('data-zhx-item');
+      const zh = el.dataset.zhxItem;
       if (!zh) return;
       e.preventDefault();
       e.stopPropagation();
@@ -3373,7 +3373,7 @@
       let nameEl = null;
       for (const p of ps) if (!p.classList.contains('region-name')) { nameEl = p; break; }
       if (!nameEl) continue;
-      let zh = nameEl.getAttribute('data-zhx-item');
+      let zh = nameEl.dataset.zhxItem;
       if (!zh) {
         const t0 = (nameEl.textContent || '').trim();
         if (!t0) continue;
@@ -3404,9 +3404,9 @@
 
   function trimACLNode(node) {
     const raw = node.nodeValue;
-    if (!raw || !raw.trim()) return;
+    if (!raw?.trim()) return;
     const pe = node.parentElement;
-    if (pe && pe.closest && pe.closest(ACL_SKIP_SEL)) return;
+    if (pe?.closest?.(ACL_SKIP_SEL)) return;
     const next = trACL(raw);
     if (next !== raw) {
       node.nodeValue = next;
@@ -3415,14 +3415,14 @@
   }
 
   function translateACLPage(rootArg) {
-    if (rootArg && rootArg.nodeType === 3) { trimACLNode(rootArg); return; }
+    if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
     const root = rootArg || document.body;
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n) => {
         if (n.nodeType === 1) {
           if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-          if (n.closest && n.closest(ACL_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+          if (n.closest?.(ACL_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
       },
@@ -3434,7 +3434,7 @@
       else if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
         const ph = n.getAttribute('placeholder');
         if (ph) { const nn = trACL(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-      } else if (n.hasAttribute && n.hasAttribute('title')) {
+      } else if (n.hasAttribute?.('title')) {
         const ti = n.getAttribute('title');
         if (ti && /[\u3040-\u30ff]/.test(ti)) { const nn = trACL(ti); if (nn !== ti) n.setAttribute('title', nn); }
       }
@@ -3482,7 +3482,7 @@
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
     if (ko in RONKA_ITEM_CACHE) return RONKA_ITEM_CACHE[ko];
-    const v = (nameMap && nameMap[ko]) || null;
+    const v = nameMap?.[ko] || null;
     RONKA_ITEM_CACHE[ko] = v;
     return v;
   }
@@ -3533,11 +3533,11 @@
   function markRonkaItem(node, translated) {
     if (!translated || translated.length > 40) return;
     const p = node.parentElement;
-    if (!p || p.tagName !== 'P') return;
+    if (p?.tagName !== 'P') return;
     const wrap = p.parentElement;
-    if (!wrap || !wrap.classList || !wrap.classList.contains('post-item-information')) return;
-    if (p.getAttribute('data-zhx-item') === translated) return;
-    p.setAttribute('data-zhx-item', translated);
+    if (!wrap?.classList?.contains('post-item-information')) return;
+    if (p.dataset.zhxItem === translated) return;
+    p.dataset.zhxItem = translated;
     p.setAttribute('title', '点击查看灰机 wiki 物品页');
   }
 
@@ -3548,8 +3548,8 @@
     const links = document.querySelectorAll('.post-search-modal a[href*="lodestone"]');
     for (const a of links) {
       const box = a.closest('.item-searcher');
-      const itemEl = box && box.querySelector('[data-zhx-item]');
-      const zh = itemEl && itemEl.getAttribute('data-zhx-item');
+      const itemEl = box?.querySelector('[data-zhx-item]');
+      const zh = itemEl?.dataset?.zhxItem;
       if (!zh) continue;
       a.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
       a.textContent = '';
@@ -3582,9 +3582,9 @@
 
   function trimRonkaNode(node) {
     const raw = node.nodeValue;
-    if (!raw || !raw.trim()) return;
+    if (!raw?.trim()) return;
     const p = node.parentElement;
-    if (p && p.closest && p.closest(RONKA_SKIP_SEL)) return;
+    if (p?.closest?.(RONKA_SKIP_SEL)) return;
     const next = trRonka(raw);
     if (next !== raw) {
       node.nodeValue = next;
@@ -3593,7 +3593,7 @@
   }
 
   function translateRonkaPage(rootArg) {
-    if (rootArg && rootArg.nodeType === 3) { trimRonkaNode(rootArg); return; }
+    if (rootArg?.nodeType === 3) { trimRonkaNode(rootArg); return; }
     if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
     const root = rootArg || document.body;
     if (!root) return;
@@ -3601,7 +3601,7 @@
       acceptNode: (n) => {
         if (n.nodeType === 1) {
           if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-          if (n.closest && n.closest(RONKA_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+          if (n.closest?.(RONKA_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
       },
@@ -3621,7 +3621,7 @@
         }
         const ti = n.getAttribute('title');
         if (ti) { const nn = trRonka(ti); if (nn !== ti) n.setAttribute('title', nn); }
-      } else if (n.hasAttribute && n.hasAttribute('aria-label')) {
+      } else if (n.hasAttribute?.('aria-label')) {
         const al = n.getAttribute('aria-label');
         if (al) { const nn = trRonka(al); if (nn !== al) n.setAttribute('aria-label', nn); }
       }
@@ -3646,7 +3646,7 @@
       let need = false;
       for (const m of muts) {
         if (m.type === 'childList' && m.addedNodes.length) { need = true; break; }
-        if (m.type === 'characterData' && m.target && m.target.nodeValue && RONKA_KR.test(m.target.nodeValue)) { need = true; break; }
+        if (m.type === 'characterData' && m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)) { need = true; break; }
       }
       if (!need || rkTimer) return;
       rkTimer = setTimeout(() => {
@@ -3724,7 +3724,7 @@
     try { _itemPfxCache = null; } catch (e) {}
     try { _allKeysCache = null; } catch (e) {}
     try { _fcSubstrCache = null; } catch (e) {}
-    try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) {}
+    try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) { /* 忽略：缓存清理 best-effort，失败无碍 */ }
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) {} }
   }
@@ -3761,15 +3761,14 @@
 
   // EC 装备 ID 单条查找（中文名 → EC_ID 映射，构建自物品总表）
   function lookupEcIdByZh(zh) {
-    return (zh && ecidMap && ecidMap[zh]) ? String(ecidMap[zh]) : null;
+    return (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null;
   }
   function buildTables() {
     itemHash = {}; ecidMap = {}; nameMap = {}; koByZh = {};
     const lines = ITEM_DB_TEXT.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const ln = lines[i];
+    for (const ln of lines) {
       if (!ln) continue;
-      const c0 = ln.charCodeAt(0);
+      const c0 = ln.codePointAt(0);
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;   // 仅「数字」或「-」开头的行（跳过表头）
       const p = ln.split('\t');
       if (p.length < 5) continue;
@@ -3786,7 +3785,7 @@
     // 染剂色名回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」（仅当 Xxx 未被其他名占用）
     const extra = [];
     for (const k in nameMap) {
-      if (k.length > 4 && k.slice(-4) === ' Dye') {
+      if (k.length > 4 && k.endsWith(' Dye')) {
         const base = k.slice(0, -4);
         if (nameMap[base] === undefined) extra.push(base, nameMap[k]);
       }
@@ -3796,7 +3795,7 @@
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
         无持久缓存（本次页面内仍可工作）────────────────────────────── */
-  function _storeNorm(x) { return typeof x === 'string' ? x : (x == null ? null : String(x)); }
+  function _storeNorm(x) { if (typeof x === 'string') return x; return x == null ? null : String(x); }
   function storeGetAsync(k) {
     return new Promise((resolve) => {
       try {
@@ -3810,7 +3809,7 @@
           GM.getValue(k, null).then((x) => resolve(_storeNorm(x)), () => resolve(null));
           return;
         }
-      } catch (e) {}
+      } catch (e) { /* 忽略：存储读取失败按无缓存处理 */ }
       resolve(null);
     });
   }
@@ -3825,7 +3824,7 @@
         GM.setValue(k, v).then(() => {}, () => {});
         return;
       }
-    } catch (e) {}
+    } catch (e) { /* 忽略：存储写入失败不阻断主流程 */ }
   }
 
   /* ── 网络：优先 GM_xmlhttpRequest（不受页面 CSP/CORS 限制），无则 fetch ── */
@@ -3839,7 +3838,7 @@
           GM_xmlhttpRequest({
             method: 'GET', url,
             timeout: timeout || 20000,
-            onload: (r) => { (r && r.status >= 200 && r.status < 300) ? ok(r.responseText || '') : bad(new Error('HTTP ' + (r && r.status))); },
+            onload: (r) => { (r?.status >= 200 && r.status < 300) ? ok(r.responseText || '') : bad(new Error('HTTP ' + r?.status)); },
             onerror: () => bad(new Error('network')),
             ontimeout: () => bad(new Error('timeout')),
           });
@@ -3856,8 +3855,8 @@
             }
           } catch (e) {}
           fetch(url, ctl ? { signal: ctl.signal } : {}).then(
-            (r) => { if (tm) clearTimeout(tm); return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); },
-            (e) => { if (tm) clearTimeout(tm); throw e; }
+            (r) => { if (tm) { clearTimeout(tm); } return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); },
+            (e) => { if (tm) { clearTimeout(tm); } throw e; }
           ).then(ok, bad);
           return;
         }
@@ -3892,7 +3891,7 @@
      另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
      不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
   function applyRuntimeDict(txt) {
-    if (typeof txt !== 'string' || !txt || txt.charAt(0) !== '{') return;
+    if (typeof txt !== 'string' || !txt.startsWith('{')) return;
     let d = null;
     try { d = JSON.parse(txt); } catch (e) { return; }
     if (!d || typeof d !== 'object') return;
@@ -3915,11 +3914,11 @@
         if (!obj) continue;
         const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
         if (extra) for (const k in extra) check(obj, k, extra[k]);
-        if (common) for (const k in common) { if (extra && extra[k] !== undefined) continue; check(obj, k, common[k]); }
+        if (common) { for (const k in common) { if (extra?.[k] !== undefined) continue; check(obj, k, common[k]); } }
         if (common) Object.assign(obj, common);
         if (extra) Object.assign(obj, extra);
       }
-    } catch (e) {}
+    } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
     // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）
     try { _fcSubstrCache = null; } catch (e) {}
     try { _allKeysCache = null; } catch (e) {}
@@ -3927,7 +3926,7 @@
     try { _sweepDictFixes(fixes); } catch (e) {}
   }
   function _sweepDictFixes(fixes) {
-    if (!fixes || !fixes.length) return;
+    if (!fixes?.length) return;
     const seen = new Set();
     const uniq = [];
     for (const [oldV, newV] of fixes) {
@@ -3949,7 +3948,7 @@
       if (!v) continue;
       let changed = false;
       for (const [oldV, newV] of uniq) {
-        if (v.indexOf(oldV) >= 0) { v = v.split(oldV).join(newV); changed = true; }
+        if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
       }
       if (changed) { try { n.nodeValue = v; } catch (e) {} }
     }
@@ -3990,8 +3989,8 @@
       const local = {};
       await Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {})));
       let meta = null;
-      try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { meta = null; }
-      const fresh = !!(meta && meta.t && (Date.now() - meta.t < DAY_MS));
+      try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理 */ meta = null; }
+      const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
       const allCached = need.every((t) => !!local[t]);
       if (allCached && fresh) {
         for (const t of need) applyTable(t, local[t].tx);
@@ -4001,18 +4000,18 @@
       // ② 拉版本清单；失败不致命（有缓存用缓存，无缓存盲拉）
       let ver = null;
       try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
-      const vfps = (ver && ver.files && typeof ver.files === 'object') ? ver.files : null;
+      const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
       // ③ 逐表：指纹一致 → 缓存；不一致 / 缺失 → 下载（失败时回退旧缓存）
       let okCount = 0;
       await Promise.all(need.map(async (t) => {
         try {
-          const fp = vfps && vfps[t] ? String(vfps[t]) : null;
+          const fp = vfps?.[t] ? String(vfps[t]) : null;
           const cached = local[t] || null;
-          if (fp && cached && cached.fp === fp) { applyTable(t, cached.tx); okCount++; return; }
+          if (fp && cached?.fp === fp) { applyTable(t, cached.tx); okCount++; return; }
           if (!fp && cached) { applyTable(t, cached.tx); okCount++; return; }   // 无版本信息时不盲刷
           let txt = null;
           try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
-          const fmtOk = (t === 'dict') ? (txt && txt.charAt(0) === '{') : (txt && (txt.indexOf('\t') >= 0 || txt.indexOf('|') >= 0));
+          const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
           if (txt && txt.length > 100 && fmtOk) {
             applyTable(t, txt);
             _writeCachedTable(t, fp, txt);
@@ -4020,11 +4019,11 @@
           } else if (cached) {
             applyTable(t, cached.tx); okCount++;             // 下载失败 → 兜底旧缓存
           }
-        } catch (e) {}
+        } catch (e) { /* 忽略：单表下载/处理失败，跳过 */ }
       }));
       // ④ 全部表可用且拿到版本清单时记录检查时间：当天不再重复探测
       //（数据更新次日生效；未记录时下次访问自动重试）
-      if (ver && ver.v) DATA_VER = String(ver.v);
+      if (ver?.v) DATA_VER = String(ver.v);
       if (ver && okCount === need.length) {
         storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
       }
@@ -4055,9 +4054,9 @@
     if (a) {
       const h = a.getAttribute('href') || '';
       const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-      if (m && itemHash && itemHash[m[1]]) return itemHash[m[1]];
+      if (m && itemHash?.[m[1]]) return itemHash[m[1]];
     }
-    if (nameMap && nameMap[name]) return nameMap[name];
+    if (nameMap?.[name]) return nameMap[name];
     const zhAuto = tryEnToZh(name);           // ★ 外文名自动查物品总表
     if (zhAuto) return zhAuto;
     return null;
@@ -4079,7 +4078,7 @@
     outer: for (const n of nodes) {
       if (n.nodeType === 1) {
         for (const p of out) {
-          if (p.nodeType === 1 && p.contains && p.contains(n)) continue outer;
+          if (p.nodeType === 1 && p.contains?.(n)) continue outer;
         }
       }
       out.push(n);
@@ -4117,7 +4116,7 @@
       if (sp.classList.contains('zhixia-item-zh')) return;
       const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) return;
-      if (!nameMap || !nameMap[name]) return;
+      if (!nameMap?.[name]) return;
       list.push({ sp, name });
     });
     return list;
@@ -4140,7 +4139,7 @@
       if (el.dataset.zhixiaCard) return;
       const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) return;
-      if (!nameMap || !nameMap[name]) return;
+      if (!nameMap?.[name]) return;
       list.push({ el, name });
     });
     return list;
@@ -4209,7 +4208,7 @@
       const m = t.match(/^([\u25EF\u2B24\u25CB\u25CF])\s*(.+)$/);
       if (!m) return;
       const name = m[2].trim();
-      const zh = (nameMap && nameMap[name]) || (name === 'Undyed' ? '未染色' : null);
+      const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
       if (!zh) return;
       list.push({ el, name, zh });
     });
@@ -4224,7 +4223,7 @@
       const walk = (node) => {
         for (const n of Array.from(node.childNodes)) {
           if (n.nodeType === 3) {
-            if (n.nodeValue && n.nodeValue.indexOf(t.name) >= 0) {
+            if (n.nodeValue && n.nodeValue.includes(t.name)) {
               n.nodeValue = n.nodeValue.replace(t.name, zh);
               changed = true;
             }
@@ -4275,7 +4274,7 @@
     window.__zhixiaWikiJumpBound = true;
     document.addEventListener('click', (e) => {
       const el0 = e.target;
-      if (!el0 || !el0.closest) return;
+      if (!el0?.closest) return;
       const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
       let probe = a || el0;
       let guard = 0;
@@ -4327,8 +4326,8 @@
   function zhTargetsIn(root) {
     const list = [];
     const cands = [];
-    if (root.matches && root.matches('a.eorzeadb_link')) cands.push(root);
-    root.querySelectorAll && root.querySelectorAll('a.eorzeadb_link').forEach((a) => cands.push(a));
+    if (root.matches?.('a.eorzeadb_link')) cands.push(root);
+    root.querySelectorAll?.('a.eorzeadb_link').forEach((a) => cands.push(a));
     for (const a of cands) {
       if (a.classList.contains('zhixia-item-zh')) continue;
       const el = a.querySelector('span') || a;
@@ -4343,13 +4342,13 @@
   function zhPlainTargetsIn(root) {
     const list = [];
     const cands = [];
-    if (root.matches && root.matches('span[class*="has-text-rarity-"]')) cands.push(root);
-    root.querySelectorAll && root.querySelectorAll('span[class*="has-text-rarity-"]').forEach((sp) => cands.push(sp));
+    if (root.matches?.('span[class*="has-text-rarity-"]')) cands.push(root);
+    root.querySelectorAll?.('span[class*="has-text-rarity-"]').forEach((sp) => cands.push(sp));
     for (const sp of cands) {
       if (sp.classList.contains('zhixia-item-zh')) continue;
       const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) continue;
-      if (!nameMap || !nameMap[name]) continue;
+      if (!nameMap?.[name]) continue;
       list.push({ sp, name });
     }
     return list;
@@ -4358,13 +4357,13 @@
   function zhCardTargetsIn(root) {
     const list = [];
     const cands = [];
-    if (root.matches && root.matches(EC_CARD_SEL)) cands.push(root);
-    root.querySelectorAll && root.querySelectorAll(EC_CARD_SEL).forEach((el) => cands.push(el));
+    if (root.matches?.(EC_CARD_SEL)) cands.push(root);
+    root.querySelectorAll?.(EC_CARD_SEL).forEach((el) => cands.push(el));
     for (const el of cands) {
       if (el.dataset.zhixiaCard) continue;
       const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) continue;
-      if (!nameMap || !nameMap[name]) continue;
+      if (!nameMap?.[name]) continue;
       list.push({ el, name });
     }
     return list;
@@ -4373,15 +4372,15 @@
   function zhDyeTargetsIn(root) {
     const list = [];
     const cands = [];
-    if (root.matches && root.matches('div.tag, span.tag')) cands.push(root);
-    root.querySelectorAll && root.querySelectorAll('div.tag, span.tag').forEach((el) => cands.push(el));
+    if (root.matches?.('div.tag, span.tag')) cands.push(root);
+    root.querySelectorAll?.('div.tag, span.tag').forEach((el) => cands.push(el));
     for (const el of cands) {
       if (el.classList.contains('zhixia-dye-zh')) continue;
       const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
       const m = t.match(/^([\u25EF\u2B24\u25CB\u25CF])\s*(.+)$/);
       if (!m) continue;
       const name = m[2].trim();
-      const zh = (nameMap && nameMap[name]) || (name === 'Undyed' ? '未染色' : null);
+      const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
       if (!zh) continue;
       list.push({ el, name, zh });
     }
@@ -4391,7 +4390,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  const _ver = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) ? GM_info.script.version : 'dev';
+  const _ver = (typeof GM_info !== 'undefined' && GM_info?.script?.version) ? GM_info.script.version : 'dev';
   console.log('FF14 幻化站中文化脚本已加载 v' + _ver + ' →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();

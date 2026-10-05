@@ -8,14 +8,22 @@ const path = require('path');
 
 function extractDict(src, name) {
   const esc = name.replace(/[\\$]/g, '\\$&');
-  // 支持两种形态：const NAME = {...}  或  const NAME = Object.assign({}, DICT_COMMON, {...})
+  // 支持三种形态：
+  //   const NAME = {...}；const NAME = Object.assign({}, DICT_COMMON, {...})；
+  //   const NAME = { ...DICT_COMMON, ... }（v1.2.4 起展开语法，body 自含 DICT_COMMON）
   const re = new RegExp('const ' + esc + ' = (?:(Object\\.assign\\(\\{\\}, DICT_COMMON, ))?(\\{|\\[)([\\s\\S]*?)\\n  (\\}|\\])');
   const m = src.match(re);
   if (!m) return { missing: true };
   const body = m[2] + m[3] + '\n' + m[4];
   let val;
   try {
-    val = new Function('return (' + body.replace(/;\s*$/, '') + ')')();
+    if (body.indexOf('...DICT_COMMON') !== -1 && name !== 'DICT_COMMON') {
+      // 展开形态：求值前注入 DICT_COMMON（等效运行时 ...DICT_COMMON 展开）
+      const c0 = extractDict(src, 'DICT_COMMON');
+      val = new Function('DICT_COMMON', 'return (' + body.replace(/;\s*$/, '') + ')')(c0.value || {});
+    } else {
+      val = new Function('return (' + body.replace(/;\s*$/, '') + ')')();
+    }
   } catch (e) {
     return { error: String(e).slice(0, 120) };
   }
