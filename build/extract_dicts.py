@@ -1,4 +1,4 @@
-# 提取模板中的 5 个词典块 → dict/*.json
+# 提取模板中的词典块 → dict/*.json（历史工具；词典权威源现为 dict/*.json）
 import re, json, shutil, os
 
 SRC = '/home/ubuntu/zhixia-glamour/src/ff14-glamour-zh.external.user.js'
@@ -10,15 +10,20 @@ s = open(SRC, encoding='utf-8').read()
 
 def find_block(s, name):
     """定位 const <name> = { 或 [ 到匹配的 }; 或 ];，返回 (start, end, body)"""
-    m = re.search(r'\n  const ' + re.escape(name) + r' = ([\{\[])\n', s)
+    m = re.search(r'\n  const ' + re.escape(name) + r' = ', s)
     if not m:
         return None
-    open_ch = m.group(1)
+    # 跳过历史前缀 `Object.assign({}, DICT_COMMON, `（旧模板形态）
+    _pfx = 'Object.assign({}, DICT_COMMON, '
+    off = len(_pfx) if s[m.end():].startswith(_pfx) else 0
+    open_ch = s[m.end() + off]
+    if open_ch not in '{[':
+        return None
     close_ch = '}' if open_ch == '{' else ']'
     start = m.start() + 1  # 跳过前导换行
-    # 从 m.end() 开始数括号平衡
+    # 从开括号之后开始数括号平衡
     depth = 1
-    i = m.end()
+    i = m.end() + off + 1
     while i < len(s) and depth > 0:
         c = s[i]
         if c == open_ch: depth += 1
@@ -35,31 +40,87 @@ def find_block(s, name):
             i = s.find('*/', i) + 1
         i += 1
     end = i  # 指向 close_ch 之后
-    body = s[m.end():i-1]  # 不含外层括号
+    body = s[m.end() + off + 1:i-1]  # 不含外层括号
     return (start, end, body, open_ch, close_ch)
 
-def unescape_js(x):
-    """完整反转义 JS 字符串：\\x -> \\x, \\uXXXX -> 字符, 其余转义字符"""
-    x = x.replace('\\\\', '\x00')          # 双反斜杠先占位
-    x = x.replace("\\'", "'").replace('\\"', '"')
-    x = x.replace('\\n', '\n').replace('\\t', '\t')
-    x = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), x)
-    x = x.replace('\x00', '\\')
-    return x
+def scan_js_string(s, i):
+    """从 s[i]（引号处）扫描到闭合引号，返回 (内容, 下一位置) 或 None（受控扫描，不执行代码）。"""
+    q = s[i]
+    if q not in ("'", '"'):
+        return None
+    i += 1
+    out = []
+    while i < len(s):
+        c = s[i]
+        if c == '\\':
+            n = s[i + 1] if i + 1 < len(s) else ''
+            if n == 'n':
+                out.append('\n')
+            elif n == 'r':
+                out.append('\r')
+            elif n == 't':
+                out.append('\t')
+            elif n == 'u' and i + 5 < len(s):
+                try:
+                    out.append(chr(int(s[i + 2:i + 6], 16)))
+                except ValueError:
+                    out.append(n)
+                i += 6
+                continue
+            else:
+                out.append(n)
+            i += 2
+            continue
+        if c == q:
+            return (''.join(out), i + 1)
+        out.append(c)
+        i += 1
+    return None
+
+def _skip_tail(t, j, allow_comma=True):
+    """j 起跳过空白/可选尾逗号；返回新位置，或 None（存在多余内容）。"""
+    while j < len(t) and t[j] in ' \t':
+        j += 1
+    if allow_comma and j < len(t) and t[j] == ',':
+        j += 1
+        while j < len(t) and t[j] in ' \t':
+            j += 1
+    if j != len(t):
+        return None
+    return j
+
+def parse_kv_line(t):
+    """解析单行 'k': 'v',（单/双引号）→ (k, v) 或 None。"""
+    r1 = scan_js_string(t, 0)
+    if not r1:
+        return None
+    k, i = r1
+    while i < len(t) and t[i] in ' \t':
+        i += 1
+    if i >= len(t) or t[i] != ':':
+        return None
+    i += 1
+    while i < len(t) and t[i] in ' \t':
+        i += 1
+    r2 = scan_js_string(t, i)
+    if not r2:
+        return None
+    v, j = r2
+    if _skip_tail(t, j) is None:
+        return None
+    return (k, v)
 
 def parse_kv_dict(body):
-    """解析 { 'k': 'v', ... } —— 逐行"""
+    """解析 { 'k': 'v', ... } —— 逐行（受控扫描）"""
     pairs = {}
     # 逐行扫描（保留顺序）
     for line in body.split('\n'):
         t = line.strip()
-        if not t or t.startswith('//'):
+        if not t or t.startswith('//') or t.startswith('{') or t.startswith('}') or t.startswith('...'):
             continue
-        mm = re.match(r'''^(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?\s*$''', t)
-        if mm:
-            k = (mm.group(1) if mm.group(1) is not None else mm.group(2)) or ''
-            v = (mm.group(3) if mm.group(3) is not None else mm.group(4)) or ''
-            pairs[unescape_js(k)] = unescape_js(v)
+        kv = parse_kv_line(t)
+        if kv:
+            pairs[kv[0]] = kv[1]
             continue
         print('  未解析行:', t[:90])
     return pairs
@@ -72,10 +133,11 @@ def parse_array(body):
         if not t or t.startswith('//'):
             continue
         # 字符串项
-        mm = re.match(r"^'((?:[^'\\]|\\.)*)'\s*,?\s*$", t)
-        if mm:
-            items.append({'type': 's', 'v': mm.group(1).replace("\\'", "'").replace('\\\\', '\\')})
-            continue
+        if t.startswith("'"):
+            r = scan_js_string(t, 0)
+            if r and _skip_tail(t, r[1]) is not None:
+                items.append({'type': 's', 'v': r[0]})
+                continue
         # /regex/, 'replacement', flags 形式（保守：整行保存）
         items.append({'type': 'raw', 'v': t.rstrip(',')})
     return items
