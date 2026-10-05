@@ -10,7 +10,14 @@ import re, json, sys, os
 
 BASE = '/home/ubuntu/zhixia-glamour'
 DICT_DIR = os.path.join(BASE, 'dict')
-TARGET = sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/ff14-glamour-zh.external.user.js')
+def _guard(p):
+    """仅允许仓库内目标路径（防路径穿越）。"""
+    rp = os.path.realpath(p)
+    if rp != BASE and not rp.startswith(BASE + os.sep):
+        raise SystemExit(f'目标路径越界（仅允许仓库内）: {p}')
+    return rp
+
+TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/ff14-glamour-zh.external.user.js'))
 
 # (变量名, 文件名, kind, 是否站点层)
 FILES = [
@@ -99,7 +106,7 @@ s = open(TARGET, encoding='utf-8').read()
 if find_block(s, 'DICT_COMMON') is None:
     data = json.load(open(os.path.join(DICT_DIR, 'dict-common.json'), encoding='utf-8'))
     new_block = '  const DICT_COMMON = ' + gen_kv(data['entries']) + ';\n\n'
-    anchor = re.search(r'\n  const DICT = ', s)
+    anchor = re.search(r'\n {2}const DICT = ', s)
     assert anchor, '未找到 const DICT 块（无法插入 DICT_COMMON）'
     pos = anchor.start() + 1
     s = s[:pos] + new_block + s[pos:]

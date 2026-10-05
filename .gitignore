@@ -7,6 +7,10 @@ dist/ff14-glamour-zh.user.js
 *.tmp
 .DS_Store
 node_modules/
+__pycache__/
+
+# extract_dicts.py 副产物（块位置信息，供临时脚本读取）
+dict/_blocks.json
 
 # 数据重建下载缓存（不入库）
 build/.cache/

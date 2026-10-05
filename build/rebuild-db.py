@@ -42,8 +42,17 @@ SOURCES = {
 }
 MIN_SIZE = 5 * 1024 * 1024   # 每个 CSV 至少 >5MB，小于视为下载损坏
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 # ───────────────────────── 工具 ─────────────────────────
+
+def safe_path(p, label):
+    """净化 CLI 路径：仅允许仓库内（防路径穿越）。"""
+    rp = os.path.realpath(p)
+    if rp != REPO_ROOT and not rp.startswith(REPO_ROOT + os.sep):
+        raise SystemExit(f'{label} 越界（仅允许仓库内路径）: {p}')
+    return rp
 
 def parse_args():
     import argparse
@@ -131,13 +140,18 @@ def main():
     args = parse_args()
     t0 = time.time()
 
+    # 路径净化：CLI 输入/输出限定在仓库内（防路径穿越）
+    csv_dir = safe_path(args.csv_dir, '--csv-dir') if args.csv_dir else None
+    src_p = safe_path(args.src or args.out, '--src')
+    out_p = safe_path(args.out, '--out')
+
     # 1) 获取四语 CSV
     print('══ 1. 权威源 ══')
     csv_paths = {}
     os.makedirs(CACHE, exist_ok=True)
     for lang in ('cn', 'en', 'ja', 'ko'):
-        if args.csv_dir:
-            p = os.path.join(args.csv_dir, f'{lang}-Item.csv')
+        if csv_dir:
+            p = os.path.join(csv_dir, f'{lang}-Item.csv')
             if not os.path.exists(p):
                 raise SystemExit(f'本地 CSV 不存在: {p}')
             csv_paths[lang] = p
@@ -154,14 +168,14 @@ def main():
 
     # 2) 现有表（补充列继承）
     print('══ 2. 现有表（继承 hash/EC_ID/别名）══')
-    old, extra = load_items_tsv(args.src or args.out)
+    old, extra = load_items_tsv(src_p)
     print(f'  现有 {len(old):,} 个物品 | 特殊行 {len(extra)} 条')
 
     # 3) 并集构建
     print('══ 3. 重建 ══')
     all_keys = set(cn) | set(en) | set(ja) | set(ko) | set(old)
     rows = []
-    n_new = n_kept = n_gone = n_upd_name = 0
+    n_new = n_kept = n_upd_name = 0
     for k in sorted(all_keys):
         o = old.get(k)
         z = cn.get(k) or (o[1] if o else '')
@@ -182,17 +196,17 @@ def main():
         rows.append((k, z, e, j, k2, h, ec, al))
 
     # 4) 写出
-    out_tmp = args.out + '.tmp'
+    out_tmp = out_p + '.tmp'
     with open(out_tmp, 'w', encoding='utf-8') as f:
         f.write('key\tzh\ten\tja\tko\thash\tecid\talias\n')
         for (k, z, e, j, k2, h, ec, al) in rows:
             f.write(f'{k}\t{z}\t{e}\t{j}\t{k2}\t{h}\t{ec}\t{al}\n')
         for p in extra:                   # 特殊行原样继承（如历史神典石）
             f.write('\t'.join(p) + '\n')
-    os.replace(out_tmp, args.out)
+    os.replace(out_tmp, out_p)
 
-    size_mb = os.path.getsize(args.out) / 1048576
-    print(f'  → {args.out}（{len(rows):,} 行 + 特殊 {len(extra)} 行，{size_mb:.2f} MB）')
+    size_mb = os.path.getsize(out_p) / 1048576
+    print(f'  → {out_p}（{len(rows):,} 行 + 特殊 {len(extra)} 行，{size_mb:.2f} MB）')
     print(f'  新增 {n_new:,} | 保留(已移除) {n_kept:,} | 译名更新 {n_upd_name:,}')
     print(f'══ 完成（{time.time()-t0:.0f}s）══')
 
