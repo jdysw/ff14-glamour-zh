@@ -1,0 +1,30 @@
+name: SonarQube Cloud
+
+# SonarQube Cloud（原 SonarCloud）代码质量与安全扫描。
+# 使用 CI 分析模式（需在 SonarQube Cloud 项目里关闭 Automatic Analysis）。
+# SONAR_TOKEN 存放于仓库 Secrets（Settings → Secrets and variables → Actions）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: read # 允许 SonarQube Cloud 在 PR 上装饰分析结果
+
+jobs:
+  sonarqube-cloud:
+    name: SonarQube Cloud Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 完整历史：新代码判定与逐行归属需要
+
+      # 官方扫描 action（v5 浮动标签，Sonar 会随安全修复移动该标签）
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
