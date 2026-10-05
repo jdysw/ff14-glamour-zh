@@ -2,6 +2,8 @@
 
 > **把 FF14 的幻化/穿搭网站变成中文** —— 装备名、染剂色名自动显示为国服中文，还能和灰机 wiki 双向互查。
 
+[![SonarQube Cloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jdysw_ff14-glamour-zh&metric=alert_status)](https://sonarcloud.io/project/overview?id=jdysw_ff14-glamour-zh)
+
 
 ## ✨ 这个脚本能做什么
 
