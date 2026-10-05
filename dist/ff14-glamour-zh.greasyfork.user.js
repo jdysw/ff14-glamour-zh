@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.6
+// @version      1.2.0
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2746,10 +2746,16 @@
     return text;
   }
 
-  // 子串替换词表：长度 ≥ 3 的键按长→短排序（用于长句/alt 兜底）
-  const FC_SUBSTR_KEYS = Object.keys(DICT_FC)
-    .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k))
-    .sort((a, b) => b.length - a.length);
+  // 子串替换词表：长度 ≥ 2 的键按长→短排序（用于长句/alt 兜底）
+  // v1.2.0：改为懒构建函数——词库运行时更新（dict.json）后清缓存即可重算
+  let _fcSubstrCache = null;
+  function _getFCSubstrKeys() {
+    if (_fcSubstrCache) return _fcSubstrCache;
+    _fcSubstrCache = Object.keys(DICT_FC)
+      .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k))
+      .sort((a, b) => b.length - a.length);
+    return _fcSubstrCache;
+  }
 
   // v1.1.5：系列名前缀推导（从系列表「系列・职业」条目反推「系列→系列译」）
   // 用途：长标题等「裸前缀」场景（如 H1「ファントムヴィジョン・法系装备」）；严格双验证：
@@ -2783,7 +2789,7 @@
   }
   function _getSubstrKeysAll() {
     if (_allKeysCache) return _allKeysCache;
-    const keys = FC_SUBSTR_KEYS.slice();
+    const keys = _getFCSubstrKeys().slice();
     for (const k of _getSeriesPfx().keys()) if (!DICT_FC[k]) keys.push(k);
     for (const k of _getItemPfx().keys()) if (!DICT_FC[k]) keys.push(k);
     keys.sort((a, b) => b.length - a.length);
@@ -3695,6 +3701,7 @@
     try { _seriesPfxCache = null; } catch (e) {}
     try { _itemPfxCache = null; } catch (e) {}
     try { _allKeysCache = null; } catch (e) {}
+    try { _fcSubstrCache = null; } catch (e) {}
     try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) {}
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) {} }
@@ -3709,15 +3716,16 @@
     items: 'items.tsv',   // 「key|中|英|日|韩|hash|EC_ID|别名」（制表符分隔，一物品一行）
     series: 'series.txt', // 「日文系列名|国服中文名」
     acl: 'acl.txt',       // 「日文副本名|国服中文名」
+    dict: 'dict.json',    // 词库（6 层合并紧凑 JSON；v1.2.0 起运行时更新，改词无需发版）
   };
   // 站点 → 按需下载的数据表（首访只拉本站所需，之后走本地缓存）
   const SITE_TABLES = {
-    mirapri: ['items'],
-    ec: ['items'],
-    fc: ['items', 'series'],
-    ronka: ['items'],
-    wiki: ['items'],
-    collection: ['items', 'series', 'acl'],
+    mirapri: ['items', 'dict'],
+    ec: ['items', 'dict'],
+    fc: ['items', 'series', 'dict'],
+    ronka: ['items', 'dict'],
+    wiki: ['items', 'dict'],
+    collection: ['items', 'series', 'acl', 'dict'],
   };
 
   let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过
@@ -3856,12 +3864,82 @@
     return [];
   }
 
+  /* ── 词库运行时更新（v1.2.0）：dict.json → 各站词典「原地合并」──────────────
+     词典对象引用遍布引擎（DICT_FC 直查、子串表、派生缓存等），reassign 会使引用失效；
+     故用 Object.assign 原地更新 + 清派生缓存（子串键/前缀），新词全链路即时生效。
+     另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
+     不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
+  function applyRuntimeDict(txt) {
+    if (typeof txt !== 'string' || !txt || txt.charAt(0) !== '{') return;
+    let d = null;
+    try { d = JSON.parse(txt); } catch (e) { return; }
+    if (!d || typeof d !== 'object') return;
+    const common = (d.common && typeof d.common === 'object') ? d.common : null;
+    const layers = [
+      ['main', DICT],
+      ['ec', DICT_EC],
+      ['fc', DICT_FC],
+      ['ronka', DICT_RONKA],
+      ['acl', DICT_ACL],
+    ];
+    const fixes = [];
+    const check = (obj, k, newV) => {
+      const oldV = obj[k];
+      if (typeof oldV === 'string' && oldV && typeof newV === 'string' && newV && oldV !== newV) fixes.push([oldV, newV]);
+    };
+    try {
+      if (common) Object.assign(DICT_COMMON, common);
+      for (const [key, obj] of layers) {
+        if (!obj) continue;
+        const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
+        if (extra) for (const k in extra) check(obj, k, extra[k]);
+        if (common) for (const k in common) { if (extra && extra[k] !== undefined) continue; check(obj, k, common[k]); }
+        if (common) Object.assign(obj, common);
+        if (extra) Object.assign(obj, extra);
+      }
+    } catch (e) {}
+    // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）
+    try { _fcSubstrCache = null; } catch (e) {}
+    try { _allKeysCache = null; } catch (e) {}
+    // 定向替换：旧译 → 新译（去重后单次全页扫描）
+    try { _sweepDictFixes(fixes); } catch (e) {}
+  }
+  function _sweepDictFixes(fixes) {
+    if (!fixes || !fixes.length) return;
+    const seen = new Set();
+    const uniq = [];
+    for (const [oldV, newV] of fixes) {
+      if (!oldV || !newV || oldV === newV) continue;
+      const k = oldV + '\u0000' + newV;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      uniq.push([oldV, newV]);
+    }
+    if (!uniq.length || !document.body) return;
+    const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement && skipTags[n.parentElement.tagName]) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const batch = [];
+    while (walk.nextNode()) batch.push(walk.currentNode);
+    for (const n of batch) {
+      let v = n.nodeValue;
+      if (!v) continue;
+      let changed = false;
+      for (const [oldV, newV] of uniq) {
+        if (v.indexOf(oldV) >= 0) { v = v.split(oldV).join(newV); changed = true; }
+      }
+      if (changed) { try { n.nodeValue = v; } catch (e) {} }
+    }
+  }
+
   function applyTable(name, txt) {
     if (typeof txt !== 'string' || !txt) return;
     switch (name) {
       case 'items':  ITEM_DB_TEXT = txt; break;        // 物品总表（8 列，制表符分隔）
       case 'series': SERIES_TEXT = '\n' + txt; break;  // 行首锚定查找需要前导换行
       case 'acl':    ACL_CFC_TEXT = '\n' + txt; break;
+      case 'dict':   applyRuntimeDict(txt); break;     // 词库运行时合并（v1.2.0）
     }
   }
 
@@ -3912,7 +3990,8 @@
           if (!fp && cached) { applyTable(t, cached.tx); okCount++; return; }   // 无版本信息时不盲刷
           let txt = null;
           try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
-          if (txt && txt.length > 100 && (txt.indexOf('\t') >= 0 || txt.indexOf('|') >= 0)) {
+          const fmtOk = (t === 'dict') ? (txt && txt.charAt(0) === '{') : (txt && (txt.indexOf('\t') >= 0 || txt.indexOf('|') >= 0));
+          if (txt && txt.length > 100 && fmtOk) {
             applyTable(t, txt);
             _writeCachedTable(t, fp, txt);
             okCount++;
@@ -4290,7 +4369,8 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.6 →', host);
+  const _ver = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) ? GM_info.script.version : '1.2.0';
+  console.log('FF14 幻化站中文化脚本已加载 v' + _ver + ' →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (onHost(host, 'mirapri.com')) { startMirapri(); startItems(); }

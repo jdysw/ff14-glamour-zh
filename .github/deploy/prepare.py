@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""组装 Cloudflare Pages 部署目录（site/）：数据文件 + version.json + index.html。
+"""组装 Cloudflare Pages 部署目录（site/）：数据文件 + 词库 + version.json + index.html。
 
-与 ~/zhixia-data/update-data.py 的产物结构保持一致（sha256 前 12 位指纹）。
+数据文件指纹 = sha256 前 12 位；词库（dict.json）由 build/make_dict_json.py 生成。
+与 ~/zhixia-data/update-data.py 的产物结构保持一致。
 在仓库根运行：python3 .github/deploy/prepare.py
 """
 import datetime
 import hashlib
 import json
+import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,6 +40,19 @@ def main() -> int:
         shutil.copy2(s, v2 / dst)
         files[key] = fp(v2 / dst)
         print(f'  [{key:7s}] <- {src:22s} fp={files[key]}  ({s.stat().st_size} bytes)')
+    # 词库：dict/*.json → dict.json（v1.2.0 起运行时更新，改词无需发新脚本版本）
+    r = subprocess.run(
+        [sys.executable, str(ROOT / 'build' / 'make_dict_json.py'), '--out', str(v2 / 'dict.json')],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        print('✗ dict.json 生成失败'); print(r.stdout); print(r.stderr)
+        return 1
+    m = re.search(r'fp=([0-9a-f]{12})', r.stdout)
+    if not m:
+        print('✗ 未取得 dict 指纹:', r.stdout.strip())
+        return 1
+    files['dict'] = m.group(1)
+    print(f'  [dict   ] <- build/make_dict_json.py  fp={files["dict"]}  ({(v2 / "dict.json").stat().st_size} bytes)')
     ver = {'v': datetime.date.today().strftime('%Y%m%d'), 'files': files}
     (v2 / 'version.json').write_text(json.dumps(ver, indent=1), encoding='utf-8')
     print('  version.json 已生成')

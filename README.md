@@ -78,7 +78,8 @@ ff14-glamour-zh/
 │   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板
 │   ├── extract_dicts.py   — 反向提取：src/ 模板 → dict/*.json（同步用）
 │   ├── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
-│   └── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
+│   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
+│   └── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
 ├── dist/                  — 构建产物（生成物，不手改）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 ├── legacy/                — 历史归档（旧独立版 ronka、历代生成器等，不参与构建）
@@ -92,11 +93,13 @@ ff14-glamour-zh/
 
 | 产物 | 体积 | 用途 |
 |---|---|---|
-| `dist/ff14-glamour-zh.greasyfork.user.js` | ~192 KB | GF 发布版：数据运行时按需加载（Greasy Fork ≤2MB 合规） |
+| `dist/ff14-glamour-zh.greasyfork.user.js` | ~195 KB | GF 发布版：数据与词库运行时按需加载（Greasy Fork ≤2MB 合规） |
 
-**GF 版数据流**：装备/染剂数据从 `https://zhixia-data.pages.dev/` **按需**拉取（单文件合表
-`ff14/v2/items.tsv`：中英日韩名、光之收藏家 hash、Eorzea Collection ID 一表全含）→ 缓存到本地
-（GM 存储）→ **每日至多一次**版本检查（sha256 指纹比对，变化才重新下载）。数据为只读纯文本（非可执行代码）。
+**GF 版数据流**：装备/染剂数据与界面词库从 `https://zhixia-data.pages.dev/` **按需**拉取
+（`ff14/v2/items.tsv` 单文件合表：中英日韩名、光之收藏家 hash、Eorzea Collection ID 一表全含；
+`ff14/v2/dict.json` 界面词库）→ 缓存到本地（GM 存储）→ **每日至多一次**版本检查（sha256 指纹比对，
+变化才重新下载）。**改词条只需更新数据站的 dict.json，无需发新脚本版本，用户次日自动生效**
+（脚本内嵌词库仅作首屏兜底/离线兜底）。数据为只读纯文本/JSON（非可执行代码）。
 
 ### 更新链路（一次修改，两条分发线）
 
@@ -112,9 +115,9 @@ git add -A && git commit -m "..." && git push
 # ④ 脚本（代码变动时）——GF 端 Sync 拉取最新版
 ```
 
-- 只改**界面词典**（dict/）→ 走 ①②；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④。
-- **数据站自动部署**：`data/ff14-items.tsv`、`data/ff14-series.txt`、`data/acl-cfc.txt` 任一推送
-  到 main → GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
+- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④。
+- **数据站自动部署**：`data/ff14-items.tsv`、`data/ff14-series.txt`、`data/acl-cfc.txt`、`dict/*.json`（词库）
+  任一推送到 main → GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
   项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
   备用本地通道：`python3 ~/zhixia-data/update-data.py --deploy`。
 
@@ -137,9 +140,10 @@ git add data/ && git commit -m "data: 重建物品总表" && git push
 **改界面词**（最常见）：
 ```bash
 # 1. 直接编辑 dict/dict-*.json（JSON: {"kind":"kv","entries":{"原文":"译文"}}）
-# 2. 一键构建 + 验证
+# 2. 一键构建 + 验证（顺带更新脚本内嵌兜底）
 bash build.sh
-# 3. （自用可选）经自建链路推送到本机脚本管理器；开源使用可跳过此步
+# 3. 提交推送 → 数据站自动部署 dict.json → 用户下次访问自动生效（无需发新脚本版本）
+git add dict/ && git commit -m "dict: ..." && git push
 ```
 
 **更新装备数据**：`python3 build/rebuild-db.py` 重建物品总表（四语权威源自动下载，跟随游戏版本）；分发给用户走「数据更新流程」。
