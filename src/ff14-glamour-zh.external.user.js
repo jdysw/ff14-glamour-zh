@@ -4087,6 +4087,8 @@
   // 依据全库调用链核查——nameMap：各站文本翻译共用；itemHash：lookupZh
   // （EC/mirapri 装备链接）与 fcLinkZhName（FC）；ecidMap/koByZh：仅 wiki
   // 反查块（EC/韩服链接）。未知站点与测试环境返回 null（全建，保守）。
+  // 维护须知：新增站点或为某站新增索引查询时，必须同步本表与 neededTables()；
+  // 漏登记的后果是查表静默跳过（功能不生效），由各站端到端测试兜底发现。
   function _siteIndexes() {
     if (window.__zhxTestIndexes) return window.__zhxTestIndexes;
     const h = location.hostname;
