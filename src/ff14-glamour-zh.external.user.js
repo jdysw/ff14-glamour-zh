@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.8
+// @version      1.3
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -3806,21 +3806,25 @@
 
   function startWiki() {
     // 灰机页面 DOM 变动极频繁（目录/评论区/懒加载），必须节流并限制重试次数，
-    // 否则按钮插不进去时会每次变动都重跑（并连带 EC 接口请求）把页面拖死。
+    // 否则按钮插不进去时会每次变动都重跑把页面拖死。
+    // 移动端（Via 等）首屏渲染慢：放宽总重试次数 + 阶梯定时兜底，避免固定 3 次
+    // 尝试在前几秒用尽后永久放弃；注入为纯本地查询（无网络），重试成本极低。
     let tries = 0;
     let timer = null;
+    const MAX_TRIES = 12;
     const attempt = () => {
-      if (tries >= 3) return;
+      if (tries >= MAX_TRIES) return;
       if (document.documentElement.dataset.zhixiaWikiDone) return;
       tries++;
       safe(injectWikiButton, 'Wiki 按钮注入')();
     };
     attempt();
-    setTimeout(attempt, 1500);            // 灰机皮肤二次渲染
+    // 阶梯定时：覆盖移动端首屏渲染慢的场景（成功即止，重复触发为幂等重建）
+    [1500, 4000, 8000, 15000].forEach((ms) => setTimeout(attempt, ms));
     new MutationObserver(() => {
-      if (timer || tries >= 3) return;
+      if (timer || tries >= MAX_TRIES) return;
       timer = setTimeout(() => { timer = null; attempt(); }, 1200);
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body || document.documentElement, { childList: true, subtree: true });
     // 外置版：数据到达后刷新「幻化装备反查链接」区块（补齐国际服 / 韩服链接）
     if (DATA_REMOTE) onTablesReady(() => safe(injectWikiButton, 'Wiki 反查刷新')());
   }
@@ -4228,11 +4232,25 @@
     });
   }
 
+  // 首屏优先：网络下载推迟到页面 load 之后（弱网/移动端避免与页面自身资源抢带宽，
+  // 缓解页面图片流被饿死/加载缓慢；缓存命中路径不受影响），最长兜底等待 12s，
+  // 防 load 迟迟不触发时数据永不拉取。
+  function _waitPageLoad() {
+    return new Promise((resolve) => {
+      if (document.readyState === 'complete') { resolve(); return; }
+      let done = false;
+      const fin = () => { if (!done) { done = true; resolve(); } };
+      try { window.addEventListener('load', fin, { once: true }); } catch (e) { /* 兜底计时器保底 */ }
+      setTimeout(fin, 12000);
+    });
+  }
+
   async function _ensureMain() {
     const need = neededTables();
     if (!need.length) return;
     const fast = await _ensureTryFast(need);
     if (!fast) return;
+    await _waitPageLoad();
     await _ensureFetchAll(need, fast.local);
   }
 
