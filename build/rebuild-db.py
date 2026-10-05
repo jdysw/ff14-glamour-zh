@@ -34,10 +34,11 @@ ROOT = os.path.dirname(HERE)
 DEFAULT_ITEMS = os.path.join(ROOT, 'data', 'ff14-items.tsv')
 CACHE = os.path.join(HERE, '.cache', 'datamining')
 
+# 注：上游仓库已更名（ff14- → ffxiv-），旧名在 jsdelivr 已 404，2026-10 更正
 SOURCES = {
-    'cn': 'https://cdn.jsdelivr.net/gh/thewakingsands/ff14-datamining-cn@master/Item.csv',
-    'en': 'https://cdn.jsdelivr.net/gh/xivapi/ff14-datamining@master/csv/en/Item.csv',
-    'ja': 'https://cdn.jsdelivr.net/gh/xivapi/ff14-datamining@master/csv/ja/Item.csv',
+    'cn': 'https://cdn.jsdelivr.net/gh/thewakingsands/ffxiv-datamining-cn@master/Item.csv',
+    'en': 'https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/en/Item.csv',
+    'ja': 'https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/ja/Item.csv',
     'ko': 'https://cdn.jsdelivr.net/gh/Ra-Workspace/ffxiv-datamining-ko@master/csv/Item.csv',
 }
 MIN_SIZE = 5 * 1024 * 1024   # 每个 CSV 至少 >5MB，小于视为下载损坏
@@ -90,25 +91,28 @@ def fetch(url, dest, refresh=False):
     raise RuntimeError(f'下载失败: {url} —— {last}')
 
 
+def _title_name_idx(row):
+    """表头行 → Name 列号；非表头/缺列返回 None。"""
+    if row and row[0] == '#':
+        try:
+            return row.index('Name')
+        except ValueError:
+            return None
+    return None
+
+
 def load_csv(path):
     """datamining CSV → {key: Name}（从表头行找 Name 列）。"""
     out = {}
     with open(path, encoding='utf-8-sig', newline='') as f:
-        rd = csv.reader(f)
         name_idx = None
-        for row in rd:
+        for row in csv.reader(f):
             if not row:
                 continue
             if name_idx is None:
-                if row[0] == '#':
-                    try:
-                        name_idx = row.index('Name')
-                    except ValueError:
-                        pass
+                name_idx = _title_name_idx(row)
                 continue
-            if not row[0].isdigit():
-                continue
-            if len(row) > name_idx and row[name_idx].strip():
+            if row[0].isdigit() and len(row) > name_idx and row[name_idx].strip():
                 out[int(row[0])] = row[name_idx].strip()
     return out
 
@@ -136,16 +140,16 @@ def load_items_tsv(path):
 
 # ───────────────────────── 主流程 ─────────────────────────
 
-def main():
-    args = parse_args()
-    t0 = time.time()
-
-    # 路径净化：CLI 输入/输出限定在仓库内（防路径穿越）
+def _resolve_paths(args):
+    """路径净化：CLI 输入/输出限定在仓库内（防路径穿越）。"""
     csv_dir = safe_path(args.csv_dir, '--csv-dir') if args.csv_dir else None
     src_p = safe_path(args.src or args.out, '--src')
     out_p = safe_path(args.out, '--out')
+    return csv_dir, src_p, out_p
 
-    # 1) 获取四语 CSV
+
+def _fetch_csvs(csv_dir, refresh):
+    """① 获取四语 CSV → {lang: 本地路径}。"""
     print('══ 1. 权威源 ══')
     csv_paths = {}
     os.makedirs(CACHE, exist_ok=True)
@@ -158,13 +162,78 @@ def main():
             print(f'  {lang}: 本地 {p}')
         else:
             csv_paths[lang] = fetch(SOURCES[lang], os.path.join(CACHE, f'{lang}-Item.csv'),
-                                    refresh=args.refresh)
+                                    refresh=refresh)
+    return csv_paths
 
+
+def _load_four(csv_paths):
+    """四语 CSV → (cn, en, ja, ko) 四个 {key: Name}。"""
     cn = load_csv(csv_paths['cn'])
     en = load_csv(csv_paths['en'])
     ja = load_csv(csv_paths['ja'])
     ko = load_csv(csv_paths['ko'])
     print(f'  cn {len(cn):,} | en {len(en):,} | ja {len(ja):,} | ko {len(ko):,}')
+    return cn, en, ja, ko
+
+
+def _inherit(o, idx):
+    """旧行第 idx 列的值（o 为空 → 空串）。"""
+    return o[idx] if o else ''
+
+
+def _is_removed(k, cn, en, ja, ko):
+    """权威四语全无此 key（旧物品保留判定）。"""
+    return k not in cn and k not in en and k not in ja and k not in ko
+
+
+def _name_updated(o, k, cn):
+    """权威更新了该物品的译名（旧有 + 权威有 + 不同）。"""
+    return bool(o and o[1] and cn.get(k) and o[1] != cn[k])
+
+
+def _merge_rows(cn, en, ja, ko, old):
+    """③ 并集构建 → (rows, 新增, 保留, 译名更新)。"""
+    print('══ 3. 重建 ══')
+    all_keys = set(cn) | set(en) | set(ja) | set(ko) | set(old)
+    rows = []
+    n_new = n_kept = n_upd_name = 0
+    for k in sorted(all_keys):
+        o = old.get(k)
+        z = cn.get(k) or _inherit(o, 1)
+        if not z:
+            continue                      # 无中文名 → 不纳入（翻译场景以中文为准）
+        if o is None:
+            n_new += 1
+        elif _is_removed(k, cn, en, ja, ko):
+            n_kept += 1                   # 权威已无 → 旧物品保留
+        if _name_updated(o, k, cn):
+            n_upd_name += 1               # 权威更新了译名
+        rows.append((k, z, en.get(k) or _inherit(o, 2), ja.get(k) or _inherit(o, 3),
+                     ko.get(k) or _inherit(o, 4), _inherit(o, 5), _inherit(o, 6), _inherit(o, 7)))
+    return rows, n_new, n_kept, n_upd_name
+
+
+def _write_tsv(out_p, rows, extra):
+    """④ 写出（先写 .tmp 再原子替换）→ 大小 MB。"""
+    out_tmp = out_p + '.tmp'
+    with open(out_tmp, 'w', encoding='utf-8') as f:
+        f.write('key\tzh\ten\tja\tko\thash\tecid\talias\n')
+        for row in rows:
+            f.write('\t'.join(str(x) for x in row) + '\n')
+        for p in extra:                   # 特殊行原样继承（如历史神典石）
+            f.write('\t'.join(p) + '\n')
+    os.replace(out_tmp, out_p)
+    return os.path.getsize(out_p) / 1048576
+
+
+def main():
+    args = parse_args()
+    t0 = time.time()
+
+    csv_dir, src_p, out_p = _resolve_paths(args)
+
+    csv_paths = _fetch_csvs(csv_dir, args.refresh)
+    cn, en, ja, ko = _load_four(csv_paths)
 
     # 2) 现有表（补充列继承）
     print('══ 2. 现有表（继承 hash/EC_ID/别名）══')
@@ -172,40 +241,11 @@ def main():
     print(f'  现有 {len(old):,} 个物品 | 特殊行 {len(extra)} 条')
 
     # 3) 并集构建
-    print('══ 3. 重建 ══')
-    all_keys = set(cn) | set(en) | set(ja) | set(ko) | set(old)
-    rows = []
-    n_new = n_kept = n_upd_name = 0
-    for k in sorted(all_keys):
-        o = old.get(k)
-        z = cn.get(k) or (o[1] if o else '')
-        if not z:
-            continue                      # 无中文名 → 不纳入（翻译场景以中文为准）
-        e = en.get(k) or (o[2] if o else '')
-        j = ja.get(k) or (o[3] if o else '')
-        k2 = ko.get(k) or (o[4] if o else '')
-        h = o[5] if o else ''            # hash 继承
-        ec = o[6] if o else ''           # EC_ID 继承
-        al = o[7] if o else ''           # 别名继承
-        if o is None:
-            n_new += 1
-        elif k not in cn and k not in en and k not in ja and k not in ko:
-            n_kept += 1                   # 权威已无 → 旧物品保留
-        if o and o[1] and cn.get(k) and o[1] != cn[k]:
-            n_upd_name += 1               # 权威更新了译名
-        rows.append((k, z, e, j, k2, h, ec, al))
+    rows, n_new, n_kept, n_upd_name = _merge_rows(cn, en, ja, ko, old)
 
     # 4) 写出
-    out_tmp = out_p + '.tmp'
-    with open(out_tmp, 'w', encoding='utf-8') as f:
-        f.write('key\tzh\ten\tja\tko\thash\tecid\talias\n')
-        for (k, z, e, j, k2, h, ec, al) in rows:
-            f.write(f'{k}\t{z}\t{e}\t{j}\t{k2}\t{h}\t{ec}\t{al}\n')
-        for p in extra:                   # 特殊行原样继承（如历史神典石）
-            f.write('\t'.join(p) + '\n')
-    os.replace(out_tmp, out_p)
+    size_mb = _write_tsv(out_p, rows, extra)
 
-    size_mb = os.path.getsize(out_p) / 1048576
     print(f'  → {out_p}（{len(rows):,} 行 + 特殊 {len(extra)} 行，{size_mb:.2f} MB）')
     print(f'  新增 {n_new:,} | 保留(已移除) {n_kept:,} | 译名更新 {n_upd_name:,}')
     print(f'══ 完成（{time.time()-t0:.0f}s）══')
