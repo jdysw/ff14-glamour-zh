@@ -30,10 +30,11 @@
 1. 先安装一个用户脚本管理器（任选其一）：
    - [Tampermonkey](https://www.tampermonkey.net/)（推荐）
    - [Violentmonkey](https://violentmonkey.github.io/)
-2. 安装脚本：
+2. **Chrome / Edge 138+ 用户**：在扩展管理页（`chrome://extensions`）的脚本管理器详情中开启「**允许用户脚本**」开关（或开启扩展管理页右上角的「开发者模式」），否则用户脚本无法运行——详见 [Tampermonkey 官方指引 Q209](https://www.tampermonkey.net/faq.php?q=Q209&locale=zh)。
+3. 安装脚本：
    - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
    - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
-3. 打开任意支持站点，自动生效。
+4. 打开任意支持站点，自动生效。
 
 ## 💡 使用说明
 
