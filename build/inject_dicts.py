@@ -52,31 +52,19 @@ def gen_arr(entries, indent='    '):
     lines.append('  ]')
     return '\n'.join(lines)
 
-def find_block(s, name):
-    """定位 `const NAME = {...};` 块；兼容历史前缀（Object.assign 形态）。
-    返回 (stmt_start, stmt_end)；未找到返回 None。"""
-    m = re.search(r'\n  const ' + re.escape(name) + r' = ', s)
-    if not m:
-        return None
-    stmt_start = m.start() + 1  # 行首（跳过 \n）
-    i = m.end()
-    pfx_old = 'Object.assign({}, DICT_COMMON, '
-    pfx_new = '{ ...DICT_COMMON,'
-    if s.startswith(pfx_old, i):
-        i += len(pfx_old)
-        open_ch = s[i]
-        assert open_ch in '{[', name + ': 块的起始括号缺失'
-        depth, close_ch = 1, ('}' if open_ch == '{' else ']')
+def _skip_str(s, i):
+    """i 指向 ' 处；跳过字符串（含转义）；返回闭合引号的位置。"""
+    i += 1
+    while i < len(s) and s[i] != "'":
+        if s[i] == '\\':
+            i += 1
         i += 1
-    elif s.startswith(pfx_new, i):
-        # 展开形态：前缀自带对象开括号
-        depth, close_ch, open_ch = 1, '}', '{'
-        i += len(pfx_new)
-    else:
-        open_ch = s[i]
-        assert open_ch in '{[', name + ': 块的起始括号缺失'
-        depth, close_ch = 1, ('}' if open_ch == '{' else ']')
-        i += 1
+    return i
+
+
+def _scan_block(s, i, open_ch, close_ch):
+    """从 i（开括号之后）扫描到配平；返回闭合括号之后的位置。"""
+    depth = 1
     while i < len(s) and depth > 0:
         c = s[i]
         if c == open_ch:
@@ -84,19 +72,39 @@ def find_block(s, name):
         elif c == close_ch:
             depth -= 1
         elif c == "'":
-            i += 1
-            while i < len(s) and s[i] != "'":
-                if s[i] == '\\':
-                    i += 1
-                i += 1
+            i = _skip_str(s, i)
         elif c == '/' and i + 1 < len(s) and s[i + 1] == '/':
             while i < len(s) and s[i] != '\n':
                 i += 1
         elif c == '/' and i + 1 < len(s) and s[i + 1] == '*':
             i = s.find('*/', i) + 1
         i += 1
-    j = i  # 闭合符之后；吞掉尾部残留 `;` / `)`（兼容 `});` 与 `};` 两种收尾）
-    while j < len(s) and s[j] in ';)':
+    return i
+
+
+def _open_at(s, i, name):
+    """块起始定位：返回 (open_ch, close_ch, body_start)；兼容三种形态。"""
+    pfx_old = 'Object.assign({}, DICT_COMMON, '
+    pfx_new = '{ ...DICT_COMMON,'
+    if s.startswith(pfx_old, i):
+        i += len(pfx_old)
+    elif s.startswith(pfx_new, i):
+        return '{', '}', i + len(pfx_new)
+    open_ch = s[i]
+    assert open_ch in '{[', name + ': 块的起始括号缺失'
+    return open_ch, ('}' if open_ch == '{' else ']'), i + 1
+
+
+def find_block(s, name):
+    """定位 `const NAME = {...};` 块；兼容历史前缀（Object.assign 形态）。
+    返回 (stmt_start, stmt_end)；未找到返回 None。"""
+    m = re.search(r'\n  const ' + re.escape(name) + r' = ', s)
+    if not m:
+        return None
+    stmt_start = m.start() + 1  # 行首（跳过 \n）
+    open_ch, close_ch, body = _open_at(s, m.end(), name)
+    j = _scan_block(s, body, open_ch, close_ch)  # 闭合符之后
+    while j < len(s) and s[j] in ';)':           # 吞尾部残留 `;` / `)`（兼容 `});` 与 `};`）
         j += 1
     return (stmt_start, j)
 
