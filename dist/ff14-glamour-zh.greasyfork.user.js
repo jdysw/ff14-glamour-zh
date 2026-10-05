@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.8
+// @version      1.2.9
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -3904,26 +3904,32 @@
   function lookupEcIdByZh(zh) {
     return (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null;
   }
-  function buildTables() {
-    itemHash = {}; ecidMap = {}; nameMap = {}; koByZh = {};
-    const lines = ITEM_DB_TEXT.split('\n');
-    for (const ln of lines) {
-      if (!ln) continue;
-      const c0 = ln.codePointAt(0);
-      if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;   // 仅「数字」或「-」开头的行（跳过表头）
-      const p = ln.split('\t');
-      if (p.length < 5) continue;
-      const zh = p[1] || '', en = p[2] || '', ja = p[3] || '', ko = p[4] || '';
-      if (p[0] !== '-') {
-        if (p[5] && itemHash[p[5]] === undefined) itemHash[p[5]] = zh;    // hash -> 中文名
-        if (p[6] && ecidMap[zh] === undefined) ecidMap[zh] = p[6];        // 中文名 -> EC_ID
-      }
-      if (en && nameMap[en] === undefined) nameMap[en] = zh;
-      if (ja && nameMap[ja] === undefined) nameMap[ja] = zh;
-      if (ko && nameMap[ko] === undefined) nameMap[ko] = zh;
-      if (zh && ko && koByZh[zh] === undefined) koByZh[zh] = ko;
-    }
-    // 染剂色名回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」（仅当 Xxx 未被其他名占用）
+  // v1.2.x：单行解析拆出（降认知复杂度）
+  function _btHashRow(p, zh) {
+    if (p[0] === '-') return;
+    if (p[5] && itemHash[p[5]] === undefined) itemHash[p[5]] = zh;    // hash -> 中文名
+    if (p[6] && ecidMap[zh] === undefined) ecidMap[zh] = p[6];        // 中文名 -> EC_ID
+  }
+
+  function _btNameRow(zh, en, ja, ko) {
+    if (en && nameMap[en] === undefined) nameMap[en] = zh;
+    if (ja && nameMap[ja] === undefined) nameMap[ja] = zh;
+    if (ko && nameMap[ko] === undefined) nameMap[ko] = zh;
+    if (zh && ko && koByZh[zh] === undefined) koByZh[zh] = ko;
+  }
+
+  function _btRow(ln) {
+    const c0 = ln.codePointAt(0);
+    if (c0 !== 45 && (c0 < 48 || c0 > 57)) return;   // 仅「数字」或「-」开头的行（跳过表头）
+    const p = ln.split('\t');
+    if (p.length < 5) return;
+    const zh = p[1] || '', en = p[2] || '', ja = p[3] || '', ko = p[4] || '';
+    _btHashRow(p, zh);
+    _btNameRow(zh, en, ja, ko);
+  }
+
+  // 染剂色名回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」（仅当 Xxx 未被其他名占用）
+  function _btDyeFallback() {
     const extra = [];
     for (const k in nameMap) {
       if (k.length > 4 && k.endsWith(' Dye')) {
@@ -3932,6 +3938,16 @@
       }
     }
     for (let i = 0; i < extra.length; i += 2) nameMap[extra[i]] = extra[i + 1];
+  }
+
+  function buildTables() {
+    itemHash = {}; ecidMap = {}; nameMap = {}; koByZh = {};
+    const lines = ITEM_DB_TEXT.split('\n');
+    for (const ln of lines) {
+      if (!ln) continue;
+      _btRow(ln);
+    }
+    _btDyeFallback();
   }
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
@@ -4031,6 +4047,24 @@
      故用 Object.assign 原地更新 + 清派生缓存（子串键/前缀），新词全链路即时生效。
      另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
      不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
+  // v1.2.x：单层合并与修正收集拆出（降认知复杂度）
+  let _dictFixesBuf = null;
+
+  function _dictFixCheck(obj, k, newV) {
+    const oldV = obj[k];
+    if (typeof oldV === 'string' && oldV && typeof newV === 'string' && newV && oldV !== newV) {
+      _dictFixesBuf.push([oldV, newV]);
+    }
+  }
+
+  function _applyDictLayer(key, obj, d, common) {
+    const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
+    if (extra) for (const k in extra) _dictFixCheck(obj, k, extra[k]);
+    if (common) { for (const k in common) { if (extra?.[k] !== undefined) { continue; } _dictFixCheck(obj, k, common[k]); } }
+    if (common) Object.assign(obj, common);
+    if (extra) Object.assign(obj, extra);
+  }
+
   function applyRuntimeDict(txt) {
     if (typeof txt !== 'string' || !txt.startsWith('{')) return;
     let d = null;
@@ -4044,30 +4078,24 @@
       ['ronka', DICT_RONKA],
       ['acl', DICT_ACL],
     ];
-    const fixes = [];
-    const check = (obj, k, newV) => {
-      const oldV = obj[k];
-      if (typeof oldV === 'string' && oldV && typeof newV === 'string' && newV && oldV !== newV) fixes.push([oldV, newV]);
-    };
+    _dictFixesBuf = [];
     try {
       if (common) Object.assign(DICT_COMMON, common);
       for (const [key, obj] of layers) {
         if (!obj) continue;
-        const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
-        if (extra) for (const k in extra) check(obj, k, extra[k]);
-        if (common) { for (const k in common) { if (extra?.[k] !== undefined) { continue; } check(obj, k, common[k]); } }
-        if (common) Object.assign(obj, common);
-        if (extra) Object.assign(obj, extra);
+        _applyDictLayer(key, obj, d, common);
       }
     } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
     // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）
     try { _fcSubstrCache = null; } catch (e) {}
     try { _allKeysCache = null; } catch (e) {}
     // 定向替换：旧译 → 新译（去重后单次全页扫描）
+    const fixes = _dictFixesBuf;
+    _dictFixesBuf = null;
     try { _sweepDictFixes(fixes); } catch (e) {}
   }
-  function _sweepDictFixes(fixes) {
-    if (!fixes?.length) return;
+  // v1.2.x：去重与单节点扫描拆出（降认知复杂度）
+  function _sweepDedupe(fixes) {
     const seen = new Set();
     const uniq = [];
     for (const [oldV, newV] of fixes) {
@@ -4077,6 +4105,22 @@
       seen.add(k);
       uniq.push([oldV, newV]);
     }
+    return uniq;
+  }
+
+  function _sweepNode(n, uniq) {
+    let v = n.nodeValue;
+    if (!v) return;
+    let changed = false;
+    for (const [oldV, newV] of uniq) {
+      if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
+    }
+    if (changed) { try { n.nodeValue = v; } catch (e) {} }
+  }
+
+  function _sweepDictFixes(fixes) {
+    if (!fixes?.length) return;
+    const uniq = _sweepDedupe(fixes);
     if (!uniq.length || !document.body) return;
     const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -4084,15 +4128,7 @@
     });
     const batch = [];
     while (walk.nextNode()) batch.push(walk.currentNode);
-    for (const n of batch) {
-      let v = n.nodeValue;
-      if (!v) continue;
-      let changed = false;
-      for (const [oldV, newV] of uniq) {
-        if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
-      }
-      if (changed) { try { n.nodeValue = v; } catch (e) {} }
-    }
+    for (const n of batch) _sweepNode(n, uniq);
   }
 
   function applyTable(name, txt) {
@@ -4121,14 +4157,38 @@
   }
 
   let _ensurePromise = null;
+  // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
+  function _ensureReadLocal(need) {
+    const local = {};
+    return Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {}))).then(() => local);
+  }
+
+  async function _ensureFetchTable(t, vfps, local) {
+    try {
+      const fp = vfps?.[t] ? String(vfps[t]) : null;
+      const cached = local[t] || null;
+      if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
+      if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
+      let txt = null;
+      try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
+      const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
+      if (txt && txt.length > 100 && fmtOk) {
+        applyTable(t, txt);
+        _writeCachedTable(t, fp, txt);
+        return 1;
+      }
+      if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
+      return 0;
+    } catch (e) { return 0; }   // 忽略：单表下载/处理失败，跳过
+  }
+
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
     _ensurePromise = (async () => {
       const need = neededTables();
       if (!need.length) return;
       // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
-      const local = {};
-      await Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {})));
+      const local = await _ensureReadLocal(need);
       let meta = null;
       try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
       const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
@@ -4144,24 +4204,7 @@
       const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
       // ③ 逐表：指纹一致 → 缓存；不一致 / 缺失 → 下载（失败时回退旧缓存）
       let okCount = 0;
-      await Promise.all(need.map(async (t) => {
-        try {
-          const fp = vfps?.[t] ? String(vfps[t]) : null;
-          const cached = local[t] || null;
-          if (fp && cached?.fp === fp) { applyTable(t, cached.tx); okCount++; return; }
-          if (!fp && cached) { applyTable(t, cached.tx); okCount++; return; }   // 无版本信息时不盲刷
-          let txt = null;
-          try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
-          const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
-          if (txt && txt.length > 100 && fmtOk) {
-            applyTable(t, txt);
-            _writeCachedTable(t, fp, txt);
-            okCount++;
-          } else if (cached) {
-            applyTable(t, cached.tx); okCount++;             // 下载失败 → 兜底旧缓存
-          }
-        } catch (e) { /* 忽略：单表下载/处理失败，跳过 */ }
-      }));
+      (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local)))).forEach((v) => { okCount += v; });
       // ④ 全部表可用且拿到版本清单时记录检查时间：当天不再重复探测
       //（数据更新次日生效；未记录时下次访问自动重试）
       if (ver?.v) DATA_VER = String(ver.v);
