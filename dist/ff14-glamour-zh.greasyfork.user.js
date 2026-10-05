@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.7
+// @version      1.2.8
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2712,67 +2712,81 @@
   const FC_DECOR_TAIL = /[\s|｜>＞≫»▶▽◆■□●○★☆♪！!。、…😊✨🎉]{1,64}$/u;
 
   // 逐条替换：整串精确 → 剥离装饰 → 当日文装备名 → 子串兜底
-  function trFC(text) {
-    if (!text) return text;
-    const t0 = text.trim();
-    if (!t0) return text;
-    if (t0.length > 120) return text;
-
-    // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
+  // v1.2.8：四步链拆为子步骤（降认知复杂度）
+  // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
+  function _trFCExact(text, t0) {
     let hit0 = DICT_FC[t0];
     if (!hit0) {
       const norm = t0.replace(/[ \t\u00a0]+/g, ' ').trim();
       if (norm !== t0) hit0 = DICT_FC[norm];
     }
-    if (hit0) {
-      const i = text.indexOf(t0);
-      return text.slice(0, i) + hit0 + text.slice(i + t0.length);
-    }
+    if (!hit0) return null;
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + hit0 + text.slice(i + t0.length);
+  }
 
-    // ② 剥离装饰符号后再试
-    const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
-    if (core && core !== t0) {
-      const hit1 = DICT_FC[core];
-      if (hit1) {
-        const head = t0.slice(0, t0.indexOf(core));
-        const tail = t0.slice(t0.indexOf(core) + core.length);
-        const i = text.indexOf(t0);
-        return text.slice(0, i) + head + hit1 + tail + text.slice(i + t0.length);
-      }
-    }
+  // ② 剥离装饰符号后再试
+  function _trFCDecor(text, t0, core) {
+    if (!core || core === t0) return null;
+    const hit1 = DICT_FC[core];
+    if (!hit1) return null;
+    const head = t0.slice(0, t0.indexOf(core));
+    const tail = t0.slice(t0.indexOf(core) + core.length);
+    const i = text.indexOf(t0);
+    return text.slice(0, i) + head + hit1 + tail + text.slice(i + t0.length);
+  }
 
-    // ③ 日文装备名（剥「画像」等后缀）；失败再试系列名（v1.12.0）
-    // v1.12.2：含假名 OR 纯汉字串（≤20字，如 夜桜上衣）都试查
-    // v1.2.1：判定前剥【…】标记——「春日半頬【想】」等「纯汉字+全角标记」名此前两条件都不满足，整名不查表
+  // ③ 日文装备名（剥「画像」等后缀）；失败再试系列名（v1.12.0）
+  // v1.12.2：含假名 OR 纯汉字串（≤20字，如 夜桜上衣）都试查
+  // v1.2.1：判定前剥【…】标记——「春日半頬【想】」等「纯汉字+全角标记」名此前两条件都不满足，整名不查表
+  function _trFCName(text, t0, core) {
     const c3 = core || t0;
     const c3p = c3.replace(/【[^【】]*】/g, '').trim() || c3;
-    if (/[\u3040-\u30ff]/.test(c3p) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(c3p) && c3p.length >= 2 && c3p.length <= 20)) {
-      const cand = c3.replace(/(の画像|画像|イメージ|の見た目)$/, '').trim();
-      // v1.1.3：数据就绪前不跑逐段翻译——「系列・职业」半翻译（ファントムヴィジョン·御敌）会破坏原文，
-      // 数据到后的补扫将无法再识别（整体译名依赖完整日文名）；等数据齐由补扫统一处理
-      let zh = lookupJp2Zh(cand) || lookupSeries(cand);
-      if (!zh && _tablesReady) zh = trFCSegments(cand);
-      if (zh && zh !== cand) {
-        const i2 = text.indexOf(t0);
-        return text.slice(0, i2) + zh + text.slice(i2 + t0.length);
-      }
-    }
+    const isKana = /[\u3040-\u30ff]/.test(c3p);
+    const isKanji = /^[\u3005\u3006\u4e00-\u9fff]+$/.test(c3p) && c3p.length >= 2 && c3p.length <= 20;
+    if (!isKana && !isKanji) return null;
+    const cand = c3.replace(/(の画像|画像|イメージ|の見た目)$/, '').trim();
+    // v1.1.3：数据就绪前不跑逐段翻译——「系列・职业」半翻译（ファントムヴィジョン·御敌）会破坏原文，
+    // 数据到后的补扫将无法再识别（整体译名依赖完整日文名）；等数据齐由补扫统一处理
+    let zh = lookupJp2Zh(cand) || lookupSeries(cand);
+    if (!zh && _tablesReady) zh = trFCSegments(cand);
+    if (!zh || zh === cand) return null;
+    const i2 = text.indexOf(t0);
+    return text.slice(0, i2) + zh + text.slice(i2 + t0.length);
+  }
 
-    // ④ 子串兜底：含菜单词/装备名的片段（v1.14.5：门槛 6→2，覆盖被 <br> 等拆分的短节点如「で制作」）
-    // v1.1.3：数据就绪前不跑——避免对「系列・职业」复合名做部分替换破坏原文（如 ファントムヴィジョン・御敌）；补扫时统一处理
-    if (_tablesReady && (core || t0).length >= 2 && /[^\x00-\x7F]/.test(t0)) {
-      let out = text;
-      let changed = false;
-      // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
-      for (const k of _getSubstrKeysAll()) {
-        if (!out.includes(k)) continue;
-        const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
-        if (v == null) continue;
-        out = out.split(k).join(v);
-        changed = true;
-      }
-      if (changed) return out;
+  // ④ 子串兜底：含菜单词/装备名的片段（v1.14.5：门槛 6→2，覆盖被 <br> 等拆分的短节点如「で制作」）
+  // v1.1.3：数据就绪前不跑——避免对「系列・职业」复合名做部分替换破坏原文（如 ファントムヴィジョン・御敌）；补扫时统一处理
+  function _trFCSubstr(text, t0, core) {
+    if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
+    let out = text;
+    let changed = false;
+    // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
+    for (const k of _getSubstrKeysAll()) {
+      if (!out.includes(k)) continue;
+      const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
+      if (v == null) continue;
+      out = out.split(k).join(v);
+      changed = true;
     }
+    return changed ? out : null;
+  }
+
+  // 逐条替换：整串精确 → 剥离装饰 → 当日文装备名 → 子串兜底
+  function trFC(text) {
+    if (!text) return text;
+    const t0 = text.trim();
+    if (!t0) return text;
+    if (t0.length > 120) return text;
+    const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
+    const s1 = _trFCExact(text, t0);
+    if (s1 !== null) return s1;
+    const s2 = _trFCDecor(text, t0, core);
+    if (s2 !== null) return s2;
+    const s3 = _trFCName(text, t0, core);
+    if (s3 !== null) return s3;
+    const s4 = _trFCSubstr(text, t0, core);
+    if (s4 !== null) return s4;
     return text;
   }
 
@@ -2904,9 +2918,47 @@
     if (next !== raw) node.nodeValue = next;
   }
 
+  // v1.2.8：节点分派拆为子步骤（降认知复杂度）
+  function _fcAcceptNode(n) {
+    if (n.nodeType === 1) {
+      if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
+      if (n.closest?.(FC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+    }
+    return NodeFilter.FILTER_ACCEPT;
+  }
+
+  function _wowFCInput(n) {
+    const ph = n.getAttribute('placeholder');
+    if (ph) { const nn = trFC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+    // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
+    const v0 = n.getAttribute('value');
+    if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
+      const tv = trFC(v0);
+      if (tv && tv !== v0) n.setAttribute('value', tv);
+    }
+  }
+
+  function _procFCImg(n) {
+    const alt = n.getAttribute('alt');
+    if (!alt || alt.length < 2 || alt.length > 90) return;
+    const nn = trFC(alt);
+    if (nn !== alt && !n.dataset.zhixiaFcAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaFcAlt = '1'; }
+  }
+
+  function _procFCNode(n) {
+    if (n.nodeType === 3) { trimFCNode(n); return; }
+    if (n.tagName === 'INPUT') { _wowFCInput(n); return; }
+    if (n.tagName === 'A' && /lodestone|finalfantasyxiv|garland|eriones|ffxivdb|gamerescape/i.test(n.getAttribute('href') || '')) {
+      // v1.12.1：外服链接 → 直接改写为灰机 wiki（文字查表；已中文则直接用）
+      rewriteFCForeignLink(n);
+      return;
+    }
+    if (n.tagName === 'IMG' || n.hasAttribute('alt')) _procFCImg(n);
+  }
+
   function translateFCPage(rootArg) {
     const isFull = !rootArg;
-    if (!rootArg) {
+    if (isFull) {
       if (window.__zhixiaFcBusy) return;
       window.__zhixiaFcBusy = true;
     }
@@ -2915,38 +2967,11 @@
       const root = rootArg || document.body;
       if (!root) return;
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-        acceptNode: (n) => {
-          if (n.nodeType === 1) {
-            if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-            if (n.closest?.(FC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        },
+        acceptNode: _fcAcceptNode,
       });
       const batch = [];
       while (w.nextNode()) batch.push(w.currentNode);
-      for (const n of batch) {
-        if (n.nodeType === 3) trimFCNode(n);
-        else if (n.tagName === 'INPUT') {
-          const ph = n.getAttribute('placeholder');
-          if (ph) { const nn = trFC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-          // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
-          const v0 = n.getAttribute('value');
-          if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
-            const tv = trFC(v0);
-            if (tv && tv !== v0) n.setAttribute('value', tv);
-          }
-        } else if (n.tagName === 'A' && /lodestone|finalfantasyxiv|garland|eriones|ffxivdb|gamerescape/i.test(n.getAttribute('href') || '')) {
-          // v1.12.1：外服链接 → 直接改写为灰机 wiki（文字查表；已中文则直接用）
-          rewriteFCForeignLink(n);
-        } else if (n.tagName === 'IMG' || n.hasAttribute('alt')) {
-          const alt = n.getAttribute('alt');
-          if (alt && alt.length >= 2 && alt.length <= 90) {
-            const nn = trFC(alt);
-            if (nn !== alt && !n.dataset.zhixiaFcAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaFcAlt = '1'; }
-          }
-        }
-      }
+      for (const n of batch) _procFCNode(n);
     } finally {
       if (isFull) window.__zhixiaFcBusy = false;
     }
@@ -3015,49 +3040,62 @@
   }
 
   // 装备名点击 → 灰机 wiki（fc 站装备名多为纯文本/链接，统一兜底）
+  // v1.2.8：click 回调拆为子步骤（降认知复杂度）
+  function _fcJumpName(probe, t, isForeign) {
+    // v1.2.1：① Lodestone hash 直查（不受文本污染）
+    if (probe.tagName === 'A') {
+      const hm = (probe.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
+      if (hm && itemHash?.[hm[1]]) return itemHash[hm[1]];
+    }
+    // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
+    const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
+    if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) {
+      const z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
+      if (z) return z;
+    }
+    if (isForeign && /^[\u4e00-\u9fff·・A-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) return t;
+    return null;
+  }
+
+  function _fcJumpResolve(el0, isForeign) {
+    // 向上探测 5 层找可译名
+    let probe = el0;
+    let guard = 0;
+    while (probe && guard < 5) {
+      const t = (probe.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t && t.length >= 2 && t.length <= 60) {
+        const z = _fcJumpName(probe, t, isForeign);
+        if (z && z !== t) return z;
+      }
+      probe = probe.parentElement;
+      guard++;
+    }
+    return null;
+  }
+
+  function _fcJumpClick(e) {
+    const el0 = e.target;
+    if (!el0?.closest) return;
+    // ① 站内导航/卡片链接放行（非外服）
+    if (el0.closest('a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/summary/"], a[href*="/fashion_accessories/"], a[href*="/modern_aesthetics/"]')) return;
+    // ② 已是灰机的链接放行
+    const a = el0.closest('a');
+    if (a && /huijiwiki\.com/i.test(a.getAttribute('href') || '')) return;
+    // ③ 外服链接（Lodestone 等）→ 拦截改跳灰机
+    const aHref = a ? (a.getAttribute('href') || '') : '';
+    const isForeign = /lodestone|finalfantasyxiv\.com|garland|eriones|ffxivdb|gamerescape/i.test(aHref);
+    const zh = _fcJumpResolve(el0, isForeign);
+    if (!zh || !isForeign) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(WIKI_ITEM + encodeURIComponent(zh), '_blank', 'noopener');
+  }
+
+  // 装备名点击 → 灰机 wiki（fc 站装备名多为纯文本/链接，统一兜底）
   function bindFCWikiJump() {
     if (window.__zhixiaFcJump) return;
     window.__zhixiaFcJump = true;
-    document.addEventListener('click', (e) => {
-      const el0 = e.target;
-      if (!el0?.closest) return;
-      // ① 站内导航/卡片链接放行（非外服）
-      if (el0.closest('a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/summary/"], a[href*="/fashion_accessories/"], a[href*="/modern_aesthetics/"]')) return;
-      // ② 已是灰机的链接放行
-      const a = el0.closest('a');
-      if (a && /huijiwiki\.com/i.test(a.getAttribute('href') || '')) return;
-      // ③ 外服链接（Lodestone 等）→ 拦截改跳灰机
-      const aHref = a ? (a.getAttribute('href') || '') : '';
-      const isForeign = /lodestone|finalfantasyxiv\.com|garland|eriones|ffxivdb|gamerescape/i.test(aHref);
-      // 无链接的纯文本装备名也拦（表格里可能没包链接）
-      let probe = el0;
-      let guard = 0;
-      let zh = null;
-      while (probe && guard < 5) {
-        const t = (probe.textContent || '').replace(/\s+/g, ' ').trim();
-        if (t && t.length >= 2 && t.length <= 60) {
-          let z = null;
-          // v1.2.1：① Lodestone hash 直查（不受文本污染）
-          if (probe.tagName === 'A') {
-            const hm = (probe.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-            if (hm && itemHash?.[hm[1]]) z = itemHash[hm[1]];
-          }
-          // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
-          if (!z) {
-            const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
-            if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
-          }
-          if (!z && isForeign && /^[\u4e00-\u9fff·・A-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) z = t;
-          if (z && z !== t) { zh = z; break; }
-        }
-        probe = probe.parentElement;
-        guard++;
-      }
-      if (!zh || !isForeign) return;
-      e.preventDefault();
-      e.stopPropagation();
-      window.open(WIKI_ITEM + encodeURIComponent(zh), '_blank', 'noopener');
-    }, true);
+    document.addEventListener('click', _fcJumpClick, true);
   }
 
   // v1.12.6：横幅汉化 —— 左侧图区不遮，右侧文字区：原日文模糊(亚克力) + 中文双行
