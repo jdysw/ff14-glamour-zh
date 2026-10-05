@@ -4164,25 +4164,20 @@
   }
 
   async function _ensureFetchTable(t, vfps, local) {
-    try {
-      const fp = vfps?.[t] ? String(vfps[t]) : null;
-      const cached = local[t] || null;
-      if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
-      if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
-      let txt = null;
-      try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
-      const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
-      if (txt && txt.length > 100 && fmtOk) {
-        applyTable(t, txt);
-        _writeCachedTable(t, fp, txt);
-        return 1;
-      }
-      if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
-      return 0;
-    } catch (e) {
-      // 忽略：单表下载/处理意外失败——跳过该表（不计数），不影响其它表与主流程
-      return 0;
+    const fp = vfps?.[t] ? String(vfps[t]) : null;
+    const cached = local[t] || null;
+    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
+    if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
+    let txt = null;
+    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
+    const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
+    if (txt && txt.length > 100 && fmtOk) {
+      applyTable(t, txt);
+      _writeCachedTable(t, fp, txt);
+      return 1;
     }
+    if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
+    return 0;
   }
 
   function ensureTables() {
@@ -4207,7 +4202,7 @@
       const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
       // ③ 逐表：指纹一致 → 缓存；不一致 / 缺失 → 下载（失败时回退旧缓存）
       let okCount = 0;
-      (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local)))).forEach((v) => { okCount += v; });
+      (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch(() => 0)))).forEach((v) => { okCount += v; });
       // ④ 全部表可用且拿到版本清单时记录检查时间：当天不再重复探测
       //（数据更新次日生效；未记录时下次访问自动重试）
       if (ver?.v) DATA_VER = String(ver.v);
