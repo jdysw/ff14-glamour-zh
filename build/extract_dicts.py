@@ -1,11 +1,14 @@
 # 提取模板中的词典块 → dict/*.json（历史工具；词典权威源现为 dict/*.json）
 import re, json, shutil, os
 
-SRC = '/home/ubuntu/zhixia-glamour/src/ff14-glamour-zh.external.user.js'
-DICT_DIR = '/home/ubuntu/zhixia-glamour/dict'
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根（脚本相对，去机器绑定）
+SRC = os.path.join(BASE, 'src', 'ff14-glamour-zh.external.user.js')
+DICT_DIR = os.path.join(BASE, 'dict')
+_BAK_DIR = os.path.join(BASE, 'build', '.cache')   # 备份落构建缓存目录（.gitignore 已排除）
 
-# 备份
-shutil.copy(SRC, SRC + '.bak-dictsplit')
+# 备份（构建缓存目录，不再落仓库根）
+os.makedirs(_BAK_DIR, exist_ok=True)
+shutil.copy(SRC, os.path.join(_BAK_DIR, 'src-before-dictsplit.bak'))
 s = open(SRC, encoding='utf-8').read()
 
 def _skip_string(s, i):

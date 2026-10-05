@@ -8,7 +8,7 @@
 #           find_block 兼容两种历史形态，可将旧模板一次性升级；再次运行幂等。
 import re, json, sys, os
 
-BASE = '/home/ubuntu/zhixia-glamour'
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根（脚本相对，去机器绑定）
 DICT_DIR = os.path.join(BASE, 'dict')
 def _guard(p):
     """仅允许仓库内目标路径（防路径穿越）。"""
