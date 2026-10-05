@@ -1,0 +1,59 @@
+name: Release
+
+# 版本发布自动化：src/ 推送到 main 且 @version 有变更 → 构建 → 创建 v<版本> tag + Release（附发布件）。
+# 版本号已有 Release 则自动跳过（幂等）；也可在 Actions 页手动触发（补发/演练）。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 提取版本号
+        id: v
+        run: |
+          V=$(sed -n 's/.*@version[[:space:]]\+\([0-9][0-9.]*\).*/\1/p' src/ff14-glamour-zh.external.user.js | head -1)
+          [ -n "$V" ] || { echo "未找到 @version"; exit 1; }
+          echo "ver=$V" >> "$GITHUB_OUTPUT"
+          echo "版本号：$V"
+
+      - name: 检查是否已发布（幂等跳过）
+        id: chk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.ver }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.v.outputs.ver }} 已存在，跳过发布"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 构建
+        if: steps.chk.outputs.skip == '0'
+        run: bash build.sh
+
+      - name: 创建 Release
+        if: steps.chk.outputs.skip == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.ver }}" \
+            "dist/ff14-glamour-zh.greasyfork.user.js#FF14 幻化站中文化 v${{ steps.v.outputs.ver }}（Greasy Fork 发布件）" \
+            --title "v${{ steps.v.outputs.ver }}" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY"
