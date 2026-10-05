@@ -1268,7 +1268,7 @@
     if (ecBusy) return;
     ecBusy = true;
     try {
-      const root = rootArg || document.body;
+      const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
@@ -1395,7 +1395,7 @@
     busy = true;
     const isFull = !rootArg;
     try {
-      const root = rootArg || document.body;
+      const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
@@ -2964,7 +2964,7 @@
     }
     try {
       if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
-      const root = rootArg || document.body;
+      const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: _fcAcceptNode,
@@ -3547,7 +3547,7 @@
 
   function translateACLPage(rootArg) {
     if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
-    const root = rootArg || document.body;
+    const root = rootArg || document.body || document.documentElement;
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: _aclAcceptNode,
@@ -3759,7 +3759,7 @@
   function translateRonkaPage(rootArg) {
     if (rootArg?.nodeType === 3) { trimRonkaNode(rootArg); return; }
     if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
-    const root = rootArg || document.body;
+    const root = rootArg || document.body || document.documentElement;
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: _ronkaAcceptNode,
@@ -4319,7 +4319,7 @@
         pending = [];
         try { handler(nodes); } catch (e) { console.warn('observeLocal：', e); }
       }, delay || 350);
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
 
 
