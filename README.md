@@ -1,6 +1,6 @@
 # FF14 幻化站中文化 · 与灰机 wiki 双向互查
 
-> 把 FF14 的幻化 / 穿搭网站**变成中文**——装备名、染剂色名自动显示为国服译名，并与灰机 wiki 双向互查。
+> 将 FF14 的多个国际服幻化网站的进行全局汉化（以国服译名为准），并实现与灰机 wiki 双向互查。
 
 [![Release](https://img.shields.io/github/v/release/jdysw/ff14-glamour-zh)](https://github.com/jdysw/ff14-glamour-zh/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](./LICENSE)
@@ -8,24 +8,22 @@
 
 ## ✨ 这个脚本能做什么
 
-逛幻化站最头疼的，是满屏日语、韩语装备名——想查国服译名还得手动一个个搜。装上这个脚本，常见幻化站**全站变中文**：
-
 - 🌐 **全站中文化** —— 界面、装备名、染剂色名、副本名自动显示为国服中文
-- 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名均可点击，直接跳转灰机 wiki 物品页查国服译名与获取途径，一步到位
-- 🔄 **双向互查** —— 灰机 wiki 物品页会多出「幻化反查」区块（光之收藏家 / 日服 / 国际服 / 韩服），从 wiki 一键找到同款穿搭
+- 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名均可点击，直接跳转灰机 wiki 物品页查国服译名与获取途径
+- 🔄 **双向互查** —— 灰机 wiki 物品页会多出「幻化反查」区块，从 wiki 一键跳转到幻化网站，找到使用该装备的穿搭
 - ⚡ **无感翻译** —— 词库本地索引、毫秒级查询；安装即用，无需配置
 - 🔒 **纯本地运行** —— 词库按需下载、本地缓存；不收集、不上传任何用户信息
 
 ## 🌏 支持站点
 
-| 站点 | 地区 | 汉化内容 |
-|---|---|---|
-| [Mirapri](https://mirapri.com) | 日服 | 界面 + 装备 / 染剂名 |
-| [Eorzea Collection](https://ffxiv.eorzeacollection.com) | 国际服 | 界面 + 装备 / 染剂名 |
-| [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服 | 界面 + 装备 / 副本名 |
-| [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服 | 界面 + 装备 / 染剂名 |
-| [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 收藏站 | 界面 + 装备名 |
-| [灰机 wiki](https://ff14.huijiwiki.com) | 中文 | 物品页新增「幻化反查」区块 |
+| 站点 | 简介 |
+|---|---|
+| [Mirapri](https://mirapri.com) | 日服幻化网站 |
+| [Eorzea Collection](https://ffxiv.eorzeacollection.com) | 国际服幻化网站 |
+| [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服个人幻化网站（猫娘模特） |
+| [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
+| [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
+| [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 
 ## 📦 安装
 
@@ -33,7 +31,7 @@
    - [Tampermonkey](https://www.tampermonkey.net/)（推荐）
    - [Violentmonkey](https://violentmonkey.github.io/)
 2. 安装脚本：
-   - **Greasy Fork** → *（即将上架，发布后补充链接）*
+   - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
    - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
 3. 打开任意支持站点，自动生效。
 
