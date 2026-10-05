@@ -1,7 +1,7 @@
 #!/bin/bash
 # 一键构建：词典注入 → 语法检查 → 词典校验 → GF 发布件
 set -e
-cd /home/ubuntu/zhixia-glamour
+cd "$(dirname "$0")"
 
 echo "① 词典注入（dict/*.json → src/ 模板）"
 python3 build/inject_dicts.py
@@ -16,8 +16,11 @@ echo "④ GF 发布件（数据外置版 → dist/ff14-glamour-zh.greasyfork.use
 cp src/ff14-glamour-zh.external.user.js dist/ff14-glamour-zh.greasyfork.user.js
 node --check dist/ff14-glamour-zh.greasyfork.user.js
 
-echo "⑤ 同步到 workspace（HTTP 更新服务目录）"
-cp dist/ff14-glamour-zh.greasyfork.user.js /home/ubuntu/workspace/ff14-glamour-zh.user.js
-cp src/ff14-glamour-zh.external.user.js /home/ubuntu/workspace/ff14-glamour-zh.external.user.js
+# ⑤ 同步到 workspace（可选：仅当目标目录存在时；作者本地 HTTP 更新服务用，CI/贡献者环境自动跳过）
+WS="${ZHX_WORKSPACE:-$HOME/workspace}"
+if [ -d "$WS" ]; then
+  cp dist/ff14-glamour-zh.greasyfork.user.js "$WS/ff14-glamour-zh.user.js"
+  cp src/ff14-glamour-zh.external.user.js "$WS/ff14-glamour-zh.external.user.js"
+fi
 
 echo "✅ 构建完成：$(stat -c%s dist/ff14-glamour-zh.greasyfork.user.js) B（GF 版）"
