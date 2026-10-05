@@ -3908,50 +3908,87 @@
   function lookupEcIdByZh(zh) {
     return (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null;
   }
-  // v1.2.x：单行解析拆出（降认知复杂度）
-  function _btHashRow(p, zh) {
+  // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
+  function _btHashRow(p, zh, t) {
     if (p[0] === '-') return;
-    if (p[5] && itemHash[p[5]] === undefined) itemHash[p[5]] = zh;    // hash -> 中文名
-    if (p[6] && ecidMap[zh] === undefined) ecidMap[zh] = p[6];        // 中文名 -> EC_ID
+    if (t.itemHash && p[5] && t.itemHash[p[5]] === undefined) t.itemHash[p[5]] = zh;   // hash -> 中文名
+    if (t.ecidMap && p[6] && t.ecidMap[zh] === undefined) t.ecidMap[zh] = p[6];       // 中文名 -> EC_ID
   }
 
-  function _btNameRow(zh, en, ja, ko) {
-    if (en && nameMap[en] === undefined) nameMap[en] = zh;
-    if (ja && nameMap[ja] === undefined) nameMap[ja] = zh;
-    if (ko && nameMap[ko] === undefined) nameMap[ko] = zh;
-    if (zh && ko && koByZh[zh] === undefined) koByZh[zh] = ko;
+  // 写入一个名字键；成功写入且形如「Xxx Dye」时顺手收集（构建后统一补开）
+  function _btNamePut(nm, key, zh, dye) {
+    if (!nm || !key || nm[key] !== undefined) return;
+    nm[key] = zh;
+    if (dye && key.length > 4 && key.endsWith(' Dye')) dye.push(key);
   }
 
-  function _btRow(ln) {
+  function _btNameRow(zh, en, ja, ko, t) {
+    _btNamePut(t.nameMap, en, zh, t.dye);
+    _btNamePut(t.nameMap, ja, zh, t.dye);
+    _btNamePut(t.nameMap, ko, zh, t.dye);
+    if (t.koByZh && zh && ko && t.koByZh[zh] === undefined) t.koByZh[zh] = ko;
+  }
+
+  function _btRow(ln, t) {
     const c0 = ln.codePointAt(0);
     if (c0 !== 45 && (c0 < 48 || c0 > 57)) return;   // 仅「数字」或「-」开头的行（跳过表头）
     const p = ln.split('\t');
     if (p.length < 5) return;
     const zh = p[1] || '', en = p[2] || '', ja = p[3] || '', ko = p[4] || '';
-    _btHashRow(p, zh);
-    _btNameRow(zh, en, ja, ko);
+    _btHashRow(p, zh, t);
+    _btNameRow(zh, en, ja, ko, t);
   }
 
-  // 染剂色名回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」（仅当 Xxx 未被其他名占用）
-  function _btDyeFallback() {
-    const extra = [];
-    for (const k in nameMap) {
-      if (k.length > 4 && k.endsWith(' Dye')) {
-        const base = k.slice(0, -4);
-        if (nameMap[base] === undefined) extra.push(base, nameMap[k]);
-      }
-    }
-    for (let i = 0; i < extra.length; i += 2) nameMap[extra[i]] = extra[i + 1];
+  // 构建目标：按站裁剪所需索引（scope 为 null 时全建——未知站点/测试环境），
+  // 并携带染剂候选缓冲（构建中顺手收集，替代原先对 nameMap 十余万键的全量扫描）
+  function _btTargets(scope) {
+    const pick = (k) => !scope || scope.indexOf(k) >= 0;
+    return {
+      itemHash: pick('itemHash') ? {} : null,
+      ecidMap: pick('ecidMap') ? {} : null,
+      nameMap: pick('nameMap') ? {} : null,
+      koByZh: pick('koByZh') ? {} : null,
+      dye: [],
+    };
   }
 
-  function buildTables() {
-    itemHash = {}; ecidMap = {}; nameMap = {}; koByZh = {};
+  /* v1.3 分片构建：每片目标 ≤8ms 后让出主线程（setTimeout 0），避免移动端
+     主线程被连续阻塞 1-2 秒（页面渲染/交互停顿、圈圈转不出）。构建在局部
+     对象上完成，全部完成前各查表函数仍拿到 null（静默跳过）——与原同步版
+     语义一致；完成后一次性赋值 + 染剂回退 + 回调。 */
+  function buildTables(scope, done) {
+    const t = _btTargets(scope);
     const lines = ITEM_DB_TEXT.split('\n');
-    for (const ln of lines) {
-      if (!ln) continue;
-      _btRow(ln);
-    }
-    _btDyeFallback();
+    let i = 0;
+    const finish = () => {
+      try {
+        // 染剂色名回退（顺手收集版）：「Xxx Dye → 中文名」补开「Xxx → 中文名」
+        if (t.nameMap && t.dye.length) {
+          for (const key of t.dye) {
+            const base = key.slice(0, -4);
+            if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
+          }
+        }
+        itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
+      } catch (e) { /* 忽略：构建收尾 best-effort */ }
+      if (typeof done === 'function') { try { done(); } catch (e) {} }
+    };
+    const step = () => {
+      try {
+        const deadline = Date.now() + 8;
+        while (i < lines.length) {
+          const end = Math.min(i + 250, lines.length);
+          while (i < end) {
+            const ln = lines[i++];
+            if (ln) _btRow(ln, t);
+          }
+          if (Date.now() >= deadline) break;
+        }
+      } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
+      if (i < lines.length) { setTimeout(step, 0); return; }
+      finish();
+    };
+    step();
   }
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
@@ -4044,6 +4081,22 @@
     if (onHost(h, 'ronkacloset.com')) return SITE_TABLES.ronka;
     if (onHost(h, 'ffxivcollection.com')) return SITE_TABLES.collection;
     return [];
+  }
+
+  // v1.3：各站实际使用的索引（按站裁剪构建范围，降低构建耗时与内存）。
+  // 依据全库调用链核查——nameMap：各站文本翻译共用；itemHash：lookupZh
+  // （EC/mirapri 装备链接）与 fcLinkZhName（FC）；ecidMap/koByZh：仅 wiki
+  // 反查块（EC/韩服链接）。未知站点与测试环境返回 null（全建，保守）。
+  function _siteIndexes() {
+    if (window.__zhxTestIndexes) return window.__zhxTestIndexes;
+    const h = location.hostname;
+    if (onHost(h, 'mirapri.com')) return ['nameMap', 'itemHash'];
+    if (onHost(h, 'eorzeacollection.com')) return ['nameMap', 'itemHash'];
+    if (onHost(h, 'huijiwiki.com')) return ['ecidMap', 'koByZh'];
+    if (onHost(h, 'ff14-fc.com')) return ['nameMap', 'itemHash'];
+    if (onHost(h, 'ronkacloset.com')) return ['nameMap'];
+    if (onHost(h, 'ffxivcollection.com')) return ['nameMap'];
+    return null;
   }
 
   /* ── 词库运行时更新（v1.2.0）：dict.json → 各站词典「原地合并」──────────────
@@ -4159,7 +4212,12 @@
   }
   function _writeCachedTable(t, fp, tx) {
     if (!fp || !tx) return;
-    storeSet(DT_PREFIX + t, fp + '\n' + tx);
+    // v1.3：大字符串（数 MB 级）写入推迟到页面空闲，避免同步写造成瞬时卡顿；
+    // 写入失败仅影响下次重新下载，可接受
+    const key = DT_PREFIX + t, val = fp + '\n' + tx;
+    const put = () => { try { storeSet(key, val); } catch (e) {} };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
+    else setTimeout(put, 50);
   }
 
   let _ensurePromise = null;
@@ -4214,18 +4272,20 @@
   }
 
   // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
+  // v1.3：buildTables 改分片（回调式）——分片全部完成后才广播就绪
   function _ensureFinalize() {
     return new Promise((resolve) => {
       const go = () => {
-        try { buildTables(); } catch (e) {}
-        try { _fireTablesReady(); } catch (e) {}
-        try {
-          console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
-            + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
-            + ' / 副本表 ' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
-            + ' / 数据版本 ' + (DATA_VER || '未记录'));
-        } catch (e) {}
-        resolve();
+        buildTables(_buildScope, () => {
+          try { _fireTablesReady(); } catch (e) {}
+          try {
+            console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
+              + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
+              + ' / 副本表 ' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
+              + ' / 数据版本 ' + (DATA_VER || '未记录'));
+          } catch (e) {}
+          resolve();
+        });
       };
       if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 });
       else setTimeout(go, 50);
@@ -4245,9 +4305,12 @@
     });
   }
 
+  let _buildScope = null;   // 本页索引构建范围（按站裁剪；null = 全建）
+
   async function _ensureMain() {
     const need = neededTables();
     if (!need.length) return;
+    _buildScope = _siteIndexes();
     const fast = await _ensureTryFast(need);
     if (!fast) return;
     await _waitPageLoad();
@@ -4614,4 +4677,19 @@
   else if (onHost(host, 'ff14-fc.com')) startFC();
   else if (onHost(host, 'ronkacloset.com')) startRonka();
   else if (onHost(host, 'ffxivcollection.com')) startACL();
+
+  // v1.3：bfcache 兜底——页面从浏览器缓存恢复（快速刷新/后退前进）时可能带着
+  // 未完成的注入状态回来，补跑一次各站入口（全部幂等）+ 数据就绪检查。
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    try {
+      if (onHost(host, 'mirapri.com')) { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); }
+      else if (onHost(host, 'eorzeacollection.com')) { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); }
+      else if (onHost(host, 'huijiwiki.com')) safe(injectWikiButton, 'pageshow')();
+      else if (onHost(host, 'ff14-fc.com')) safe(translateFCPage, 'pageshow')();
+      else if (onHost(host, 'ronkacloset.com')) { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); }
+      else if (onHost(host, 'ffxivcollection.com')) safe(translateACLPage, 'pageshow')();
+      safe(ensureTables, 'pageshow 数据')();
+    } catch (err) { /* 忽略：兜底失败不影响主流程 */ }
+  });
 })();
