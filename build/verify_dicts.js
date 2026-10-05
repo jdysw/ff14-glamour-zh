@@ -17,7 +17,7 @@ function extractDict(src, name) {
   const body = m[2] + m[3] + '\n' + m[4];
   let val;
   try {
-    if (body.indexOf('...DICT_COMMON') !== -1 && name !== 'DICT_COMMON') {
+    if (body.includes('...DICT_COMMON') && name !== 'DICT_COMMON') {
       // 展开形态：求值前注入 DICT_COMMON（等效运行时 ...DICT_COMMON 展开）
       const c0 = extractDict(src, 'DICT_COMMON');
       val = new Function('DICT_COMMON', 'return (' + body.replace(/;\s*$/, '') + ')')(c0.value || {});
