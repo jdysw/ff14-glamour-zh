@@ -56,6 +56,22 @@ def find_block(s, name):
     body = s[m.end() + off + 1:end - 1]  # 不含外层括号
     return (start, end, body, open_ch, close_ch)
 
+_ESC_MAP = {'n': '\n', 'r': '\r', 't': '\t'}
+
+
+def _scan_escape(s, i):
+    """s[i] 为反斜杠；返回 (字符, 下一位置)。"""
+    n = s[i + 1] if i + 1 < len(s) else ''
+    if n in _ESC_MAP:
+        return (_ESC_MAP[n], i + 2)
+    if n == 'u' and i + 5 < len(s):
+        try:
+            return (chr(int(s[i + 2:i + 6], 16)), i + 6)
+        except ValueError:
+            return (n, i + 6)
+    return (n, i + 2)
+
+
 def scan_js_string(s, i):
     """从 s[i]（引号处）扫描到闭合引号，返回 (内容, 下一位置) 或 None（受控扫描，不执行代码）。"""
     q = s[i]
@@ -66,23 +82,8 @@ def scan_js_string(s, i):
     while i < len(s):
         c = s[i]
         if c == '\\':
-            n = s[i + 1] if i + 1 < len(s) else ''
-            if n == 'n':
-                out.append('\n')
-            elif n == 'r':
-                out.append('\r')
-            elif n == 't':
-                out.append('\t')
-            elif n == 'u' and i + 5 < len(s):
-                try:
-                    out.append(chr(int(s[i + 2:i + 6], 16)))
-                except ValueError:
-                    out.append(n)
-                i += 6
-                continue
-            else:
-                out.append(n)
-            i += 2
+            ch, i = _scan_escape(s, i)
+            out.append(ch)
             continue
         if c == q:
             return (''.join(out), i + 1)

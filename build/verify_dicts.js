@@ -56,29 +56,33 @@ function scanString(s, i) {
   return null;
 }
 
+// 跳过空白（空格/制表符）→ 新位置
+function skipSpace(t, i) {
+  while (t[i] === ' ' || t[i] === '\t') i += 1;
+  return i;
+}
+
+// 单行 `'k': 'v',` → { k, v } 或 null（非引号开头/格式不符即 null）
+function parseKvLine(t) {
+  if (t[0] !== "'" && t[0] !== '"') return null;
+  const k = scanString(t, 0);
+  if (!k) return null;
+  let i = skipSpace(t, k.next);
+  if (t[i] !== ':') return null;
+  i = skipSpace(t, i + 1);
+  const v = scanString(t, i);
+  if (!v) return null;
+  let j = skipSpace(t, v.next);
+  if (t[j] === ',') j = skipSpace(t, j + 1);
+  if (j !== t.length) return null;
+  return { k: k.str, v: v.str };
+}
+
 function parseKvBody(body) {
   const obj = {};
   for (const rawLine of body.split('\n')) {
-    const t = rawLine.trim();
-    if (!t || t[0] === '{' || t[0] === '}' || t.startsWith('...DICT_COMMON')) continue;
-    if (t[0] !== "'" && t[0] !== '"') continue;
-    const k = scanString(t, 0);
-    if (!k) continue;
-    let i = k.next;
-    while (t[i] === ' ' || t[i] === '\t') i += 1;
-    if (t[i] !== ':') continue;
-    i += 1;
-    while (t[i] === ' ' || t[i] === '\t') i += 1;
-    const v = scanString(t, i);
-    if (!v) continue;
-    let j = v.next;
-    while (t[j] === ' ' || t[j] === '\t') j += 1;
-    if (t[j] === ',') {
-      j += 1;
-      while (t[j] === ' ' || t[j] === '\t') j += 1;
-    }
-    if (j !== t.length) continue;
-    obj[k.str] = v.str;
+    const kv = parseKvLine(rawLine.trim());
+    if (kv) obj[kv.k] = kv.v;
   }
   return obj;
 }
