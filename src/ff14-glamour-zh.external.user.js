@@ -4121,6 +4121,8 @@
   function _sweepDictFixes(fixes) {
     if (!fixes?.length) return;
     const uniq = _sweepDedupe(fixes);
+    // 防御上限：正常维护场景远小于此；超出时截断并告警（收敛供应链滥用面）
+    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) {} uniq.length = 500; }
     if (!uniq.length || !document.body) return;
     const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
