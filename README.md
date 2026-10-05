@@ -82,6 +82,9 @@ ff14-glamour-zh/
 ├── dist/                  — 构建产物（生成物，不手改）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 ├── legacy/                — 历史归档（旧独立版 ronka、历代生成器等，不参与构建）
+├── .github/               — 仓库自动化
+│   ├── workflows/deploy-data.yml — 数据站自动部署（data/ 变动 → CF Pages）
+│   └── deploy/            — 部署组装脚本（prepare.py）+ 数据站根页
 └── build.sh               — 一键全链构建
 ```
 
@@ -105,23 +108,27 @@ Raw 源（Greasy Fork「Sync」用）：
 bash build.sh
 # ② 上传 GitHub
 git add -A && git commit -m "..." && git push
-# ③ 数据站（数据变动时）
-python3 build/rebuild-db.py && python3 ~/zhixia-data/update-data.py --deploy
+# ③ 数据站 —— data/ 三文件变动时，推送 main 即自动部署（见下）
 # ④ 脚本（代码变动时）——GF 端 Sync 拉取最新版
 ```
 
-- 只改**词库数据** → 走 ①③；只改**脚本代码** → 走 ①②④。
+- 只改**界面词典**（dict/）→ 走 ①②；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④。
+- **数据站自动部署**：`data/ff14-items.tsv`、`data/ff14-series.txt`、`data/acl-cfc.txt` 任一推送
+  到 main → GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
+  项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
+  备用本地通道：`python3 ~/zhixia-data/update-data.py --deploy`。
 
 ### 数据更新流程（游戏版本更新后 / 数据表变动后）
 
 ```bash
-python3 build/rebuild-db.py                     # 1. 重建物品总表（自动下载四语权威源；--csv-dir 可离线）
-python3 ~/zhixia-data/update-data.py            # 2. 同步数据文件 + 重建 version.json
-python3 ~/zhixia-data/update-data.py --deploy   # 3. 部署到 CF Pages
+python3 build/rebuild-db.py    # 1. 重建物品总表（自动下载四语权威源；--csv-dir 可离线）
+git add data/ && git commit -m "data: 重建物品总表" && git push
+                               # 2. 推送 → GitHub Actions 自动组装并部署数据站
+# （备用本地通道）python3 ~/zhixia-data/update-data.py --deploy —— 经 wrangler 登录态直连部署
 ```
 
 - 源数据＝四语 datamining Item.csv（中/英/日/韩）；hash/EC_ID/别名由本表继承，不因重建丢失。
-- 指纹 = `sha256(文件内容) 前 12 位`，由 update-data.py 自动计算写入 version.json。
+- 指纹 = `sha256(文件内容) 前 12 位`（`.github/deploy/prepare.py` 与 update-data.py 算法一致），写入 version.json。
 - **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
 - GF 发布件需重新同步的场景只有：**脚本代码变动**。
 
