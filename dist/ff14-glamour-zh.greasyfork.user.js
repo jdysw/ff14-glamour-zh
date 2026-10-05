@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.0
+// @version      1.1.1
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -1580,6 +1580,11 @@
     // 幂等重建：数据晚到时刷新会先移除上一版区块再重建
     const prev = document.querySelector('.zhixia-reverse-block');
     if (prev && prev.parentElement) prev.parentElement.removeChild(prev);
+
+    // 仅在装备页注入：页面 infobox 部位类目须属于幻化装备（与 EC 链接同一判定）。
+    // 非装备页（消耗品/素材/家具/任务/NPC 等）直接退出——既不注入反查区块，
+    // 也不改动「其他站点链接」。
+    if (!getSlot()) return;
 
     // 原「其他站点链接」列表里的光之收藏家移除（新块内已有，避免重复）
     const src = blockByTitle('其他站点链接');
@@ -4158,7 +4163,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.0 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.1 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (host.endsWith('mirapri.com')) { startMirapri(); startItems(); }
