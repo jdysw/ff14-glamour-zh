@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.6
+// @version      1.2.7
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -1576,31 +1576,19 @@
     return items;
   }
 
-  function injectWikiButton() {
-    // 幂等重建：数据晚到时刷新会先移除上一版区块再重建
-    const prev = document.querySelector('.zhixia-reverse-block');
-    if (prev) prev.remove();
-
-    // 仅在装备页注入：页面 infobox 部位类目须属于幻化装备（与 EC 链接同一判定）。
-    // 非装备页（消耗品/素材/家具/任务/NPC 等）直接退出——既不注入反查区块，
-    // 也不改动「其他站点链接」。
-    if (!getSlot()) return;
-
-    // 原「其他站点链接」列表里的光之收藏家移除（新块内已有，避免重复）
-    const src = blockByTitle('其他站点链接');
-    if (src) {
-      for (const a of src.querySelectorAll('a')) {
-        const h = a.getAttribute('href') || '';
-        if (/risingstones/i.test(h) || (a.textContent || '').includes('光之收藏家')) {
-          const li = a.closest('li');
-          (li || a).remove();
-        }
+  // v1.2.7：DOM 清理/构建/挂载拆为子步骤（降认知复杂度）
+  function _removeOldStarlight(src) {
+    if (!src) return;
+    for (const a of src.querySelectorAll('a')) {
+      const h = a.getAttribute('href') || '';
+      if (/risingstones/i.test(h) || (a.textContent || '').includes('光之收藏家')) {
+        const li = a.closest('li');
+        (li || a).remove();
       }
     }
+  }
 
-    // 「幻化装备反查链接」区块（与「其他站点链接」同款式：区块 + 标题 + 列表，一行一条）
-    const items = wikiReverseItems();
-    if (!items.length) return;
+  function _buildReverseBlock(items) {
     const block = document.createElement('div');
     block.className = 'ff14-content-box-block zhixia-reverse-block';
     const title = document.createElement('div');
@@ -1621,19 +1609,43 @@
       ul.appendChild(li);
     }
     block.appendChild(ul);
+    return block;
+  }
 
-    // 位置：「其他站点链接」区块之后；无该区块时退回 infobox / 正文顶
+  function _mountReverseBlock(block, src) {
+    // 位置：「其他站点链接」之后；无该区块时退回 infobox / 正文顶
     if (src?.parentElement) {
       src.parentElement.insertBefore(block, src.nextSibling);
-    } else {
-      const info = document.querySelector('.infobox, [class*="infobox"]');
-      if (info?.parentElement) {
-        info.parentElement.insertBefore(block, info.nextSibling);
-      } else {
-        const content = document.querySelector('#mw-content-text, .mw-parser-output, #content');
-        if (content) content.insertBefore(block, content.firstChild);
-      }
+      return;
     }
+    const info = document.querySelector('.infobox, [class*="infobox"]');
+    if (info?.parentElement) {
+      info.parentElement.insertBefore(block, info.nextSibling);
+      return;
+    }
+    const content = document.querySelector('#mw-content-text, .mw-parser-output, #content');
+    if (content) content.insertBefore(block, content.firstChild);
+  }
+
+  function injectWikiButton() {
+    // 幂等重建：数据晚到时刷新会先移除上一版区块再重建
+    const prev = document.querySelector('.zhixia-reverse-block');
+    if (prev) prev.remove();
+
+    // 仅在装备页注入：页面 infobox 部位类目须属于幻化装备（与 EC 链接同一判定）。
+    // 非装备页（消耗品/素材/家具/任务/NPC 等）直接退出——既不注入反查区块，
+    // 也不改动「其他站点链接」。
+    if (!getSlot()) return;
+
+    // 原「其他站点链接」列表里的光之收藏家移除（新块内已有，避免重复）
+    const src = blockByTitle('其他站点链接');
+    _removeOldStarlight(src);
+
+    // 「幻化装备反查链接」区块（与「其他站点链接」同款式：区块 + 标题 + 列表，一行一条）
+    const items = wikiReverseItems();
+    if (!items.length) return;
+    const block = _buildReverseBlock(items);
+    _mountReverseBlock(block, src);
     document.documentElement.dataset.zhixiaWikiDone = '1';
   }
 
@@ -2627,14 +2639,8 @@
     }
     return _seriesMap;
   }
-  function lookupSeries(jp) {
-    if (!jp || jp.length < 2 || jp.length > 60) return null;
-    const map = _getSeriesMap();
-    if (!map.size) return null;
-    // ① 精确
-    const exact = map.get(jp);
-    if (exact) return exact;
-    // ② 逐步剥离：优先在 ・ 处剥
+  // v1.2.7：② 剥离 / ③ 前缀匹配拆为子步骤（降认知复杂度）
+  function _stripSeriesHit(map, jp) {
     let s = jp;
     for (let guard = 0; guard < 6; guard++) {
       const di = s.lastIndexOf('・');
@@ -2643,16 +2649,36 @@
       const hit = map.get(s);
       if (hit) return hit;
     }
-    // ③ 前缀匹配（桶：首2字）：k 与 jp 互为前缀（双向），取最长键
+    return null;
+  }
+
+  function _mutualPrefix(k, jp) {
+    return jp.startsWith(k) || k.startsWith(jp);
+  }
+
+  function _prefixBest(map, jp) {
     const head = jp.slice(0, 2);
     let bestKey = '', bestVal = null;
     for (const [k, v] of map) {
       if (k.length < 2 || !k.startsWith(head)) continue;
       if (k.length > head.length + 14 && !k.startsWith(jp)) continue;
-      const mutual = jp.startsWith(k) || k.startsWith(jp);
-      if (mutual && k.length > bestKey.length) { bestKey = k; bestVal = v; }
+      if (_mutualPrefix(k, jp) && k.length > bestKey.length) { bestKey = k; bestVal = v; }
     }
     return bestVal;
+  }
+
+  function lookupSeries(jp) {
+    if (!jp || jp.length < 2 || jp.length > 60) return null;
+    const map = _getSeriesMap();
+    if (!map.size) return null;
+    // ① 精确
+    const exact = map.get(jp);
+    if (exact) return exact;
+    // ② 逐步剥离：优先在 ・ 处剥
+    const hit = _stripSeriesHit(map, jp);
+    if (hit) return hit;
+    // ③ 前缀匹配（桶：首2字）：k 与 jp 互为前缀（双向），取最长键
+    return _prefixBest(map, jp);
   }
 
   // v1.12.3：职能/类别词（・复合名逐段翻译用）
@@ -2767,6 +2793,22 @@
   //   仅当同一前缀所有样本译名一致（set.size === 1）才启用；带缓存，数据就绪后懒构建。
   let _seriesPfxCache = null;
   let _allKeysCache = null;
+  // v1.2.7：_seriesPfxCollect 拆为子步骤（降认知复杂度）
+  function _seriesPfxCollect(map, cand) {
+    for (const [jp, zh] of map) {
+      const di = jp.lastIndexOf('・');
+      if (di <= 0) continue;
+      const roleZh = FC_ROLE_ZH[jp.slice(di + 1)];
+      if (!roleZh || !zh.endsWith(roleZh)) continue;
+      const zhHead = zh.slice(0, zh.length - roleZh.length);
+      if (zhHead.length < 2) continue;
+      const key = jp.slice(0, di);
+      if (key.length < 3) continue;
+      if (!cand.has(key)) cand.set(key, new Set());
+      cand.get(key).add(zhHead);
+    }
+  }
+
   function _getSeriesPfx() {
     if (_seriesPfxCache) return _seriesPfxCache;
     _seriesPfxCache = new Map();
@@ -2774,18 +2816,7 @@
       const map = _getSeriesMap();
       if (map.size) {
         const cand = new Map();
-        for (const [jp, zh] of map) {
-          const di = jp.lastIndexOf('・');
-          if (di <= 0) continue;
-          const roleZh = FC_ROLE_ZH[jp.slice(di + 1)];
-          if (!roleZh || !zh.endsWith(roleZh)) continue;
-          const zhHead = zh.slice(0, zh.length - roleZh.length);
-          if (zhHead.length < 2) continue;
-          const key = jp.slice(0, di);
-          if (key.length < 3) continue;
-          if (!cand.has(key)) cand.set(key, new Set());
-          cand.get(key).add(zhHead);
-        }
+        _seriesPfxCollect(map, cand);
         for (const [key, set] of cand) if (set.size === 1) _seriesPfxCache.set(key, [...set][0]);
       }
     } catch (e) { /* 忽略：系列前缀推导 best-effort，失败返回空表 */ }
@@ -2806,22 +2837,28 @@
   // 算法：按「・」前段分组，求组内中文名的最长公共子串（≥90% 覆盖、≥2 字）；
   //   处理「改良型×」等修饰词混入（公共子串而非前缀，规避前段差异）。带缓存，数据就绪后懒构建。
   let _itemPfxCache = null;
+  // v1.2.7：_itemPfxGroup 拆为子步骤（降认知复杂度）
+  function _itemPfxGroup(nm) {
+    const groups = new Map();
+    for (const k in nm) {
+      const di = k.indexOf('・');
+      if (di <= 0 || di >= k.length - 1) continue;
+      const zh = nm[k];
+      if (!zh) continue;
+      const key = k.slice(0, di);
+      if (key.length < 3) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(zh);
+    }
+    return groups;
+  }
+
   function _getItemPfx() {
     if (_itemPfxCache) return _itemPfxCache;
     _itemPfxCache = new Map();
     try {
       if (!nameMap) return _itemPfxCache;
-      const groups = new Map();
-      for (const k in nameMap) {
-        const di = k.indexOf('・');
-        if (di <= 0 || di >= k.length - 1) continue;
-        const zh = nameMap[k];
-        if (!zh) continue;
-        const key = k.slice(0, di);
-        if (key.length < 3) continue;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(zh);
-      }
+      const groups = _itemPfxGroup(nameMap);
       for (const [key, list] of groups) {
         if (list.length < 2) continue;
         const sub = _lcs90(list);
@@ -2830,18 +2867,27 @@
     } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
   }
-  function _lcs90(list) {
-    const n = list.length;
-    const need = Math.ceil(n * 0.9);
+  // v1.2.7：_shortestStr/_countIncludes 拆为子步骤（降认知复杂度）
+  function _shortestStr(list) {
     let shortest = list[0];
     for (const x of list) if (x.length < shortest.length) shortest = x;
+    return shortest;
+  }
+
+  function _countIncludes(list, sub) {
+    let c = 0;
+    for (const x of list) if (x.includes(sub)) c++;
+    return c;
+  }
+
+  function _lcs90(list) {
+    const need = Math.ceil(list.length * 0.9);
+    const shortest = _shortestStr(list);
     const maxLen = Math.min(12, shortest.length);
     for (let len = maxLen; len >= 2; len--) {
       for (let i = 0; i + len <= shortest.length; i++) {
         const sub = shortest.slice(i, i + len);
-        let c = 0;
-        for (const x of list) if (x.includes(sub)) c++;
-        if (c >= need) return sub;
+        if (_countIncludes(list, sub) >= need) return sub;
       }
     }
     return null;
