@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.4
+// @version      1.2.5
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -1105,11 +1105,11 @@
   // EC 上会变动的文本（数量、时间、页数…）
   const PATTERNS_EC = [
     // 面饰页动态文案
-    [/^—\s*Previous\s+(.+?)\s*—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
-    [/^—\s*Next\s+(.+?)\s*—$/, (m0, x) => '— 下一个' + (DICT_EC[x] || x) + ' —'],
+    [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
+    [/^—\s{0,8}Next\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 下一个' + (DICT_EC[x] || x) + ' —'],
     // 分类标题 em-dash 包裹（— Weapon — 等）+ Shader 前缀（v1.14.2）
-    [/^[—–-]\s*(.+?)\s*[—–-]$/, (m0, x) => '— ' + (DICT_EC[x] || x) + ' —'],
-    [/^Shader:\s*(.+)$/i, (m0, x) => '滤镜：' + (DICT_EC[x] || x)],
+    [/^[—–-]\s{0,8}(.{1,200}?)\s{0,8}[—–-]$/, (m0, x) => '— ' + (DICT_EC[x] || x) + ' —'],
+    [/^Shader:\s{0,8}(.{1,200})$/i, (m0, x) => '滤镜：' + (DICT_EC[x] || x)],
     // 首页统计 + 版本页动态句 + Patron 挑战名（v1.14.7）
     [/^([\d,]+) glamours have already been submitted by the community!?$/, (m0, n) => '社区已提交 ' + n + ' 套幻化！'],
     [/^PvP Series (\d+) has begun$/, (m0, n) => 'PvP 第 ' + n + ' 赛季已开始'],
@@ -1122,14 +1122,14 @@
     [/^(Phantom Vision|Vana'dielian|Praemagitek)\s+(Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/, (m0, a, b) => (DICT_EC[a] || a) + (DICT_EC[b] || b) + '套装'],
     // Latest Patch - 7.5 版本选项（v1.14.5）
     [/^Latest Patch(\s*-\s*[\d.]+)?$/, (m0, v) => '最新版本' + (v || '')],
-    [/^MORE\s+(.+)$/, (m0, x) => '更多' + (DICT_EC[x] || x)],
-    [/^GLAMOURS USING THIS\s+(.+)$/, (m0, x) => '使用此' + (DICT_EC[x] || x) + '的幻化'],
+    [/^MORE\s{1,8}(.{1,200})$/, (m0, x) => '更多' + (DICT_EC[x] || x)],
+    [/^GLAMOURS USING THIS\s{1,8}(.{1,200})$/, (m0, x) => '使用此' + (DICT_EC[x] || x) + '的幻化'],
     [/^PvP Series (\d+) - awarded at Level (\d+)$/, 'PvP 第 $1 赛季 - 等级 $2 奖励'],
     // 版本号标题：Patch 7.5 - Into the Mist -> 版本 7.5 - Into the Mist
-    [/^Patch\s+([\d.]+)(.*)$/i, '版本 $1$2'],
+    [/^Patch\s{1,8}([\d.]{1,20})(.{0,200})$/i, '版本 $1$2'],
     // 日期中文化：Oct 2nd, 2026 -> 2026年10月2日；Oct 2, 2026 -> 2026年10月2日
-    [/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,\s*(\d{4})\b/g,
-      (m0, mo, d, y) => y + '年' + ({ Jan: '1', Feb: '2', Mar: '3', Apr: '4', May: '5', Jun: '6', Jul: '7', Aug: '8', Sep: '9', Oct: '10', Nov: '11', Dec: '12' }[mo]) + '月' + String(d) + '日'],
+    [/\b([A-Z][a-z]{2})[a-z]{0,20}\.{0,1}\s{1,8}(\d{1,2})(?:st|nd|rd|th)?,\s{0,8}(\d{4})\b/g,
+      (m0, mo, d, y) => { const n = ({ Jan: '1', Feb: '2', Mar: '3', Apr: '4', May: '5', Jun: '6', Jul: '7', Aug: '8', Sep: '9', Oct: '10', Nov: '11', Dec: '12' })[mo]; return n ? y + '年' + n + '月' + String(d) + '日' : m0; }],
     // 时间中文化：3:00 PM -> 15:00；12:30 AM -> 00:30
     [/\b(\d{1,2}):(\d{2})\s*(AM|PM)\b/gi,
       (m0, h, mi, ap) => {
@@ -1156,10 +1156,10 @@
     [/^(\d+)\s+months?\s+ago$/i, '$1 个月前'],
     [/^(\d+)\s+days?\s+ago$/i, '$1 天前'],
     [/^(\d+)\s+hours?\s+ago$/i, '$1 小时前'],
-    [/^Up to\s+(.+)$/i, '$1 以下'],
+    [/^Up to\s{1,8}(.{1,200})$/i, '$1 以下'],
     [/^Loading\s*\.\.\.$/i, '加载中…'],
-    [/^MORE GLAMOURS BY\s+(.+)$/i, '该作者的更多幻化'],
-    [/^All from\s+(.+)$/i, '来自 $1 的全部'],
+    [/^MORE GLAMOURS BY\s{1,8}(.{1,200})$/i, '该作者的更多幻化'],
+    [/^All from\s{1,8}(.{1,200})$/i, '来自 $1 的全部'],
     [/^([\d,]+)\s+glamours?$/i, '$1 套幻化'],
     [/^Showing\s+([\d,]+)\s+of\s+([\d,]+)$/i, '显示 $1 / 共 $2 条'],
     [/^(Au Ra|Hyur|Elezen|Miqo'te|Lalafell|Roegadyn|Viera|Hrothgar)\s+Female$/i,
@@ -2664,7 +2664,7 @@
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
   function trFCSegments(t) {
-    if (!t || !t.includes('・')) return null;
+    if (!t?.includes('・')) return null;
     const parts = t.split('・');
     if (parts.length < 2 || parts.length > 5) return null;
     let hit = 0;
@@ -3140,7 +3140,7 @@
    */
 
   const ACL_DECOR_HEAD = /^[\s\u00a0※◆■□●○▼▽☆★]+/;
-  const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]+$/;
+  const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]{1,64}$/;
   const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;
 
   const DICT_ACL = { ...DICT_COMMON,
@@ -3795,7 +3795,7 @@
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
         无持久缓存（本次页面内仍可工作）────────────────────────────── */
-  function _storeNorm(x) { if (typeof x === 'string') return x; return x == null ? null : String(x); }
+  function _storeNorm(x) { if (typeof x === 'string') { return x; } return x == null ? null : String(x); }
   function storeGetAsync(k) {
     return new Promise((resolve) => {
       try {
@@ -3914,7 +3914,7 @@
         if (!obj) continue;
         const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
         if (extra) for (const k in extra) check(obj, k, extra[k]);
-        if (common) { for (const k in common) { if (extra?.[k] !== undefined) continue; check(obj, k, common[k]); } }
+        if (common) { for (const k in common) { if (extra?.[k] !== undefined) { continue; } check(obj, k, common[k]); } }
         if (common) Object.assign(obj, common);
         if (extra) Object.assign(obj, extra);
       }
@@ -3989,7 +3989,7 @@
       const local = {};
       await Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {})));
       let meta = null;
-      try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理 */ meta = null; }
+      try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
       const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
       const allCached = need.every((t) => !!local[t]);
       if (allCached && fresh) {
@@ -4205,7 +4205,7 @@
     document.querySelectorAll('div.tag, span.tag').forEach((el) => {
       if (el.classList.contains('zhixia-dye-zh')) return;
       const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = t.match(/^([\u25EF\u2B24\u25CB\u25CF])\s*(.+)$/);
+      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
       if (!m) return;
       const name = m[2].trim();
       const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
@@ -4223,7 +4223,7 @@
       const walk = (node) => {
         for (const n of Array.from(node.childNodes)) {
           if (n.nodeType === 3) {
-            if (n.nodeValue && n.nodeValue.includes(t.name)) {
+            if (n.nodeValue?.includes(t.name)) {
               n.nodeValue = n.nodeValue.replace(t.name, zh);
               changed = true;
             }
@@ -4377,7 +4377,7 @@
     for (const el of cands) {
       if (el.classList.contains('zhixia-dye-zh')) continue;
       const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = t.match(/^([\u25EF\u2B24\u25CB\u25CF])\s*(.+)$/);
+      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
       if (!m) continue;
       const name = m[2].trim();
       const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
