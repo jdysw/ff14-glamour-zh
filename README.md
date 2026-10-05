@@ -72,8 +72,7 @@ ff14-glamour-zh/
 ├── data/                  ★ 数据表
 │   ├── ff14-items.tsv     — 物品总表（8 列：key|中|英|日|韩|hash|EC_ID|别名；51,225 物品）
 │   ├── ff14-series.txt    — 系列/副本名
-│   ├── acl-cfc.txt        — 副本名（fc/collection 用）
-│   └── huiji-icon.b64     — 灰机 wiki 图标（构建时内嵌进脚本）
+│   └── acl-cfc.txt        — 副本名（fc/collection 用）
 ├── src/                   ★ 脚本模板（发布母版）
 │   └── ff14-glamour-zh.external.user.js
 ├── build/                 — 构建脚本
@@ -82,11 +81,10 @@ ff14-glamour-zh/
 │   ├── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
 │   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
 │   └── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
-├── dist/                  — 构建产物（生成物，不手改）
+├── dist/                  — 构建产物：本地生成（不入库）；发布走 GitHub Releases 自动构建
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
-├── legacy/                — 历史归档（旧独立版 ronka、历代生成器等，不参与构建）
 ├── .github/               — 仓库自动化
-│   ├── workflows/deploy-data.yml — 数据站自动部署（data/ 变动 → CF Pages）
+│   ├── workflows/         — deploy-data（数据站部署）/ release（自动发布）/ sonarqube-cloud（代码质量）
 │   └── deploy/            — 部署组装脚本（prepare.py）+ 数据站根页
 └── build.sh               — 一键全链构建
 ```
@@ -114,10 +112,11 @@ bash build.sh
 # ② 上传 GitHub
 git add -A && git commit -m "..." && git push
 # ③ 数据站 —— data/ 三文件变动时，推送 main 即自动部署（见下）
-# ④ 脚本（代码变动时）——GF 端 Sync 拉取最新版
+# ④ 脚本（代码变动时）——推送后 Actions 自动构建并创建 Release（版本号变化时）；
+#    GF 端通过上方 Raw 源同步最新版
 ```
 
-- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④。
+- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④（建议同时将 `@version` +1，便于发布追踪）。
 - **数据站自动部署**：`data/ff14-items.tsv`、`data/ff14-series.txt`、`data/acl-cfc.txt`、`dict/*.json`（词库）
   任一推送到 main → GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
   项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
@@ -135,7 +134,7 @@ git add data/ && git commit -m "data: 重建物品总表" && git push
 - 源数据＝四语 datamining Item.csv（中/英/日/韩）；hash/EC_ID/别名由本表继承，不因重建丢失。
 - 指纹 = `sha256(文件内容) 前 12 位`（`.github/deploy/prepare.py` 与 update-data.py 算法一致），写入 version.json。
 - **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
-- GF 发布件需重新同步的场景只有：**脚本代码变动**。
+- **发布自动化**：`src/` 推送到 main 且 `@version` 有变更 → Actions（`release.yml`）自动构建并创建 Release（附 `dist/` 发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
 
 ### 日常维护
 
@@ -156,7 +155,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 
 ### 规则
 
-- `dist/` 是生成物，不手改。
+- `dist/` 为本地构建产物（不入库）；发布走 GitHub Releases 自动构建（`release.yml`）。
 - 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
 - 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 内词典与 dict/*.json 源逐条一致。
 - **GF 版数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备/染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
