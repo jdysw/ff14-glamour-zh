@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.0
+// @version      1.2.1
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2715,8 +2715,10 @@
 
     // ③ 日文装备名（剥「画像」等后缀）；失败再试系列名（v1.12.0）
     // v1.12.2：含假名 OR 纯汉字串（≤20字，如 夜桜上衣）都试查
+    // v1.2.1：判定前剥【…】标记——「春日半頬【想】」等「纯汉字+全角标记」名此前两条件都不满足，整名不查表
     const c3 = core || t0;
-    if (/[\u3040-\u30ff]/.test(c3) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(c3) && c3.length >= 2 && c3.length <= 20)) {
+    const c3p = c3.replace(/【[^【】]*】/g, '').trim() || c3;
+    if (/[\u3040-\u30ff]/.test(c3p) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(c3p) && c3p.length >= 2 && c3p.length <= 20)) {
       const cand = c3.replace(/(の画像|画像|イメージ|の見た目)$/, '').trim();
       // v1.1.3：数据就绪前不跑逐段翻译——「系列・职业」半翻译（ファントムヴィジョン·御敌）会破坏原文，
       // 数据到后的补扫将无法再识别（整体译名依赖完整日文名）；等数据齐由补扫统一处理
@@ -2880,16 +2882,15 @@
         else if (n.tagName === 'INPUT') {
           const ph = n.getAttribute('placeholder');
           if (ph) { const nn = trFC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+          // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
+          const v0 = n.getAttribute('value');
+          if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
+            const tv = trFC(v0);
+            if (tv && tv !== v0) n.setAttribute('value', tv);
+          }
         } else if (n.tagName === 'A' && /lodestone|finalfantasyxiv|garland|eriones|ffxivdb|gamerescape/i.test(n.getAttribute('href') || '')) {
           // v1.12.1：外服链接 → 直接改写为灰机 wiki（文字查表；已中文则直接用）
           rewriteFCForeignLink(n);
-        } else if (n.tagName === 'INPUT' && n.hasAttribute('value')) {
-          // v1.12.7：input[type=submit][value]（検索/クリア 等按钮）翻译
-          const v0 = n.getAttribute('value');
-          if (v0 && v0.length <= 24) {
-            const tv = trFC(v0);
-            if (tv && tv !== v0) { n.setAttribute('value', tv); changed = true; }
-          }
         } else if (n.tagName === 'IMG' || n.hasAttribute('alt')) {
           const alt = n.getAttribute('alt');
           if (alt && alt.length >= 2 && alt.length <= 90) {
@@ -2923,7 +2924,15 @@
   function fcLinkZhName(a) {
     const t = (a.textContent || '').replace(/\s+/g, ' ').trim();
     if (!t || t.length < 2 || t.length > 60) return null;
-    if (/[\u3040-\u30ff]/.test(t) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(t) && t.length <= 20)) {
+    // v1.2.1：① Lodestone hash 直查（hash→物品表中文名，不受文本侧子串替换污染，如「春日护手【想】」）
+    const hm = (a.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
+    if (hm && itemHash && itemHash[hm[1]]) {
+      const z = itemHash[hm[1]];
+      if (z && z !== t) return z;
+    }
+    // v1.2.1：② 判定前剥【…】标记（「春日半頬【想】」等「纯汉字+全角标记」名此前不查表）
+    const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
+    if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) {
       const z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
       if (z && z !== t) return z;
     }
@@ -2980,7 +2989,16 @@
         const t = (probe.textContent || '').replace(/\s+/g, ' ').trim();
         if (t && t.length >= 2 && t.length <= 60) {
           let z = null;
-          if (/[\u3040-\u30ff]/.test(t) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(t) && t.length <= 20)) z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
+          // v1.2.1：① Lodestone hash 直查（不受文本污染）
+          if (probe.tagName === 'A') {
+            const hm = (probe.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
+            if (hm && itemHash && itemHash[hm[1]]) z = itemHash[hm[1]];
+          }
+          // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
+          if (!z) {
+            const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
+            if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
+          }
           if (!z && isForeign && /^[\u4e00-\u9fff·・A-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) z = t;
           if (z && z !== t) { zh = z; break; }
         }
@@ -3266,8 +3284,10 @@
     }
 
     // ③ 日文装备名（JP2ZH 对照表单条查找）
+    // v1.2.1：判定前剥【…】标记（与 trFC 同修；「纯汉字+全角标记」名此前不查表）
     const core = (t0.replace(ACL_DECOR_HEAD, '').replace(ACL_DECOR_TAIL, '')).trim() || t0;
-    if (/[\u3040-\u30ff]/.test(core) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(core) && core.length >= 2 && core.length <= 30)) {
+    const corep = core.replace(/【[^【】]*】/g, '').trim() || core;
+    if (/[\u3040-\u30ff]/.test(corep) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(corep) && corep.length >= 2 && corep.length <= 30)) {
       const zh = lookupJp2Zh(core);
       if (zh && zh !== core) {
         const i = text.indexOf(t0);
@@ -4369,7 +4389,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  const _ver = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) ? GM_info.script.version : '1.2.0';
+  const _ver = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) ? GM_info.script.version : 'dev';
   console.log('FF14 幻化站中文化脚本已加载 v' + _ver + ' →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
