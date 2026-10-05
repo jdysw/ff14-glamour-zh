@@ -3942,7 +3942,7 @@
   // 构建目标：按站裁剪所需索引（scope 为 null 时全建——未知站点/测试环境），
   // 并携带染剂候选缓冲（构建中顺手收集，替代原先对 nameMap 十余万键的全量扫描）
   function _btTargets(scope) {
-    const pick = (k) => !scope || scope.indexOf(k) >= 0;
+    const pick = (k) => !scope || scope.includes(k);
     return {
       itemHash: pick('itemHash') ? {} : null,
       ecidMap: pick('ecidMap') ? {} : null,
