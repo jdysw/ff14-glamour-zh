@@ -1,6 +1,6 @@
 # FF14 幻化站中文化 · 与灰机 wiki 双向互查
 
-> 将 FF14 的多个国际服幻化网站的进行全局汉化（以国服译名为准），并实现与灰机 wiki 双向互查。
+> 将 FF14 的多个国际服幻化网站进行全局汉化（以国服译名为准），并实现与灰机 wiki 双向互查。
 
 [![Release](https://img.shields.io/github/v/release/jdysw/ff14-glamour-zh)](https://github.com/jdysw/ff14-glamour-zh/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](./LICENSE)
