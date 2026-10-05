@@ -57,6 +57,9 @@ def main() -> int:
     (v2 / 'version.json').write_text(json.dumps(ver, indent=1), encoding='utf-8')
     print('  version.json 已生成')
     shutil.copy2(Path(__file__).resolve().parent / 'index.html', OUT / 'index.html')
+    # 响应头规则：让 CF 压缩 items.tsv（text/tab-separated-values 不在 CF 压缩白名单，
+    # 6.7MB → 约 1.76MB）——与本地备用通道 ~/zhixia-data/_headers 保持一致
+    shutil.copy2(Path(__file__).resolve().parent / '_headers', OUT / '_headers')
     print('✓ site/ 组装完成')
     return 0
 
