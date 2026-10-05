@@ -4179,7 +4179,10 @@
       }
       if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
       return 0;
-    } catch (e) { return 0; }   // 忽略：单表下载/处理失败，跳过
+    } catch (e) {
+      // 忽略：单表下载/处理意外失败——跳过该表（不计数），不影响其它表与主流程
+      return 0;
+    }
   }
 
   function ensureTables() {
