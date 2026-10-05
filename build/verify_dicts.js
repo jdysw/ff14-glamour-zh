@@ -105,20 +105,24 @@ function extractDict(src, name) {
   return { value: val };
 }
 
-function diffOne(name, va, vb, labelA, labelB) {
-  // 返回 true=一致；打印差异
-  if (Array.isArray(va) || Array.isArray(vb)) {
-    const sa = (va || []).map(String).join('\u0001');
-    const sb = (vb || []).map(String).join('\u0001');
-    const eq = sa === sb;
-    console.log(name, '数组', (va || []).length, 'vs', (vb || []).length, eq ? '✅ 完全一致' : '❌ 不一致');
-    if (!eq) {
-      const setA = new Set((va || []).map(String)), setB = new Set((vb || []).map(String));
-      for (const x of setA) if (!setB.has(x)) console.log('  ' + labelA + '独有:', String(x).slice(0, 100));
-      for (const x of setB) if (!setA.has(x)) console.log('  ' + labelB + '独有:', String(x).slice(0, 100));
-    }
-    return eq;
+function _logKeys(label, keys) {
+  for (const k of keys.slice(0, 8)) console.log('  ' + label + '独有:', JSON.stringify(k));
+}
+
+function diffArray(name, va, vb, labelA, labelB) {
+  const sa = (va || []).map(String).join('\u0001');
+  const sb = (vb || []).map(String).join('\u0001');
+  const eq = sa === sb;
+  console.log(name, '数组', (va || []).length, 'vs', (vb || []).length, eq ? '✅ 完全一致' : '❌ 不一致');
+  if (!eq) {
+    const setA = new Set((va || []).map(String)), setB = new Set((vb || []).map(String));
+    for (const x of setA) if (!setB.has(x)) console.log('  ' + labelA + '独有:', String(x).slice(0, 100));
+    for (const x of setB) if (!setA.has(x)) console.log('  ' + labelB + '独有:', String(x).slice(0, 100));
   }
+  return eq;
+}
+
+function diffObject(name, va, vb, labelA, labelB) {
   const ka = Object.keys(va || {}), kb = Object.keys(vb || {});
   const onlyA = ka.filter(k => !(k in vb));
   const onlyB = kb.filter(k => !(k in va));
@@ -126,11 +130,18 @@ function diffOne(name, va, vb, labelA, labelB) {
   const eq = !onlyA.length && !onlyB.length && !diffV.length;
   console.log(name, '字典', ka.length, 'vs', kb.length, eq ? '✅ 完全一致' : '❌ 不一致');
   if (!eq) {
-    for (const k of onlyA.slice(0, 8)) console.log('  ' + labelA + '独有:', JSON.stringify(k));
-    for (const k of onlyB.slice(0, 8)) console.log('  ' + labelB + '独有:', JSON.stringify(k));
+    _logKeys(labelA, onlyA);
+    _logKeys(labelB, onlyB);
     for (const k of diffV.slice(0, 8)) console.log('  值不同:', JSON.stringify(k), JSON.stringify(va[k]), '→', JSON.stringify(vb[k]));
   }
   return eq;
+}
+
+function diffOne(name, va, vb, labelA, labelB) {
+  // 返回 true=一致；打印差异
+  return (Array.isArray(va) || Array.isArray(vb))
+    ? diffArray(name, va, vb, labelA, labelB)
+    : diffObject(name, va, vb, labelA, labelB);
 }
 
 const fileA = process.argv[2];
