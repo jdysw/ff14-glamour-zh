@@ -13,6 +13,7 @@ echo "③ 词典校验（src 内词典 vs dict/*.json 源）"
 node build/verify_dicts.js src/ff14-glamour-zh.external.user.js
 
 echo "④ GF 发布件（数据外置版 → dist/ff14-glamour-zh.greasyfork.user.js）"
+mkdir -p dist
 cp src/ff14-glamour-zh.external.user.js dist/ff14-glamour-zh.greasyfork.user.js
 node --check dist/ff14-glamour-zh.greasyfork.user.js
 
