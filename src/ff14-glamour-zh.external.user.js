@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.5
+// @version      1.1.6
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2318,6 +2318,15 @@
     'エオルゼアの装備や実用情報を紹介していきます♪': '介绍艾欧泽亚的装备与实用信息♪',
     '装備特集の行き方一覧': '装备特辑的获取方式一览',
     '1GCDで分かる获取方式♪': '一个GCD就能看懂的获取方式♪',
+    'ヤ・シュトラ': '雅·修特拉',
+    'スノウ': '斯诺',
+    'ソーラー': '金阳',
+    'ハンマーキング': '玄甲',
+    'スカリー': '狩猎者',
+    'オステア': '苦行',
+    'アテナ': '雅典娜',
+    'マインキープ': '富矿',
+    'コスチュームセット': '服装套装',
   });
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 dict/dict-ronka.json 注入）
@@ -2716,10 +2725,10 @@
     if (_tablesReady && (core || t0).length >= 2 && /[^\x00-\x7F]/.test(t0)) {
       let out = text;
       let changed = false;
-      // 长词优先，避免短词先替换（v1.1.5：含动态推导的系列前缀）
+      // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
       for (const k of _getSubstrKeysAll()) {
         if (!out.includes(k)) continue;
-        const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k);
+        const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
         if (v == null) continue;
         out = out.split(k).join(v);
         changed = true;
@@ -2768,9 +2777,56 @@
     if (_allKeysCache) return _allKeysCache;
     const keys = FC_SUBSTR_KEYS.slice();
     for (const k of _getSeriesPfx().keys()) if (!DICT_FC[k]) keys.push(k);
+    for (const k of _getItemPfx().keys()) if (!DICT_FC[k]) keys.push(k);
     keys.sort((a, b) => b.length - a.length);
     _allKeysCache = keys;
     return keys;
+  }
+
+  // v1.1.6：物品系列名前缀推导（从物品表「系列・部件」条目反推「系列→系列译」）
+  // 用途：fc 卡片标题等「裸系列名」场景（ネオイシュガルディアン、イディル、キングダムテール 等）
+  // 算法：按「・」前段分组，求组内中文名的最长公共子串（≥90% 覆盖、≥2 字）；
+  //   处理「改良型×」等修饰词混入（公共子串而非前缀，规避前段差异）。带缓存，数据就绪后懒构建。
+  let _itemPfxCache = null;
+  function _getItemPfx() {
+    if (_itemPfxCache) return _itemPfxCache;
+    _itemPfxCache = new Map();
+    try {
+      if (!nameMap) return _itemPfxCache;
+      const groups = new Map();
+      for (const k in nameMap) {
+        const di = k.indexOf('・');
+        if (di <= 0 || di >= k.length - 1) continue;
+        const zh = nameMap[k];
+        if (!zh) continue;
+        const key = k.slice(0, di);
+        if (key.length < 3) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(zh);
+      }
+      for (const [key, list] of groups) {
+        if (list.length < 2) continue;
+        const sub = _lcs90(list);
+        if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
+      }
+    } catch (e) {}
+    return _itemPfxCache;
+  }
+  function _lcs90(list) {
+    const n = list.length;
+    const need = Math.ceil(n * 0.9);
+    let shortest = list[0];
+    for (const x of list) if (x.length < shortest.length) shortest = x;
+    const maxLen = Math.min(12, shortest.length);
+    for (let len = maxLen; len >= 2; len--) {
+      for (let i = 0; i + len <= shortest.length; i++) {
+        const sub = shortest.slice(i, i + len);
+        let c = 0;
+        for (const x of list) if (x.indexOf(sub) !== -1) c++;
+        if (c >= need) return sub;
+      }
+    }
+    return null;
   }
 
   const FC_SKIP_SEL = 'script, style, noscript, textarea, .sns, .twitter, .line';
@@ -3629,6 +3685,7 @@
     try { _jp2zhCache.clear(); } catch (e) {}
     try { _seriesMap = null; } catch (e) {}
     try { _seriesPfxCache = null; } catch (e) {}
+    try { _itemPfxCache = null; } catch (e) {}
     try { _allKeysCache = null; } catch (e) {}
     try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) {}
     const cbs = _readyCbs.splice(0);
@@ -4225,7 +4282,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.5 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.6 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (onHost(host, 'mirapri.com')) { startMirapri(); startItems(); }
