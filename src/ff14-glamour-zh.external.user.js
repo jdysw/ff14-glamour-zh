@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.3
+// @version      1.1.4
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -1645,7 +1645,7 @@
   const DICT_FC = Object.assign({}, DICT_COMMON, {
     '部位別': '按部位',
     'シリーズ': '系列',
-    'ヘアカタログ': '发型目录',
+    'ヘアカタログ': '发型图鉴',
     'カテゴリ別': '按分类',
     'お役立ち': '实用',
     'アイテム': '物品',
@@ -1832,7 +1832,7 @@
     '検索はこちら': '点击搜索',
     'はこちら': '点这里',
     'こちら': '这里',
-    'ヘアカタログ髪型': '发型目录',
+    'ヘアカタログ髪型': '发型图鉴',
     'カタログ': '目录',
     'スタイル': '样式',
     'コーデ': '搭配',
@@ -2041,7 +2041,7 @@
     '防具シリーズの一覧': '防具系列一览',
     '武器の一覧': '武器一览',
     'ファッションアクセ 一覧': '时尚配饰一览',
-    'ヘアカタログ髪型一覧': '发型目录一览',
+    'ヘアカタログ髪型一覧': '发型图鉴一览',
     '装備まとめ': '装备汇总',
     'アイテム紹介': '物品介绍',
     '攻略・お役立ち': '攻略·实用',
@@ -2115,6 +2115,11 @@
     '装備特輯の前往一覧': '前往装备特辑一览',
     '装備特輯': '装备特辑',
     '武器一覧へ': '前往武器一览',
+    '装備特集の一覧へ': '前往装备特辑一览',
+    '装備パーツごとの一覧へ': '前往装备部位分类一览',
+    '装備シリーズ一覧へ': '前往装备系列一览',
+    'ヘアカタログ一覧へ': '前往发型图鉴一览',
+    'ファッションアクセ一覧へ': '前往时尚配饰一览',
     '装備シリーズへ': '前往装备系列',
     '外着': '外套',
     'ネイル': '美甲',
@@ -3725,18 +3730,21 @@
 
   /* ── 版本与缓存：每日至多一次版本探测；指纹一致直接复用本地缓存 ──
      缓存键 zhx.dt.<表名> = 「指纹 + 换行 + 文本」（单键原子写入） */
+  // 域名精确匹配（含子域）：evilmirapri.com 不匹配、www.mirapri.com 匹配
+  // （安全加固：原 endsWith('mirapri.com') 会被任意前缀域名绕过——CodeQL js/incomplete-url-substring-sanitization）
+  const onHost = (h, d) => h === d || h.endsWith('.' + d);
   const DAY_MS = 24 * 60 * 60 * 1000;
   const META_KEY = 'zhx.meta';        // {"v":"...","t":时间戳}
   const DT_PREFIX = 'zhx.dt.';
 
   function neededTables() {
     const h = location.hostname;
-    if (h.endsWith('mirapri.com')) return SITE_TABLES.mirapri;
-    if (h.endsWith('eorzeacollection.com')) return SITE_TABLES.ec;
-    if (h.endsWith('huijiwiki.com')) return SITE_TABLES.wiki;
-    if (h.endsWith('ff14-fc.com')) return SITE_TABLES.fc;
-    if (h.endsWith('ronkacloset.com')) return SITE_TABLES.ronka;
-    if (h.endsWith('ffxivcollection.com')) return SITE_TABLES.collection;
+    if (onHost(h, 'mirapri.com')) return SITE_TABLES.mirapri;
+    if (onHost(h, 'eorzeacollection.com')) return SITE_TABLES.ec;
+    if (onHost(h, 'huijiwiki.com')) return SITE_TABLES.wiki;
+    if (onHost(h, 'ff14-fc.com')) return SITE_TABLES.fc;
+    if (onHost(h, 'ronkacloset.com')) return SITE_TABLES.ronka;
+    if (onHost(h, 'ffxivcollection.com')) return SITE_TABLES.collection;
     return [];
   }
 
@@ -4174,13 +4182,13 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.3 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.4 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
-  if (host.endsWith('mirapri.com')) { startMirapri(); startItems(); }
-  else if (host.endsWith('eorzeacollection.com')) { startEC(); startItems(); }
-  else if (host.endsWith('huijiwiki.com')) startWiki();
-  else if (host.endsWith('ff14-fc.com')) startFC();
-  else if (host.endsWith('ronkacloset.com')) startRonka();
-  else if (host.endsWith('ffxivcollection.com')) startACL();
+  if (onHost(host, 'mirapri.com')) { startMirapri(); startItems(); }
+  else if (onHost(host, 'eorzeacollection.com')) { startEC(); startItems(); }
+  else if (onHost(host, 'huijiwiki.com')) startWiki();
+  else if (onHost(host, 'ff14-fc.com')) startFC();
+  else if (onHost(host, 'ronkacloset.com')) startRonka();
+  else if (onHost(host, 'ffxivcollection.com')) startACL();
 })();

@@ -44,7 +44,12 @@ for (const f of list) {
   const fp = f.startsWith('/') ? f : path.join(RONKA, f);
   if (!fs.existsSync(fp)) continue;
   let html = fs.readFileSync(fp, 'utf-8');
-  html = html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+  // 大小写不敏感 + 循环删到不动点；未闭合标签一并删除（CodeQL 完整清理模式）
+  let _prevHtml;
+  do {
+    _prevHtml = html;
+    html = html.replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, '').replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, '');
+  } while (html !== _prevHtml);
   // 文本节点
   const texts = new Set();
   for (const m of html.matchAll(/>([^<>]+)</g)) {

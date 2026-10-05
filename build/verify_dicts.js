@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 function extractDict(src, name) {
-  const esc = name.replace(/[$]/g, '\\$');
+  const esc = name.replace(/[\\$]/g, '\\$&');
   // 支持两种形态：const NAME = {...}  或  const NAME = Object.assign({}, DICT_COMMON, {...})
   const re = new RegExp('const ' + esc + ' = (?:(Object\\.assign\\(\\{\\}, DICT_COMMON, ))?(\\{|\\[)([\\s\\S]*?)\\n  (\\}|\\])');
   const m = src.match(re);
