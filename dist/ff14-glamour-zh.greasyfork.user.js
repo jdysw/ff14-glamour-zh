@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.2
+// @version      1.1.3
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -2070,6 +2070,11 @@
     '関連装備': '相关装备',
     'Gallery': '画廊',
     'Info': '信息',
+    'ディフェンダー': '御敌',
+    'スレイヤー': '制敌',
+    'ストライカー': '强袭',
+    'スカウト': '游击',
+    'レンジャー': '精准',
     'メレー': '近战',
     'レンジ': '远程',
     '特徴・形': '特征·形状',
@@ -2691,7 +2696,10 @@
     const c3 = core || t0;
     if (/[\u3040-\u30ff]/.test(c3) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(c3) && c3.length >= 2 && c3.length <= 20)) {
       const cand = c3.replace(/(の画像|画像|イメージ|の見た目)$/, '').trim();
-      const zh = lookupJp2Zh(cand) || lookupSeries(cand) || trFCSegments(cand);
+      // v1.1.3：数据就绪前不跑逐段翻译——「系列・职业」半翻译（ファントムヴィジョン·御敌）会破坏原文，
+      // 数据到后的补扫将无法再识别（整体译名依赖完整日文名）；等数据齐由补扫统一处理
+      let zh = lookupJp2Zh(cand) || lookupSeries(cand);
+      if (!zh && _tablesReady) zh = trFCSegments(cand);
       if (zh && zh !== cand) {
         const i2 = text.indexOf(t0);
         return text.slice(0, i2) + zh + text.slice(i2 + t0.length);
@@ -2699,7 +2707,8 @@
     }
 
     // ④ 子串兜底：含菜单词/装备名的片段（v1.14.5：门槛 6→2，覆盖被 <br> 等拆分的短节点如「で制作」）
-    if ((core || t0).length >= 2 && /[^\x00-\x7F]/.test(t0)) {
+    // v1.1.3：数据就绪前不跑——避免对「系列・职业」复合名做部分替换破坏原文（如 ファントムヴィジョン・御敌）；补扫时统一处理
+    if (_tablesReady && (core || t0).length >= 2 && /[^\x00-\x7F]/.test(t0)) {
       let out = text;
       let changed = false;
       // 长词优先，避免短词先替换
@@ -4165,7 +4174,7 @@
   /* ===================================================================== */
 
   const host = location.hostname;
-  console.log('FF14 幻化站中文化脚本已加载 v1.1.2 →', host);
+  console.log('FF14 幻化站中文化脚本已加载 v1.1.3 →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   if (host.endsWith('mirapri.com')) { startMirapri(); startItems(); }
