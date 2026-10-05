@@ -1,6 +1,6 @@
 # —— 构建产物 ——
-# 内嵌版（~8MB，可用 build.sh 一键重建，不纳入版本库）
-dist/ff14-glamour-zh.user.js
+# dist/：本地构建产物（build.sh 生成，供测试与手动验证）；发布走 GitHub Releases
+dist/
 
 # —— 杂项 ——
 *.bak-*
