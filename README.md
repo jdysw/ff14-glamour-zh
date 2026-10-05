@@ -1,30 +1,29 @@
 # FF14 幻化站中文化 · 与灰机 wiki 双向互查
 
-> **把 FF14 的幻化/穿搭网站变成中文** —— 装备名、染剂色名自动显示为国服中文，还能和灰机 wiki 双向互查。
+> 将 FF14 的多个国际服幻化网站的进行全局汉化（以国服译名为准），并实现与灰机 wiki 双向互查。
 
-[![SonarQube Cloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jdysw_ff14-glamour-zh&metric=alert_status)](https://sonarcloud.io/project/overview?id=jdysw_ff14-glamour-zh)
+[![Release](https://img.shields.io/github/v/release/jdysw/ff14-glamour-zh)](https://github.com/jdysw/ff14-glamour-zh/releases/latest)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue)](./LICENSE)
 
 
 ## ✨ 这个脚本能做什么
 
-逛幻化站时最头疼的，是满屏日语 / 韩语装备名——想查国服对应的名字还得手动搜。装上这个脚本，常见幻化站**全部变中文**：
-
 - 🌐 **全站中文化** —— 界面、装备名、染剂色名、副本名自动显示为国服中文
-- 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名可点击，直接跳转灰机 wiki 物品页：查国服名称、获取途径，一步到位
-- 🔄 **双向互查** —— 灰机 wiki 物品页也会多出「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），从 wiki 一键找到同款幻化
-- ⚡ **无感翻译** —— 词典本地索引，毫秒级查询；安装即用、无需配置
+- 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名均可点击，直接跳转灰机 wiki 物品页查国服译名与获取途径
+- 🔄 **双向互查** —— 灰机 wiki 物品页会多出「幻化反查」区块，从 wiki 一键跳转到幻化网站，找到使用该装备的穿搭
+- ⚡ **无感翻译** —— 词库本地索引、毫秒级查询；安装即用，无需配置
 - 🔒 **纯本地运行** —— 词库按需下载、本地缓存；不收集、不上传任何用户信息
 
 ## 🌏 支持站点
 
-| 站点 | 地区 | 汉化内容 |
-|---|---|---|
-| [Mirapri](https://mirapri.com) | 日服 | 界面 + 装备 / 染剂名 |
-| [Eorzea Collection](https://ffxiv.eorzeacollection.com) | 国际服 | 界面 + 装备 / 染剂名 |
-| [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服 | 界面 + 装备 / 副本名 |
-| [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服 | 界面 + 装备 / 染剂名 |
-| [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 收藏站 | 界面 + 装备名 |
-| [灰机 wiki](https://ff14.huijiwiki.com) | 中文 | 物品页新增「幻化反查」区块 |
+| 站点 | 简介 |
+|---|---|
+| [Mirapri](https://mirapri.com) | 日服幻化网站 |
+| [Eorzea Collection](https://ffxiv.eorzeacollection.com) | 国际服幻化网站 |
+| [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服个人幻化网站（猫娘模特） |
+| [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
+| [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
+| [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 
 ## 📦 安装
 
@@ -32,23 +31,23 @@
    - [Tampermonkey](https://www.tampermonkey.net/)（推荐）
    - [Violentmonkey](https://violentmonkey.github.io/)
 2. 安装脚本：
-   - **从 Greasy Fork 安装** → *（即将上架，发布后补充链接）*
-   - **从 GitHub 直接安装** → [**点击安装**](https://raw.githubusercontent.com/jdysw/ff14-glamour-zh/main/src/ff14-glamour-zh.external.user.js)
+   - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
+   - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
 3. 打开任意支持站点，自动生效。
 
 ## 💡 使用说明
 
-- 汉化后的装备名 / 染剂名**可以点击** → 跳转灰机 wiki 查国服名称与获取方式。
-- 灰机 wiki 物品页会多出「幻化反查」区块 → 一键跳去各幻化站看同款穿搭。
-- 词库数据每天至多自动检查一次更新，无需任何手动操作。
+- 汉化后的装备名 / 染剂名**支持点击** → 跳转灰机 wiki 查国服译名与获取途径。
+- 灰机 wiki 物品页会多出「幻化反查」区块 → 一键跳去对应幻化站看同款穿搭。
+- 词库数据每天至多自动检查一次更新，全程无需手动操作。
 
 ## ❓ 常见问题
 
 **Q：会影响网站正常功能吗？**
-不会。脚本只做「文本替换」和「附加链接」，不修改站点数据、不触碰你的账号与操作。
+不会。脚本只做「文本替换」与「附加链接」，不修改站点数据，不触碰你的账号与操作。
 
 **Q：需要特殊网络环境吗？**
-不需要。词库托管在 Cloudflare 静态站、按站点按需加载（单站首次约 0.3~1MB，压缩传输后 2~3 秒完成），之后全部走本地缓存。
+不需要。词库托管在 Cloudflare 静态站、按站点按需加载（单站首次约 0.3~1MB，压缩传输约 2~3 秒完成），之后全部走本地缓存。
 
 **Q：发现了翻译缺漏或错误？**
 欢迎到 [Issues](https://github.com/jdysw/ff14-glamour-zh/issues) 反馈：说明「哪个站、什么词、正确译文」即可。
@@ -57,6 +56,8 @@
 
 <details>
 <summary><b>点击展开：目录结构 / 构建流水线 / 发布流程（开发者向）</b></summary>
+
+[![SonarQube Cloud Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jdysw_ff14-glamour-zh&metric=alert_status)](https://sonarcloud.io/project/overview?id=jdysw_ff14-glamour-zh)
 
 ### 目录结构
 
@@ -81,7 +82,7 @@ ff14-glamour-zh/
 │   ├── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
 │   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
 │   └── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
-├── dist/                  — 构建产物：本地生成（不入库）；发布走 GitHub Releases 自动构建
+├── dist/                  — 构建产物：本地生成（不入库）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 ├── .github/               — 仓库自动化
 │   ├── workflows/         — deploy-data（数据站部署）/ release（自动发布）/ sonarqube-cloud（代码质量）
@@ -93,32 +94,33 @@ ff14-glamour-zh/
 
 | 产物 | 体积 | 用途 |
 |---|---|---|
-| `dist/ff14-glamour-zh.greasyfork.user.js` | ~195 KB | GF 发布版：数据与词库运行时按需加载（Greasy Fork ≤2MB 合规） |
+| `dist/ff14-glamour-zh.greasyfork.user.js` | ~195 KB | 发布版：数据与词库运行时按需加载（Greasy Fork ≤2MB 合规） |
 
-**GF 版数据流**：装备/染剂数据与界面词库从 `https://zhixia-data.pages.dev/` **按需**拉取
+**数据流**：装备 / 染剂数据与界面词库从 `https://zhixia-data.pages.dev/` **按需**拉取
 （`ff14/v2/items.tsv` 单文件合表：中英日韩名、光之收藏家 hash、Eorzea Collection ID 一表全含；
 `ff14/v2/dict.json` 界面词库）→ 缓存到本地（GM 存储）→ **每日至多一次**版本检查（sha256 指纹比对，
 变化才重新下载）。**改词条只需更新数据站的 dict.json，无需发新脚本版本，用户次日自动生效**
-（脚本内嵌词库仅作首屏兜底/离线兜底）。数据为只读纯文本/JSON（非可执行代码）。
+（脚本内嵌词库仅作首屏兜底 / 离线兜底）。数据为只读纯文本 / JSON（非可执行代码）。
 
 ### 更新链路（一次修改，两条分发线）
 
-Raw 源（Greasy Fork「Sync」用）：
-`https://raw.githubusercontent.com/jdysw/ff14-glamour-zh/main/src/ff14-glamour-zh.external.user.js`
+安装与同步的固定入口（恒指向最新发布版）：
+`https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js`
 
 ```bash
 # ① 构建 + 校验（改词库或改代码后都先跑）
 bash build.sh
-# ② 上传 GitHub
+# ② 提交推送
 git add -A && git commit -m "..." && git push
-# ③ 数据站 —— data/ 三文件变动时，推送 main 即自动部署（见下）
-# ④ 脚本（代码变动时）——推送后 Actions 自动构建并创建 Release（版本号变化时）；
-#    GF 端通过上方 Raw 源同步最新版
+# ③ 数据站 —— data/、dict/ 变动时，推送 main 即自动部署
+# ④ 脚本发布 —— src/ 变动且 @version 提升时，Actions 自动构建并创建 Release
 ```
 
-- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）；只改**游戏数据**（data/）→ 重建后推送（③ 自动）；改**代码** → ①④（建议同时将 `@version` +1，便于发布追踪）。
-- **数据站自动部署**：`data/ff14-items.tsv`、`data/ff14-series.txt`、`data/acl-cfc.txt`、`dict/*.json`（词库）
-  任一推送到 main → GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
+- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）。
+- 只改**游戏数据**（data/）→ 重建后推送（③ 自动）。
+- 改**代码**（src/）→ ①④，建议同时将 `@version` +1，便于发布追踪。
+- **数据站自动部署**：`data/` 三个数据文件、`dict/*.json`（词库）任一推送到 main →
+  GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
   项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
   备用本地通道：`python3 ~/zhixia-data/update-data.py --deploy`。
 
@@ -131,10 +133,10 @@ git add data/ && git commit -m "data: 重建物品总表" && git push
 # （备用本地通道）python3 ~/zhixia-data/update-data.py --deploy —— 经 wrangler 登录态直连部署
 ```
 
-- 源数据＝四语 datamining Item.csv（中/英/日/韩）；hash/EC_ID/别名由本表继承，不因重建丢失。
+- 源数据＝四语 datamining Item.csv（中 / 英 / 日 / 韩）；hash / EC_ID / 别名由本表继承，不因重建丢失。
 - 指纹 = `sha256(文件内容) 前 12 位`（`.github/deploy/prepare.py` 与 update-data.py 算法一致），写入 version.json。
 - **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
-- **发布自动化**：`src/` 推送到 main 且 `@version` 有变更 → Actions（`release.yml`）自动构建并创建 Release（附 `dist/` 发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
+- **发布自动化**：`src/` 推送到 main 且 `@version` 有变更 → Actions（`.github/workflows/release.yml`）自动构建并创建 Release（附发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
 
 ### 日常维护
 
@@ -158,7 +160,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - `dist/` 为本地构建产物（不入库）；发布走 GitHub Releases 自动构建（`release.yml`）。
 - 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
 - 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 内词典与 dict/*.json 源逐条一致。
-- **GF 版数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备/染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
+- **数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备 / 染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
 
 </details>
 
