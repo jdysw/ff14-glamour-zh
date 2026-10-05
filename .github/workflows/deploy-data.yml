@@ -1,0 +1,38 @@
+name: Deploy data station
+
+# 当 data/ 下三个数据文件在 main 分支变化时，自动组装并部署到 Cloudflare Pages。
+# 也可在 Actions 页面手动触发（workflow_dispatch）。
+# 依赖 repo secrets：CLOUDFLARE_API_TOKEN（仅 Pages 读写权限）、CLOUDFLARE_ACCOUNT_ID。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/ff14-items.tsv'
+      - 'data/ff14-series.txt'
+      - 'data/acl-cfc.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-data
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble site
+        run: python3 .github/deploy/prepare.py
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=ff14-glamour-zh --branch=main --commit-dirty=true
