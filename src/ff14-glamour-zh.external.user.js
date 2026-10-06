@@ -1194,7 +1194,7 @@
     if (!en) return null;
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
     // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 buildTables 展开）
-    const out = nameMap?.[en] || null;
+    const out = resolveByName(en);
     _en2zhCache.set(en, out);
     return out;
   }
@@ -2653,7 +2653,7 @@
   function lookupJp2Zh(jp) {
     if (!jp || jp.length > 80) return null;   // v1.12.0 放宽
     if (_jp2zhCache.has(jp)) return _jp2zhCache.get(jp);
-    const out = nameMap?.[jp] || null;
+    const out = resolveByName(jp);
     _jp2zhCache.set(jp, out);
     return out;
   }
@@ -3032,8 +3032,8 @@
     if (!t || t.length < 2 || t.length > 60) return null;
     // v1.2.1：① Lodestone hash 直查（hash→物品表中文名，不受文本侧子串替换污染，如「春日护手【想】」）
     const hm = (a.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-    if (hm && itemHash?.[hm[1]]) {
-      const z = itemHash[hm[1]];
+    if (hm) {
+      const z = resolveByHash(hm[1]);
       if (z && z !== t) return z;
     }
     // v1.2.1：② 判定前剥【…】标记（「春日半頬【想】」等「纯汉字+全角标记」名此前不查表）
@@ -3078,7 +3078,7 @@
     // v1.2.1：① Lodestone hash 直查（不受文本污染）
     if (probe.tagName === 'A') {
       const hm = (probe.getAttribute('href') || '').match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-      if (hm && itemHash?.[hm[1]]) return itemHash[hm[1]];
+      if (hm) { const z = resolveByHash(hm[1]); if (z) return z; }
     }
     // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
     const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
@@ -3631,7 +3631,7 @@
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
     if (ko in RONKA_ITEM_CACHE) return RONKA_ITEM_CACHE[ko];
-    const v = nameMap?.[ko] || null;
+    const v = resolveByName(ko);
     RONKA_ITEM_CACHE[ko] = v;
     return v;
   }
@@ -4346,6 +4346,82 @@
   }
   /* @zhixia:data-layer-end */
 
+  /* @zhixia:core-item-resolver-start */
+  /* ── Core Item Resolver（v1.4 Phase 6）：物品索引统一解析层——对 hash / 名称索引
+       与衍生注册表（重名 / 别名）的集中访问。解析语义与既有查询完全一致（同名键
+       首行胜）；重名键（同键多译）经 resolveAllByName 取全量，顺序=TSV 行序
+       （历史优先，禁止随机）。Phase 15 模块化构建时，本区段将原样抽出为
+       src/core/item-resolver.js。 */
+
+  let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序）
+  let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分）
+
+  // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
+  // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
+  function _irBuildAux(text) {
+    if (typeof text !== 'string' || !text || !nameMap) return false;
+    const dup = Object.create(null);
+    const ali = Object.create(null);
+    for (const ln of text.split('\n')) {
+      const c0 = ln.codePointAt(0);
+      if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;   // 仅「数字」或「-」开头（与构建器同规则，跳过表头）
+      const p = ln.split('\t');
+      if (!p[1]) continue;
+      const zh = p[1];
+      for (let ci = 2; ci <= 4 && ci < p.length; ci++) {
+        const k = p[ci];
+        if (!k) continue;
+        const cur = nameMap[k];
+        if (cur === undefined || cur === zh) continue;   // 仅登记「同键多译」；同名同译的直接跳过
+        const d = dup[k] || (dup[k] = [cur]);
+        if (!d.includes(zh)) d.push(zh);
+      }
+      if (p.length > 7 && p[7]) {
+        for (const part of p[7].split('；')) {
+          const a = part.trim();
+          if (!a) continue;
+          const d = ali[a] || (ali[a] = []);
+          if (!d.includes(zh)) d.push(zh);
+        }
+      }
+    }
+    _irDupMap = dup;
+    _irAliasMap = ali;
+    return true;
+  }
+
+  function resolveByHash(hash) { return (hash && itemHash?.[hash]) ? itemHash[hash] : null; }
+  function resolveByName(name) { return (name && nameMap?.[name]) ? nameMap[name] : null; }
+  function resolveAllByName(name) {
+    const first = nameMap?.[name];
+    if (!first) return [];
+    const d = _irDupMap?.[name];
+    return d ? d.slice() : [first];
+  }
+  function resolveAlias(alias) {
+    const d = _irAliasMap?.[alias];
+    return d ? d.slice() : [];
+  }
+  // 统一优先级（计划书 6.4，以现有实际行为为准）：
+  // 1) hash → 2) 名称 → 3) 历史兼容 fallback（latinFallback：外文名自动查物品总表）。
+  // 注：EC_ID 方向为 zh → ecid（lookupEcIdByZh）；反查无现状消费者，暂不提供。
+  function resolve(input, opts) {
+    if (!input) return null;
+    if (input.hash) { const z = resolveByHash(input.hash); if (z) return z; }
+    if (input.name) {
+      const z = resolveByName(input.name); if (z) return z;
+      if (opts?.latinFallback) { const z2 = tryEnToZh(input.name); if (z2) return z2; }
+    }
+    if (input.alias) { const zs = resolveAlias(input.alias); if (zs.length) return zs[0]; }
+    return null;
+  }
+
+  // 数据就绪后建立衍生注册表（加载早期未注册时保持 null——查询路径均有回退）。
+  if (typeof itemDbReady === 'function') {
+    try { itemDbReady(() => { try { _irBuildAux(ITEM_DB_TEXT); } catch (e) {} }); } catch (e) {}
+  }
+  /* @zhixia:core-item-resolver-end */
+
   /* @zhixia:core-dictionary-start */
   /* ── Core Dictionary（v1.4 Phase 5）：运行时词典——dict.json 六层原地合并
        （common + 5 站）、旧译→新译修正收集与定向替换、派生缓存失效，及对外接口
@@ -4484,15 +4560,9 @@
   /* @zhixia:core-translator-end */
 
   function lookupZh(a, name) {
-    if (a) {
-      const h = a.getAttribute('href') || '';
-      const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-      if (m && itemHash?.[m[1]]) return itemHash[m[1]];
-    }
-    if (nameMap?.[name]) return nameMap[name];
-    const zhAuto = tryEnToZh(name);           // ★ 外文名自动查物品总表
-    if (zhAuto) return zhAuto;
-    return null;
+    const h = (a?.getAttribute('href')) || '';
+    const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
+    return resolve({ hash: m?.[1], name }, { latinFallback: true });   // hash → 名称 → 外文名兜底（等价原逻辑）
   }
 
   /* ── 通用工具层（工程做法借鉴 maboloshi/github-chinese）───────────── */
@@ -4560,7 +4630,7 @@
       if (sp.classList.contains('zhixia-item-zh')) return;
       const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) return;
-      if (!nameMap?.[name]) return;
+      if (!resolveByName(name)) return;
       list.push({ sp, name });
     });
     return list;
@@ -4583,7 +4653,7 @@
       if (el.dataset.zhixiaCard) return;
       const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) return;
-      if (!nameMap?.[name]) return;
+      if (!resolveByName(name)) return;
       list.push({ el, name });
     });
     return list;
@@ -4591,7 +4661,7 @@
 
   function zhApplyCards(targets) {
     targets.forEach((t) => {
-      const zh = nameMap[t.name];
+      const zh = resolveByName(t.name);
       if (!zh || zh === t.name) return;
       t.el.textContent = zh;
       t.el.dataset.zhixiaCard = '1';
@@ -4607,7 +4677,7 @@
 
   function zhApplyPlain(targets) {
     targets.forEach((t) => {
-      const zh = nameMap[t.name];
+      const zh = resolveByName(t.name);
       if (!zh || zh === t.name) return;
       const a = document.createElement('a');
       a.className = t.sp.className;
@@ -4652,7 +4722,7 @@
       const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
       if (!m) return;
       const name = m[2].trim();
-      const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
+      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
       if (!zh) return;
       list.push({ el, name, zh });
     });
@@ -4792,7 +4862,7 @@
       if (sp.classList.contains('zhixia-item-zh')) continue;
       const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) continue;
-      if (!nameMap?.[name]) continue;
+      if (!resolveByName(name)) continue;
       list.push({ sp, name });
     }
     return list;
@@ -4807,7 +4877,7 @@
       if (el.dataset.zhixiaCard) continue;
       const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (!name || name.length < 3 || name.length > 48) continue;
-      if (!nameMap?.[name]) continue;
+      if (!resolveByName(name)) continue;
       list.push({ el, name });
     }
     return list;
@@ -4824,7 +4894,7 @@
       const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
       if (!m) continue;
       const name = m[2].trim();
-      const zh = nameMap?.[name] || (name === 'Undyed' ? '未染色' : null);
+      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
       if (!zh) continue;
       list.push({ el, name, zh });
     }

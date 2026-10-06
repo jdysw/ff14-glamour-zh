@@ -69,6 +69,10 @@ function buildLayer() {
     sliceBetween(DIST_TEXT, A.ronkaCacheStart, A.ronkaCacheEnd),
     sliceBetween(DIST_TEXT, A.lookupZhStart, A.lookupZhEnd),
     sliceBetween(DIST_TEXT, A.aclStart, A.aclEnd),
+    // 数据层测试不触发 resolver 的 itemDbReady 注册链（会级联 ensureTables → _ensureFinalize，
+    // 而装配体未含探测区函数）；注册行为由 test-item-resolver.mjs 专测。
+    'itemDbReady = undefined;',
+    sliceBetween(DIST_TEXT, '/* @zhixia:core-item-resolver-start */', '/* @zhixia:core-item-resolver-end */'),
     `return {
       setDb: (t) => { ITEM_DB_TEXT = t; },
       setSeriesText: (t) => { SERIES_TEXT = t; _seriesMap = null; },

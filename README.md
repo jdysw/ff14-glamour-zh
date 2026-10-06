@@ -165,6 +165,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **站点配置统一在 Site Registry（v1.4 Phase 3）**：src 内 `@zhixia:site-registry` 区段是六站唯一配置源（host 匹配 / 所需数据表 / 构建索引 / 页面入口）——**新增站点**或**为某站新增索引查询**时只改这一处；漏登记的后果是功能静默失效（查表跳过），由各站端到端测试兜底。
 - **Core 基础设施以 `@zhixia:core-*` 区段标记（v1.4 Phase 4）**：storage / http / cache / dom / runtime / constants 六组基础设施在 src 内均有独立标记区段（runtime 与 cache 各含 2 段）；**存储键（`zhx.meta` / `zhx.dt.*`）与缓存序列化格式是跨版本兼容契约**（用户本地缓存数 MB 数据），改动须过 `tests/unit/test-core.mjs`。
 - **翻译与词典分层（v1.4 Phase 5）**：`@zhixia:core-translator` 是翻译统一接口（按 profile 分发到各站翻译器，**不改变任何译文**）；`@zhixia:core-dictionary` 是运行时词典（dict.json 六层原地合并 / 修订号 / 派生缓存统一失效入口）——**改词典合并机制或派生缓存时认准 `@zhixia:core-dictionary` 区段**，行为由 `tests/unit/test-dictionary.mjs` 冻结。
+- **物品索引统一解析层（v1.4 Phase 6）**：`@zhixia:core-item-resolver` 是物品索引（hash / 名称）与衍生注册表（重名 / 别名）的统一访问入口——**站点与翻译器不再直查 `itemHash` / `nameMap`**，一律经 `resolveByHash` / `resolveByName` / `resolveAllByName` / `resolveAlias` / `resolve`；**解析语义与既有查询完全一致（同名键首行胜）**，重名键（同键多译）经 `resolveAllByName` 取全量（顺序 = TSV 行序，历史优先）；行为由 `tests/unit/test-item-resolver.mjs` 冻结。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

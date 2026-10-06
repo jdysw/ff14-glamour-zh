@@ -66,5 +66,8 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
   注意：假宿主桩必须在 `buildCore(env)` 之前设置（装配参数为值捕获，装配后替换不生效）。
 - **Dictionary / Translator 测试（`unit/test-dictionary.mjs`）**：从 `dist` 提取 `@zhixia:core-dictionary` / `@zhixia:core-translator` 区段装配运行（六层词表从空对象起、tr 系用前缀桩、修正扫描用 mock TreeWalker）；
   词典接口（get / has / update / getRevision / invalidate）、old→new 定向替换、派生缓存失效与翻译接口分发均在此冻结；「真实译文」由 integration / live 套件端到端覆盖。
+- **Item Resolver 测试（`unit/test-item-resolver.mjs`）**：从 `dist` 提取 `@zhixia:core-item-resolver` 区段装配运行（重名 / 别名注册表用构造样例；`itemDbReady` 提供与缺省两条路径都测）；
+  统一解析契约（hash / 名称 / 全量重名 / 别名 / 优先级与历史兜底）均在此冻结。
+  注意：数据层测试装配体须屏蔽 `itemDbReady`（`'itemDbReady = undefined;'`）——否则 resolver 区段尾的就绪注册会级联 `ensureTables → _ensureFinalize`（装配体未含探测区函数）；注册行为由本文件专测。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。
