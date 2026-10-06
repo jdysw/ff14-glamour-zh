@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3
+// @version      1.3.1
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -21,6 +21,9 @@
 
 (function () {
   'use strict';
+
+  // 运行探测（URL 带 zhx_probe 参数时启用）用：脚本注入时刻；未启用时零开销
+  let __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
 
   /* =====================================================================
    * 第一部分：mirapri.com 界面汉化
@@ -1538,11 +1541,36 @@
   }
 
   // 装备栏目（部位）
-  function getSlot() {
-    const el = document.querySelector('.infobox-item--name-category');
+  // v1.3.1：多路回退——移动皮肤/类名变体下也能识别部位（原单选择器在部分皮肤下失效）
+  function _slotHit(el) {
     if (!el) return null;
-    const t = el.textContent.trim();
+    const t = (el.textContent || '').trim();
     return EC_SLOT[t] ? { key: EC_SLOT[t], label: t } : null;
+  }
+  function _slotFromList(list) {
+    for (const el of list) {
+      const r = _slotHit(el);
+      if (r) return r;
+    }
+    return null;
+  }
+  function _slotFromInfobox() {
+    const root = document.querySelector('.infobox, [class*="infobox"]');
+    if (!root) return null;
+    for (const el of root.querySelectorAll('div, td, dt, dd, li')) {
+      if (el.children.length > 2) continue;
+      const t = (el.textContent || '').trim();
+      if (t.length <= 6 && EC_SLOT[t]) return { key: EC_SLOT[t], label: t };
+    }
+    return null;
+  }
+  function getSlot() {
+    let r = _slotHit(document.querySelector('.infobox-item--name-category'));
+    if (r) return r;
+    try { r = _slotFromList(document.querySelectorAll('[class*="name-category"]')); } catch (e) { /* 忽略：类名变体查询失败——继续兜底扫描 */ }
+    if (r) return r;
+    try { r = _slotFromInfobox(); } catch (e) { /* 忽略：兜底扫描失败——按非装备页处理 */ }
+    return r;
   }
 
   // → Eorzea Collection「已筛好这件装备」的搜索页（零网络：本地表直查）
@@ -3811,16 +3839,18 @@
     // 尝试在前几秒用尽后永久放弃；注入为纯本地查询（无网络），重试成本极低。
     let tries = 0;
     let timer = null;
-    const MAX_TRIES = 12;
+    const MAX_TRIES = 16;
     const attempt = () => {
       if (tries >= MAX_TRIES) return;
       if (document.documentElement.dataset.zhixiaWikiDone) return;
       tries++;
+      try { window.__zhxWikiTries = tries; } catch (e) { /* 忽略：探测钩子，失败不影响注入 */ }
       safe(injectWikiButton, 'Wiki 按钮注入')();
     };
     attempt();
-    // 阶梯定时：覆盖移动端首屏渲染慢的场景（成功即止，重复触发为幂等重建）
-    [1500, 4000, 8000, 15000].forEach((ms) => setTimeout(attempt, ms));
+    // 阶梯定时：覆盖移动端首屏渲染慢的场景（成功即止，重复触发为幂等重建）；
+    // v1.3.1：增补 22s / 30s 两档，覆盖移动端极端慢渲染
+    [1500, 4000, 8000, 15000, 22000, 30000].forEach((ms) => setTimeout(attempt, ms));
     new MutationObserver(() => {
       if (timer || tries >= MAX_TRIES) return;
       timer = setTimeout(() => { timer = null; attempt(); }, 1200);
@@ -3952,43 +3982,62 @@
     };
   }
 
-  /* v1.3 分片构建：每片目标 ≤8ms 后让出主线程（setTimeout 0），避免移动端
-     主线程被连续阻塞 1-2 秒（页面渲染/交互停顿、圈圈转不出）。构建在局部
-     对象上完成，全部完成前各查表函数仍拿到 null（静默跳过）——与原同步版
-     语义一致；完成后一次性赋值 + 染剂回退 + 回调。 */
+  /* v1.3 分片构建：每片目标 ≤8ms 后让出主线程，避免移动端主线程被连续阻塞
+     1-2 秒（页面渲染/交互停顿、圈圈转不出）。构建在局部对象上完成，全部完成
+     前各查表函数仍拿到 null（静默跳过）——与原同步版语义一致；完成后一次性
+     赋值 + 染剂回退 + 回调。
+     v1.3.1：让出改用 MessageChannel（嵌套 setTimeout 到第 5 级后每级被浏览器
+     钳 +4~8ms，MC 恒定 ~0.2ms；创建失败或运行异常时回退分片 setTimeout）。 */
   function buildTables(scope, done) {
-    const t = _btTargets(scope);
-    const lines = ITEM_DB_TEXT.split('\n');
-    let i = 0;
-    const finish = () => {
-      try {
-        // 染剂色名回退（顺手收集版）：「Xxx Dye → 中文名」补开「Xxx → 中文名」
-        if (t.nameMap && t.dye.length) {
-          for (const key of t.dye) {
-            const base = key.slice(0, -4);
-            if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
-          }
+    const st = { i: 0, mc: null, done: done, t: _btTargets(scope), lines: ITEM_DB_TEXT.split('\n') };
+    try {
+      const m = new MessageChannel();
+      m.port2.onmessage = () => _btStep(st);
+      st.mc = m;
+    } catch (e) {
+      // 忽略：MessageChannel 不可用（旧环境/异常）——mc 保持 null，回退分片 setTimeout 让出
+    }
+    _btStep(st);
+  }
+  // 分片让出调度：MC 优先（~0.2ms/级），端口失效则置空并改走 setTimeout
+  function _btNext(st) {
+    if (st.mc) {
+      let ok = false;
+      try { st.mc.port1.postMessage(0); ok = true; } catch (e) { /* 忽略：MC 端口失效——置空后改走 setTimeout */ }
+      if (ok) return;
+      st.mc = null;
+    }
+    setTimeout(() => _btStep(st), 0);
+  }
+  // 单片构建：≤8ms 或 ≤250 行后让出
+  function _btStep(st) {
+    try {
+      const deadline = Date.now() + 8;
+      while (st.i < st.lines.length) {
+        const end = Math.min(st.i + 250, st.lines.length);
+        while (st.i < end) {
+          const ln = st.lines[st.i++];
+          if (ln) _btRow(ln, st.t);
         }
-        itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
-      } catch (e) { /* 忽略：构建收尾 best-effort */ }
-      if (typeof done === 'function') { try { done(); } catch (e) {} }
-    };
-    const step = () => {
-      try {
-        const deadline = Date.now() + 8;
-        while (i < lines.length) {
-          const end = Math.min(i + 250, lines.length);
-          while (i < end) {
-            const ln = lines[i++];
-            if (ln) _btRow(ln, t);
-          }
-          if (Date.now() >= deadline) break;
+        if (Date.now() >= deadline) break;
+      }
+    } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
+    if (st.i < st.lines.length) { _btNext(st); return; }
+    _btApplyTargets(st.t);
+    if (typeof st.done === 'function') { try { st.done(); } catch (e) { /* 忽略：完成回调异常不上抛 */ } }
+  }
+  // 构建收尾：染剂色名回退 + 一次性赋值索引
+  function _btApplyTargets(t) {
+    try {
+      // 染剂色名回退（顺手收集版）：「Xxx Dye → 中文名」补开「Xxx → 中文名」
+      if (t.nameMap && t.dye.length) {
+        for (const key of t.dye) {
+          const base = key.slice(0, -4);
+          if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
         }
-      } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
-      if (i < lines.length) { setTimeout(step, 0); return; }
-      finish();
-    };
-    step();
+      }
+      itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
+    } catch (e) { /* 忽略：构建收尾 best-effort */ }
   }
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
@@ -4276,10 +4325,14 @@
   // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
   // v1.3：buildTables 改分片（回调式）——分片全部完成后才广播就绪
   function _ensureFinalize() {
+    __zhxMark('finalize');
     return new Promise((resolve) => {
       const go = () => {
+        __zhxMark('buildStart');
         buildTables(_buildScope, () => {
+          __zhxMark('buildEnd');
           try { _fireTablesReady(); } catch (e) {}
+          __zhxMark('ready');
           try {
             console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
               + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
@@ -4289,7 +4342,7 @@
           resolve();
         });
       };
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 });
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 500 }); // v1.3.1：兜底 2000→500，消除静止页面等满 2s 的最坏情况
       else setTimeout(go, 50);
     });
   }
@@ -4694,4 +4747,193 @@
       safe(ensureTables, 'pageshow 数据')();
     } catch (err) { /* 忽略：兜底失败不影响主流程 */ }
   });
+
+  /* =====================================================================
+   * 运行与性能探测（v1.3.1）：URL 附带 zhx_probe 参数（?zhx_probe=1 或
+   * #zhx_probe）时启用——页面右下角显示「可复制的诊断报告」（环境 / 时间线 /
+   * 数据规模 / wiki 专项），供手机端实测反馈。默认关闭、近零开销；报告仅本地
+   * 显示，不写入存储、不发送任何网络请求。
+   * ===================================================================== */
+  let __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关
+  const __zhxProbeBtnCss = 'padding:6px 10px;font-size:12px;border:1px solid #8ab4d8;border-radius:8px;background:#eaf4fe;color:#1d5c96;cursor:pointer;';
+
+  function __zhxMark(name) {
+    try {
+      if (!__zhxProbeFlag) return;
+      const m = (window.__zhxMarks = window.__zhxMarks || {});
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      m[name] = Math.round(now - (__zhxBootAt || 0));
+    } catch (e) { /* 忽略：探测永不阻断主流程 */ }
+  }
+
+  function __zhxProbeOn() {
+    try { return /zhx_probe/.test((location.search || '') + (location.hash || '')); } catch (e) { /* 忽略：地址不可读时视为未启用 */ return false; }
+  }
+
+  function __zhxProbeEnv(L) {
+    L.push('ZHX-PROBE: v1');
+    const gi = (typeof GM_info !== 'undefined' && GM_info?.script) || null;
+    L.push(
+      'ver: ' + ((gi?.version) || 'n/a'),
+      'site: ' + location.hostname,
+      'url: ' + String(location.href).slice(0, 220),
+      'ua: ' + String(navigator.userAgent || '').slice(0, 200),
+      'view: ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + (window.devicePixelRatio || 1),
+      'ts: ' + new Date().toISOString(),
+      'ready: ' + document.readyState,
+      'gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
+  }
+
+  function __zhxProbeData(L) {
+    L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
+    try {
+      L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
+        + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
+        + ' acl=' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
+        + ' ver=' + (DATA_VER || 'n/a'));
+    } catch (e) { /* 忽略：数据规模读取失败（可能尚未就绪） */ }
+    try {
+      L.push('idx: nameMap=' + (nameMap ? Object.keys(nameMap).length : 0)
+        + ' itemHash=' + (itemHash ? Object.keys(itemHash).length : 0)
+        + ' ecidMap=' + (ecidMap ? Object.keys(ecidMap).length : 0)
+        + ' koByZh=' + (koByZh ? Object.keys(koByZh).length : 0));
+    } catch (e) { /* 忽略：索引规模读取失败 */ }
+  }
+
+  function __zhxProbeWiki(L) {
+    if (location.protocol !== 'file:' && !/huijiwiki\.com/.test(location.hostname)) return;   // file: 供本地夹具测试
+    const T = (f) => { try { return f(); } catch (e) { return 'ERR'; /* 忽略：子项读取失败 */ } };
+    try {
+      const W = {};
+      W.done = T(() => document.documentElement.dataset.zhixiaWikiDone || '0');
+      W.tries = T(() => window.__zhxWikiTries || 0);
+      W.slot = T(() => { const s = getSlot(); return s ? (s.label + '/' + s.key) : 'null'; });
+      W.zh = T(() => getItemZhName() || 'null');
+      W.jp = T(() => getJapaneseName() || 'null');
+      W.id = T(() => getItemId() || 'null');
+      W.ko = T(() => { const z = getItemZhName(); const k = z ? ronkaKoByZh(z) : null; return k || 'null'; });
+      W.blocks = T(() => document.querySelectorAll('.ff14-content-box-block').length);
+      W.src = T(() => !!blockByTitle('其他站点链接'));
+      W.lang = T(() => !!blockByTitle('各语言名称'));
+      W.infobox = T(() => document.querySelectorAll('.infobox, [class*="infobox"]').length);
+      W.h1 = T(() => { const h = document.querySelector('#firstHeading'); return h ? String(h.innerText || '').split('\n')[0].slice(0, 40) : 'no-h1'; });
+      W.items = T(() => wikiReverseItems().length);
+      W.inj = T(() => !!document.querySelector('.zhixia-reverse-block'));
+      L.push('wiki: ' + JSON.stringify(W));
+    } catch (e) { /* 忽略：wiki 专项收集失败不影响其它诊断 */ }
+  }
+
+  function __zhxProbeText() {
+    const L = [];
+    __zhxProbeEnv(L);
+    __zhxProbeData(L);
+    __zhxProbeWiki(L);
+    try { L.push('errs: ' + JSON.stringify(window.__zhxErrs || [])); } catch (e) { /* 忽略：错误列表读取失败 */ }
+    return L.join('\n');
+  }
+
+  function __zhxProbePanel(text) {
+    let box = document.getElementById('zhx-probe-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'zhx-probe-box';
+      box.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483000;width:min(92vw,460px);max-height:74vh;overflow:auto;background:#fff;color:#222;border:1px solid #8ab4d8;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.28);font:12px/1.5 ui-monospace,Consolas,monospace;padding:10px;';
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;';
+      const h = document.createElement('b');
+      h.textContent = '栀夏 · 运行探测（仅本地显示）';
+      head.appendChild(h);
+      const bClose = document.createElement('button');
+      bClose.textContent = '关闭';
+      bClose.style.cssText = __zhxProbeBtnCss;
+      bClose.onclick = () => { try { box.remove(); } catch (e) { /* 忽略：面板已移除 */ } };
+      head.appendChild(bClose);
+      box.appendChild(head);
+      const ta = document.createElement('textarea');
+      ta.id = 'zhx-probe-text';
+      ta.readOnly = true;
+      ta.style.cssText = 'width:100%;height:38vh;min-height:180px;box-sizing:border-box;font:11px/1.45 ui-monospace,Consolas,monospace;white-space:pre;color:#222;background:#f7fbff;border:1px solid #cfe2f3;border-radius:8px;padding:8px;';
+      box.appendChild(ta);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+      const bCopy = document.createElement('button');
+      bCopy.textContent = '复制报告';
+      bCopy.style.cssText = __zhxProbeBtnCss;
+      bCopy.onclick = () => { __zhxProbeCopy(ta); };
+      const bRef = document.createElement('button');
+      bRef.textContent = '刷新报告';
+      bRef.style.cssText = __zhxProbeBtnCss;
+      bRef.onclick = () => { try { ta.value = __zhxProbeText(); } catch (e) { /* 忽略：刷新失败保留旧报告 */ } };
+      bar.appendChild(bCopy);
+      bar.appendChild(bRef);
+      box.appendChild(bar);
+      (document.body || document.documentElement).appendChild(box);
+    }
+    const ta2 = box.querySelector('#zhx-probe-text');
+    if (ta2) ta2.value = text;
+  }
+
+  function __zhxProbeCopy(ta) {
+    const text = ta.value || '';
+    const cb = navigator.clipboard;
+    if (typeof cb?.writeText === 'function') {
+      cb.writeText(text).then(
+        () => __zhxProbeToast('已复制，发送给栀夏即可'),
+        () => __zhxProbeFallbackCopy(ta));
+      return;
+    }
+    __zhxProbeFallbackCopy(ta);
+  }
+
+  function __zhxProbeFallbackCopy(ta) {
+    let ok = false;
+    try {
+      ta.focus();
+      ta.select();
+      ok = !!document.execCommand?.('copy');   // NOSONAR —— 老浏览器兜底路径（clipboard 不可用时的最后手段）
+    } catch (e) {
+      // 忽略：无法自动复制（环境限制）——下方统一提示手动长按
+    }
+    __zhxProbeToast(ok ? '已复制，发送给栀夏即可' : '请长按选择文本后复制');
+  }
+
+  function __zhxProbeToast(msg) {
+    try {
+      let t = document.getElementById('zhx-probe-toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'zhx-probe-toast';
+        t.style.cssText = 'position:fixed;right:12px;top:12px;z-index:2147483001;background:#1d5c96;color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.3);';
+        (document.body || document.documentElement).appendChild(t);
+      }
+      t.textContent = msg;
+      clearTimeout(t.__zhxH || 0);
+      t.__zhxH = setTimeout(() => { try { t.remove(); } catch (e) { /* 忽略：已移除 */ } }, 2600);
+    } catch (e) { /* 忽略：提示条失败不影响复制 */ }
+  }
+
+  function __zhxProbeSetup() {
+    __zhxProbeFlag = true;
+    try { window.__zhxProbeDump = __zhxProbeText; } catch (e) { /* 忽略：控制台辅助入口注册失败 */ }
+    try {
+      window.__zhxErrs = window.__zhxErrs || [];
+      window.addEventListener('error', (ev) => {
+        try {
+          if (window.__zhxErrs.length < 20) {
+            window.__zhxErrs.push(String(ev?.message || 'e').slice(0, 120) + ' @L' + (ev?.lineno || 0));
+          }
+        } catch (e) { /* 忽略：错误采集失败 */ }
+      });
+    } catch (e) { /* 忽略：错误采集注册失败 */ }
+    const show = () => { try { __zhxProbePanel(__zhxProbeText()); } catch (e) { /* 忽略：面板生成失败 */ } };
+    if (document.readyState === 'complete') setTimeout(show, 2500);
+    else window.addEventListener('load', () => setTimeout(show, 2500), { once: true });
+    setTimeout(show, 22000);   // 晚到数据/慢注入的第二轮快照
+  }
+
+  // 探测启用判断（必须在任何异步回调前定值；未启用时各 mark 直接短路）
+  __zhxProbeFlag = __zhxProbeOn();
+  if (__zhxProbeFlag) {
+    try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+  }
 })();
