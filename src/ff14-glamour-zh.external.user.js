@@ -1195,6 +1195,7 @@
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
     // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 buildTables 展开）
     const out = resolveByName(en);
+    cacheGuard(_en2zhCache, CACHE_CAP_LOOKUP);
     _en2zhCache.set(en, out);
     return out;
   }
@@ -2648,6 +2649,7 @@
     if (!jp || jp.length > 80) return null;   // v1.12.0 放宽
     if (_jp2zhCache.has(jp)) return _jp2zhCache.get(jp);
     const out = resolveByName(jp);
+    cacheGuard(_jp2zhCache, CACHE_CAP_LOOKUP);
     _jp2zhCache.set(jp, out);
     return out;
   }
@@ -3610,13 +3612,16 @@
   const RONKA_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip';
   const RONKA_KR = /[\uac00-\ud7a3]/;
 
-  // 装备名单条查找（缓存 + 名称索引直查）
+  // 装备名单条查找（缓存 + 名称索引直查）；_ronkaCacheN = 条目计数（容量防线用）
   const RONKA_ITEM_CACHE = Object.create(null);
+  let _ronkaCacheN = 0;
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
     if (ko in RONKA_ITEM_CACHE) return RONKA_ITEM_CACHE[ko];
     const v = resolveByName(ko);
+    if (cacheGuard(RONKA_ITEM_CACHE, CACHE_CAP_LOOKUP, _ronkaCacheN)) _ronkaCacheN = 0;
     RONKA_ITEM_CACHE[ko] = v;
+    _ronkaCacheN++;
     return v;
   }
 
@@ -3868,16 +3873,11 @@
   function _fireTablesReady() {
     if (_tablesReady) return;
     _tablesReady = true;
-    // 清空「查不到」负缓存：外置版中数据到达前生成的空结果必须作废
-    //（新增查表负缓存时，务必在此登记清理）
-    try { _en2zhCache.clear(); } catch (e) {}
-    try { _jp2zhCache.clear(); } catch (e) {}
-    try { _seriesMap = null; } catch (e) {}
-    try { _seriesPfxCache = null; } catch (e) {}
-    try { _itemPfxCache = null; } catch (e) {}
-    try { _allKeysCache = null; } catch (e) {}
-    try { _fcSubstrCache = null; } catch (e) {}
-    try { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; } catch (e) { /* 忽略：缓存清理 best-effort，失败无碍 */ }
+    // 清空「查不到」负缓存与派生缓存：外置版中数据到达前生成的结果必须作废
+    //（新增缓存时在 Core Cache Registry 登记即被本处按类清理，勿在此手工追加）
+    try { cacheReset('lookup'); } catch (e) {}
+    try { cacheReset('translate'); } catch (e) {}
+    try { cacheReset('derived'); } catch (e) {}
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) {} }
   }
@@ -4259,6 +4259,67 @@
   }
 
   /* @zhixia:core-cache-end */
+
+  /* @zhixia:core-cache-registry-start */
+  /* ── Core Cache Registry（v1.4 Phase 14）：缓存体系集中登记 ─────────────
+     目标：每类缓存的「职责 / 生命周期 / 容量 / 失效」在此唯一登记，
+     禁止散落的手工 reset。新增缓存时，在本段 cacheRegister 一行登记即可，
+     并由 unit/test-cache.mjs 守卫（登记数量断言）。
+
+     四类缓存（按职责划分，不强制统一数据结构）：
+       · data      数据缓存（持久，GM 存储）：zhx.meta / zhx.dt.* / zhx.v3.*
+                   生命周期：跨会话；由版本探测与 dataInvalidate 管理（不在此登记）
+       · lookup    查找缓存（内存，页面生命周期）：名称 → 中文 的直查结果（含负缓存）
+                   失效：数据到达（_fireTablesReady）/ 容量防线（CACHE_CAP_LOOKUP）
+       · translate 翻译缓存（内存，页面生命周期）：由词典派生的子串键与组合键表
+                   失效：词典更新（dictInvalidate）/ 数据到达
+       · derived   派生缓存（内存，页面生命周期）：由数据表派生的映射与前缀表
+                   失效：数据到达（_fireTablesReady）；容量由数据表规模界定
+     统一入口：cacheReset(kind) 按类清理；cacheInfo() 观测（修订号 + 条目数）。 */
+  const _cacheReg = new Map();
+  const CACHE_KINDS = ['data', 'lookup', 'translate', 'derived'];
+  const CACHE_CAP_LOOKUP = 5000;   // lookup 类容量防线：超出即清空重建（避免长会话无界增长）
+  function cacheRegister(name, kind, reset, size) { _cacheReg.set(name, { kind, reset, size }); }
+  function cacheReset(kind) {
+    for (const [name, e] of _cacheReg) {
+      if (kind && e.kind !== kind) continue;
+      try { e.reset(); } catch (e2) { /* 忽略：单个缓存清理失败不阻断其余 */ }
+    }
+  }
+  function cacheInfo() {
+    const entries = {};
+    for (const [name, e] of _cacheReg) {
+      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; }
+    }
+    return {
+      entries,
+      rev: {
+        data: (typeof DATA_VER !== 'undefined' ? DATA_VER : ''),
+        dict: (typeof dictGetRevision === 'function' ? dictGetRevision() : 0),
+      },
+    };
+  }
+  /* 容量防线：条目数达到上限时清空缓存（清空即重建，不影响正确性）。
+     count 供无 size 的对象型缓存（如 RONKA 物品表）传入计数器。 */
+  function cacheGuard(cache, cap, count) {
+    if (!cache) return false;
+    let n = (typeof count === 'number') ? count : cache.size;
+    if (typeof n !== 'number') { n = 0; for (const k in cache) n++; }
+    if (n < cap) return false;
+    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) {} return true; }
+    for (const k in cache) { try { delete cache[k]; } catch (e) {} }
+    return true;
+  }
+  /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */
+  cacheRegister('en2zh', 'lookup', () => { _en2zhCache.clear(); }, () => _en2zhCache.size);
+  cacheRegister('jp2zh', 'lookup', () => { _jp2zhCache.clear(); }, () => _jp2zhCache.size);
+  cacheRegister('ronkaItems', 'lookup', () => { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; _ronkaCacheN = 0; }, () => _ronkaCacheN);
+  cacheRegister('seriesMap', 'derived', () => { _seriesMap = null; }, () => (_seriesMap ? _seriesMap.size : 0));
+  cacheRegister('seriesPfx', 'derived', () => { _seriesPfxCache = null; }, () => (_seriesPfxCache ? _seriesPfxCache.size : 0));
+  cacheRegister('itemPfx', 'derived', () => { _itemPfxCache = null; }, () => (_itemPfxCache ? _itemPfxCache.size : 0));
+  cacheRegister('fcSubstr', 'translate', () => { _fcSubstrCache = null; }, () => (_fcSubstrCache ? _fcSubstrCache.length : 0));
+  cacheRegister('allKeys', 'translate', () => { _allKeysCache = null; }, () => (_allKeysCache ? _allKeysCache.length : 0));
+  /* @zhixia:core-cache-registry-end */
 
   /* @zhixia:core-data-manager-start */
   /* ── Core Data Manager（v1.4 Phase 11）：远程数据 + 版本 + 缓存 + 重试 +
@@ -4754,7 +4815,7 @@
   function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.prototype.hasOwnProperty.call(o, key)) ? o[key] : undefined; }
   function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.prototype.hasOwnProperty.call(o, key); }
   function dictGetRevision() { return _dictRevision; }
-  function dictInvalidate() { _fcSubstrCache = null; _allKeysCache = null; }
+  function dictInvalidate() { cacheReset('translate'); }
   function dictUpdate(txt) { return applyRuntimeDict(txt); }
   /* @zhixia:core-dictionary-end */
 

@@ -57,6 +57,7 @@ const SEG = {
   storage: ['core-storage', 1],
   http: ['core-http', 1],
   cache: ['core-cache', 2],
+  cacheReg: ['core-cache-registry', 1],
   dom: ['core-dom', 1],
   observer: ['core-observer', 1],
 };
@@ -66,7 +67,7 @@ const ARG_NAMES = ['window', 'document', 'console', 'performance', 'GM', 'GM_get
   'MutationObserver'];
 
 const RETURN_STMT = `return { _storeNorm, storeGetAsync, storeSet, httpGet, _readCachedTable, _writeCachedTable,
-  safe, dedupeByAncestor, observeLocal, __zhxBootAt,
+  safe, dedupeByAncestor, observeLocal, __zhxBootAt, __cacheReg: _cacheReg, cacheGuard,
   C: { DAY_MS, META_KEY, DT_PREFIX, DATA_BASE, DATA_FILES, DATA_REMOTE } };`;
 
 function buildCore(env) {
@@ -114,9 +115,9 @@ console.log('\n── 区段哨兵（标记与装配） ──');
     eq(`${tag} 区段数（start）`, counts[tag], n);
     eq(`${tag} 区段数（end）`, DIST_TEXT.split(`/* @zhixia:${tag}-end */`).length - 1, n);
   }
-  // 本文件提取的 7 类共 9 对；其他段（dictionary / translator / item-resolver 等）由各自测试覆盖
+  // 本文件提取的 8 类共 10 对；其他段（dictionary / translator / item-resolver 等）由各自测试覆盖
   const coreTot = DIST_TEXT.split('@zhixia:core-').length - 1;
-  ok('core-* 标记成对且 ≥ 本文件提取的 9 对', coreTot % 2 === 0 && coreTot >= 18, `实际=${coreTot}`);
+  ok('core-* 标记成对且 ≥ 本文件提取的 10 对', coreTot % 2 === 0 && coreTot >= 20, `实际=${coreTot}`);
   const api = buildCore(makeEnv());
   for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', '_readCachedTable', '_writeCachedTable', 'safe', 'dedupeByAncestor', 'observeLocal']) {
     eq(`${f} 装配后可调用`, typeof api[f], 'function');
@@ -418,6 +419,18 @@ console.log('\n── dom / runtime：去重 / 错误边界 ──');
 {
   const api = buildCore(makeEnv({ performance: undefined }));
   eq('runtime：无 performance 时 __zhxBootAt=0', api.__zhxBootAt, 0);
+}
+
+console.log('\n── cache registry：登记与容量防线（Phase 14）──');
+{
+  const api = buildCore(makeEnv());
+  eq('登记条目 = 8', api.__cacheReg.size, 8);
+  const kinds = {};
+  for (const [, e] of api.__cacheReg) kinds[e.kind] = (kinds[e.kind] || 0) + 1;
+  eq('lookup / derived / translate = 3 / 3 / 2', `${kinds.lookup}/${kinds.derived}/${kinds.translate}`, '3/3/2');
+  const m = new Map([['a', 1], ['b', 2]]);
+  ok('cacheGuard：未达上限不动', api.cacheGuard(m, 3) === false && m.size === 2);
+  ok('cacheGuard：达上限清空', api.cacheGuard(m, 2) === true && m.size === 0);
 }
 
 // ═════════════════════════ 汇总 ═════════════════════════════════

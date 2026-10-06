@@ -52,6 +52,7 @@ function sliceAll(s, tag) {
 
 const DICT_SEG = sliceAll(DIST_TEXT, 'core-dictionary');
 const TR_SEG = sliceAll(DIST_TEXT, 'core-translator');
+const CACHE_REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
 
 const STUB_LINES = [
   // ── 桩（必须先于区段：值捕获纪律；六层词表从空开始）──
@@ -99,7 +100,7 @@ function buildDict(mock = {}) {
       };
     },
   };
-  const body = [...STUB_LINES, ...DICT_SEG, ...TR_SEG, RETURN_STMT].join('\n');
+  const body = [...STUB_LINES, ...CACHE_REG_SEG, ...DICT_SEG, ...TR_SEG, RETURN_STMT].join('\n');
   try {
     const fn = new Function('document', 'console', 'NodeFilter', '__rec', body);
     return fn(doc, { warn: () => {} }, NF, rec);

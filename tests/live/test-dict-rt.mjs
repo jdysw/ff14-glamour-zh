@@ -1,4 +1,4 @@
-// test-dict-rt.mjs — 词库运行时更新（v1.2.0）端到端测试（v2：抗导航干扰）
+// test-dict-rt.mjs — 词库运行时更新（v1.2.0）端到端测试（v2：抗导航干扰；v3 增长期：预置空 v3 manifest 静默回退 v2）
 // 场景 A（下载路径）：无缓存首访 → mock version.json 指纹不同 → 下载 mock dict.json
 //   断言 T1 修正重译：「装備シリーズ」新译「装备系列Q」替换页面上旧译「装备系列」
 //   断言 T2 新增词补扫：mock 新增「ランダム→随机Q」，补扫后出现于 option 文本
@@ -30,6 +30,8 @@ const mock = {
   [BASE + 'series.txt']: seriesTxt,
   [BASE + 'acl.txt']: aclTxt,
   [BASE + 'dict.json']: JSON.stringify(dictObj),
+  // v3 兜底：预置缓存失效时也返回空 sites（静默回退 v2，避免真网络干扰本测试）
+  'https://zhixia-data.pages.dev/ff14/v3/manifest.json': JSON.stringify({ schema: 3, sites: {} }),
 };
 
 const GF_REAL = readDist();
@@ -42,6 +44,8 @@ const gmStub = `(() => {
   window.__mockHits = { version: 0, dict: 0 };
   window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
+  // v3 已上线：预置「新鲜 manifest + 本站不在列」→ v3 静默回退 v2（本测试聚焦 v2 词库运行时链）
+  try { localStorage.setItem(P + 'zhx.v3.manifest', Date.now() + '\\n' + JSON.stringify({ schema: 3, sites: {}, shared: {} })); } catch (e) {}
   const MOCK = ${JSON.stringify(mock)};
   window.GM_xmlhttpRequest = (opt) => {
     const body = MOCK[opt.url];
