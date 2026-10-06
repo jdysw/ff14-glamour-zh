@@ -3,6 +3,8 @@
 // 说明：v1.4 起分片调度已内建（_btNext：MC 优先 + setTimeout 兜底），历史变体（mc2/full2）退役（见 git 历史）；
 //       基准预置「空 sites 的 v3 manifest」→ v3 探测静默回退 v2 读路径（零网络、确定行为）。
 // CPU 节流 1x/4x/8x；每档 3 轮
+// 提取锚维护（哨兵）：Phase 15 起 dist 为 rollup IIFE 输出——模块内容整体 +2 缩进；
+//   多行锚点须按「当前产物形态」维护，失配即报「锚点计数异常」（有意哨兵，见 tests/README）。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { distFile, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
@@ -20,12 +22,12 @@ const repl1 = (src, oldS, newS, tag) => {
 };
 // ── 埋点注入 ──（v1.4 Phase 3：__zhxTestSite / __zhxTestTables 已内建于 src，无需文本注入）
 s = repl1(s, "const local = await _ensureReadLocal(need);", "const local = await _ensureReadLocal(need);\n    try { (window.__zhxT = window.__zhxT || {}).readEnd = performance.now(); } catch (e) {}", 't-readEnd');
-s = repl1(s, "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');", "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');\n    try { (window.__zhxT = window.__zhxT || {}).applied = performance.now(); } catch (e) {}", 't-applied');
+s = repl1(s, "      for (const t of need) applyTable(t, local[t].tx);\n      DATA_VER = (meta.v ? String(meta.v) : '');", "      for (const t of need) applyTable(t, local[t].tx);\n      DATA_VER = (meta.v ? String(meta.v) : '');\n      try { (window.__zhxT = window.__zhxT || {}).applied = performance.now(); } catch (e) {}", 't-applied');
 s = repl1(s, "function _ensureFinalize() {", "function _ensureFinalize() {\n    try { (window.__zhxT = window.__zhxT || {}).finEntry = performance.now(); } catch (e) {}", 't-finEntry');
 s = repl1(s, "      else setTimeout(go, 50);", "      else setTimeout(go, 50);\n      try { (window.__zhxT = window.__zhxT || {}).schedAt = performance.now(); } catch (e) {}", 't-schedAt');
-s = repl1(s, "      const go = () => {\n        __zhxMark('buildStart');", "      const go = () => {\n        try { (window.__zhxT = window.__zhxT || {}).buildStart = performance.now(); } catch (e) {}\n        __zhxMark('buildStart');", 't-buildStart');
+s = repl1(s, "        const go = () => {\n          __zhxMark('buildStart');", "        const go = () => {\n          try { (window.__zhxT = window.__zhxT || {}).buildStart = performance.now(); } catch (e) {}\n          __zhxMark('buildStart');", 't-buildStart');
 s = repl1(s, "    _tablesReady = true;", "    _tablesReady = true;\n    try { (window.__zhxT = window.__zhxT || {}).ready = performance.now(); } catch (e) {}", 't-ready');
-s = repl1(s, "const cbs = _readyCbs.splice(0);\n    for (const f of cbs) { try { f(); } catch (e) {} }", "const cbs = _readyCbs.splice(0);\n    for (const f of cbs) { try { f(); } catch (e) {} }\n    try { (window.__zhxT = window.__zhxT || {}).fireDone = performance.now(); } catch (e) {}", 't-fireDone');
+s = repl1(s, "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) {} }", "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) {} }\n      try { (window.__zhxT = window.__zhxT || {}).fireDone = performance.now(); } catch (e) {}", 't-fireDone');
 
 // v1.4：分片调度已内建（_btNext：MC 优先 + setTimeout 兜底），历史变体（mc2/full2）退役（见 git 历史）。
 const variant = 'base2';

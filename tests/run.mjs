@@ -29,6 +29,7 @@ const SUITES = {
     'integration/test-index-scope.mjs',
     'integration/test-ec.mjs',
     'integration/test-probe.mjs',
+    'integration/test-dict-single-source.mjs',
   ],
   live: [
     'live/test-kasuga.mjs',

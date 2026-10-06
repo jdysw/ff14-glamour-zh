@@ -78,9 +78,9 @@ ff14-glamour-zh/
 ├── src/                   ★ 脚本模板（发布母版）
 │   └── ff14-glamour-zh.external.user.js
 ├── build/                 — 构建脚本
-│   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板
-│   ├── extract_dicts.py   — 反向提取：src/ 模板 → dict/*.json（同步用）
-│   ├── verify_dicts.js    — 词典校验（src 内词典 vs dict/*.json 源）
+│   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板（构建时全量覆盖生成）
+│   ├── extract_dicts.py   — 历史工具：反向提取（仅一次性迁移；权威源 = dict/*.json）
+│   ├── verify_dicts.js    — 词典校验（src 内嵌 vs JSON 源 / vs 远程产物）
 │   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
 │   └── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
 ├── dist/                  — 构建产物：本地生成（不入库）
@@ -152,15 +152,16 @@ git add dict/ && git commit -m "dict: ..." && git push
 
 **更新装备数据**：`python3 build/rebuild-db.py` 重建物品总表（四语权威源自动下载，跟随游戏版本）；分发给用户走「数据更新流程」。
 
-**同步方向注意**：
-- **常规：只改 JSON**（dict/），模板里的词典由 inject 覆盖生成，手改模板词典会被下次构建抹掉。
-- 如已在模板里改了词，用 `python3 build/extract_dicts.py` 反向提取回 JSON。
+**词典单一源（v1.4 Phase 16）**：
+- `dict/*.json` 是词典唯一权威源；**只改 JSON，勿手改源码词典块**（块上方有「⚠️ 自动生成」标识，手改会被下次构建覆盖）。
+- 构建时自动生成两路产物并互核：源码内嵌兜底（`inject_dicts.py`）与数据站发布词库（`make_dict_json.py` → `dict.json`）；`build.sh` 第 ⑭/⑮/⑯ 步逐条校验「源 ≡ 内嵌 ≡ 远程」一致。
+- `extract_dicts.py` 为历史一次性迁移工具（仅「模板已先行改词、需搬回 JSON」时使用），日常勿用。
 
 ### 规则
 
 - `dist/` 为本地构建产物（不入库）；发布走 GitHub Releases 自动构建（`release.yml`）。
 - 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
-- 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 内词典与 dict/*.json 源逐条一致。
+- 每次构建后跑 `verify_dicts.js`（build.sh 已含，含 ⑯ 远程产物核验），确保「src 内嵌 ≡ dict/*.json 源 ≡ 数据站 dict.json」三方逐条一致。
 - **数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备 / 染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
 - **站点配置统一在 Site Registry（v1.4 Phase 3）**：src 内 `@zhixia:site-registry` 区段是六站唯一配置源（host 匹配 / 所需数据表 / 构建索引 / 页面入口）——**新增站点**或**为某站新增索引查询**时只改这一处；漏登记的后果是功能静默失效（查表跳过），由各站端到端测试兜底。
 - **Core 基础设施以 `@zhixia:core-*` 区段标记（v1.4 Phase 4）**：storage / http / cache / dom / runtime / constants 六组基础设施在 src 内均有独立标记区段（runtime 与 cache 各含 2 段）；**存储键（`zhx.meta` / `zhx.dt.*`）与缓存序列化格式是跨版本兼容契约**（用户本地缓存数 MB 数据），改动须过 `tests/unit/test-core.mjs`。
@@ -175,6 +176,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **服务端预构建索引（v1.4 Phase 13）**：v3 数据按站裁剪语言列（每站 `names` 只含其翻译链实际查询的语言键：mirapri / fc / collection = 日文、ec = 英文、ronka = 韩文；`dup` 同步裁剪），单站全链 6.35MB → 4.14MB raw（gzip 1.95MB → 1.15MB）、parse 全链 ~270ms → ~55ms；客户端不再做任何二次计算（v3 就绪时 `_irBuildAux` 直接返回）；对比数据见 `tests/benchmark/bench-v3-load.mjs`（结论：维持 TSV 格式）。
 - **统一缓存体系（v1.4 Phase 14）**：`@zhixia:core-cache-registry` 把全部内存缓存集中登记（四类职责：`lookup` 名称查找 / `translate` 词典派生 / `derived` 数据派生 / `data` 持久数据由 DataManager 管理）——统一入口 `cacheReset(kind)`（按类清理，无参全清）、`cacheInfo()`（修订号 + 条目数观测）、`cacheGuard`（容量防线：查找缓存上限 5000 条，达限清空重建）；`_fireTablesReady` / `dictInvalidate` 的散落手工 reset 已清零（新增缓存只需登记一行）；机制由 `tests/unit/test-cache.mjs` 冻结。
 - **模块化构建（v1.4 Phase 15）**：构建方式 = 「单文件源 → 块切分 → 模块树 → Rollup 打包（`bash build.sh`，含静态验收门）」——`src/ff14-glamour-zh.external.user.js` 是切分母本与唯一手改入口；`src/main.js` / `src/core/*.js`（14）/ `src/sites/*.js`（6）均为构建链原样输出（**直接改模块会被下次构建覆盖**，改动一律落单文件源与 `build/` 链）；块→模块分配（`build/migrate/module-assign.json`）与模块输出顺序契约（`build/module-order.json`，顺序相邻关系 = 测试文本提取的正式约束）是构建约束；产物锚点体系不变（36 锚点 / 16 tag），全量回归由 `tests/` 冻结。
+- **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py` 降级为一次性迁移工具；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

@@ -1,10 +1,14 @@
-// verify_dicts.js —— 词典一致性校验
-// 用法1（当前构建用）: node verify_dicts.js <src.js>
-//                      → 校验 src 内注入的 6 组词典 与 dict/*.json 源 逐条一致
-// 用法2（兼容保留）  : node verify_dicts.js <a.js> <b.js>
-//                      → 深度对比两个脚本文件的 6 组注入词典是否等价
-//                        （PATTERNS* 为模板内手写块，不参与本对比）
+// verify_dicts.js —— 词典一致性校验（Phase 16：三种模式）
+// 用法1（构建用）  : node verify_dicts.js <src.js>
+//                    → 校验 src 内注入的 6 组词典 与 dict/*.json 源 逐条一致
+// 用法2（构建用）  : node verify_dicts.js <src.js> --dict-json <dict.json>
+//                    → 校验 src 内注入的 6 组词典 与「远程词库产物」（build/make_dict_json.py
+//                      生成、数据站发布用）逐条一致（站点层按 common+本站增量合并语义比对）
+// 用法3（兼容保留）: node verify_dicts.js <a.js> <b.js>
+//                    → 深度对比两个脚本文件的 6 组注入词典是否等价
+//                      （PATTERNS* 为模板内手写块，不参与本对比）
 // 约束：仅接受仓库内路径（防路径穿越）；对词典体做受控文本扫描，不执行任何代码。
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -145,13 +149,40 @@ function diffOne(name, va, vb, labelA, labelB) {
 }
 
 const fileA = process.argv[2];
-if (!fileA) { console.log('用法: node verify_dicts.js <src.js> [b.js]'); process.exit(1); }
+if (!fileA) { console.log('用法: node verify_dicts.js <src.js> [--dict-json <dict.json> | b.js]'); process.exit(1); }
 const a = fs.readFileSync(safeResolve(fileA, '文件A'), 'utf8');
 
 let allEq = true;
+const dictJsonIdx = process.argv.indexOf('--dict-json');
 
-if (process.argv[3]) {
-  // ── 模式2：双文件对比（6 组注入词典；PATTERNS* 为手写块，不参与）──
+if (dictJsonIdx >= 0) {
+  // ── 模式2：src vs 远程词库产物（dict.json；与 make_dict_json.py 输出/数据站发布物一致）──
+  const djPath = process.argv[dictJsonIdx + 1];
+  if (!djPath) { console.log('用法: node verify_dicts.js <src.js> --dict-json <dict.json>'); process.exit(1); }
+  const djBuf = fs.readFileSync(safeResolve(djPath, 'dict.json'));
+  const dj = JSON.parse(djBuf.toString('utf8'));
+  const fp = crypto.createHash('sha256').update(djBuf).digest('hex').slice(0, 12);
+  const common = dj.common || {};
+  const MAP = [
+    ['DICT_COMMON', 'common'],
+    ['DICT',        'main'],
+    ['DICT_EC',     'ec'],
+    ['DICT_FC',     'fc'],
+    ['DICT_RONKA',  'ronka'],
+    ['DICT_ACL',    'acl'],
+  ];
+  for (const [n, key] of MAP) {
+    const d = extractDict(a, n);
+    if (d.value === undefined) { console.log(n, '提取失败', d.missing ? '(src 中缺失)' : ''); allEq = false; continue; }
+    // 期望值：站点层 = common + 本站增量（与运行时合并 / dict.json 语义一致）
+    const expect = (n === 'DICT_COMMON') ? { ...common } : { ...common, ...(dj[key] || {}) };
+    if (!diffOne(n, d.value, expect, 'src', 'dict.json')) allEq = false;
+  }
+  console.log(`（对照物: ${djPath}  fp=${fp}）`);
+  console.log(allEq ? '\n=== 全部一致 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
+  if (!allEq) process.exitCode = 1;
+} else if (process.argv[3]) {
+  // ── 模式3：双文件对比（6 组注入词典；PATTERNS* 为手写块，不参与）──
   const b = fs.readFileSync(safeResolve(process.argv[3], '文件B'), 'utf8');
   const NAMES = ['DICT_COMMON', 'DICT', 'DICT_EC', 'DICT_FC', 'DICT_RONKA', 'DICT_ACL'];
   for (const n of NAMES) {

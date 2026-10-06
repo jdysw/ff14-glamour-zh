@@ -1,5 +1,10 @@
-# 提取模板中的词典块 → dict/*.json（历史工具；词典权威源现为 dict/*.json）
+# extract_dicts.py —— 【历史工具 · 一次性迁移专用】
+# 从旧模板反向提取词典块 → dict/*.json。词典权威源 = dict/*.json（Phase 16 起单一源）：
+# 日常改词请直接编辑 JSON（再跑 build.sh 由 inject 生成内嵌块）；勿用本工具回写。
+# 仅在「模板里已先行改词、需要搬回 JSON」的一次性迁移场景下使用。
 import re, json, shutil, os
+
+print('== 提示：词典权威源为 dict/*.json（日常改词请直接改 JSON）；本工具仅用于一次性迁移 ==')
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根（脚本相对，去机器绑定）
 SRC = os.path.join(BASE, 'src', 'ff14-glamour-zh.external.user.js')

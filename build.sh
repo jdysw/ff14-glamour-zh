@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 15 一键构建：词典注入 → 单文件源语法 → 模块化链（块切分 → 接口 → 顺序契约 → Rollup）→ 静态验收（顺序 / 锚点 / wiring）→ 词典校验
+# Phase 16 一键构建：词典注入 → 单文件源语法 → 模块化链（块切分 → 接口 → 顺序契约 → Rollup）→ 静态验收（顺序 / 锚点 / wiring）→ 词典校验（源 + 远程产物）
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -8,7 +8,7 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   PYTHON_BIN="python"
 fi
 
-CACHE_DIR="${ZHX_BUILD_CACHE:-.cache/phase15}"
+CACHE_DIR="${ZHX_BUILD_CACHE:-.cache/build}"
 MODULES_V1="$CACHE_DIR/modules-v1"
 MODULES_V2="$CACHE_DIR/modules-v2"
 BLOCK_MAP="$CACHE_DIR/block-map.json"
@@ -65,4 +65,10 @@ node build/migrate/analyze-wiring.mjs src
 printf '%s\n' '⑭ 词典校验（src 内词典 vs dict/*.json 源）'
 node build/verify_dicts.js src/ff14-glamour-zh.external.user.js
 
-printf '\n%s\n' "✅ Phase 15 构建验收完成：$OUT"
+printf '%s\n' '⑮ 远程词库产物（dict/*.json → dict.json；数据站发布物）'
+"$PYTHON_BIN" build/make_dict_json.py --out "$CACHE_DIR/dict.json"
+
+printf '%s\n' '⑯ 词典单一源核验（src 内嵌 ≡ 远程产物）'
+node build/verify_dicts.js src/ff14-glamour-zh.external.user.js --dict-json "$CACHE_DIR/dict.json"
+
+printf '\n%s\n' "✅ Phase 16 构建验收完成：$OUT"

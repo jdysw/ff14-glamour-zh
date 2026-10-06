@@ -56,6 +56,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **测试产物**（注入副本、日志、Chrome profile、词库生成物）一律写 `tests/.cache/`（已 gitignore），不污染工作区。
 - **锚点纪律**：部分测试用「锚点计数断言 + split/join 全量替换」向测试副本注入埋点（如 `bench-read-path` 的数据链埋点、`test-index-scope` 的 `__zhxDebug`）；
   修改 `src` 的 `buildTables` / `_ensureReadLocal` 等被锚定区段时，**必须同步检查相关测试的锚点计数**（历史多次踩坑）。
+  另注意**产物缩进形态**：Phase 15 起 `dist/` 为 rollup IIFE 输出——模块内容整体较 `src/` +2 缩进；多行内联锚点（含缩进的行）须对照当前产物维护，失配会以「锚点计数异常」明确报错（哨兵，防静默错位；按报错更新锚点即可）。
 - **站点测试钩子（v1.4 Phase 3 起内建于 src）**：`__zhxTestSite`（指定站点）/ `__zhxTestTables` / `__zhxTestIndexes`（覆写表 / 索引配置）——集成测试在页面注入前 eval 设置即可，无需文本注入。
 - **数据层测试（`unit/test-data-layer.mjs`）**：按锚点从 `dist` 提取数据层代码段、在 Node 内装配运行（无需 Chrome / 外网）；
   改动数据层函数的首尾特征文本时，提取会以「锚缺失 / 锚不唯一」明确报错，按报错更新该文件的 `ANCHORS` 即可。
@@ -82,5 +83,6 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **Phase 13 语言裁剪与基准**：`unit/test-runtime-v3.mjs` A 段含语言裁剪断言（ja 表无韩文 / en 表无韩文假名 / ko 表无假名；dup 按语言裁剪 13/20/19）；`unit/test-item-resolver.mjs` 含 `_irBuildAux` 的 v3 守卫断言；`benchmark/bench-v3-load.mjs`（纯 Node、免 Chrome）对比 v2/v3 全链 parse 与 TSV / JSON 格式（结论：维持 TSV）；`bench-read-path` 已随 v1.4 适配（`_btStep` / `__zhxMark` 锚点、v3 探测预置、历史变体退役）。
 - **Phase 14 缓存注册表**：`unit/test-cache.mjs`（40 断言）冻结 `@zhixia:core-cache-registry`——登记完整性（8 条 / 三类 kind）、按类清理与全清、`cacheInfo` 观测、`cacheGuard` 容量防线（Map / 对象 + 计数器）、异常安全与同名覆盖语义；`unit/test-core.mjs` 增注册表节（提取 + 登记数 + guard）；`test-dictionary` 与 `test-data-layer` 的装配面含注册表段（`dictInvalidate` / 查找函数已经由注册表按类清理的依赖）。
 - **Phase 15 模块化构建**：`src/` 为构建链输出（`bash build.sh`：词典注入 → 块切分 → 接口 → 顺序契约 → Rollup → 顺序 / 锚点 / wiring / 词典四道验收）——**改动一律落单文件源与 `build/` 链，直接改 `src/core|sites` 模块会被下次构建覆盖**；测试提取依赖 `@zhixia` 锚点对（配对健康由构建链守护），部分段尾注释（如 `@zhixia:core-item-resolver-end`）随其前置块迁移属切分器设计行为（提取窗口自适应）；调整块归属（`module-assign.json`）或顺序契约（`module-order.json`）后须全量回归（unit + integration）。
+- **Phase 16 词典单一源**：`integration/test-dict-single-source.mjs`（12 断言）冻结「dict/*.json = 唯一权威源」契约——A) src 内嵌 ≡ JSON 源（verify 模式1）；B) 6 个词典块带 inject 维护的「自动生成」标识（恰 6 条）；C) 反证：篡改副本经 verify 必失败 → inject 再生必恢复（手改被覆盖）；D) 远程产物（make_dict_json → dict.json）≡ src 内嵌（verify `--dict-json`）；E) build.sh 含 ⑮/⑯ 两步。改动词典链路（inject / make_dict_json / verify）后须全量回归。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

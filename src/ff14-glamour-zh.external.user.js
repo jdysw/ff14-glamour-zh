@@ -35,6 +35,7 @@
    * ===================================================================== */
 
   // 日文 → 中文（精确匹配整段文本）
+  // ⚠️ 自动生成（dict/dict-common.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_COMMON = {
     'ABOUT': '关于',
     'ACCESSORIES': '配饰',
@@ -490,6 +491,7 @@
     '흰색': '白',
   };
 
+  // ⚠️ 自动生成（dict/dict-main.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
     'ファッションチェック': '时尚品鉴',
     '投稿ガイドライン': '投稿指南',
@@ -610,6 +612,7 @@
    * 采用「整段精确匹配」，用户产出的标题/作者/描述不会被误翻
    * ===================================================================== */
 
+  // ⚠️ 自动生成（dict/dict-ec.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_EC = { ...DICT_COMMON,
     ', all about glamour.': '，一切都关于幻化。',
     'A Pair of Wings': '双翼',
@@ -1682,6 +1685,7 @@
    * ===================================================================== */
 
   // 界面词表（日文 → 中文），按 FF14 国服官方译名
+  // ⚠️ 自动生成（dict/dict-fc.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_FC = { ...DICT_COMMON,
     '部位別': '按部位',
     'シリーズ': '系列',
@@ -2378,6 +2382,7 @@
   };
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 dict/dict-ronka.json 注入）
+  // ⚠️ 自动生成（dict/dict-ronka.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_RONKA = { ...DICT_COMMON,
     '기본색': '基础色',
     '하얀눈색': '素雪白',
@@ -3250,6 +3255,7 @@
   const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]{1,64}$/;
   const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;
 
+  // ⚠️ 自动生成（dict/dict-acl.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_ACL = { ...DICT_COMMON,
     'クラス / ジョブ': '职业 / 特职',
     'アイテム': '物品',
