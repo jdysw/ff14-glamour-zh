@@ -4363,31 +4363,44 @@
     const dup = Object.create(null);
     const ali = Object.create(null);
     for (const ln of text.split('\n')) {
-      const c0 = ln.codePointAt(0);
-      if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;   // 仅「数字」或「-」开头（与构建器同规则，跳过表头）
-      const p = ln.split('\t');
-      if (!p[1]) continue;
-      const zh = p[1];
-      for (let ci = 2; ci <= 4 && ci < p.length; ci++) {
-        const k = p[ci];
-        if (!k) continue;
-        const cur = nameMap[k];
-        if (cur === undefined || cur === zh) continue;   // 仅登记「同键多译」；同名同译的直接跳过
-        const d = dup[k] || (dup[k] = [cur]);
-        if (!d.includes(zh)) d.push(zh);
-      }
-      if (p.length > 7 && p[7]) {
-        for (const part of p[7].split('；')) {
-          const a = part.trim();
-          if (!a) continue;
-          const d = ali[a] || (ali[a] = []);
-          if (!d.includes(zh)) d.push(zh);
-        }
-      }
+      _irScanLine(ln, dup, ali);
     }
     _irDupMap = dup;
     _irAliasMap = ali;
     return true;
+  }
+
+  // 单行扫描：登记重名（同键多译）与别名（alias 列以全角分号拆分）
+  function _irScanLine(ln, dup, ali) {
+    const c0 = ln.codePointAt(0);
+    if (c0 !== 45 && (c0 < 48 || c0 > 57)) return;   // 仅「数字」或「-」开头（与构建器同规则，跳过表头）
+    const p = ln.split('\t');
+    if (!p[1]) return;
+    const zh = p[1];
+    for (let ci = 2; ci <= 4 && ci < p.length; ci++) {
+      _irRegDup(p[ci], zh, dup);
+    }
+    if (p.length > 7 && p[7]) {
+      for (const part of p[7].split('；')) {
+        const a = part.trim();
+        if (a) _irRegAlias(a, zh, ali);
+      }
+    }
+  }
+
+  // 登记重名键（仅「同键多译」；同名同译的直接跳过）
+  function _irRegDup(k, zh, dup) {
+    if (!k) return;
+    const cur = nameMap[k];
+    if (cur === undefined || cur === zh) return;
+    const d = dup[k] || (dup[k] = [cur]);
+    if (!d.includes(zh)) d.push(zh);
+  }
+
+  // 登记别名（1 别名 → 多 zh，按行序）
+  function _irRegAlias(a, zh, ali) {
+    const d = ali[a] || (ali[a] = []);
+    if (!d.includes(zh)) d.push(zh);
   }
 
   function resolveByHash(hash) { return (hash && itemHash?.[hash]) ? itemHash[hash] : null; }
