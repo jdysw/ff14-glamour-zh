@@ -81,5 +81,6 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **v3 上线后的 live 适配（Phase 14 收尾）**：`live/e2e-real-dict.mjs` 按 v3 链路断言（`zhx.v3.f.fc.*` 缓存 + manifest 写入 + dict 结构）；`live/test-dict-rt.mjs` 预置「新鲜空 v3 manifest」使 v3 静默回退 v2（mock 另含 v3 manifest 兜底）——该测试聚焦 v2 词库运行时链本身。
 - **Phase 13 语言裁剪与基准**：`unit/test-runtime-v3.mjs` A 段含语言裁剪断言（ja 表无韩文 / en 表无韩文假名 / ko 表无假名；dup 按语言裁剪 13/20/19）；`unit/test-item-resolver.mjs` 含 `_irBuildAux` 的 v3 守卫断言；`benchmark/bench-v3-load.mjs`（纯 Node、免 Chrome）对比 v2/v3 全链 parse 与 TSV / JSON 格式（结论：维持 TSV）；`bench-read-path` 已随 v1.4 适配（`_btStep` / `__zhxMark` 锚点、v3 探测预置、历史变体退役）。
 - **Phase 14 缓存注册表**：`unit/test-cache.mjs`（40 断言）冻结 `@zhixia:core-cache-registry`——登记完整性（8 条 / 三类 kind）、按类清理与全清、`cacheInfo` 观测、`cacheGuard` 容量防线（Map / 对象 + 计数器）、异常安全与同名覆盖语义；`unit/test-core.mjs` 增注册表节（提取 + 登记数 + guard）；`test-dictionary` 与 `test-data-layer` 的装配面含注册表段（`dictInvalidate` / 查找函数已经由注册表按类清理的依赖）。
+- **Phase 15 模块化构建**：`src/` 为构建链输出（`bash build.sh`：词典注入 → 块切分 → 接口 → 顺序契约 → Rollup → 顺序 / 锚点 / wiring / 词典四道验收）——**改动一律落单文件源与 `build/` 链，直接改 `src/core|sites` 模块会被下次构建覆盖**；测试提取依赖 `@zhixia` 锚点对（配对健康由构建链守护），部分段尾注释（如 `@zhixia:core-item-resolver-end`）随其前置块迁移属切分器设计行为（提取窗口自适应）；调整块归属（`module-assign.json`）或顺序契约（`module-order.json`）后须全量回归（unit + integration）。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

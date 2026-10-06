@@ -1,0 +1,28 @@
+{
+  "comment": "Phase 15：Rollup 产物中模块的确定性输出顺序契约。",
+  "comment2": "order-modules.mjs 将其实现为链式副作用 import；verify-build-order.mjs 对最终 dist 再验一次。",
+  "comment3": "顺序中的相邻关系是测试文本提取的正式构建约束，不是业务初始化顺序的自由优化空间。",
+  "entry": "main",
+  "order": [
+    "core/runtime",
+    "core/dictionary",
+    "sites/eorzea-collection",
+    "core/dom",
+    "sites/mirapri",
+    "sites/huiji-wiki",
+    "core/item-resolver",
+    "core/cache",
+    "sites/ff14-fc",
+    "sites/ffxiv-collection",
+    "sites/ronka",
+    "core/constants",
+    "core/data-manager",
+    "core/storage",
+    "core/http",
+    "core/site-registry",
+    "core/translator",
+    "core/observer",
+    "core/targets",
+    "core/probe"
+  ]
+}

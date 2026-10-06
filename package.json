@@ -16,5 +16,9 @@
     "test:all": "node tests/run.mjs --suite=all",
     "test:core": "node tests/run.mjs --suite=core",
     "test:bench": "node tests/run.mjs --suite=benchmark"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "rollup": "^4.64.0"
   }
 }

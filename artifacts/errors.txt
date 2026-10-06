@@ -1,0 +1,10 @@
+Phase 15 历史问题记录（修复前）
+
+本文件保留原问题包中的 5 个失败现象作为修复前证据：
+- test-data-layer：尾锚缺失
+- test-core：core-constants 区段未闭合
+- test-cache：_en2zhCache 重复声明
+- test-dictionary：tr 重复声明
+- test-item-resolver：resolveByHash 未定义
+
+修复后上述 5 项均已通过；当前 unit 套件剩余 test-runtime-v3 无法启动，原因是交接包缺少 build/make-runtime-data.py，见 README-修复报告.md。

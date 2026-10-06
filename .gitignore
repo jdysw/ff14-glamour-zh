@@ -2,6 +2,9 @@
 # dist/：本地构建产物（build.sh 生成，供测试与手动验证）；发布走 GitHub Releases
 dist/
 
+# 构建链缓存（build.sh 的 CACHE_DIR：块地图 / 模块草案）
+.cache/
+
 # —— 杂项 ——
 *.bak-*
 *.tmp

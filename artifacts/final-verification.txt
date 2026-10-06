@@ -1,0 +1,12 @@
+Phase 15 Final Verification
+
+1. 原始单文件源：与另一版 AI 基线 IDENTICAL
+2. 原有 6 份核心测试：与另一版 AI 基线 IDENTICAL
+3. 模块主体：与另一版 AI 基线去除顺序标记后 IDENTICAL
+4. src 全部 JS：node --check 通过
+5. build.sh：bash -n 通过
+6. 顺序脚本：重复执行后文件哈希不变化
+7. Dist anchor scan：36 anchors / 16 tags / BAD 0
+8. Dist module order：21 modules exact match
+9. Unit：11 / 12 通过；唯一失败为缺失 build/make-runtime-data.py 的 test-runtime-v3
+10. 当前交接包缺少 integration / benchmark 测试目录，不能在本包内宣称已验证

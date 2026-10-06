@@ -1,0 +1,3 @@
+期望模块顺序：core/runtime → core/dictionary → sites/eorzea-collection → core/dom → sites/mirapri → sites/huiji-wiki → core/item-resolver → core/cache → sites/ff14-fc → sites/ffxiv-collection → sites/ronka → core/constants → core/data-manager → core/storage → core/http → core/site-registry → core/translator → core/observer → core/targets → core/probe → main
+实际模块顺序：core/runtime → core/dictionary → sites/eorzea-collection → core/dom → sites/mirapri → sites/huiji-wiki → core/item-resolver → core/cache → sites/ff14-fc → sites/ffxiv-collection → sites/ronka → core/constants → core/data-manager → core/storage → core/http → core/site-registry → core/translator → core/observer → core/targets → core/probe → main
+✅ Rollup 产物模块顺序与契约完全一致
