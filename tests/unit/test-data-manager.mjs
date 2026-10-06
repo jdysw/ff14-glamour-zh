@@ -53,8 +53,9 @@ const NAMES = [
   'storeGetAsync', 'storeSet', 'httpGet',
   'ITEM_DB_TEXT', 'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
-  'DATA_VER', 'DATA_BASE', 'DATA_FILES',
+  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
 
@@ -72,6 +73,11 @@ function makeWorld(over = {}) {
     itemHash: null, nameMap: null, ecidMap: null, koByZh: null,
     DATA_VER: '',
     DATA_BASE: 'https://example.test/ff14/v2/',
+    DATA_BASE_V3: 'https://example.test/ff14/v3/',
+    // v3：不在此测试覆盖（由 test-runtime-v3.mjs 专测）；findSite 返回 null 使 v3 直接跳过
+    findSite: () => null,
+    applyRuntimeDict: () => {},
+    _irAliasMap: null, _irDupMap: null,
     DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
     applyTable: (n, t) => { rec.apply.push([n, t]); },
     neededTables: () => { rec.need++; return over.need || ['items']; },

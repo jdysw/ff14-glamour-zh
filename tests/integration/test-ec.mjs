@@ -57,6 +57,8 @@ await sleep(800);
 await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
 console.log('预置 items:', await c.eval(preset('gm:zhx.dt.items', itemsTsv)));
 console.log('预置 meta:', await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`));
+// v3 探测节流（v1.4 Phase 12）：预置 v3 manifest 缓存（本站不在其中 → v3 静默跳过；24h 内不再探测）→ 零网络成立
+console.log('预置 v3 缓存:', await c.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))}); return 1; })()`));
 await c.eval("window.__zhxTestSite = 'ec';");
 await c.eval("window.__zhxTestTables = ['items'];" );
 await c.eval(gmStub);

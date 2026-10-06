@@ -76,5 +76,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **Site Adapter（Phase 9，同 `test-site-registry.mjs` G 组）**：适配器接口面（boot/pageshow/processRoot/destroy 齐全、boot 调 start、DATA_REMOTE 两态补扫注册、onPageShow 补跑）；装配采用站点函数桩（STUB_NAMES 记录调用）+ `buildDevice(dataRemote)` 参数化。
 - **Probe 与统计（Phase 10）**：`integration/test-probe.mjs` 增验报告含 `obs: / resolver:` 统计行；`unit/test-observer.mjs` H 节冻结观察统计（ticks / nodes）；`unit/test-item-resolver.mjs` A2 节冻结 resolveEcId / resolveKo 与 hit/miss 计数；`unit/test-data-layer.mjs` 已适配 resolver 接口（原 lookupEcIdByZh / ronkaKoByZh 名退役）。
 - **DataManager（Phase 11，`unit/test-data-manager.mjs`）**：装配 core-cache（2 段）+ core-data-manager 区段（24 个外部标识符以 new Function 参数注入桩）；冻结快路径零网络（每日至多一次版本检查）、版本变更下载、服务器不可用降级、旧缓存兜底与 invalidate 语义。
+- **Runtime Data v3（Phase 12，`unit/test-runtime-v3.mjs`）**：A 段校验生成器产物（manifest 结构、逐文件 sha256/bytes、names 去重与染剂回退、站点清单——`data/v3/` 未预生成时自动重建到临时目录）；B 段装配 core-cache + core-data-manager 区段，冻结 v3 加载（成功应用 + 缓存写入 / 零网络快路径 / manifest-404 / schema 不兼容 / sha 不匹配 → 回退）与 `_ensureMain` / `_ensureFinalize` 接入语义。注意：`_ensureTryFast` / `_ensureFetchAll` / `_waitPageLoad` 在提取段内有真实定义、会遮蔽同名桩参数——回退行为以「发出的 v2 请求」观测。
+- **v3 探测与离线集成测试**：`integration/test-ec.mjs`（⑥ 零网络）与 `integration/test-wiki.mjs`（场景 B/C）预置 `gm:zhx.v3.manifest`（本站不在其中 → v3 静默跳过、24h 内不再探测）；未预置时首跑会发一次 v3 manifest 探测请求（每日至多一次），属预期行为。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

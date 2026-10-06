@@ -3891,6 +3891,7 @@
        src/core/constants.js。 */
   const DATA_REMOTE = true;
   const DATA_BASE = 'https://zhixia-data.pages.dev/ff14/v2/';
+  const DATA_BASE_V3 = 'https://zhixia-data.pages.dev/ff14/v3/';   // Runtime Data v3（Phase 12；失败回退 v2）
   const DATA_FILES = {
     items: 'items.tsv',   // 「key|中|英|日|韩|hash|EC_ID|别名」（制表符分隔，一物品一行）
     series: 'series.txt', // 「日文系列名|国服中文名」
@@ -4324,7 +4325,7 @@
     return new Promise((resolve) => {
       const go = () => {
         __zhxMark('buildStart');
-        buildTables(_buildScope, () => {
+        const finish = () => {
           __zhxMark('buildEnd');
           try { _fireTablesReady(); } catch (e) {}
           __zhxMark('ready');
@@ -4335,7 +4336,9 @@
               + ' / 数据版本 ' + (DATA_VER || '未记录'));
           } catch (e) {}
           resolve();
-        });
+        };
+        if (_v3Applied) { finish(); return; }   // v3：索引已直接就绪，跳过 v2 建表
+        buildTables(_buildScope, finish);
       };
       if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 500 }); // v1.3.1：兜底 2000→500，消除静止页面等满 2s 的最坏情况
       else setTimeout(go, 50);
@@ -4357,10 +4360,144 @@
 
   let _buildScope = null;   // 本页索引构建范围（按站裁剪；null = 全建）
 
+  // ── Runtime Data v3（v1.4 Phase 12）：按站最小数据 + manifest ——
+  // 加载顺序：v3 →（失败 / schema 不兼容）→ v2 → 缓存 / 内嵌 fallback。
+  // v3 文件清单/格式由 build/make-runtime-data.py 生成（生成器侧已完成首行胜、
+  // 染剂回退展开、'-' 行跳过等语义等价处理；此处直接建索引一次赋值）。
+  // 缓存：manifest（zhx.v3.manifest = t + '\n' + 原文）；文件（zhx.v3.f.<site>.<name>
+  // = sha256 + '\n' + 文本）。sha256 校验在 crypto.subtle 可用时执行，不可用不阻塞。
+  let _v3Applied = false;
+
+  // 「键\t值...」文本 → 映射（多值模式收集为数组；行内/键首列已由生成器去重）
+  function _v3Pairs(txt, multi) {
+    const m = Object.create(null);
+    for (const ln of String(txt).split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (!p[0]) continue;
+      if (multi) {
+        const d = m[p[0]] || (m[p[0]] = []);
+        for (let i = 1; i < p.length; i++) { if (p[i] && !d.includes(p[i])) d.push(p[i]); }
+      } else if (p[1] !== undefined && m[p[0]] === undefined) {
+        m[p[0]] = p[1];
+      }
+    }
+    return m;
+  }
+
+  // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
+  function _applyV3(files) {
+    try {
+      const names = files.names ? _v3Pairs(files.names) : null;
+      const hash = files.hash ? _v3Pairs(files.hash) : null;
+      const ecid = files.ecid ? _v3Pairs(files.ecid) : null;
+      const ko = files.ko ? _v3Pairs(files.ko) : null;
+      const ali = files.alias ? _v3Pairs(files.alias, true) : null;
+      const dup = files.dup ? _v3Pairs(files.dup, true) : null;
+      if (names) nameMap = names;
+      if (hash) itemHash = hash;
+      if (ecid) ecidMap = ecid;
+      if (ko) koByZh = ko;
+      if (ali) _irAliasMap = ali;
+      if (dup) _irDupMap = dup;
+      if (files.series) SERIES_TEXT = '\n' + files.series;
+      if (files.acl) ACL_CFC_TEXT = '\n' + files.acl;
+      if (files.dict) applyRuntimeDict(files.dict);
+      _v3Applied = true;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // v3 单文件获取：缓存命中且 sha 一致直接用；否则下载 + sha 校验 + 写缓存
+  async function _v3FetchFile(siteId, name, meta) {
+    if (!meta || !meta.url) return null;
+    const ck = 'zhx.v3.f.' + siteId + '.' + name;
+    try {
+      const raw = await storeGetAsync(ck);
+      if (raw) {
+        const i = raw.indexOf('\n');
+        if (i > 0 && raw.slice(0, i) === meta.sha256) return raw.slice(i + 1);
+      }
+    } catch (e) { /* 忽略：缓存读取失败走网络 */ }
+    let txt = null;
+    try { txt = await httpGet(DATA_BASE_V3 + meta.url, 25000); } catch (e) { txt = null; }
+    if (typeof txt !== 'string' || !txt) return null;
+    try {
+      if (meta.sha256 && typeof crypto !== 'undefined' && crypto && crypto.subtle && typeof TextEncoder === 'function') {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+        const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+        if (hex !== meta.sha256) return null;
+      }
+    } catch (e) { /* 忽略：校验不可用/失败不阻塞（下载成功即可用） */ }
+    try { storeSet(ck, meta.sha256 + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+    return txt;
+  }
+
+  // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
+  // 任何一步失败/缺文件 → false（调用方回退 v2，不改变现有行为）。
+  async function _ensureTryV3() {
+    const site = findSite();
+    if (!site || !site.id) return false;
+    try {
+      let man = null, manT = 0;
+      try {
+        const mraw = await storeGetAsync('zhx.v3.manifest');
+        if (mraw) {
+          const i = mraw.indexOf('\n');
+          if (i > 0) { manT = Number(mraw.slice(0, i)) || 0; man = JSON.parse(mraw.slice(i + 1)); }
+        }
+      } catch (e) { man = null; }
+      const fresh = !!(manT && (Date.now() - manT < DAY_MS));
+      // 本地无新鲜 manifest（或结构无效）→ 拉取一次（每日至多一次探测）；
+      // 站点是否在列由下方统一判断（不在列 → 直接回退，不额外请求）
+      if (!man || !fresh || man.schema !== 3 || !man.sites) {
+        let txt = null;
+        try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
+        man = null;
+        if (typeof txt === 'string' && txt) {
+          try {
+            const m2 = JSON.parse(txt);
+            if (m2 && m2.schema === 3 && m2.sites) {
+              man = m2; manT = Date.now();
+              try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略 */ }
+            }
+          } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
+        }
+      }
+      if (!man || !man.sites || !man.sites[site.id]) return false;
+      const sm = man.sites[site.id].files || {};
+      const names = Object.keys(sm);
+      if (!names.length) return false;
+      const need = neededTables();
+      const files = {};
+      const jobs = names.map((n) => _v3FetchFile(site.id, n, sm[n])
+        .then((t) => { files[n] = t; }, () => { files[n] = null; }));
+      // 共享词库（manifest.shared.dict；neededTables 含 dict 的站点拉取）
+      const sharedDict = need.includes('dict') && man.shared && man.shared.dict ? man.shared.dict : null;
+      if (sharedDict) {
+        jobs.push(_v3FetchFile(site.id, 'dict', sharedDict)
+          .then((t) => { files.dict = t; }, () => { files.dict = null; }));
+      }
+      await Promise.all(jobs);
+      for (const n of names) { if (files[n] == null) return false; }
+      if (sharedDict && files.dict == null) return false;
+      if (!_applyV3(files)) return false;
+      try { if (man.version) DATA_VER = String(man.version); } catch (e) { /* 忽略 */ }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function _ensureMain() {
     const need = neededTables();
     if (!need.length) return;
     _buildScope = _siteIndexes();
+    // v3 优先：成功即返回（_ensureFinalize 将跳过 v2 建表）；失败 → 现有 v2 链
+    const v3 = await _ensureTryV3();
+    if (v3) return;
     const fast = await _ensureTryFast(need);
     if (!fast) return;
     await _waitPageLoad();

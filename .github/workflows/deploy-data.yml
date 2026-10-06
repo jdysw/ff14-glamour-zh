@@ -12,6 +12,9 @@ on:
       - 'data/ff14-series.txt'
       - 'data/acl-cfc.txt'
       - 'dict/**'
+      - 'build/make-runtime-data.py'
+      - 'build/make_dict_json.py'
+      - '.github/deploy/**'
   workflow_dispatch:
 
 permissions:

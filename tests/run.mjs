@@ -20,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
 const SUITES = {
-  unit: ['unit/test-regex-1b.mjs', 'unit/decor-regex-test.mjs', 'unit/test-data-layer.mjs', 'unit/test-data-manager.mjs', 'unit/test-site-registry.mjs', 'unit/test-core.mjs', 'unit/test-dictionary.mjs', 'unit/test-item-resolver.mjs', 'unit/test-observer.mjs', 'unit/test-targets.mjs'],
+  unit: ['unit/test-regex-1b.mjs', 'unit/decor-regex-test.mjs', 'unit/test-data-layer.mjs', 'unit/test-data-manager.mjs', 'unit/test-runtime-v3.mjs', 'unit/test-site-registry.mjs', 'unit/test-core.mjs', 'unit/test-dictionary.mjs', 'unit/test-item-resolver.mjs', 'unit/test-observer.mjs', 'unit/test-targets.mjs'],
   integration: [
     'integration/test-build-idempotent.mjs',
     'integration/test-wiki.mjs',
