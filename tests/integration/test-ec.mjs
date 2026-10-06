@@ -7,16 +7,10 @@ import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('ec-page.html');
 
-let s = readDist();
-const n1 = "onHost(host, 'eorzeacollection.com')";
-const n2 = "  function neededTables() {\n    const h = location.hostname;";
-if (s.split(n1).length - 1 < 1) throw new Error('n1 计数异常: ' + (s.split(n1).length - 1));
-if (s.split(n2).length - 1 !== 1) throw new Error('n2 计数异常: ' + (s.split(n2).length - 1));
-s = s.split(n1).join("(onHost(host, 'eorzeacollection.com') || location.protocol === 'file:')");
-s = s.replace(n2, "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;");
+const s = readDist();
 fs.writeFileSync(cachePath('gf-ec-test.user.js'), s);
 const GF = s;
-console.log('测试副本已生成（EC 分支 + neededTables hook）');
+console.log('测试副本已生成（hook 已内建于 src）');
 
 const gmStub = `(() => {
   if (window.__gmStub) return;
@@ -63,6 +57,7 @@ await sleep(800);
 await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
 console.log('预置 items:', await c.eval(preset('gm:zhx.dt.items', itemsTsv)));
 console.log('预置 meta:', await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`));
+await c.eval("window.__zhxTestSite = 'ec';");
 await c.eval("window.__zhxTestTables = ['items'];" );
 await c.eval(gmStub);
 await c.eval(wrap(GF));

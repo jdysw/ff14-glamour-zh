@@ -1,7 +1,7 @@
 // wiki 反查块夹具测试 v2：
 //  A 数据不可用（阻断数据站）→ 优雅降级 2 项
 //  B 数据预置（缓存命中）→ 4 项齐 + 零网络
-// 测试副本注入两处 hook：wiki 分支放宽 file:// + neededTables 可被 __zhxTestTables 覆盖
+// v1.4 Phase 3：测试 hook 已内建于 src（__zhxTestSite 指定站点 / __zhxTestTables 覆写表清单）
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
@@ -9,16 +9,10 @@ import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('wiki-item.html');
 
-let s = readDist();
-const n1 = "onHost(host, 'huijiwiki.com')";
-const n2 = "  function neededTables() {\n    const h = location.hostname;";
-if (s.split(n1).length - 1 < 1) throw new Error('n1 计数异常: ' + (s.split(n1).length - 1));
-if (s.split(n2).length - 1 !== 1) throw new Error('n2 计数异常: ' + (s.split(n2).length - 1));
-s = s.split(n1).join("(onHost(host, 'huijiwiki.com') || location.protocol === 'file:')");
-s = s.replace(n2, "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;");
+const s = readDist();
 fs.writeFileSync(cachePath('gf-wiki-test.user.js'), s);
 const GF = s;
-console.log('测试副本已生成（wiki 分支 + neededTables hook）');
+console.log('测试副本已生成（hook 已内建于 src）');
 
 const gmStub = `(() => {
   if (window.__gmStub) return;
@@ -57,6 +51,7 @@ await c1.send('Network.enable');
 await c1.send('Network.setBlockedURLs', { urls: ['*zhixia-data.pages.dev*'] });
 await sleep(800);
 await c1.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
+await c1.eval("window.__zhxTestSite = 'wiki';");
 await c1.eval("window.__zhxTestTables = ['items'];");
 await c1.eval(gmStub);
 await c1.eval(wrap(GF));
@@ -77,6 +72,7 @@ await sleep(800);
 const p1 = await c2.eval(preset('gm:zhx.dt.items', itemsTsv));
 const p3 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
 console.log('预置完成:', p1, p3);
+await c2.eval("window.__zhxTestSite = 'wiki';");
 await c2.eval("window.__zhxTestTables = ['items'];" );
 await c2.eval(gmStub);
 await c2.eval(wrap(GF));
@@ -99,6 +95,7 @@ const c3 = t3.cdp;
 await sleep(800);
 await c3.eval(preset('gm:zhx.dt.items', itemsTsv));
 await c3.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
+await c3.eval("window.__zhxTestSite = 'wiki';");
 await c3.eval("window.__zhxTestTables = ['items'];");
 await c3.eval(gmStub);
 await c3.eval(wrap(GF));

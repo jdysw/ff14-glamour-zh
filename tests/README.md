@@ -54,9 +54,12 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 ## 维护约定
 
 - **测试产物**（注入副本、日志、Chrome profile、词库生成物）一律写 `tests/.cache/`（已 gitignore），不污染工作区。
-- **锚点纪律**：测试用「锚点计数断言 + split/join 全量替换」从 `src` 生成测试副本；
-  修改 `src` 的分发区段 / `neededTables` / `buildTables` 等被锚定区段时，**必须同步检查相关测试的锚点计数**（历史多次踩坑）。
+- **锚点纪律**：部分测试用「锚点计数断言 + split/join 全量替换」向测试副本注入埋点（如 `bench-read-path` 的数据链埋点、`test-index-scope` 的 `__zhxDebug`）；
+  修改 `src` 的 `buildTables` / `_ensureReadLocal` 等被锚定区段时，**必须同步检查相关测试的锚点计数**（历史多次踩坑）。
+- **站点测试钩子（v1.4 Phase 3 起内建于 src）**：`__zhxTestSite`（指定站点）/ `__zhxTestTables` / `__zhxTestIndexes`（覆写表 / 索引配置）——集成测试在页面注入前 eval 设置即可，无需文本注入。
 - **数据层测试（`unit/test-data-layer.mjs`）**：按锚点从 `dist` 提取数据层代码段、在 Node 内装配运行（无需 Chrome / 外网）；
   改动数据层函数的首尾特征文本时，提取会以「锚缺失 / 锚不唯一」明确报错，按报错更新该文件的 `ANCHORS` 即可。
+- **Site Registry 测试（`unit/test-site-registry.mjs`）**：从 `dist` 提取 `@zhixia:site-registry` 区段装配运行；
+  六站 host 匹配 / 表与索引清单 / 未知 host 不启动 / 测试钩子均在此冻结；改动区段内 host 判定逻辑前先看此文件。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

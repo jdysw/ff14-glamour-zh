@@ -17,15 +17,7 @@ const repl1 = (src, oldS, newS, tag) => {
   if (n !== 1) throw new Error(`${tag} 锚点计数异常: ${n}`);
   return src.split(oldS).join(newS);
 };
-const replAll = (src, oldS, newS, tag) => {
-  const n = src.split(oldS).length - 1;
-  if (n < 1) throw new Error(`${tag} 锚点缺失: ${n}`);
-  return src.split(oldS).join(newS);
-};
-
-// ── 埋点注入 ──
-s = replAll(s, "onHost(host, 'eorzeacollection.com')", "(onHost(host, 'eorzeacollection.com') || location.protocol === 'file:')", 'file通');  // 分发行+pageshow 行共 2 处，全替换
-s = repl1(s, "  function neededTables() {\n    const h = location.hostname;", "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;", 'tables-hook');
+// ── 埋点注入 ──（v1.4 Phase 3：__zhxTestSite / __zhxTestTables 已内建于 src，无需文本注入）
 s = repl1(s, "const local = await _ensureReadLocal(need);", "const local = await _ensureReadLocal(need);\n    try { (window.__zhxT = window.__zhxT || {}).readEnd = performance.now(); } catch (e) {}", 't-readEnd');
 s = repl1(s, "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');", "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');\n    try { (window.__zhxT = window.__zhxT || {}).applied = performance.now(); } catch (e) {}", 't-applied');
 s = repl1(s, "function _ensureFinalize() {", "function _ensureFinalize() {\n    try { (window.__zhxT = window.__zhxT || {}).finEntry = performance.now(); } catch (e) {}", 't-finEntry');
@@ -82,7 +74,7 @@ const runOne = async (rate, round) => {
     await sleep(400);
     await c.send('Emulation.setCPUThrottlingRate', { rate });
     await c.eval(clear);
-    await c.eval(`window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash'];`);
+    await c.eval(`window.__zhxTestSite = 'ec'; window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash'];`);
     await c.eval(preset('gm:zhx.dt.items', itemsTsv));
     await c.eval(preset('gm:zhx.dt.dict', dictJson));
     await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'bench', t: Date.now() })); return 1; })()`);

@@ -7,16 +7,10 @@ import { readDist, fixturePath, cachePath, cacheUrl } from '../helpers/paths.mjs
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 
-let s = readDist();
-const n1 = "onHost(host, 'huijiwiki.com')";
-const n2 = "  function neededTables() {\n    const h = location.hostname;";
-if (s.split(n1).length - 1 < 1) throw new Error('n1 计数异常: ' + (s.split(n1).length - 1));
-if (s.split(n2).length - 1 !== 1) throw new Error('n2 计数异常: ' + (s.split(n2).length - 1));
-s = s.split(n1).join("(onHost(host, 'huijiwiki.com') || location.protocol === 'file:')");
-s = s.replace(n2, "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;");
+const s = readDist();
 fs.writeFileSync(cachePath('gf-wiki-fallback.user.js'), s);
 const GF = s;
-console.log('测试副本已生成（wiki 分支 + neededTables hook）');
+console.log('测试副本已生成（hook 已内建于 src）');
 
 // 变体夹具：D1 类名变体 / D2 无类名（文本可辨）
 const base = fs.readFileSync(fixturePath('wiki-item.html'), 'utf8');
@@ -55,6 +49,7 @@ for (const [tag, file] of [['D1 类名变体', 'wiki-item-d1.html'], ['D2 无类
   const c = t.cdp;
   await sleep(700);
   await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
+  await c.eval("window.__zhxTestSite = 'wiki';");
   await c.eval("window.__zhxTestTables = [];");
   await c.eval(gmStub);
   await c.eval(wrap(GF));

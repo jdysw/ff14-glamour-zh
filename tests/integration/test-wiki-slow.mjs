@@ -8,15 +8,9 @@ import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('wiki-slow.html');
 
-let s = readDist();
-const n1 = "onHost(host, 'huijiwiki.com')";
-const n2 = "  function neededTables() {\n    const h = location.hostname;";
-if (s.split(n1).length - 1 < 1) throw new Error('n1 计数异常');
-if (s.split(n2).length - 1 !== 1) throw new Error('n2 计数异常');
-s = s.split(n1).join("(onHost(host, 'huijiwiki.com') || location.protocol === 'file:')");
-s = s.replace(n2, "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;");
-const GF = s;
-console.log('测试副本已生成（wiki 分支 + neededTables hook）');
+const s = readDist();
+const GF = s;   // v1.4 Phase 3：测试 hook 已内建于 src（__zhxTestSite / __zhxTestTables）
+console.log('测试副本已生成（hook 已内建于 src）');
 
 const gmStub = `(() => {
   if (window.__gmStub) return;
@@ -38,6 +32,7 @@ await sleep(500);
 const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
 await c.eval(`(() => { localStorage.setItem('gm:zhx.dt.items', ${JSON.stringify('testfp000001' + '\n' + itemsTsv)}); return 1; })()`);
 await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
+await c.eval("window.__zhxTestSite = 'wiki';");
 await c.eval("window.__zhxTestTables = ['items'];");
 await c.eval(gmStub);
 const readyStateAtInject = await c.eval('document.readyState');

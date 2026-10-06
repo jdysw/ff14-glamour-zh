@@ -3915,15 +3915,7 @@
     acl: 'acl.txt',       // 「日文副本名|国服中文名」
     dict: 'dict.json',    // 词库（6 层合并紧凑 JSON；v1.2.0 起运行时更新，改词无需发版）
   };
-  // 站点 → 按需下载的数据表（首访只拉本站所需，之后走本地缓存）
-  const SITE_TABLES = {
-    mirapri: ['items', 'dict'],
-    ec: ['items', 'dict'],
-    fc: ['items', 'series', 'dict'],
-    ronka: ['items', 'dict'],
-    wiki: ['items', 'dict'],
-    collection: ['items', 'series', 'acl', 'dict'],
-  };
+  // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
 
   let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过
   let SERIES_TEXT = '';
@@ -4114,41 +4106,67 @@
 
   /* ── 版本与缓存：每日至多一次版本探测；指纹一致直接复用本地缓存 ──
      缓存键 zhx.dt.<表名> = 「指纹 + 换行 + 文本」（单键原子写入） */
-  // 域名精确匹配（含子域）：evilmirapri.com 不匹配、www.mirapri.com 匹配
-  // （安全加固：原 endsWith('mirapri.com') 会被任意前缀域名绕过——CodeQL js/incomplete-url-substring-sanitization）
-  const onHost = (h, d) => h === d || h.endsWith('.' + d);
   const DAY_MS = 24 * 60 * 60 * 1000;
   const META_KEY = 'zhx.meta';        // {"v":"...","t":时间戳}
   const DT_PREFIX = 'zhx.dt.';
 
-  function neededTables() {
-    const h = location.hostname;
-    if (onHost(h, 'mirapri.com')) return SITE_TABLES.mirapri;
-    if (onHost(h, 'eorzeacollection.com')) return SITE_TABLES.ec;
-    if (onHost(h, 'huijiwiki.com')) return SITE_TABLES.wiki;
-    if (onHost(h, 'ff14-fc.com')) return SITE_TABLES.fc;
-    if (onHost(h, 'ronkacloset.com')) return SITE_TABLES.ronka;
-    if (onHost(h, 'ffxivcollection.com')) return SITE_TABLES.collection;
-    return [];
-  }
+  /* @zhixia:site-registry-start */
+  /* ── Site Registry（v1.4 Phase 3）：六站唯一配置源 ─────────────────────
+     一处维护：新增站点 = 本表加一条（并同步 userscript @match 头）；为某站
+     新增索引 = 站内 indexes 加一项；调整所需数据表 = 站内 tables。hosts 用
+     onHost 精确匹配（含子域）；boot = 页面加载即启动；pageshow = bfcache
+     恢复补跑（各函数幂等，safe 包裹）。Phase 15 模块化构建时，本区段将
+     原样抽出为 src/core/site-registry.js。 */
+  // 域名精确匹配（含子域）：evilmirapri.com 不匹配、www.mirapri.com 匹配
+  // （安全加固：原 endsWith('mirapri.com') 会被任意前缀域名绕过——CodeQL js/incomplete-url-substring-sanitization）
+  const onHost = (h, d) => h === d || h.endsWith('.' + d);
 
-  // v1.3：各站实际使用的索引（按站裁剪构建范围，降低构建耗时与内存）。
-  // 依据全库调用链核查——nameMap：各站文本翻译共用；itemHash：lookupZh
-  // （EC/mirapri 装备链接）与 fcLinkZhName（FC）；ecidMap/koByZh：仅 wiki
-  // 反查块（EC/韩服链接）。未知站点与测试环境返回 null（全建，保守）。
-  // 维护须知：新增站点或为某站新增索引查询时，必须同步本表与 neededTables()；
-  // 漏登记的后果是查表静默跳过（功能不生效），由各站端到端测试兜底发现。
-  function _siteIndexes() {
-    if (window.__zhxTestIndexes) return window.__zhxTestIndexes;
+  const SITE_REGISTRY = [
+    { id: 'mirapri', hosts: ['mirapri.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
+      boot() { startMirapri(); startItems(); },
+      pageshow() { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); } },
+    { id: 'ec', hosts: ['eorzeacollection.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
+      boot() { startEC(); startItems(); },
+      pageshow() { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); } },
+    { id: 'wiki', hosts: ['huijiwiki.com'], tables: ['items', 'dict'], indexes: ['ecidMap', 'koByZh'],
+      boot() { startWiki(); },
+      pageshow() { safe(injectWikiButton, 'pageshow')(); } },
+    { id: 'fc', hosts: ['ff14-fc.com'], tables: ['items', 'series', 'dict'], indexes: ['nameMap', 'itemHash'],
+      boot() { startFC(); },
+      pageshow() { safe(translateFCPage, 'pageshow')(); } },
+    { id: 'ronka', hosts: ['ronkacloset.com'], tables: ['items', 'dict'], indexes: ['nameMap'],
+      boot() { startRonka(); },
+      pageshow() { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); } },
+    { id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'],
+      boot() { startACL(); },
+      pageshow() { safe(translateACLPage, 'pageshow')(); } },
+  ];
+
+  // 测试钩子：__zhxTestSite 指定站点 id（file:// 集成测试用；生产不存在，零开销）
+  function findSite() {
+    if (window.__zhxTestSite) { for (const s of SITE_REGISTRY) { if (s.id === window.__zhxTestSite) return s; } }
     const h = location.hostname;
-    if (onHost(h, 'mirapri.com')) return ['nameMap', 'itemHash'];
-    if (onHost(h, 'eorzeacollection.com')) return ['nameMap', 'itemHash'];
-    if (onHost(h, 'huijiwiki.com')) return ['ecidMap', 'koByZh'];
-    if (onHost(h, 'ff14-fc.com')) return ['nameMap', 'itemHash'];
-    if (onHost(h, 'ronkacloset.com')) return ['nameMap'];
-    if (onHost(h, 'ffxivcollection.com')) return ['nameMap'];
+    for (const s of SITE_REGISTRY) {
+      for (const d of s.hosts) { if (onHost(h, d)) return s; }
+    }
     return null;
   }
+
+  // 索引依据全库调用链核查——nameMap：各站文本翻译共用；itemHash：lookupZh
+  // （EC/mirapri 装备链接）与 fcLinkZhName（FC）；ecidMap/koByZh：仅 wiki
+  // 反查块（EC/韩服链接）。未知站点返回 null（全建，保守）。
+  function neededTables() {
+    if (window.__zhxTestTables) return window.__zhxTestTables;
+    const s = findSite();
+    return s ? s.tables : [];
+  }
+
+  function _siteIndexes() {
+    if (window.__zhxTestIndexes) return window.__zhxTestIndexes;
+    const s = findSite();
+    return s ? s.indexes : null;
+  }
+  /* @zhixia:site-registry-end */
 
   /* ── 词库运行时更新（v1.2.0）：dict.json → 各站词典「原地合并」──────────────
      词典对象引用遍布引擎（DICT_FC 直查、子串表、派生缓存等），reassign 会使引用失效；
@@ -4726,24 +4744,15 @@
   console.log('FF14 幻化站中文化脚本已加载 v' + _ver + ' →', host);
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
-  if (onHost(host, 'mirapri.com')) { startMirapri(); startItems(); }
-  else if (onHost(host, 'eorzeacollection.com')) { startEC(); startItems(); }
-  else if (onHost(host, 'huijiwiki.com')) startWiki();
-  else if (onHost(host, 'ff14-fc.com')) startFC();
-  else if (onHost(host, 'ronkacloset.com')) startRonka();
-  else if (onHost(host, 'ffxivcollection.com')) startACL();
+  const __site = findSite();
+  if (__site) __site.boot();   // 站点入口（Site Registry 配置驱动）
 
   // v1.3：bfcache 兜底——页面从浏览器缓存恢复（快速刷新/后退前进）时可能带着
   // 未完成的注入状态回来，补跑一次各站入口（全部幂等）+ 数据就绪检查。
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
     try {
-      if (onHost(host, 'mirapri.com')) { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); }
-      else if (onHost(host, 'eorzeacollection.com')) { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); }
-      else if (onHost(host, 'huijiwiki.com')) safe(injectWikiButton, 'pageshow')();
-      else if (onHost(host, 'ff14-fc.com')) safe(translateFCPage, 'pageshow')();
-      else if (onHost(host, 'ronkacloset.com')) { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); }
-      else if (onHost(host, 'ffxivcollection.com')) safe(translateACLPage, 'pageshow')();
+      if (__site) __site.pageshow();   // 各站补跑入口（Site Registry 配置驱动）
       safe(ensureTables, 'pageshow 数据')();
     } catch (err) { /* 忽略：兜底失败不影响主流程 */ }
   });

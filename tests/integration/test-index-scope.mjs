@@ -8,20 +8,14 @@ import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('ec-page.html');
 
-// ── 生成测试副本：EC 分支放宽 file:// + neededTables hook + __zhxDebug 暴露 ──
+// ── 生成测试副本：__zhxDebug 暴露（v1.4 Phase 3：测试 hook 已内建于 src）──
 let s = readDist();
-const n1 = "onHost(host, 'eorzeacollection.com')";
-const n2 = "  function neededTables() {\n    const h = location.hostname;";
 const n3 = "      itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;";
-if (s.split(n1).length - 1 < 1) throw new Error('n1 缺失');
-if (s.split(n2).length - 1 !== 1) throw new Error('n2 计数异常: ' + (s.split(n2).length - 1));
 if (s.split(n3).length - 1 !== 1) throw new Error('n3 计数异常: ' + (s.split(n3).length - 1));
-s = s.split(n1).join("(onHost(host, 'eorzeacollection.com') || location.protocol === 'file:')");
-s = s.replace(n2, "  function neededTables() {\n    if (window.__zhxTestTables) return window.__zhxTestTables;\n    const h = location.hostname;");
 s = s.replace(n3, n3 + "\n      window.__zhxDebug = { itemHash: t.itemHash, ecidMap: t.ecidMap, nameMap: t.nameMap, koByZh: t.koByZh, dyeCount: t.dye.length };");
 fs.writeFileSync(cachePath('gf-idx-test.user.js'), s);
 const GF = s;
-console.log('测试副本已生成（EC 分支 + neededTables hook + __zhxDebug 暴露）');
+console.log('测试副本已生成（__zhxDebug 暴露）');
 
 const gmStub = `(() => {
   if (window.__gmStub) return;
