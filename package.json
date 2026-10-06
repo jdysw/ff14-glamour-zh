@@ -1,0 +1,20 @@
+{
+  "name": "ff14-glamour-zh",
+  "version": "1.3.1",
+  "private": true,
+  "description": "FF14 幻化站中文化 · 与灰机 wiki 双向互查（userscript）",
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "bash build.sh",
+    "test": "node tests/run.mjs --suite=unit,integration",
+    "test:unit": "node tests/run.mjs --suite=unit",
+    "test:integration": "node tests/run.mjs --suite=integration",
+    "test:live": "node tests/run.mjs --suite=live",
+    "test:all": "node tests/run.mjs --suite=all",
+    "test:core": "node tests/run.mjs --suite=core",
+    "test:bench": "node tests/run.mjs --suite=benchmark"
+  }
+}
