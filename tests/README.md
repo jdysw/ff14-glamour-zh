@@ -69,5 +69,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **Item Resolver 测试（`unit/test-item-resolver.mjs`）**：从 `dist` 提取 `@zhixia:core-item-resolver` 区段装配运行（重名 / 别名注册表用构造样例；`itemDbReady` 提供与缺省两条路径都测）；
   统一解析契约（hash / 名称 / 全量重名 / 别名 / 优先级与历史兜底）均在此冻结。
   注意：数据层测试装配体须屏蔽 `itemDbReady`（`'itemDbReady = undefined;'`）——否则 resolver 区段尾的就绪注册会级联 `ensureTables → _ensureFinalize`（装配体未含探测区函数）；注册行为由本文件专测。
+- **Observer 测试（`unit/test-observer.mjs`）**：从 `dist` 提取 `@zhixia:core-observer` / `@zhixia:core-dom` 区段装配运行（假 MutationObserver / document / timer 桩，手动触发 + 手动跑 timer）；
+  统一调度契约（1/100/1000 节点规模、父子去重、重复入队去重、flood 重置、characterData 默认关闭与 filter、站点独立 debounce、disconnect 扩展位）均在此冻结。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

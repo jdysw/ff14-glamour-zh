@@ -3815,20 +3815,17 @@
     bindZhxItemClick('__zhxRonkaItemBound');
     safe(translateRonkaPage, 'Ronka 全扫')();
     safe(translateRonkaTitle, 'Ronka 标题')();
-    let rkTimer = null;
-    new MutationObserver((muts) => {
-      let need = false;
-      for (const m of muts) {
-        if (m.type === 'childList' && m.addedNodes.length) { need = true; break; }
-        if (m.type === 'characterData' && m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)) { need = true; break; }
-      }
-      if (!need || rkTimer) return;
-      rkTimer = setTimeout(() => {
-        rkTimer = null;
+    // v1.4 Phase 7：经统一观察器（本站必须保留 characterData——韩文文本变更很常见）
+    createObserver({
+      root: document.documentElement,
+      characterData: true,
+      filter: (m) => !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),
+      debounce: 120,
+      handler: () => {
         safe(translateRonkaPage, 'Ronka 局部')();
         safe(translateRonkaTitle, 'Ronka 标题')();
-      }, 120);
-    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+      },
+    });
     // 外置版：数据到达后补扫一次
     if (DATA_REMOTE) onTablesReady(() => {
       safe(translateRonkaPage, 'Ronka 补扫')();
@@ -3843,7 +3840,6 @@
     // 移动端（Via 等）首屏渲染慢：放宽总重试次数 + 阶梯定时兜底，避免固定 3 次
     // 尝试在前几秒用尽后永久放弃；注入为纯本地查询（无网络），重试成本极低。
     let tries = 0;
-    let timer = null;
     const MAX_TRIES = 16;
     const attempt = () => {
       if (tries >= MAX_TRIES) return;
@@ -3856,10 +3852,8 @@
     // 阶梯定时：覆盖移动端首屏渲染慢的场景（成功即止，重复触发为幂等重建）；
     // v1.3.1：增补 22s / 30s 两档，覆盖移动端极端慢渲染
     [1500, 4000, 8000, 15000, 22000, 30000].forEach((ms) => setTimeout(attempt, ms));
-    new MutationObserver(() => {
-      if (timer || tries >= MAX_TRIES) return;
-      timer = setTimeout(() => { timer = null; attempt(); }, 1200);
-    }).observe(document.body || document.documentElement, { childList: true, subtree: true });
+    // v1.4 Phase 7：经统一观察器（debounce 由统一层管理；尝试次数守卫仍在 attempt 内）
+    createObserver({ debounce: 1200, handler: () => attempt() });
     // 外置版：数据到达后刷新「幻化装备反查链接」区块（补齐国际服 / 韩服链接）
     if (DATA_REMOTE) onTablesReady(() => safe(injectWikiButton, 'Wiki 反查刷新')());
   }
@@ -4594,46 +4588,93 @@
   /* @zhixia:core-runtime-end */
 
   /* @zhixia:core-dom-start */
-  /* ── Core DOM（v1.4 Phase 4）：DOM 观察与节点批量处理工具——局部观察器
-       （observeLocal）与祖先去重（dedupeByAncestor）。Phase 15 模块化构建
-       时，本区段将原样抽出为 src/core/dom.js。 */
-  // 祖先去重：同一批 mutation 中，后代节点不再重复遍历
+  /* ── Core DOM（v1.4 Phase 4）：DOM 节点批量处理工具——祖先去重
+       （dedupeByAncestor；v1.4 Phase 7 升级为 O(n·depth)）。Phase 15 模块化
+       构建时，本区段将原样抽出为 src/core/dom.js。 */
+  // 祖先去重（v1.4 Phase 7 升级：原 O(n²) contains 扫描 → O(n·depth) 祖先链查询）：
+  // ① 完全去重：同一节点重复入队只保留一次；
+  // ② 父子不同队：凡「祖先也在本批次」的节点一律跳过（只处理最上层祖先——其处理范围覆盖后代）。
   function dedupeByAncestor(nodes) {
+    const uniq = (nodes.length > 1) ? [...new Set(nodes)] : nodes;
+    const elems = new Set();
+    for (const n of uniq) if (n.nodeType === 1) elems.add(n);
+    if (!elems.size) return uniq;
     const out = [];
-    outer: for (const n of nodes) {
+    for (const n of uniq) {
       if (n.nodeType === 1) {
-        for (const p of out) {
-          if (p.nodeType === 1 && p.contains?.(n)) continue outer;
+        let p = n.parentNode;
+        let covered = false;
+        while (p) {
+          if (elems.has(p)) { covered = true; break; }
+          p = p.parentNode;
         }
+        if (covered) continue;
       }
       out.push(n);
     }
     return out;
   }
 
-  // 统一局部观察器：只把「新增节点」批量交给 handler，不做全页重扫
-  function observeLocal(handler, delay) {
+  /* @zhixia:core-dom-end */
+
+  /* @zhixia:core-observer-start */
+  /* ── Core Observer（v1.4 Phase 7）：统一 MutationObserver 调度层——pending 队列 /
+       debounce 计时 / 洪峰保护 / 祖先去重（dedupeByAncestor）/ childList 与可选
+       characterData（按站点显式开启，禁止无条件开启）。所有站点的观察器都经由
+       createObserver（或兼容包装 observeLocal）创建。Phase 15 模块化构建时，
+       本区段将原样抽出为 src/core/observer.js。 */
+
+  // 统一观察器工厂。
+  // opts: {
+  //   handler(nodes)       必填——批次处理器（nodes = 去重后的新增节点；signal 型站点可忽略）
+  //   debounce = 350       debounce 毫秒（站点独立）
+  //   characterData false  是否纳入 characterData 变更（仅确需的站点开启，如 Ronka）
+  //   filter = null        characterData 逐条过滤器：(mutation) => boolean
+  //   floodLimit = 800     pending 洪峰阈值：超阈值时重置计时器，待洪峰平息再处理
+  //   root = null          观察根（默认 document.body || document.documentElement）
+  // }
+  // 返回 { disconnect } 便于站点销毁（现状站点均为常驻，保留扩展位）。
+  function createObserver(opts) {
+    const o = opts || {};
+    const debounce = o.debounce || 350;
+    const floodLimit = o.floodLimit || 800;
+    const root = o.root || document.body || document.documentElement;
     let timer = null;
     let pending = [];
-    new MutationObserver((muts) => {
+    const mo = new MutationObserver((muts) => {
+      let hitCD = false;
       for (const m of muts) {
+        if (m.type === 'characterData') {
+          if (!o.characterData) continue;                 // 未开启：完全忽略
+          if (o.filter && !o.filter(m)) continue;         // 站点过滤（如 RONKA_KR）
+          hitCD = true;
+          continue;
+        }
         for (const n of m.addedNodes) {
           if (n.nodeType === 1 || n.nodeType === 3) pending.push(n);
         }
       }
-      const flood = pending.length > 800;      // 洪峰保护：避免 pending 无限增长（v1.11.1）
+      const flood = pending.length > floodLimit;          // 洪峰保护：避免 pending 无限增长
       if (flood && timer) { clearTimeout(timer); timer = null; }
-      if (timer || !pending.length) return;
+      if (timer || (!pending.length && !hitCD)) return;
       timer = setTimeout(() => {
         timer = null;
         const nodes = dedupeByAncestor(pending);
         pending = [];
-        try { handler(nodes); } catch (e) { console.warn('observeLocal：', e); }
-      }, delay || 350);
-    }).observe(document.body || document.documentElement, { childList: true, subtree: true });
+        try { o.handler(nodes); } catch (e) { console.warn('createObserver：', e); }
+      }, debounce);
+    });
+    mo.observe(root, o.characterData
+      ? { childList: true, subtree: true, characterData: true }
+      : { childList: true, subtree: true });
+    return { disconnect: () => mo.disconnect() };
   }
 
-  /* @zhixia:core-dom-end */
+  // 兼容包装：既有站点的局部观察器（handler 收新增节点批次；delay 为 debounce）
+  function observeLocal(handler, delay) {
+    return createObserver({ handler, debounce: delay || 350 });
+  }
+  /* @zhixia:core-observer-end */
 
 
   // EC「套装」区块里的装备名是纯文本（没有链接、没有 hash），用外文名兜底

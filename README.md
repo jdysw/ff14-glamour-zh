@@ -166,6 +166,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **Core 基础设施以 `@zhixia:core-*` 区段标记（v1.4 Phase 4）**：storage / http / cache / dom / runtime / constants 六组基础设施在 src 内均有独立标记区段（runtime 与 cache 各含 2 段）；**存储键（`zhx.meta` / `zhx.dt.*`）与缓存序列化格式是跨版本兼容契约**（用户本地缓存数 MB 数据），改动须过 `tests/unit/test-core.mjs`。
 - **翻译与词典分层（v1.4 Phase 5）**：`@zhixia:core-translator` 是翻译统一接口（按 profile 分发到各站翻译器，**不改变任何译文**）；`@zhixia:core-dictionary` 是运行时词典（dict.json 六层原地合并 / 修订号 / 派生缓存统一失效入口）——**改词典合并机制或派生缓存时认准 `@zhixia:core-dictionary` 区段**，行为由 `tests/unit/test-dictionary.mjs` 冻结。
 - **物品索引统一解析层（v1.4 Phase 6）**：`@zhixia:core-item-resolver` 是物品索引（hash / 名称）与衍生注册表（重名 / 别名）的统一访问入口——**站点与翻译器不再直查 `itemHash` / `nameMap`**，一律经 `resolveByHash` / `resolveByName` / `resolveAllByName` / `resolveAlias` / `resolve`；**解析语义与既有查询完全一致（同名键首行胜）**，重名键（同键多译）经 `resolveAllByName` 取全量（顺序 = TSV 行序，历史优先）；行为由 `tests/unit/test-item-resolver.mjs` 冻结。
+- **统一观察器（v1.4 Phase 7）**：`@zhixia:core-observer` 是全部站点 MutationObserver 调度的唯一入口——统一 pending 队列 / debounce 计时 / 洪峰保护（超限重置）/ 祖先去重（`dedupeByAncestor` 升级为 O(n·depth) 祖先链查询：同节点去重 + 父子不同队）；`childList` 默认订阅、`characterData` **仅 Ronka 显式开启**（配 RONKA_KR 过滤器），其余站点禁开；**新站点观察器一律经 `createObserver`（或兼容包装 `observeLocal`）创建**，行为由 `tests/unit/test-observer.mjs` 冻结。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

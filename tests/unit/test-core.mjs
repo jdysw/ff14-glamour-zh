@@ -58,6 +58,7 @@ const SEG = {
   http: ['core-http', 1],
   cache: ['core-cache', 2],
   dom: ['core-dom', 1],
+  observer: ['core-observer', 1],
 };
 
 const ARG_NAMES = ['window', 'document', 'console', 'performance', 'GM', 'GM_getValue', 'GM_setValue',
@@ -113,9 +114,9 @@ console.log('\n── 区段哨兵（标记与装配） ──');
     eq(`${tag} 区段数（start）`, counts[tag], n);
     eq(`${tag} 区段数（end）`, DIST_TEXT.split(`/* @zhixia:${tag}-end */`).length - 1, n);
   }
-  // 本文件提取的 6 类共 8 对；其他段（dictionary / translator 等）由各自测试覆盖
+  // 本文件提取的 7 类共 9 对；其他段（dictionary / translator / item-resolver 等）由各自测试覆盖
   const coreTot = DIST_TEXT.split('@zhixia:core-').length - 1;
-  ok('core-* 标记成对且 ≥ 本文件提取的 8 对', coreTot % 2 === 0 && coreTot >= 16, `实际=${coreTot}`);
+  ok('core-* 标记成对且 ≥ 本文件提取的 9 对', coreTot % 2 === 0 && coreTot >= 18, `实际=${coreTot}`);
   const api = buildCore(makeEnv());
   for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', '_readCachedTable', '_writeCachedTable', 'safe', 'dedupeByAncestor', 'observeLocal']) {
     eq(`${f} 装配后可调用`, typeof api[f], 'function');
@@ -385,16 +386,21 @@ console.log('\n── dom / runtime：去重 / 错误边界 ──');
 {
   const api = buildCore(makeEnv());
   eq('dedupe：空数组', JSON.stringify(api.dedupeByAncestor([])), '[]');
-  const A = { nodeType: 1, contains: (n) => n === B };
-  const B = { nodeType: 1, contains: () => false };
+  // v1.4 Phase 7 升级：按祖先链去重（节点用 parentNode 关系表达层级）
+  const A = { nodeType: 1, parentNode: null };
+  const B = { nodeType: 1, parentNode: A };
   const C = { nodeType: 3 };
   const r1 = api.dedupeByAncestor([A, B]);
-  eq('dedupe：后代被去重', r1.length, 1);
+  eq('dedupe：后代被去重（父在前）', r1.length, 1);
   eq('dedupe：保留祖先', r1[0] === A, true);
+  const r1b = api.dedupeByAncestor([B, A]);
+  eq('dedupe：后代被去重（父在后同样只留祖先）', r1b.length === 1 && r1b[0] === A, true);
   const r2 = api.dedupeByAncestor([B, C]);
   eq('dedupe：独立节点保留', r2.length, 2);
   const r3 = api.dedupeByAncestor([C]);
   eq('dedupe：文本节点直接保留', r3.length, 1);
+  const r4 = api.dedupeByAncestor([B, B, C]);
+  eq('dedupe：同节点重复入队只保留一次', r4.length, 2);
 }
 {
   const env = makeEnv();
