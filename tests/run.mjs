@@ -32,6 +32,7 @@ const SUITES = {
   ],
   live: [
     'live/test-kasuga.mjs',
+    'live/test-fc.mjs',
     'live/test-fc-pages.mjs',
     'live/check-fc-banners.mjs',
     'live/test-ronka.mjs',
