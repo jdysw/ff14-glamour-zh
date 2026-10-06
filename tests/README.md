@@ -75,5 +75,6 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
   全页 / 局部同路径、四类 target（item / plain-item / card / dye）判定与字段、分派顺序、幂等（flag 跳过与 React 重建重采）均在此冻结。
 - **Site Adapter（Phase 9，同 `test-site-registry.mjs` G 组）**：适配器接口面（boot/pageshow/processRoot/destroy 齐全、boot 调 start、DATA_REMOTE 两态补扫注册、onPageShow 补跑）；装配采用站点函数桩（STUB_NAMES 记录调用）+ `buildDevice(dataRemote)` 参数化。
 - **Probe 与统计（Phase 10）**：`integration/test-probe.mjs` 增验报告含 `obs: / resolver:` 统计行；`unit/test-observer.mjs` H 节冻结观察统计（ticks / nodes）；`unit/test-item-resolver.mjs` A2 节冻结 resolveEcId / resolveKo 与 hit/miss 计数；`unit/test-data-layer.mjs` 已适配 resolver 接口（原 lookupEcIdByZh / ronkaKoByZh 名退役）。
+- **DataManager（Phase 11，`unit/test-data-manager.mjs`）**：装配 core-cache（2 段）+ core-data-manager 区段（24 个外部标识符以 new Function 参数注入桩）；冻结快路径零网络（每日至多一次版本检查）、版本变更下载、服务器不可用降级、旧缓存兜底与 invalidate 语义。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

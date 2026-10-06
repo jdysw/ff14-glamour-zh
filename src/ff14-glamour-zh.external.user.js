@@ -4259,6 +4259,13 @@
 
   /* @zhixia:core-cache-end */
 
+  /* @zhixia:core-data-manager-start */
+  /* ── Core Data Manager（v1.4 Phase 11）：远程数据 + 版本 + 缓存 + 重试 +
+       ready + fallback 的集中管理。既有链路行为逐字保留（ensureTables /
+       itemDbReady / onTablesReady 均为原语义）；对外的 dataManager 对象
+       提供统一 API：ensure / ready / getTable / getIndex / invalidate。
+       缓存与版本探测契约见 Core Cache（段1/2）；Phase 15 模块化构建时，
+       本区段将原样抽出为 src/core/data-manager.js。 */
   let _ensurePromise = null;
   // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
   function _ensureReadLocal(need) {
@@ -4368,6 +4375,48 @@
   function itemDbReady(cb) {
     ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) {} });
   }
+
+  // ── DataManager 统一 API（v1.4 Phase 11）─────────────────────────────
+  // 说明：既有 ensureTables / itemDbReady / onTablesReady 行为与调用点全部保留；
+  // 本对象为别名与扩展入口，新代码统一经 dataManager 访问。site 参数为将来按站
+  // 数据链预留（现状六站共享同一数据链，忽略该参数）。
+  function dataGetTable(name) {
+    // 表文本（只读引用）：items / series / acl；未就绪或未知表 → null
+    switch (name) {
+      case 'items': return ITEM_DB_TEXT || null;
+      case 'series': return SERIES_TEXT || null;
+      case 'acl': return ACL_CFC_TEXT || null;
+      default: return null;
+    }
+  }
+  function dataGetIndex(name) {
+    // 索引引用（数据层与核心模块内部/调试用途；业务侧查询一律走 Item Resolver）
+    switch (name) {
+      case 'itemHash': return itemHash || null;
+      case 'nameMap': return nameMap || null;
+      case 'ecidMap': return ecidMap || null;
+      case 'koByZh': return koByZh || null;
+      default: return null;
+    }
+  }
+  function dataInvalidate() {
+    // 失效就绪状态：下次 ensure 重新探测版本（表缓存不删除——旧缓存仍可兜底复用）
+    _ensurePromise = null;
+    DATA_VER = '';
+    try { storeSet(META_KEY, ''); } catch (e) { /* 忽略：元数据清除失败不影响主流程 */ }
+  }
+  const dataManager = {
+    ensure(site) { return ensureTables(); },                       // site：预留（见上）
+    ready(cb) {
+      const p = ensureTables();
+      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) {} });
+      return p;
+    },
+    getTable(name) { return dataGetTable(name); },
+    getIndex(name) { return dataGetIndex(name); },
+    invalidate() { dataInvalidate(); },
+  };
+  /* @zhixia:core-data-manager-end */
   /* @zhixia:data-layer-end */
 
   /* @zhixia:core-item-resolver-start */
