@@ -163,6 +163,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - 每次构建后跑 `verify_dicts.js`（build.sh 已含），确保 src 内词典与 dict/*.json 源逐条一致。
 - **数据外置**：src 模板即发布母版；界面词典内嵌（首屏即时生效），装备 / 染剂数据按需从数据站加载。修改一律只动 src（及 dict/、data/），构建产物自动生成。
 - **站点配置统一在 Site Registry（v1.4 Phase 3）**：src 内 `@zhixia:site-registry` 区段是六站唯一配置源（host 匹配 / 所需数据表 / 构建索引 / 页面入口）——**新增站点**或**为某站新增索引查询**时只改这一处；漏登记的后果是功能静默失效（查表跳过），由各站端到端测试兜底。
+- **Core 基础设施以 `@zhixia:core-*` 区段标记（v1.4 Phase 4）**：storage / http / cache / dom / runtime / constants 六组基础设施在 src 内均有独立标记区段（runtime 与 cache 各含 2 段）；**存储键（`zhx.meta` / `zhx.dt.*`）与缓存序列化格式是跨版本兼容契约**（用户本地缓存数 MB 数据），改动须过 `tests/unit/test-core.mjs`。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

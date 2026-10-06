@@ -22,8 +22,13 @@
 (function () {
   'use strict';
 
+  /* @zhixia:core-runtime-start */
+  /* ── Core Runtime（v1.4 Phase 4）：脚本注入时刻（运行探测用；未启用时零
+       开销）。本模块共 2 处标记区段（段2 = 错误边界 safe，见下文）；Phase 15
+       模块化构建时，本区段将原样抽出为 src/core/runtime.js。 */
   // 运行探测（URL 带 zhx_probe 参数时启用）用：脚本注入时刻；未启用时零开销
   let __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  /* @zhixia:core-runtime-end */
 
   /* =====================================================================
    * 第一部分：mirapri.com 界面汉化
@@ -3907,6 +3912,10 @@
   /* @zhixia:data-layer-start */
   /* ── 外置数据版（Greasy Fork 发布版）：按需下载 + 版本化本地缓存 ──
      内嵌自用版由 build/make_embedded5.py 把本区块整体替换为内嵌数据。 */
+  /* @zhixia:core-constants-start */
+  /* ── Core Constants（v1.4 Phase 4）：数据源与网络契约（DATA_BASE /
+       DATA_FILES，均为 https）。Phase 15 模块化构建时，本区段将原样抽出为
+       src/core/constants.js。 */
   const DATA_REMOTE = true;
   const DATA_BASE = 'https://zhixia-data.pages.dev/ff14/v2/';
   const DATA_FILES = {
@@ -3915,6 +3924,8 @@
     acl: 'acl.txt',       // 「日文副本名|国服中文名」
     dict: 'dict.json',    // 词库（6 层合并紧凑 JSON；v1.2.0 起运行时更新，改词无需发版）
   };
+
+  /* @zhixia:core-constants-end */
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
 
   let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过
@@ -4032,6 +4043,10 @@
     } catch (e) { /* 忽略：构建收尾 best-effort */ }
   }
 
+  /* @zhixia:core-storage-start */
+  /* ── Core Storage（v1.4 Phase 4）：GM 存储读写封装——同步 / Promise 双
+       兼容，存储不可用时静默降级（无持久缓存仍可工作）。Phase 15 模块化
+       构建时，本区段将原样抽出为 src/core/storage.js。 */
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
         无持久缓存（本次页面内仍可工作）────────────────────────────── */
   function _storeNorm(x) { if (typeof x === 'string') { return x; } return x == null ? null : String(x); }
@@ -4065,6 +4080,13 @@
       }
     } catch (e) { /* 忽略：存储写入失败不阻断主流程 */ }
   }
+
+  /* @zhixia:core-storage-end */
+
+  /* @zhixia:core-http-start */
+  /* ── Core HTTP（v1.4 Phase 4）：GM_xmlhttpRequest 优先（不受页面 CSP /
+       CORS 限制），无则 fetch 兜底；统一 timeout 与错误策略。Phase 15 模块化
+       构建时，本区段将原样抽出为 src/core/http.js。 */
 
   /* ── 网络：优先 GM_xmlhttpRequest（不受页面 CSP/CORS 限制），无则 fetch ── */
   function httpGet(url, timeout) {
@@ -4104,11 +4126,20 @@
     });
   }
 
+  /* @zhixia:core-http-end */
+
+  /* @zhixia:core-cache-start */
+  /* ── Core Cache（v1.4 Phase 4，段1/2）：缓存策略——每日至多一次版本探测、
+       元数据与表缓存键。本模块共 2 处标记区段（段2 = 读写接口，见下文）；
+       Phase 15 模块化构建时，原样抽出为 src/core/cache.js。 */
+
   /* ── 版本与缓存：每日至多一次版本探测；指纹一致直接复用本地缓存 ──
      缓存键 zhx.dt.<表名> = 「指纹 + 换行 + 文本」（单键原子写入） */
   const DAY_MS = 24 * 60 * 60 * 1000;
   const META_KEY = 'zhx.meta';        // {"v":"...","t":时间戳}
   const DT_PREFIX = 'zhx.dt.';
+
+  /* @zhixia:core-cache-end */
 
   /* @zhixia:site-registry-start */
   /* ── Site Registry（v1.4 Phase 3）：六站唯一配置源 ─────────────────────
@@ -4269,6 +4300,10 @@
     }
   }
 
+  /* @zhixia:core-cache-start */
+  /* ── Core Cache（段2/2）：缓存读取 / 写入接口——zhx.dt.* 序列化格式
+       （指纹 + 换行 + 文本）与空闲延迟写入。Phase 15 随段1 一同抽出为
+       src/core/cache.js。 */
   function _readCachedTable(t) {
     return storeGetAsync(DT_PREFIX + t).then((raw) => {
       if (!raw) return null;
@@ -4288,6 +4323,8 @@
     if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
     else setTimeout(put, 50);
   }
+
+  /* @zhixia:core-cache-end */
 
   let _ensurePromise = null;
   // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
@@ -4414,6 +4451,9 @@
 
   /* ── 通用工具层（工程做法借鉴 maboloshi/github-chinese）───────────── */
 
+  /* @zhixia:core-runtime-start */
+  /* ── Core Runtime（段2/2）：错误边界——包住关键函数，单点出错不拖垮整批
+       翻译。Phase 15 随段1 一同抽出为 src/core/runtime.js。 */
   // 错误边界：包住关键函数，单点出错不拖垮整批翻译
   function safe(fn, tag) {
     return function () {
@@ -4422,6 +4462,12 @@
     };
   }
 
+  /* @zhixia:core-runtime-end */
+
+  /* @zhixia:core-dom-start */
+  /* ── Core DOM（v1.4 Phase 4）：DOM 观察与节点批量处理工具——局部观察器
+       （observeLocal）与祖先去重（dedupeByAncestor）。Phase 15 模块化构建
+       时，本区段将原样抽出为 src/core/dom.js。 */
   // 祖先去重：同一批 mutation 中，后代节点不再重复遍历
   function dedupeByAncestor(nodes) {
     const out = [];
@@ -4457,6 +4503,8 @@
       }, delay || 350);
     }).observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
+
+  /* @zhixia:core-dom-end */
 
 
   // EC「套装」区块里的装备名是纯文本（没有链接、没有 hash），用外文名兜底

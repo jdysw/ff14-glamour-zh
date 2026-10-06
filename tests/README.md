@@ -61,5 +61,8 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
   改动数据层函数的首尾特征文本时，提取会以「锚缺失 / 锚不唯一」明确报错，按报错更新该文件的 `ANCHORS` 即可。
 - **Site Registry 测试（`unit/test-site-registry.mjs`）**：从 `dist` 提取 `@zhixia:site-registry` 区段装配运行；
   六站 host 匹配 / 表与索引清单 / 未知 host 不启动 / 测试钩子均在此冻结；改动区段内 host 判定逻辑前先看此文件。
+- **Core 测试（`unit/test-core.mjs`）**：从 `dist` 提取 `@zhixia:core-*` 全部区段装配运行（假 GM / fetch 宿主）；
+  storage / http / cache / dom / runtime / constants 行为与跨版本契约（存储键、序列化格式）均在此冻结；
+  注意：假宿主桩必须在 `buildCore(env)` 之前设置（装配参数为值捕获，装配后替换不生效）。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。
