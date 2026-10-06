@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3
+// @version      1.3.1
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION）：界面与装备、染剂名显示为国服中文，装备名可点击直达灰机 wiki 物品页；灰机 wiki 物品页另附「幻化反查链接」（光之收藏家 / 日服 / 国际服 / 韩服），幻化站与 wiki 双向互查。词库按需下载、本地缓存，每日至多检查一次更新；不收集、不上传任何用户信息。
 // @author       zhixia
 // @license      GPL-3.0
@@ -3952,11 +3952,15 @@
     };
   }
 
-  /* v1.3 分片构建：每片目标 ≤8ms 后让出主线程（setTimeout 0），避免移动端
-     主线程被连续阻塞 1-2 秒（页面渲染/交互停顿、圈圈转不出）。构建在局部
-     对象上完成，全部完成前各查表函数仍拿到 null（静默跳过）——与原同步版
-     语义一致；完成后一次性赋值 + 染剂回退 + 回调。 */
+  /* v1.3 分片构建：每片目标 ≤8ms 后让出主线程，避免移动端主线程被连续阻塞
+     1-2 秒（页面渲染/交互停顿、圈圈转不出）。构建在局部对象上完成，全部完成
+     前各查表函数仍拿到 null（静默跳过）——与原同步版语义一致；完成后一次性
+     赋值 + 染剂回退 + 回调。
+     v1.3.1：让出改用 MessageChannel（嵌套 setTimeout 到第 5 级后每级被浏览器
+     钳 +4~8ms，MC 恒定 ~0.2ms；创建失败或运行异常时回退分片 setTimeout）。 */
   function buildTables(scope, done) {
+    let mc = null;
+    try { mc = new MessageChannel(); mc.port2.onmessage = () => step(); } catch (e) { mc = null; }
     const t = _btTargets(scope);
     const lines = ITEM_DB_TEXT.split('\n');
     let i = 0;
@@ -3985,7 +3989,10 @@
           if (Date.now() >= deadline) break;
         }
       } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
-      if (i < lines.length) { setTimeout(step, 0); return; }
+      if (i < lines.length) {
+        if (mc) { try { mc.port1.postMessage(0); return; } catch (e) { mc = null; } }
+        setTimeout(step, 0); return;
+      }
       finish();
     };
     step();
@@ -4289,7 +4296,7 @@
           resolve();
         });
       };
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 });
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 500 }); // v1.3.1：兜底 2000→500，消除静止页面等满 2s 的最坏情况
       else setTimeout(go, 50);
     });
   }
