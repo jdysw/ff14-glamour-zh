@@ -4676,19 +4676,95 @@
   }
   /* @zhixia:core-observer-end */
 
+  /* @zhixia:core-targets-start */
+  /* ── Core Targets（v1.4 Phase 8）：统一 DOM Target Pipeline——
+     采集（collectTargets）→ 分派（dispatchTargets）→ 处理（processRoot）。
+     root 缺省 = 全页（document 范围）；传元素 = 局部（Mutation 新增子树）：
+     两条路径经同一采集 / 判定逻辑，行为与旧版逐项一致（golden 冻结）。
+     Phase 15 模块化构建时原样抽出为 src/core/targets.js。 */
 
-  // EC「套装」区块里的装备名是纯文本（没有链接、没有 hash），用外文名兜底
-  function zhPlainTargets() {
+  // 统一采集：root 内（含自身）按类型收集候选，输出标准 target：
+  //   { type, element, text, context }
+  // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
+  // 全页（root 缺省）：仅 document.querySelectorAll；
+  // 局部（root 为元素）：先 matches 自身、再子树，与旧 *In 版逐字一致。
+  function collectTargets(root) {
+    const local = root != null;
+    const scope = local ? root : document;
     const list = [];
-    document.querySelectorAll('span[class*="has-text-rarity-"]').forEach((sp) => {
-      if (sp.classList.contains('zhixia-item-zh')) return;
+    if (local && !scope.querySelectorAll) return list;   // 局部根非元素：无目标
+    const scan = (sel) => {
+      const cands = [];
+      if (local && scope.matches?.(sel)) cands.push(scope);
+      scope.querySelectorAll(sel).forEach((el) => cands.push(el));
+      return cands;
+    };
+
+    // item：装备链接（两站均用 eorzeadb_link 标记）
+    for (const a of scan('a.eorzeadb_link')) {
+      if (a.classList.contains('zhixia-item-zh')) continue;
+      const el = a.querySelector('span') || a;
+      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!name || name.length < 2 || name.length > 48) continue;
+      if (/^(https?:|\/)/.test(name)) continue;
+      list.push({ type: 'item', element: a, text: name, context: { el } });
+    }
+
+    // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
+    for (const sp of scan('span[class*="has-text-rarity-"]')) {
+      if (sp.classList.contains('zhixia-item-zh')) continue;
       const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) return;
-      if (!resolveByName(name)) return;
-      list.push({ sp, name });
-    });
+      if (!name || name.length < 3 || name.length > 48) continue;
+      if (!resolveByName(name)) continue;
+      list.push({ type: 'plain-item', element: sp, text: name, context: {} });
+    }
+
+    // card：EC 列表页卡片标题（外层 <a> 指向站内页）
+    for (const el of scan(EC_CARD_SEL)) {
+      if (el.dataset.zhixiaCard) continue;
+      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!name || name.length < 3 || name.length > 48) continue;
+      if (!resolveByName(name)) continue;
+      list.push({ type: 'card', element: el, text: name, context: {} });
+    }
+
+    // dye：染剂标签（「⬤ Ink Blue」）
+    for (const el of scan('div.tag, span.tag')) {
+      if (el.classList.contains('zhixia-dye-zh')) continue;
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
+      if (!m) continue;
+      const name = m[2].trim();
+      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
+      if (!zh) continue;
+      list.push({ type: 'dye', element: el, text: name, context: { zh } });
+    }
+
     return list;
   }
+
+  // 统一分派：按 type 交给对应处理器；各处理器收到的仍是「同类 target 数组」，
+  // 调用顺序固定为 item → plain-item → card → dye（与旧版四件套执行顺序一致）。
+  function dispatchTargets(targets, applyMap) {
+    const m = applyMap || {};
+    const by = {};
+    for (const t of targets) (by[t.type] = by[t.type] || []).push(t);
+    if (m.item && by.item) m.item(by.item);
+    if (m['plain-item'] && by['plain-item']) m['plain-item'](by['plain-item']);
+    if (m.card && by.card) m.card(by.card);
+    if (m.dye && by.dye) m.dye(by.dye);
+  }
+
+  // 统一处理路径：全页（root 缺省）与局部（元素）同路径；
+  // context.applyMap 提供各 type 的处理器；返回本次采集到的 targets。
+  function processRoot(root, context) {
+    const c = context || {};
+    const targets = collectTargets(root);
+    dispatchTargets(targets, c.applyMap);
+    return targets;
+  }
+  /* @zhixia:core-targets-end */
+
 
   // EC 列表页（面饰 / 时尚配饰 / 陆行鸟 / 时尚趋势）的装备名是纯文本卡片标题，
   // 外层 <a> 指向 EC 站内页：这里把标题换成国服中文名，点标题直接去灰机 wiki。
@@ -4700,18 +4776,6 @@
   // 拿不到原文而跳过（历史缺陷：EC 站装备链接点击不跳 wiki）。注意本常量引用
   // EC_CARD_SEL，只能在 4053 行（其定义）之后使用——调用均发生在脚本分发阶段，安全。
   const EC_ITEM_SKIP_SEL = 'a.eorzeadb_link, span[class*="has-text-rarity-"], ' + EC_CARD_SEL;
-
-  function zhCardTargets() {
-    const list = [];
-    document.querySelectorAll(EC_CARD_SEL).forEach((el) => {
-      if (el.dataset.zhixiaCard) return;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) return;
-      if (!resolveByName(name)) return;
-      list.push({ el, name });
-    });
-    return list;
-  }
 
   function zhApplyCards(targets) {
     targets.forEach((t) => {
@@ -4767,22 +4831,6 @@
     });
   }
 
-  // EC 的染剂名是 div.tag 里的「⬤ Ink Blue」这类纯文本，改为中文（只动文本节点，保留色块图标）
-  function zhDyeTargets() {
-    const list = [];
-    document.querySelectorAll('div.tag, span.tag').forEach((el) => {
-      if (el.classList.contains('zhixia-dye-zh')) return;
-      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
-      if (!m) return;
-      const name = m[2].trim();
-      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
-      if (!zh) return;
-      list.push({ el, name, zh });
-    });
-    return list;
-  }
-
   function zhApplyDye(targets) {
     targets.forEach((t) => {
       const zh = t.zh;
@@ -4806,20 +4854,6 @@
         t.el.title = t.name + '（国服：' + zh + '）';
       }
     });
-  }
-
-  // 收集还没换成中文的装备 / 染剂链接（两站均用 eorzeadb_link 标记）
-  function zhTargets() {
-    const list = [];
-    document.querySelectorAll('a.eorzeadb_link').forEach((a) => {
-      if (a.classList.contains('zhixia-item-zh')) return;
-      const el = a.querySelector('span') || a;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 2 || name.length > 48) return;
-      if (/^(https?:|\/)/.test(name)) return;
-      list.push({ a, el, name });
-    });
-    return list;
   }
 
   function zhApply(targets) {
@@ -4863,12 +4897,17 @@
     }, true);
   }
 
-  // 统一入口：装备/染剂/卡片/占位符 一次跑完（合并原 zhApply* 四件套）
+  // EC 物品链统一分派映射：标准 target → 既有 apply（字段与行为逐字保持）
+  const EC_ITEMS_APPLY = {
+    item: (ts) => safe(zhApply, 'zhApply')(ts.map((t) => ({ a: t.element, el: t.context.el, name: t.text }))),
+    'plain-item': (ts) => safe(zhApplyPlain, 'zhApplyPlain')(ts.map((t) => ({ sp: t.element, name: t.text }))),
+    card: (ts) => safe(zhApplyCards, 'zhApplyCards')(ts.map((t) => ({ el: t.element, name: t.text }))),
+    dye: (ts) => safe(zhApplyDye, 'zhApplyDye')(ts.map((t) => ({ el: t.element, name: t.text, zh: t.context.zh }))),
+  };
+
+  // 统一入口：装备/染剂/卡片/占位符 一次跑完（全页；经统一 Target Pipeline）
   function applyItemZh() {
-    safe(zhApply, 'zhApply')(zhTargets());
-    safe(zhApplyPlain, 'zhApplyPlain')(zhPlainTargets());
-    safe(zhApplyCards, 'zhApplyCards')(zhCardTargets());
-    safe(zhApplyDye, 'zhApplyDye')(zhDyeTargets());
+    processRoot(null, { applyMap: EC_ITEMS_APPLY });
     safe(applyPlaceholder, 'placeholder')();
   }
 
@@ -4876,83 +4915,13 @@
     itemDbReady(() => {
       safe(bindGlobalWikiJump, 'wikiJump')();
       applyItemZh();
-      // 局部：新增节点收窄到 subtree，避免全页重查
+      // 局部：新增节点收窄到 subtree，避免全页重查（与全页同一条 Target Pipeline）
       observeLocal((nodes) => {
         for (const n of nodes) {
-          if (n.nodeType === 1) {
-            safe(zhApply, 'zhApply局部')(zhTargetsIn(n));
-            safe(zhApplyPlain, 'zhPlain局部')(zhPlainTargetsIn(n));
-            safe(zhApplyCards, 'zhCards局部')(zhCardTargetsIn(n));
-            safe(zhApplyDye, 'zhDye局部')(zhDyeTargetsIn(n));
-          }
+          if (n.nodeType === 1) safe(processRoot, 'EC 物品局部')(n, { applyMap: EC_ITEMS_APPLY });
         }
       }, 400);
     });
-  }
-
-  // 局部版采集：root 内含元素（含自身）
-  function zhTargetsIn(root) {
-    const list = [];
-    const cands = [];
-    if (root.matches?.('a.eorzeadb_link')) cands.push(root);
-    root.querySelectorAll?.('a.eorzeadb_link').forEach((a) => cands.push(a));
-    for (const a of cands) {
-      if (a.classList.contains('zhixia-item-zh')) continue;
-      const el = a.querySelector('span') || a;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 2 || name.length > 48) continue;
-      if (/^(https?:|\/)/.test(name)) continue;
-      list.push({ a, el, name });
-    }
-    return list;
-  }
-
-  function zhPlainTargetsIn(root) {
-    const list = [];
-    const cands = [];
-    if (root.matches?.('span[class*="has-text-rarity-"]')) cands.push(root);
-    root.querySelectorAll?.('span[class*="has-text-rarity-"]').forEach((sp) => cands.push(sp));
-    for (const sp of cands) {
-      if (sp.classList.contains('zhixia-item-zh')) continue;
-      const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ sp, name });
-    }
-    return list;
-  }
-
-  function zhCardTargetsIn(root) {
-    const list = [];
-    const cands = [];
-    if (root.matches?.(EC_CARD_SEL)) cands.push(root);
-    root.querySelectorAll?.(EC_CARD_SEL).forEach((el) => cands.push(el));
-    for (const el of cands) {
-      if (el.dataset.zhixiaCard) continue;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ el, name });
-    }
-    return list;
-  }
-
-  function zhDyeTargetsIn(root) {
-    const list = [];
-    const cands = [];
-    if (root.matches?.('div.tag, span.tag')) cands.push(root);
-    root.querySelectorAll?.('div.tag, span.tag').forEach((el) => cands.push(el));
-    for (const el of cands) {
-      if (el.classList.contains('zhixia-dye-zh')) continue;
-      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
-      if (!m) continue;
-      const name = m[2].trim();
-      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
-      if (!zh) continue;
-      list.push({ el, name, zh });
-    }
-    return list;
   }
 
   /* ===================================================================== */
