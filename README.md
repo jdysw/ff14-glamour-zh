@@ -169,6 +169,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **统一观察器（v1.4 Phase 7）**：`@zhixia:core-observer` 是全部站点 MutationObserver 调度的唯一入口——统一 pending 队列 / debounce 计时 / 洪峰保护（超限重置）/ 祖先去重（`dedupeByAncestor` 升级为 O(n·depth) 祖先链查询：同节点去重 + 父子不同队）；`childList` 默认订阅、`characterData` **仅 Ronka 显式开启**（配 RONKA_KR 过滤器），其余站点禁开；**新站点观察器一律经 `createObserver`（或兼容包装 `observeLocal`）创建**，行为由 `tests/unit/test-observer.mjs` 冻结。
 - **统一 Target Pipeline（v1.4 Phase 8）**：`@zhixia:core-targets` 是 DOM 目标采集与处理分派的统一层——`collectTargets(root)`（全页缺省 / 局部传元素，输出 `{type, element, text, context}` 标准 target）→ `dispatchTargets`（顺序 item → plain-item → card → dye）→ `processRoot(root, context)`；EC 物品链（装备 / 套装文本 / 卡片 / 染剂）已整体迁入，**新站点目标采集一律经 collectTargets 扩展**；行为由 `tests/unit/test-targets.mjs` 冻结。
 - **站点适配器（v1.4 Phase 9）**：`createSiteAdapter` 是六站统一接口——配置面 `id/hosts/tables/indexes`，生命周期 `start / processRoot / onDataReady / onPageShow / destroy`；数据就绪补扫由工厂统一登记（不再散落各站）；站点实现按拆分顺序（① ronka ② ec ③ mirapri ④ fc ⑤ collection ⑥ wiki）渐进归拢，Phase 15 时随区段抽出为 `src/sites/*.js`；接口行为由 `tests/unit/test-site-registry.mjs`（G 组）冻结。
+- **Core Probe（v1.4 Phase 10）**：`@zhixia:core-probe` 是运行诊断独立段——默认关闭（`?zhx_probe=1` 启用）、近零开销、不写存储、不发网络请求、不影响正常执行路径；读取面 = runtime timeline（`__zhxMarks`）/ data stats / observer stats（`_obsStats`）/ resolver hit-miss（`_irStats`）/ Wiki stats。Wiki 数据访问只经 Item Resolver：`resolveEcId` / `resolveKo`（禁用对 `ecidMap` / `koByZh` 的直接访问）；Phase 15 时本区段原样抽出为独立文件。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

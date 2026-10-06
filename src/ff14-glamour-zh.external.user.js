@@ -1539,11 +1539,6 @@
     return t;
   }
 
-  // 中文名 → 韩文名（Ronka 反查；构建自物品总表）
-  function ronkaKoByZh(zh) {
-    return (zh && koByZh?.[zh]) ? koByZh[zh] : null;
-  }
-
   // 装备栏目（部位）
   // v1.3.1：多路回退——移动皮肤/类名变体下也能识别部位（原单选择器在部分皮肤下失效）
   function _slotHit(el) {
@@ -1583,7 +1578,7 @@
     if (!slot) { cb(null); return; }
     const zh = getItemZhName();
     if (!zh) { cb(null); return; }
-    const ecId = lookupEcIdByZh(zh);
+    const ecId = resolveEcId(zh);
     if (!ecId) { cb(null); return; }
     cb({ href: EC_BASE + encodeURIComponent('filter[' + slot.key + ']') + '=' + ecId,
          why: slot.label + ' · ' + zh });
@@ -1603,7 +1598,7 @@
     // 3) 国际服幻化站（Eorzea Collection，内嵌表直查，零网络）
     eorzeaLink((ec) => { if (ec) items.push([ec.href, '国际服幻化站（Eorzea Collection）']); });
     // 4) 韩服幻化站（Ronka LookBook，关键词=韩文名，由中文名反查）
-    const ko = ronkaKoByZh(zh);
+    const ko = resolveKo(zh);
     if (ko) items.push([RONKA_BASE + '?keyword=' + encodeURIComponent(ko), '韩服幻化站（Ronka LookBook）']);
     return items;
   }
@@ -3915,10 +3910,7 @@
   let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用）
   let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用）
 
-  // EC 装备 ID 单条查找（中文名 → EC_ID 映射，构建自物品总表）
-  function lookupEcIdByZh(zh) {
-    return (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null;
-  }
+  // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
   // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
   function _btHashRow(p, zh, t) {
     if (p[0] === '-') return;
@@ -4435,8 +4427,10 @@
     if (!d.includes(zh)) d.push(zh);
   }
 
-  function resolveByHash(hash) { return (hash && itemHash?.[hash]) ? itemHash[hash] : null; }
-  function resolveByName(name) { return (name && nameMap?.[name]) ? nameMap[name] : null; }
+  // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
+  const _irStats = { hit: 0, miss: 0 };
+  function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
+  function resolveByName(name) { const z = (name && nameMap?.[name]) ? nameMap[name] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveAllByName(name) {
     const first = nameMap?.[name];
     if (!first) return [];
@@ -4449,7 +4443,7 @@
   }
   // 统一优先级（计划书 6.4，以现有实际行为为准）：
   // 1) hash → 2) 名称 → 3) 历史兼容 fallback（latinFallback：外文名自动查物品总表）。
-  // 注：EC_ID 方向为 zh → ecid（lookupEcIdByZh）；反查无现状消费者，暂不提供。
+  // 注：EC_ID / 韩文名反查见 resolveEcId / resolveKo（v1.4 Phase 10：Wiki 唯一数据入口）。
   function resolve(input, opts) {
     if (!input) return null;
     if (input.hash) { const z = resolveByHash(input.hash); if (z) return z; }
@@ -4460,6 +4454,9 @@
     if (input.alias) { const zs = resolveAlias(input.alias); if (zs.length) return zs[0]; }
     return null;
   }
+  // EC_ID / 韩文名反查（zh → 值）——v1.4 Phase 10：Wiki 与 Probe 的唯一数据入口
+  function resolveEcId(zh) { const z = (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null; _irStats[z ? 'hit' : 'miss']++; return z; }
+  function resolveKo(zh) { const z = (zh && koByZh?.[zh]) ? koByZh[zh] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
 
   // 数据就绪后建立衍生注册表（加载早期未注册时保持 null——查询路径均有回退）。
   if (typeof itemDbReady === 'function') {
@@ -4672,6 +4669,8 @@
   //   root = null          观察根（默认 document.body || document.documentElement）
   // }
   // 返回 { disconnect } 便于站点销毁（现状站点均为常驻，保留扩展位）。
+  // 观察统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
+  const _obsStats = { ticks: 0, nodes: 0 };
   function createObserver(opts) {
     const o = opts || {};
     const debounce = o.debounce || 350;
@@ -4699,6 +4698,7 @@
         timer = null;
         const nodes = dedupeByAncestor(pending);
         pending = [];
+        _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
         try { o.handler(nodes); } catch (e) { console.warn('createObserver：', e); }
       }, debounce);
     });
@@ -4982,6 +4982,13 @@
     } catch (err) { /* 忽略：兜底失败不影响主流程 */ }
   });
 
+  /* @zhixia:core-probe-start */
+  /* ── Core Probe（v1.4 Phase 10 独立化）：运行与性能探测——默认关闭、近零
+     开销、不写存储、不发网络请求、不影响正常执行路径。读取面：runtime
+     timeline（__zhxMarks）/ data stats / observer stats（_obsStats）/
+     resolver hit-miss（_irStats）/ Wiki stats。Phase 15 模块化构建时，本区段
+     将原样抽出为 src/core/probe.js（或 src/dev/probe.js，由构建系统决定是否
+     保留生产能力）。 */
   /* =====================================================================
    * 运行与性能探测（v1.3.1）：URL 附带 zhx_probe 参数（?zhx_probe=1 或
    * #zhx_probe）时启用——页面右下角显示「可复制的诊断报告」（环境 / 时间线 /
@@ -5020,6 +5027,7 @@
 
   function __zhxProbeData(L) {
     L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
+    try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
     try {
       L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
         + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
@@ -5045,7 +5053,7 @@
       W.zh = T(() => getItemZhName() || 'null');
       W.jp = T(() => getJapaneseName() || 'null');
       W.id = T(() => getItemId() || 'null');
-      W.ko = T(() => { const z = getItemZhName(); const k = z ? ronkaKoByZh(z) : null; return k || 'null'; });
+      W.ko = T(() => { const z = getItemZhName(); const k = z ? resolveKo(z) : null; return k || 'null'; });
       W.blocks = T(() => document.querySelectorAll('.ff14-content-box-block').length);
       W.src = T(() => !!blockByTitle('其他站点链接'));
       W.lang = T(() => !!blockByTitle('各语言名称'));
@@ -5170,4 +5178,5 @@
   if (__zhxProbeFlag) {
     try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
   }
+  /* @zhixia:core-probe-end */
 })();

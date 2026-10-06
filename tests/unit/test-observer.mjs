@@ -84,7 +84,7 @@ function makeEnv() {
 
 function buildObs(env) {
   const parts = [...sliceAll(DIST_TEXT, 'core-dom'), ...sliceAll(DIST_TEXT, 'core-observer')];
-  const ret = 'return { createObserver, observeLocal, dedupeByAncestor };';
+  const ret = 'return { createObserver, observeLocal, dedupeByAncestor, __obsStats: () => ({ ..._obsStats }) };';
   try {
     const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver',
       parts.join('\n') + '\n' + ret);
@@ -253,6 +253,29 @@ console.log('\n── G：兼容包装与可配置性 ──');
   eq('自定义 floodLimit=2 下 1 个节点不触发 flood', timers.filter((t) => t.cleared).length, 0);
   mo2.trigger([{ type: 'childList', addedNodes: [mkNode(), mkNode()] }]);   // pending = 3 > 2 → flood
   eq('自定义 floodLimit=2 下 3 个节点触发 flood（清旧 timer）', timers.filter((t) => t.cleared).length >= 1, true);
+}
+
+console.log('\n── H：观察统计（v1.4 Phase 10）──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  api.observeLocal(() => {}, 0);
+  const mo = FakeMO.last;
+
+  const z0 = api.__obsStats();
+  eq('初始统计为 0', z0.ticks === 0 && z0.nodes === 0, true);
+
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode(), mkNode()] }]);
+  runTimer();
+  const z1 = api.__obsStats();
+  eq('一次调度后 ticks=1', z1.ticks, 1);
+  eq('nodes 累计（2 节点）', z1.nodes, 2);
+
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  runTimer();
+  const z2 = api.__obsStats();
+  eq('二次调度后 ticks=2', z2.ticks, 2);
+  eq('nodes 累计（3 节点）', z2.nodes, 3);
 }
 
 console.log(`\n════════ 汇总 ════════`);

@@ -74,12 +74,14 @@ function buildResolver(env = {}) {
   const stubs = [
     'let itemHash = __env.itemHash;',
     'let nameMap = __env.nameMap;',
+    'let ecidMap = __env.ecidMap;',
+    'let koByZh = __env.koByZh;',
     'let ITEM_DB_TEXT = __env.text || "";',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, _irBuildAux,',
+    'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }) };',
   ].join('\n');
   const body = [...stubs, ...RESOLVER_SEG, ret].join('\n');
@@ -94,6 +96,8 @@ function buildResolver(env = {}) {
 const mkEnv = (over = {}) => ({
   itemHash: { h1: '甲', h3: '丙' },
   nameMap: { ...PRESET_NAME_MAP },
+  ecidMap: { 甲: 100, 丙: 102 },
+  koByZh: { 甲: '가', 丙: '나' },
   text: SAMPLE_TSV,
   itemDbReady: undefined,
   ...over,
@@ -112,8 +116,29 @@ const mkEnv = (over = {}) => ({
   eq('resolveByName 未命中 → null', api.resolveByName('nope'), null);
   eq('resolveByName 空输入 → null', api.resolveByName(null), null);
 
-  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveAllByName', 'resolveAlias', 'resolve', '_irBuildAux']
+  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
     .every((f) => typeof api[f] === 'function'), true);
+}
+
+// ─────────────────────────────────────────────────────────────
+// A2. EC_ID / 韩文名反查（v1.4 Phase 10：Wiki 唯一数据入口）
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv());
+  eq('resolveEcId 命中（数字值转字符串）', api.resolveEcId('甲'), '100');
+  eq('resolveEcId 未命中 → null', api.resolveEcId('无'), null);
+  eq('resolveEcId 空输入 → null', api.resolveEcId(''), null);
+  eq('resolveKo 命中', api.resolveKo('甲'), '가');
+  eq('resolveKo 未命中 → null', api.resolveKo(null), null);
+
+  // 统计计数（新实例，避免上文查询干扰）：resolveByHash / resolveByName / resolveEcId / resolveKo 自增 hit/miss
+  const api2 = buildResolver(mkEnv());
+  eq('统计：初始 0/0', JSON.stringify(api2.__stats()), JSON.stringify({ hit: 0, miss: 0 }));
+  api2.resolveByHash('h1');          // hit
+  api2.resolveByName('nope');        // miss
+  api2.resolveEcId('丙');            // hit
+  api2.resolveKo('无');              // miss
+  eq('统计：2 hit / 2 miss', JSON.stringify(api2.__stats()), JSON.stringify({ hit: 2, miss: 2 }));
 }
 
 // ─────────────────────────────────────────────────────────────

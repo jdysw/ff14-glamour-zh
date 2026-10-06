@@ -39,8 +39,6 @@ const ANCHORS = {
   jp2zhEnd: '// ── 系列名前缀查找（v1.12.0）',
   seriesStart: '// ── 系列名前缀查找（v1.12.0）',
   seriesEnd: '// v1.12.3：职能/类别词',
-  ronkaKoStart: 'function ronkaKoByZh(zh) {',
-  ronkaKoEnd: '// 装备栏目（部位）',
   ronkaCacheStart: 'const RONKA_ITEM_CACHE = Object.create(null);',
   ronkaCacheEnd: '// 逐条翻译：',
   lookupZhStart: 'function lookupZh(a, name) {',
@@ -65,7 +63,6 @@ function buildLayer() {
     sliceBetween(DIST_TEXT, A.en2zhStart, A.en2zhEnd),
     sliceBetween(DIST_TEXT, A.jp2zhStart, A.jp2zhEnd),
     sliceBetween(DIST_TEXT, A.seriesStart, A.seriesEnd),
-    sliceBetween(DIST_TEXT, A.ronkaKoStart, A.ronkaKoEnd),
     sliceBetween(DIST_TEXT, A.ronkaCacheStart, A.ronkaCacheEnd),
     sliceBetween(DIST_TEXT, A.lookupZhStart, A.lookupZhEnd),
     sliceBetween(DIST_TEXT, A.aclStart, A.aclEnd),
@@ -77,7 +74,7 @@ function buildLayer() {
       setDb: (t) => { ITEM_DB_TEXT = t; },
       setSeriesText: (t) => { SERIES_TEXT = t; _seriesMap = null; },
       setAcl: (t) => { ACL_CFC_TEXT = t; },
-      buildTables, lookupEcIdByZh, lookupZh, tryEnToZh, lookupJp2Zh, lookupSeries, ronkaKoByZh, ronkaItemLookup, lookupAclCfc,
+      buildTables, resolveEcId, lookupZh, tryEnToZh, lookupJp2Zh, lookupSeries, resolveKo, ronkaItemLookup, lookupAclCfc,
       snap: () => ({ itemHash, ecidMap, nameMap, koByZh }),
       peek: () => ({ en: _en2zhCache.size, jp: _jp2zhCache.size, ronka: Object.keys(RONKA_ITEM_CACHE).length }),
       internals: { _btRow, _btHashRow, _btNameRow, _btNamePut, _btTargets, _btApplyTargets },
@@ -128,7 +125,7 @@ async function main() {
   section('B1：装配 + 构建 + 解析层（_bt* 系列）');
   const a = buildLayer();
   ok('装配：各查询函数可用',
-    ['buildTables', 'lookupEcIdByZh', 'lookupZh', 'tryEnToZh', 'lookupJp2Zh', 'lookupSeries', 'ronkaKoByZh', 'ronkaItemLookup', 'lookupAclCfc']
+    ['buildTables', 'resolveEcId', 'lookupZh', 'tryEnToZh', 'lookupJp2Zh', 'lookupSeries', 'resolveKo', 'ronkaItemLookup', 'lookupAclCfc']
       .every((k) => typeof a[k] === 'function'));
   a.setDb(FIXTURE);
   await build(a, null, 'fixture');
@@ -169,7 +166,7 @@ async function main() {
     eq('白盒：ecid 重复首值 wins', t.ecidMap['七号'], '707');
   }
 
-  section('B3：查询层（lookupZh / tryEnToZh / lookupJp2Zh / lookupEcIdByZh）');
+  section('B3：查询层（lookupZh / tryEnToZh / lookupJp2Zh / resolveEcId）');
   eq('tryEnToZh：命中', a.tryEnToZh('Fire Shard'), '火之碎晶');
   eq('tryEnToZh：缺失 → null', a.tryEnToZh('__必然缺失__'), null);
   ok('tryEnToZh：null 入参 → null', a.tryEnToZh(null) === null);
@@ -194,9 +191,9 @@ async function main() {
     a.lookupJp2Zh('y'.repeat(81));
     ok('lookupJp2Zh：超长输入不写缓存', a.peek().jp === p0);
   }
-  eq('lookupEcIdByZh：命中', a.lookupEcIdByZh('测试甲'), '9001');
-  ok('lookupEcIdByZh：返回类型为 string', typeof a.lookupEcIdByZh('测试甲') === 'string');
-  ok('lookupEcIdByZh：空/缺失 → null', a.lookupEcIdByZh('') === null && a.lookupEcIdByZh(null) === null);
+  eq('resolveEcId：命中', a.resolveEcId('测试甲'), '9001');
+  ok('resolveEcId：返回类型为 string', typeof a.resolveEcId('测试甲') === 'string');
+  ok('resolveEcId：空/缺失 → null', a.resolveEcId('') === null && a.resolveEcId(null) === null);
 
   section('B4：lookupZh 组合优先级');
   eq('hash 优先于名称',
@@ -208,9 +205,9 @@ async function main() {
   eq('无元素（a=null）时按名称', a.lookupZh(null, 'Test Armor A'), '测试甲');
   eq('全部未命中 → null', a.lookupZh(null, '__名無し__'), null);
 
-  section('B5：Ronka 两条查询（ronkaKoByZh / ronkaItemLookup）');
-  eq('zh → ko 反查', a.ronkaKoByZh('测试乙'), '테스트B');
-  ok('zh → ko 缺失 → null', a.ronkaKoByZh('__缺失__') === null);
+  section('B5：Ronka 两条查询（resolveKo / ronkaItemLookup）');
+  eq('zh → ko 反查', a.resolveKo('测试乙'), '테스트B');
+  ok('zh → ko 缺失 → null', a.resolveKo('__缺失__') === null);
   eq('ko → zh 查询', a.ronkaItemLookup('길'), '金币');
   {
     const p0 = a.peek().ronka;
@@ -247,7 +244,7 @@ async function main() {
     ok('scope=[nameMap]：该索引建立', sb.nameMap !== null && Object.keys(sb.nameMap).length > 0);
     ok('scope=[nameMap]：其余索引置空（重建语义）',
       sb.itemHash === null && sb.ecidMap === null && sb.koByZh === null);
-    eq('scope=[nameMap]：EC_ID 查询 → null', b.lookupEcIdByZh('测试甲'), null);
+    eq('scope=[nameMap]：EC_ID 查询 → null', b.resolveEcId('测试甲'), null);
   }
 
   section('B9：ACL 副本表查询（lookupAclCfc）');
@@ -358,8 +355,8 @@ async function main() {
     if (r.ja) check(full.tryEnToZh(r.ja), expName.get(r.ja) || null, `ja[${r.ja}]`);
     if (r.ko) check(full.tryEnToZh(r.ko), expName.get(r.ko) || null, `ko[${r.ko}]`);
     if (r.hash && !r.neg) check(full.lookupZh(hrefStub('https://x/lodestone/playguide/db/item/' + r.hash), ''), expHash.get(r.hash) || null, `hash[${r.hash}]`);
-    if (r.zh && r.ecid) check(full.lookupEcIdByZh(r.zh), expEcid.get(r.zh) ? String(expEcid.get(r.zh)) : null, `ecid[${r.zh}]`);
-    if (r.zh && r.ko) check(full.ronkaKoByZh(r.zh), expKo.get(r.zh) || null, `ko[${r.zh}]`);
+    if (r.zh && r.ecid) check(full.resolveEcId(r.zh), expEcid.get(r.zh) ? String(expEcid.get(r.zh)) : null, `ecid[${r.zh}]`);
+    if (r.zh && r.ko) check(full.resolveKo(r.zh), expKo.get(r.zh) || null, `ko[${r.zh}]`);
   }
   ok(`全表抽样一致（${sampled} 条行样本，约 ${Math.round(realLines.length / 200)} 档）`, mm === 0, mmShow.join(' | '));
 
