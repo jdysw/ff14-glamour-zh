@@ -37,20 +37,36 @@ const nStart = DIST_TEXT.split(START).length - 1;
 const nEnd = DIST_TEXT.split(END).length - 1;
 ok('A1 区段锚点唯一（start/end 各 1 处）', nStart === 1 && nEnd === 1, `start=${nStart} end=${nEnd}`);
 
-let api = null;
-try {
+// Phase 9：适配器 boot/pageshow 会触达站点函数与 safe——全部以桩注入（记录调用）
+const STUB_NAMES = [
+  'startMirapri', 'startItems', 'startEC', 'startWiki', 'startFC', 'startRonka', 'startACL',
+  'translatePage', 'applyItemZh', 'translateECPage', 'bindECPieceTiles', 'translateFCPage',
+  'translateFCTitle', 'fixFCMenu', 'bindFCBanners', 'translateRonkaPage', 'translateRonkaTitle',
+  'translateACLPage', 'translateACLTitle', 'injectWikiButton',
+];
+
+function buildDevice(dataRemote) {
+  const stubs = { calls: [], ready: [] };
+  const stubDefs = 'function safe(fn) { return fn; }\n'
+    + STUB_NAMES.map((n) => `function ${n}() { __stubCalls.push('${n}'); }`).join('\n');
   const body = DIST_TEXT.slice(DIST_TEXT.indexOf(START) + START.length, DIST_TEXT.indexOf(END));
-  const factory = new Function('location', 'window',
-    body + '\nreturn { findSite, neededTables, _siteIndexes, SITE_REGISTRY };');
+  const factory = new Function('location', 'window', 'DATA_REMOTE', 'onTablesReady', '__stubCalls',
+    stubDefs + '\n' + body + '\nreturn { findSite, neededTables, _siteIndexes, SITE_REGISTRY, createSiteAdapter };');
   let host = '';
   const locStub = { get hostname() { return host; } };
   const winStub = {};
-  const device = factory(locStub, winStub);
-  api = {
+  const device = factory(locStub, winStub, dataRemote, (fn) => stubs.ready.push(fn), stubs.calls);
+  return {
     ...device,
+    stubs,
     setHost: (h) => { host = h; },
     win: winStub,
   };
+}
+
+let api = null;
+try {
+  api = buildDevice(true);
   ok('A2 区段可在 Node 装配（自足、无外部引用）', true);
 } catch (e) {
   ok('A2 区段可在 Node 装配（自足、无外部引用）', false, e.message);
@@ -151,6 +167,37 @@ eq('F3 旧分发模式 if (onHost(host, 残留', DIST_TEXT.split('if (onHost(hos
   ok('F4 六域名均在区段内（hosts 配置）', missing.length === 0, missing.join(','));
 }
 eq('F5 function findSite() 定义', DIST_TEXT.split('function findSite()').length - 1, 1);
+
+// ─────────────────────────────────────────────────────────────
+// G. Site Adapter（v1.4 Phase 9：统一接口）
+// ─────────────────────────────────────────────────────────────
+section('G：Site Adapter 统一接口');
+{
+  const g = buildDevice(true);
+  const bad = g.SITE_REGISTRY.filter((s) =>
+    typeof s.boot !== 'function' || typeof s.pageshow !== 'function' ||
+    typeof s.processRoot !== 'function' || typeof s.destroy !== 'function');
+  ok('G1 六站接口齐全（boot/pageshow/processRoot/destroy）', bad.length === 0, bad.map((s) => s.id).join(','));
+  eq('G2 六站 processRoot 均为函数（缺省 noop）', g.SITE_REGISTRY.every((s) => typeof s.processRoot === 'function'), true);
+
+  const ronka = g.SITE_REGISTRY.find((s) => s.id === 'ronka');
+  ronka.boot();
+  ok('G3 boot() 调 start（startRonka）', g.stubs.calls.includes('startRonka'), JSON.stringify(g.stubs.calls));
+  eq('G4 DATA_REMOTE=true：boot() 注册 1 条 onDataReady', g.stubs.ready.length, 1);
+  g.stubs.ready[0]();
+  ok('G5 补扫回调执行（translateRonkaPage + translateRonkaTitle）',
+    g.stubs.calls.includes('translateRonkaPage') && g.stubs.calls.includes('translateRonkaTitle'),
+    JSON.stringify(g.stubs.calls));
+  const before = g.stubs.calls.length;
+  ronka.pageshow();
+  ok('G6 pageshow() 调 onPageShow（补跑）', g.stubs.calls.length > before, `before=${before} after=${g.stubs.calls.length}`);
+  ronka.processRoot(null);
+  ok('G7 processRoot 可调用（经 safe 包装）', g.stubs.calls.includes('translateRonkaPage'), JSON.stringify(g.stubs.calls));
+
+  const g2 = buildDevice(false);
+  g2.SITE_REGISTRY.find((s) => s.id === 'ronka').boot();
+  eq('G8 DATA_REMOTE=false：不注册补扫', g2.stubs.ready.length, 0);
+}
 
 console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);

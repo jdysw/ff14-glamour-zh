@@ -1347,8 +1347,7 @@
       for (const n of nodes) safe(translateECPage, 'EC 局部')(n);
       safe(bindECPieceTiles, 'EC 部位图')();
     }, 300);
-    // 外置版：数据到达后补扫一次（首扫时装备名可能因数据未到而跳过）
-    if (DATA_REMOTE) onTablesReady(() => safe(translateECPage, 'EC 补扫')());
+    // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }
 
   // 部分匹配（长句、带变量文本、placeholder）
@@ -3239,13 +3238,7 @@
       safe(fixFCMenu, 'FC 菜单')();
       safe(bindFCBanners, 'FC 横幅')();
     }, 300);
-    // 外置版：数据到达后补扫一次
-    if (DATA_REMOTE) onTablesReady(() => {
-      safe(translateFCPage, 'FC 补扫')();
-      safe(translateFCTitle, 'FC 标题')();
-      safe(fixFCMenu, 'FC 菜单')();
-      safe(bindFCBanners, 'FC 横幅')();
-    });
+    // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }
 
   /* ===================================================================== */
@@ -3608,11 +3601,7 @@
       for (const n of nodes) safe(translateACLPage, 'ACL 局部')(n);
       safe(translateACLTitle, 'ACL 标题')();
     }, 300);
-    // 外置版：数据到达后补扫一次
-    if (DATA_REMOTE) onTablesReady(() => {
-      safe(translateACLPage, 'ACL 补扫')();
-      safe(translateACLTitle, 'ACL 标题')();
-    });
+    // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }
 
   /* ===================================================================== */
@@ -3826,11 +3815,7 @@
         safe(translateRonkaTitle, 'Ronka 标题')();
       },
     });
-    // 外置版：数据到达后补扫一次
-    if (DATA_REMOTE) onTablesReady(() => {
-      safe(translateRonkaPage, 'Ronka 补扫')();
-      safe(translateRonkaTitle, 'Ronka 标题')();
-    });
+    // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
     console.log('Ronka（韩服幻化站）汉化已启用');
   }
 
@@ -3854,8 +3839,7 @@
     [1500, 4000, 8000, 15000, 22000, 30000].forEach((ms) => setTimeout(attempt, ms));
     // v1.4 Phase 7：经统一观察器（debounce 由统一层管理；尝试次数守卫仍在 attempt 内）
     createObserver({ debounce: 1200, handler: () => attempt() });
-    // 外置版：数据到达后刷新「幻化装备反查链接」区块（补齐国际服 / 韩服链接）
-    if (DATA_REMOTE) onTablesReady(() => safe(injectWikiButton, 'Wiki 反查刷新')());
+    // 数据就绪刷新「幻化装备反查链接」区块由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }
 
   /* =====================================================================
@@ -4146,25 +4130,79 @@
   // （安全加固：原 endsWith('mirapri.com') 会被任意前缀域名绕过——CodeQL js/incomplete-url-substring-sanitization）
   const onHost = (h, d) => h === d || h.endsWith('.' + d);
 
+  // 统一站点适配器工厂（v1.4 Phase 9）：六站标准接口——
+  //   id / hosts / tables / indexes   配置面（Phase 3 约定）
+  //   start()        页面加载即启动（原 boot 的站点入口）
+  //   processRoot()  统一处理入口（root 缺省 = 全页；元素 = 局部）
+  //   onDataReady()  数据就绪补扫（外置版；由 boot 统一登记到 onTablesReady）
+  //   onPageShow()   bfcache 恢复补跑（原 pageshow）
+  //   destroy()      预留：站点销毁（现状站点均常驻，无实现）
+  // 站点实现（startXxx / translateXxx）仍居各自区段，后续渐进迁移；
+  // Phase 15 模块化构建时，各 adapter 将随区段原样抽出为 src/sites/*.js。
+  function createSiteAdapter(cfg) {
+    const c = cfg || {};
+    return {
+      id: c.id,
+      hosts: c.hosts || [],
+      tables: c.tables || [],
+      indexes: c.indexes || [],
+      boot() {
+        if (typeof c.start === 'function') c.start();
+        if (DATA_REMOTE && typeof c.onDataReady === 'function') {
+          onTablesReady(() => { try { c.onDataReady(); } catch (e) { console.warn('站点数据就绪处理失败：', e); } });
+        }
+      },
+      pageshow() {
+        if (typeof c.onPageShow === 'function') c.onPageShow();
+      },
+      processRoot: typeof c.processRoot === 'function' ? c.processRoot : () => {},
+      destroy: typeof c.destroy === 'function' ? c.destroy : () => {},
+    };
+  }
+
   const SITE_REGISTRY = [
-    { id: 'mirapri', hosts: ['mirapri.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
-      boot() { startMirapri(); startItems(); },
-      pageshow() { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); } },
-    { id: 'ec', hosts: ['eorzeacollection.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
-      boot() { startEC(); startItems(); },
-      pageshow() { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); } },
-    { id: 'wiki', hosts: ['huijiwiki.com'], tables: ['items', 'dict'], indexes: ['ecidMap', 'koByZh'],
-      boot() { startWiki(); },
-      pageshow() { safe(injectWikiButton, 'pageshow')(); } },
-    { id: 'fc', hosts: ['ff14-fc.com'], tables: ['items', 'series', 'dict'], indexes: ['nameMap', 'itemHash'],
-      boot() { startFC(); },
-      pageshow() { safe(translateFCPage, 'pageshow')(); } },
-    { id: 'ronka', hosts: ['ronkacloset.com'], tables: ['items', 'dict'], indexes: ['nameMap'],
-      boot() { startRonka(); },
-      pageshow() { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); } },
-    { id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'],
-      boot() { startACL(); },
-      pageshow() { safe(translateACLPage, 'pageshow')(); } },
+    // ── 站点拆分顺序（计划书 9.2）：① ronka ② ec ③ mirapri ④ fc ⑤ collection ⑥ wiki ──
+    // （注册顺序 = 匹配优先级，保持 Phase 3 金标准不变）
+    createSiteAdapter({
+      id: 'mirapri', hosts: ['mirapri.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
+      start() { startMirapri(); startItems(); },
+      processRoot(root) { safe(translatePage, 'mirapri 处理')(root); },
+      onPageShow() { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'ec', hosts: ['eorzeacollection.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
+      start() { startEC(); startItems(); },
+      processRoot(root) { safe(translateECPage, 'EC 处理')(root); safe(applyItemZh, 'EC 物品处理')(); },
+      onDataReady() { safe(translateECPage, 'EC 补扫')(); },
+      onPageShow() { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'wiki', hosts: ['huijiwiki.com'], tables: ['items', 'dict'], indexes: ['ecidMap', 'koByZh'],
+      start() { startWiki(); },
+      onDataReady() { safe(injectWikiButton, 'Wiki 反查刷新')(); },
+      onPageShow() { safe(injectWikiButton, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'fc', hosts: ['ff14-fc.com'], tables: ['items', 'series', 'dict'], indexes: ['nameMap', 'itemHash'],
+      start() { startFC(); },
+      processRoot(root) { safe(translateFCPage, 'FC 处理')(root); },
+      onDataReady() { safe(translateFCPage, 'FC 补扫')(); safe(translateFCTitle, 'FC 标题')(); safe(fixFCMenu, 'FC 菜单')(); safe(bindFCBanners, 'FC 横幅')(); },
+      onPageShow() { safe(translateFCPage, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'ronka', hosts: ['ronkacloset.com'], tables: ['items', 'dict'], indexes: ['nameMap'],
+      start() { startRonka(); },
+      processRoot(root) { safe(translateRonkaPage, 'Ronka 处理')(root); },
+      onDataReady() { safe(translateRonkaPage, 'Ronka 补扫')(); safe(translateRonkaTitle, 'Ronka 标题')(); },
+      onPageShow() { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'],
+      start() { startACL(); },
+      processRoot(root) { safe(translateACLPage, 'ACL 处理')(root); },
+      onDataReady() { safe(translateACLPage, 'ACL 补扫')(); safe(translateACLTitle, 'ACL 标题')(); },
+      onPageShow() { safe(translateACLPage, 'pageshow')(); },
+    }),
   ];
 
   // 测试钩子：__zhxTestSite 指定站点 id（file:// 集成测试用；生产不存在，零开销）
