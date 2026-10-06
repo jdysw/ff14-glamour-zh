@@ -3989,54 +3989,55 @@
      v1.3.1：让出改用 MessageChannel（嵌套 setTimeout 到第 5 级后每级被浏览器
      钳 +4~8ms，MC 恒定 ~0.2ms；创建失败或运行异常时回退分片 setTimeout）。 */
   function buildTables(scope, done) {
-    let mc = null;
+    const st = { i: 0, mc: null, done: done, t: _btTargets(scope), lines: ITEM_DB_TEXT.split('\n') };
     try {
       const m = new MessageChannel();
-      m.port2.onmessage = () => step();
-      mc = m;
+      m.port2.onmessage = () => _btStep(st);
+      st.mc = m;
     } catch (e) {
       // 忽略：MessageChannel 不可用（旧环境/异常）——mc 保持 null，回退分片 setTimeout 让出
     }
-    const t = _btTargets(scope);
-    const lines = ITEM_DB_TEXT.split('\n');
-    let i = 0;
-    const finish = () => {
-      try {
-        // 染剂色名回退（顺手收集版）：「Xxx Dye → 中文名」补开「Xxx → 中文名」
-        if (t.nameMap && t.dye.length) {
-          for (const key of t.dye) {
-            const base = key.slice(0, -4);
-            if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
-          }
+    _btStep(st);
+  }
+  // 分片让出调度：MC 优先（~0.2ms/级），端口失效则置空并改走 setTimeout
+  function _btNext(st) {
+    if (st.mc) {
+      let ok = false;
+      try { st.mc.port1.postMessage(0); ok = true; } catch (e) { /* 忽略：MC 端口失效——置空后改走 setTimeout */ }
+      if (ok) return;
+      st.mc = null;
+    }
+    setTimeout(() => _btStep(st), 0);
+  }
+  // 单片构建：≤8ms 或 ≤250 行后让出
+  function _btStep(st) {
+    try {
+      const deadline = Date.now() + 8;
+      while (st.i < st.lines.length) {
+        const end = Math.min(st.i + 250, st.lines.length);
+        while (st.i < end) {
+          const ln = st.lines[st.i++];
+          if (ln) _btRow(ln, st.t);
         }
-        itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
-      } catch (e) { /* 忽略：构建收尾 best-effort */ }
-      if (typeof done === 'function') { try { done(); } catch (e) {} }
-    };
-    const step = () => {
-      try {
-        const deadline = Date.now() + 8;
-        while (i < lines.length) {
-          const end = Math.min(i + 250, lines.length);
-          while (i < end) {
-            const ln = lines[i++];
-            if (ln) _btRow(ln, t);
-          }
-          if (Date.now() >= deadline) break;
-        }
-      } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
-      if (i < lines.length) {
-        if (mc) {
-          let ok = false;
-          try { mc.port1.postMessage(0); ok = true; } catch (e) { /* 忽略：MC 端口失效——本片起回退 setTimeout 让出 */ }
-          if (ok) return;
-          mc = null;
-        }
-        setTimeout(step, 0); return;
+        if (Date.now() >= deadline) break;
       }
-      finish();
-    };
-    step();
+    } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
+    if (st.i < st.lines.length) { _btNext(st); return; }
+    _btApplyTargets(st.t);
+    if (typeof st.done === 'function') { try { st.done(); } catch (e) { /* 忽略：完成回调异常不上抛 */ } }
+  }
+  // 构建收尾：染剂色名回退 + 一次性赋值索引
+  function _btApplyTargets(t) {
+    try {
+      // 染剂色名回退（顺手收集版）：「Xxx Dye → 中文名」补开「Xxx → 中文名」
+      if (t.nameMap && t.dye.length) {
+        for (const key of t.dye) {
+          const base = key.slice(0, -4);
+          if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
+        }
+      }
+      itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
+    } catch (e) { /* 忽略：构建收尾 best-effort */ }
   }
 
   /* ── 存储封装：优先用户脚本管理器存储（跨站共享）；不可用时退化为
@@ -4772,11 +4773,15 @@
   function __zhxProbeEnv(L) {
     L.push('ZHX-PROBE: v1');
     const gi = (typeof GM_info !== 'undefined' && GM_info?.script) || null;
-    L.push('ver: ' + ((gi?.version) || 'n/a'));
-    L.push('site: ' + location.hostname, 'url: ' + String(location.href).slice(0, 220));
-    L.push('ua: ' + String(navigator.userAgent || '').slice(0, 200), 'view: ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + (window.devicePixelRatio || 1));
-    L.push('ts: ' + new Date().toISOString(), 'ready: ' + document.readyState);
-    L.push('gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
+    L.push(
+      'ver: ' + ((gi?.version) || 'n/a'),
+      'site: ' + location.hostname,
+      'url: ' + String(location.href).slice(0, 220),
+      'ua: ' + String(navigator.userAgent || '').slice(0, 200),
+      'view: ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + (window.devicePixelRatio || 1),
+      'ts: ' + new Date().toISOString(),
+      'ready: ' + document.readyState,
+      'gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
   }
 
   function __zhxProbeData(L) {
