@@ -4569,6 +4569,7 @@
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
   // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
   function _irBuildAux(text) {
+    if (_v3Applied) return true;   // v3：dup/alias 已由服务端预构建直读（Phase 13），跳过全表二次扫描
     if (typeof text !== 'string' || !text || !nameMap) return false;
     const dup = Object.create(null);
     const ali = Object.create(null);

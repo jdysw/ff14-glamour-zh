@@ -1,6 +1,7 @@
-// bench-read-path.mjs v2 — 缓存读取路径细分基准（mirapri：items+dict）
+// bench-read-path.mjs v2 — 缓存读取路径细分基准（ec：items+dict）
 // 细分埋点：injectAt → readEnd（读缓存）→ applied（applyTable 完）→ schedAt（调度发出）→ buildStart → ready → fireDone
-// 变体：base2（原版）/ mc2（仅分片间隙 MessageChannel）/ full2（启动 MC + 分片 MC）
+// 说明：v1.4 起分片调度已内建（_btNext：MC 优先 + setTimeout 兜底），历史变体（mc2/full2）退役（见 git 历史）；
+//       基准预置「空 sites 的 v3 manifest」→ v3 探测静默回退 v2 读路径（零网络、确定行为）。
 // CPU 节流 1x/4x/8x；每档 3 轮
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
@@ -22,24 +23,12 @@ s = repl1(s, "const local = await _ensureReadLocal(need);", "const local = await
 s = repl1(s, "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');", "for (const t of need) applyTable(t, local[t].tx);\n    DATA_VER = (meta.v ? String(meta.v) : '');\n    try { (window.__zhxT = window.__zhxT || {}).applied = performance.now(); } catch (e) {}", 't-applied');
 s = repl1(s, "function _ensureFinalize() {", "function _ensureFinalize() {\n    try { (window.__zhxT = window.__zhxT || {}).finEntry = performance.now(); } catch (e) {}", 't-finEntry');
 s = repl1(s, "      else setTimeout(go, 50);", "      else setTimeout(go, 50);\n      try { (window.__zhxT = window.__zhxT || {}).schedAt = performance.now(); } catch (e) {}", 't-schedAt');
-s = repl1(s, "      const go = () => {\n        buildTables(_buildScope, () => {", "      const go = () => {\n        try { (window.__zhxT = window.__zhxT || {}).buildStart = performance.now(); } catch (e) {}\n        buildTables(_buildScope, () => {", 't-buildStart');
+s = repl1(s, "      const go = () => {\n        __zhxMark('buildStart');", "      const go = () => {\n        try { (window.__zhxT = window.__zhxT || {}).buildStart = performance.now(); } catch (e) {}\n        __zhxMark('buildStart');", 't-buildStart');
 s = repl1(s, "    _tablesReady = true;", "    _tablesReady = true;\n    try { (window.__zhxT = window.__zhxT || {}).ready = performance.now(); } catch (e) {}", 't-ready');
 s = repl1(s, "const cbs = _readyCbs.splice(0);\n    for (const f of cbs) { try { f(); } catch (e) {} }", "const cbs = _readyCbs.splice(0);\n    for (const f of cbs) { try { f(); } catch (e) {} }\n    try { (window.__zhxT = window.__zhxT || {}).fireDone = performance.now(); } catch (e) {}", 't-fireDone');
 
-// ── 变体 ──
-const addMc = (x) => repl1(x, "function buildTables(scope, done) {\n    const t = _btTargets(scope);", "function buildTables(scope, done) {\n    let mc = null;\n    try { mc = new MessageChannel(); mc.port2.onmessage = () => step(); } catch (e) { mc = null; }\n    const t = _btTargets(scope);", 'v-mc-def');
-const mcStep = (x) => repl1(x, "if (i < lines.length) { setTimeout(step, 0); return; }", "if (i < lines.length) { if (mc) { mc.port1.postMessage(0); } else { setTimeout(step, 0); } return; }", 'v-mc-step');
-const variant = process.argv[2] || 'base2';
-const VARIANTS = {
-  base2: (x) => x,
-  mc2: (x) => mcStep(addMc(x)),
-  full2: (x) => {
-    x = repl1(x, "      if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 2000 });\n      else setTimeout(go, 50);", "      try { const _mc = new MessageChannel(); _mc.port2.onmessage = () => go(); _mc.port1.postMessage(0); } catch (e) { setTimeout(go, 50); }", 'v-f-go');
-    return mcStep(addMc(x));
-  },
-};
-s = VARIANTS[variant](s);
-console.log('变体:', variant);
+// v1.4：分片调度已内建（_btNext：MC 优先 + setTimeout 兜底），历史变体（mc2/full2）退役（见 git 历史）。
+const variant = 'base2';
 
 fs.writeFileSync(cachePath('gf-bench-read.user.js'), s);
 const GF = s;
@@ -78,6 +67,8 @@ const runOne = async (rate, round) => {
     await c.eval(preset('gm:zhx.dt.items', itemsTsv));
     await c.eval(preset('gm:zhx.dt.dict', dictJson));
     await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'bench', t: Date.now() })); return 1; })()`);
+    // v3 探测预置：新鲜 manifest + 空 sites → 静默回退 v2（零网络；Phase 12 起的行为）
+    await c.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))}); return 1; })()`);
     await c.eval(gmStub);
     // 注入（同一次 eval：先记 injectAt，再执行脚本）
     await c.eval(`window.__zhxT = { injectAt: performance.now() };\n` + wrap(GF));

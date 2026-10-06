@@ -41,7 +41,7 @@ const SUITES = {
     'live/test-dict-rt.mjs',
     'live/e2e-real-dict.mjs',
   ],
-  benchmark: ['benchmark/bench-read-path.mjs'],
+  benchmark: ['benchmark/bench-read-path.mjs', 'benchmark/bench-v3-load.mjs'],
   core: [
     'integration/test-wiki-slow.mjs',
     'integration/test-wiki.mjs',
@@ -143,8 +143,8 @@ function runOne(abs, logFile) {
   });
 }
 
-// 需要 Chrome 的套件先确保 CDP 就绪（build-idempotent 纯 Node，不需要）
-const needsChrome = files.some((f) => /^(integration|live|benchmark)\//.test(f) && !f.includes('build-idempotent'));
+// 需要 Chrome 的套件先确保 CDP 就绪（build-idempotent / bench-v3-load 纯 Node，不需要）
+const needsChrome = files.some((f) => /^(integration|live|benchmark)\//.test(f) && !f.includes('build-idempotent') && !f.includes('bench-v3-load'));
 let chrome = null;
 if (needsChrome) {
   try {

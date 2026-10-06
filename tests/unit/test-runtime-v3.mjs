@@ -2,7 +2,8 @@
 //
 // 目的：
 //   A. 校验 build/make-runtime-data.py 的产物（data/v3/）：manifest 结构、
-//      逐文件 sha256/bytes、names 去重与染剂回退、站点清单。
+//      逐文件 sha256/bytes、names 去重与染剂回退、站点清单、Phase 13 语言裁剪
+//      （各站 names/dup 仅含其翻译链语言：ja 表无韩文、en 表无韩文/假名、ko 表无假名）。
 //   B. 用桩装配 data-manager 段，钉死 v3 加载路径：成功应用（含缓存写入）、
 //      零网络快路径、manifest 404 / schema 不兼容 / 文件 sha 不匹配 → 回退，
 //      _ensureMain 接入（v3 成功不走 v2）、_ensureFinalize 跳过 buildTables。
@@ -79,7 +80,7 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
 {
   const txt = readFileSync(new URL('mirapri/names.tsv', V3_DIR), 'utf8');
   const lines = txt.trim().split('\n');
-  ok('A10 names 行数 > 50000', lines.length > 50000, `行数=${lines.length}`);
+  ok('A10 names 行数约 50k（Phase 13 裁剪后）', lines.length > 45000 && lines.length < 55000, `行数=${lines.length}`);
   const seen = new Set(); let dupKey = 0; let fmt = 0;
   for (const ln of lines) {
     const i = ln.indexOf('\t');
@@ -90,28 +91,30 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
   }
   eq('A11 names 无重复键（生成器已首行胜）', dupKey, 0);
   eq('A12 names 行格式均为「键\\tzh」', fmt, 0);
-  // 染剂回退：找一个「Xxx Dye」键，其 base「Xxx」键也应存在且同值
-  let dyeFound = 0; let dyeChecked = 0; let dyeBad = 0;
-  for (const ln of lines) {
+  // 染剂回退（en 表验证；Phase 13：Dye 键只存在于 en 语言表）
+  const ecTxt = readFileSync(new URL('ec/names.tsv', V3_DIR), 'utf8');
+  const ecLines = ecTxt.trim().split('\n');
+  const ecSeen = new Set(ecLines.filter((l) => l.indexOf('\t') > 0).map((l) => l.slice(0, l.indexOf('\t'))));
+  let ecFound = 0; let ecChecked = 0; let ecBad = 0;
+  for (const ln of ecLines) {
     const i = ln.indexOf('\t');
+    if (i <= 0) continue;
     const k = ln.slice(0, i);
     if (k.endsWith(' Dye') && k.length > 4) {
-      dyeFound++;
-      if (dyeChecked < 5) {
-        dyeChecked++;
+      ecFound++;
+      if (ecChecked < 5) {
+        ecChecked++;
         const base = k.slice(0, -4);
-        const baseLine = seen.has(base);
-        if (!baseLine) dyeBad++;
+        if (!ecSeen.has(base)) ecBad++;
         else {
-          const want = ln.slice(i + 1);
-          const got = txt.split('\n').find((l) => l.startsWith(base + '\t'));
-          if (got && got.slice(base.length + 1) !== want) dyeBad++;
+          const got = ecLines.find((l) => l.startsWith(base + '\t'));
+          if (got && got.slice(base.length + 1) !== ln.slice(i + 1)) ecBad++;
         }
       }
     }
   }
-  ok('A13 存在染剂键且回退展开正确', dyeFound > 0 && dyeChecked > 0 && dyeBad === 0,
-    `found=${dyeFound} checked=${dyeChecked} bad=${dyeBad}`);
+  ok('A13 染剂回退展开正确（ec/en 表）', ecFound > 0 && ecChecked > 0 && ecBad === 0,
+    `found=${ecFound} checked=${ecChecked} bad=${ecBad}`);
 }
 
 // wiki 两文件
@@ -122,12 +125,37 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
   ok('A15 wiki/ko.tsv 行数 > 40000', ko.length > 40000, `行数=${ko.length}`);
 }
 
-// alias / dup 行数与生成统计吻合（23 / 52）
+// alias 行数（23；全站一致）与 dup 行数（13；ja 语言裁剪）
 {
   const ali = readFileSync(new URL('mirapri/alias.tsv', V3_DIR), 'utf8').trim().split('\n');
   const dup = readFileSync(new URL('mirapri/dup.tsv', V3_DIR), 'utf8').trim().split('\n');
   eq('A16 alias.tsv 行数 = 23', ali.length, 23);
-  eq('A17 dup.tsv 行数 = 52', dup.length, 52);
+  eq('A17 dup.tsv 行数 = 13（ja 语言裁剪）', dup.length, 13);
+}
+
+// Phase 13 语言裁剪：各站 names 仅含其翻译链语言；dup 同步裁剪
+{
+  const keyLang = (p, re) => {
+    let n = 0;
+    for (const ln of readFileSync(new URL(p, V3_DIR), 'utf8').split('\n')) {
+      const i = ln.indexOf('\t');
+      if (i <= 0) continue;
+      if (re.test(ln.slice(0, i))) n++;
+    }
+    return n;
+  };
+  const HANGUL = /[\uac00-\ud7af]/; const KANA = /[\u3040-\u30ff]/;
+  const koInJa = ['mirapri', 'fc', 'collection'].reduce((n, s) => n + keyLang(`${s}/names.tsv`, HANGUL), 0);
+  eq('A19 ja 三站 names 无韩文键（裁剪）', koInJa, 0);
+  const weirdInEn = keyLang('ec/names.tsv', HANGUL) + keyLang('ec/names.tsv', KANA);
+  eq('A20 ec names 无韩文/假名键（裁剪）', weirdInEn, 0);
+  eq('A21 ronka names 无假名键（裁剪）', keyLang('ronka/names.tsv', KANA), 0);
+  ok('A22 ja 表假名键 > 40000（内容未裁空）', keyLang('mirapri/names.tsv', KANA) > 40000);
+  ok('A23 ko 表韩文键 > 50000（内容未裁空）', keyLang('ronka/names.tsv', HANGUL) > 50000);
+  const dupCount = (s) => readFileSync(new URL(`${s}/dup.tsv`, V3_DIR), 'utf8').trim().split('\n').length;
+  eq('A24 dup 裁剪（mirapri=13）', dupCount('mirapri'), 13);
+  eq('A25 dup 裁剪（ec=20）', dupCount('ec'), 20);
+  eq('A26 dup 裁剪（ronka=19）', dupCount('ronka'), 19);
 }
 
 // 站点文件清单与预期一致
@@ -267,7 +295,7 @@ const manText = JSON.stringify(man);
   const r = await dm._ensureTryV3();
   eq('B1 v3 成功返回 true', r, true);
   const pk = dm._peek();
-  ok('B2 nameMap 已赋值且含预期键', !!pk.nm && Object.keys(pk.nm).length > 50000, `keys=${pk.nm ? Object.keys(pk.nm).length : 'null'}`);
+  ok('B2 nameMap 已赋值且含预期键', !!pk.nm && Object.keys(pk.nm).length > 45000, `keys=${pk.nm ? Object.keys(pk.nm).length : 'null'}`);
   ok('B3 itemHash 已赋值', !!pk.ih && Object.keys(pk.ih).length > 30000);
   ok('B4 _v3Applied 置位', pk.v3 === true);
   ok('B5 dict 已应用', w.rec.dict.length === 1);

@@ -77,12 +77,14 @@ function buildResolver(env = {}) {
     'let ecidMap = __env.ecidMap;',
     'let koByZh = __env.koByZh;',
     'let ITEM_DB_TEXT = __env.text || "";',
+    'let _v3Applied = !!__env.v3Applied;',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
   ];
   const ret = [
     'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
-    '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }) };',
+    '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
+    '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
   const body = [...stubs, ...RESOLVER_SEG, ret].join('\n');
   try {
@@ -265,6 +267,24 @@ const mkEnv = (over = {}) => ({
   }
   ok('真实数据：重名数组形状（≥2 项且无重复）', shapeOk, shapeOk ? '' : `异常键：${bad}`);
   ok('真实数据：构建耗时 < 1500ms', buildMs < 1500, `实测 ${buildMs}ms`);
+}
+
+// ─────────────────────────────────────────────────────────────
+// C. v3 守卫（Phase 13）：v3 已直读预构建 dup/alias 时，_irBuildAux 跳过全表二次扫描
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv({ v3Applied: false }));
+  api._irBuildAux(SAMPLE_TSV);
+  const before = api.__maps();
+  ok('v3 前置：注册表已构建', !!before.dup && !!before.ali);
+  api.__setV3(true);
+  eq('v3 守卫：_irBuildAux → true（已就绪）', api._irBuildAux(SAMPLE_TSV), true);
+  const after = api.__maps();
+  ok('v3 守卫：注册表引用未被覆盖', after.dup === before.dup && after.ali === before.ali);
+  const api2 = buildResolver(mkEnv({ v3Applied: true }));
+  eq('v3 直装：_irBuildAux → true', api2._irBuildAux(SAMPLE_TSV), true);
+  const m2 = api2.__maps();
+  ok('v3 直装：不新建注册表', m2.dup === null && m2.ali === null);
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 | `unit/` | 纯 Node 单元测试（正则行为、数据层 golden） | 否 | 否 |
 | `integration/` | 夹具（fixtures）级集成测试 + 构建幂等 | 是（自动维护） | 否 |
 | `live/` | 真站连通测试（fc / ronka / ACL / 数据站 e2e） | 是 | **是** |
-| `benchmark/` | 读取路径性能基准（PR #15 工具） | 是 | 否 |
+| `benchmark/` | 性能基准（读取路径细分 + v2/v3 parse 对比） | 是 | 否 |
 | `fixtures/` | 静态夹具页面（wiki / EC 页结构） | — | — |
 | `helpers/` | CDP 客户端、Chrome 守护、路径解析、词典生成 | — | — |
 
@@ -78,5 +78,6 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **DataManager（Phase 11，`unit/test-data-manager.mjs`）**：装配 core-cache（2 段）+ core-data-manager 区段（24 个外部标识符以 new Function 参数注入桩）；冻结快路径零网络（每日至多一次版本检查）、版本变更下载、服务器不可用降级、旧缓存兜底与 invalidate 语义。
 - **Runtime Data v3（Phase 12，`unit/test-runtime-v3.mjs`）**：A 段校验生成器产物（manifest 结构、逐文件 sha256/bytes、names 去重与染剂回退、站点清单——`data/v3/` 未预生成时自动重建到临时目录）；B 段装配 core-cache + core-data-manager 区段，冻结 v3 加载（成功应用 + 缓存写入 / 零网络快路径 / manifest-404 / schema 不兼容 / sha 不匹配 → 回退）与 `_ensureMain` / `_ensureFinalize` 接入语义。注意：`_ensureTryFast` / `_ensureFetchAll` / `_waitPageLoad` 在提取段内有真实定义、会遮蔽同名桩参数——回退行为以「发出的 v2 请求」观测。
 - **v3 探测与离线集成测试**：`integration/test-ec.mjs`（⑥ 零网络）与 `integration/test-wiki.mjs`（场景 B/C）预置 `gm:zhx.v3.manifest`（本站不在其中 → v3 静默跳过、24h 内不再探测）；未预置时首跑会发一次 v3 manifest 探测请求（每日至多一次），属预期行为。
+- **Phase 13 语言裁剪与基准**：`unit/test-runtime-v3.mjs` A 段含语言裁剪断言（ja 表无韩文 / en 表无韩文假名 / ko 表无假名；dup 按语言裁剪 13/20/19）；`unit/test-item-resolver.mjs` 含 `_irBuildAux` 的 v3 守卫断言；`benchmark/bench-v3-load.mjs`（纯 Node、免 Chrome）对比 v2/v3 全链 parse 与 TSV / JSON 格式（结论：维持 TSV）；`bench-read-path` 已随 v1.4 适配（`_btStep` / `__zhxMark` 锚点、v3 探测预置、历史变体退役）。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。
