@@ -23,7 +23,7 @@
   'use strict';
 
   // 运行探测（URL 带 zhx_probe 参数时启用）用：脚本注入时刻；未启用时零开销
-  var __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  let __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
 
   /* =====================================================================
    * 第一部分：mirapri.com 界面汉化
@@ -1542,28 +1542,35 @@
 
   // 装备栏目（部位）
   // v1.3.1：多路回退——移动皮肤/类名变体下也能识别部位（原单选择器在部分皮肤下失效）
-  function getSlot() {
-    const hit = (el) => {
-      if (!el) return null;
-      const t = (el.textContent || '').trim();
-      return EC_SLOT[t] ? { key: EC_SLOT[t], label: t } : null;
-    };
-    let r = hit(document.querySelector('.infobox-item--name-category'));
-    if (r) return r;
-    try {
-      for (const el of document.querySelectorAll('[class*="name-category"]')) { r = hit(el); if (r) return r; }
-    } catch (e) { /* 忽略：类名变体查询失败——继续兜底扫描 */ }
-    try {
-      const root = document.querySelector('.infobox, [class*="infobox"]');
-      if (root) {
-        for (const el of root.querySelectorAll('div, td, dt, dd, li')) {
-          if (el.children.length > 2) continue;
-          const t = (el.textContent || '').trim();
-          if (t.length <= 6 && EC_SLOT[t]) return { key: EC_SLOT[t], label: t };
-        }
-      }
-    } catch (e) { /* 忽略：兜底扫描失败——按非装备页处理 */ }
+  function _slotHit(el) {
+    if (!el) return null;
+    const t = (el.textContent || '').trim();
+    return EC_SLOT[t] ? { key: EC_SLOT[t], label: t } : null;
+  }
+  function _slotFromList(list) {
+    for (const el of list) {
+      const r = _slotHit(el);
+      if (r) return r;
+    }
     return null;
+  }
+  function _slotFromInfobox() {
+    const root = document.querySelector('.infobox, [class*="infobox"]');
+    if (!root) return null;
+    for (const el of root.querySelectorAll('div, td, dt, dd, li')) {
+      if (el.children.length > 2) continue;
+      const t = (el.textContent || '').trim();
+      if (t.length <= 6 && EC_SLOT[t]) return { key: EC_SLOT[t], label: t };
+    }
+    return null;
+  }
+  function getSlot() {
+    let r = _slotHit(document.querySelector('.infobox-item--name-category'));
+    if (r) return r;
+    try { r = _slotFromList(document.querySelectorAll('[class*="name-category"]')); } catch (e) { /* 忽略：类名变体查询失败——继续兜底扫描 */ }
+    if (r) return r;
+    try { r = _slotFromInfobox(); } catch (e) { /* 忽略：兜底扫描失败——按非装备页处理 */ }
+    return r;
   }
 
   // → Eorzea Collection「已筛好这件装备」的搜索页（零网络：本地表直查）
@@ -3983,9 +3990,12 @@
      钳 +4~8ms，MC 恒定 ~0.2ms；创建失败或运行异常时回退分片 setTimeout）。 */
   function buildTables(scope, done) {
     let mc = null;
-    try { mc = new MessageChannel(); mc.port2.onmessage = () => step(); } catch (e) {
-      // 忽略：MessageChannel 不可用（旧环境/异常）——回退分片 setTimeout 让出
-      mc = null;
+    try {
+      const m = new MessageChannel();
+      m.port2.onmessage = () => step();
+      mc = m;
+    } catch (e) {
+      // 忽略：MessageChannel 不可用（旧环境/异常）——mc 保持 null，回退分片 setTimeout 让出
     }
     const t = _btTargets(scope);
     const lines = ITEM_DB_TEXT.split('\n');
@@ -4017,10 +4027,10 @@
       } catch (e) { /* 忽略：单行解析失败不阻断（尽力构建） */ }
       if (i < lines.length) {
         if (mc) {
-          try { mc.port1.postMessage(0); return; } catch (e) {
-            // 忽略：MC 端口失效——本片回退 setTimeout 让出
-            mc = null;
-          }
+          let ok = false;
+          try { mc.port1.postMessage(0); ok = true; } catch (e) { /* 忽略：MC 端口失效——本片起回退 setTimeout 让出 */ }
+          if (ok) return;
+          mc = null;
         }
         setTimeout(step, 0); return;
       }
@@ -4743,7 +4753,7 @@
    * 数据规模 / wiki 专项），供手机端实测反馈。默认关闭、近零开销；报告仅本地
    * 显示，不写入存储、不发送任何网络请求。
    * ===================================================================== */
-  var __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关
+  let __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关
   const __zhxProbeBtnCss = 'padding:6px 10px;font-size:12px;border:1px solid #8ab4d8;border-radius:8px;background:#eaf4fe;color:#1d5c96;cursor:pointer;';
 
   function __zhxMark(name) {
@@ -4761,24 +4771,16 @@
 
   function __zhxProbeEnv(L) {
     L.push('ZHX-PROBE: v1');
-    try {
-      const gi = (typeof GM_info !== 'undefined' && GM_info && GM_info.script) ? GM_info.script : null;
-      L.push('ver: ' + ((gi && gi.version) || 'n/a'));
-    } catch (e) { /* 忽略：版本号读不到不影响诊断主体 */ L.push('ver: n/a'); }
-    L.push('site: ' + location.hostname);
-    L.push('url: ' + String(location.href).slice(0, 220));
-    try { L.push('ua: ' + String(navigator.userAgent || '').slice(0, 200)); } catch (e) { /* 忽略：UA 读取失败 */ }
-    try { L.push('view: ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + (window.devicePixelRatio || 1)); } catch (e) { /* 忽略：视口读取失败 */ }
-    L.push('ts: ' + new Date().toISOString());
-    L.push('ready: ' + document.readyState);
-    try { L.push('gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest); } catch (e) { /* 忽略：GM API 探测失败 */ }
+    const gi = (typeof GM_info !== 'undefined' && GM_info?.script) || null;
+    L.push('ver: ' + ((gi?.version) || 'n/a'));
+    L.push('site: ' + location.hostname, 'url: ' + String(location.href).slice(0, 220));
+    L.push('ua: ' + String(navigator.userAgent || '').slice(0, 200), 'view: ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + (window.devicePixelRatio || 1));
+    L.push('ts: ' + new Date().toISOString(), 'ready: ' + document.readyState);
+    L.push('gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
   }
 
   function __zhxProbeData(L) {
-    try {
-      L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}));
-      L.push('boot0: ' + Math.round(__zhxBootAt || 0));
-    } catch (e) { /* 忽略：时间线读取失败 */ }
+    L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
     try {
       L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
         + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
@@ -4868,24 +4870,26 @@
 
   function __zhxProbeCopy(ta) {
     const text = ta.value || '';
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(
-          () => __zhxProbeToast('已复制，发送给栀夏即可'),
-          () => __zhxProbeFallbackCopy(ta));
-        return;
-      }
-    } catch (e) { /* 忽略：剪贴板 API 不可用——走 execCommand 兜底 */ }
+    const cb = navigator.clipboard;
+    if (typeof cb?.writeText === 'function') {
+      cb.writeText(text).then(
+        () => __zhxProbeToast('已复制，发送给栀夏即可'),
+        () => __zhxProbeFallbackCopy(ta));
+      return;
+    }
     __zhxProbeFallbackCopy(ta);
   }
 
   function __zhxProbeFallbackCopy(ta) {
+    let ok = false;
     try {
       ta.focus();
       ta.select();
-      const ok = !!(document.execCommand && document.execCommand('copy'));
-      __zhxProbeToast(ok ? '已复制，发送给栀夏即可' : '请长按选择文本后复制');
-    } catch (e) { /* 忽略：无法自动复制——提示手动长按 */ __zhxProbeToast('请长按选择文本后复制'); }
+      ok = !!document.execCommand?.('copy');   // NOSONAR —— 老浏览器兜底路径（clipboard 不可用时的最后手段）
+    } catch (e) {
+      // 忽略：无法自动复制（环境限制）——下方统一提示手动长按
+    }
+    __zhxProbeToast(ok ? '已复制，发送给栀夏即可' : '请长按选择文本后复制');
   }
 
   function __zhxProbeToast(msg) {
@@ -4911,7 +4915,7 @@
       window.addEventListener('error', (ev) => {
         try {
           if (window.__zhxErrs.length < 20) {
-            window.__zhxErrs.push(String((ev && ev.message) || 'e').slice(0, 120) + ' @L' + ((ev && ev.lineno) || 0));
+            window.__zhxErrs.push(String(ev?.message || 'e').slice(0, 120) + ' @L' + (ev?.lineno || 0));
           }
         } catch (e) { /* 忽略：错误采集失败 */ }
       });
