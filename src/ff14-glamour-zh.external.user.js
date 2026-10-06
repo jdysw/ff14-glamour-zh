@@ -4199,97 +4199,6 @@
   }
   /* @zhixia:site-registry-end */
 
-  /* ── 词库运行时更新（v1.2.0）：dict.json → 各站词典「原地合并」──────────────
-     词典对象引用遍布引擎（DICT_FC 直查、子串表、派生缓存等），reassign 会使引用失效；
-     故用 Object.assign 原地更新 + 清派生缓存（子串键/前缀），新词全链路即时生效。
-     另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
-     不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
-  // v1.2.x：单层合并与修正收集拆出（降认知复杂度）
-  let _dictFixesBuf = null;
-
-  function _dictFixCheck(obj, k, newV) {
-    const oldV = obj[k];
-    if (typeof oldV === 'string' && oldV && typeof newV === 'string' && newV && oldV !== newV) {
-      _dictFixesBuf.push([oldV, newV]);
-    }
-  }
-
-  function _applyDictLayer(key, obj, d, common) {
-    const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
-    if (extra) for (const k in extra) _dictFixCheck(obj, k, extra[k]);
-    if (common) { for (const k in common) { if (extra?.[k] !== undefined) { continue; } _dictFixCheck(obj, k, common[k]); } }
-    if (common) Object.assign(obj, common);
-    if (extra) Object.assign(obj, extra);
-  }
-
-  function applyRuntimeDict(txt) {
-    if (typeof txt !== 'string' || !txt.startsWith('{')) return;
-    let d = null;
-    try { d = JSON.parse(txt); } catch (e) { return; }
-    if (!d || typeof d !== 'object') return;
-    const common = (d.common && typeof d.common === 'object') ? d.common : null;
-    const layers = [
-      ['main', DICT],
-      ['ec', DICT_EC],
-      ['fc', DICT_FC],
-      ['ronka', DICT_RONKA],
-      ['acl', DICT_ACL],
-    ];
-    _dictFixesBuf = [];
-    try {
-      if (common) Object.assign(DICT_COMMON, common);
-      for (const [key, obj] of layers) {
-        if (!obj) continue;
-        _applyDictLayer(key, obj, d, common);
-      }
-    } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
-    // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）
-    try { _fcSubstrCache = null; } catch (e) {}
-    try { _allKeysCache = null; } catch (e) {}
-    // 定向替换：旧译 → 新译（去重后单次全页扫描）
-    const fixes = _dictFixesBuf;
-    _dictFixesBuf = null;
-    try { _sweepDictFixes(fixes); } catch (e) {}
-  }
-  // v1.2.x：去重与单节点扫描拆出（降认知复杂度）
-  function _sweepDedupe(fixes) {
-    const seen = new Set();
-    const uniq = [];
-    for (const [oldV, newV] of fixes) {
-      if (!oldV || !newV || oldV === newV) continue;
-      const k = oldV + '\u0000' + newV;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      uniq.push([oldV, newV]);
-    }
-    return uniq;
-  }
-
-  function _sweepNode(n, uniq) {
-    let v = n.nodeValue;
-    if (!v) return;
-    let changed = false;
-    for (const [oldV, newV] of uniq) {
-      if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
-    }
-    if (changed) { try { n.nodeValue = v; } catch (e) {} }
-  }
-
-  function _sweepDictFixes(fixes) {
-    if (!fixes?.length) return;
-    const uniq = _sweepDedupe(fixes);
-    // 防御上限：正常维护场景远小于此；超出时截断并告警（收敛供应链滥用面）
-    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) {} uniq.length = 500; }
-    if (!uniq.length || !document.body) return;
-    const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
-    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => (n.parentElement && skipTags[n.parentElement.tagName]) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
-    });
-    const batch = [];
-    while (walk.nextNode()) batch.push(walk.currentNode);
-    for (const n of batch) _sweepNode(n, uniq);
-  }
-
   function applyTable(name, txt) {
     if (typeof txt !== 'string' || !txt) return;
     switch (name) {
@@ -4436,6 +4345,143 @@
     ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) {} });
   }
   /* @zhixia:data-layer-end */
+
+  /* @zhixia:core-dictionary-start */
+  /* ── Core Dictionary（v1.4 Phase 5）：运行时词典——dict.json 六层原地合并
+       （common + 5 站）、旧译→新译修正收集与定向替换、派生缓存失效，及对外接口
+       （get / has / update / getRevision / invalidate）。与 Core Translator 相邻，
+       接口为后续模块的统一查询面。Phase 15 模块化构建时，本区段将原样抽出为
+       src/core/dictionary.js。 */
+
+  /* ── 词库运行时更新（v1.2.0）：dict.json → 各站词典「原地合并」──────────────
+     词典对象引用遍布引擎（DICT_FC 直查、子串表、派生缓存等），reassign 会使引用失效；
+     故用 Object.assign 原地更新 + 清派生缓存（子串键/前缀），新词全链路即时生效。
+     另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
+     不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
+  // v1.2.x：单层合并与修正收集拆出（降认知复杂度）
+  let _dictFixesBuf = null;
+
+  function _dictFixCheck(obj, k, newV) {
+    const oldV = obj[k];
+    if (typeof oldV === 'string' && oldV && typeof newV === 'string' && newV && oldV !== newV) {
+      _dictFixesBuf.push([oldV, newV]);
+    }
+  }
+
+  function _applyDictLayer(key, obj, d, common) {
+    const extra = (d[key] && typeof d[key] === 'object') ? d[key] : null;
+    if (extra) for (const k in extra) _dictFixCheck(obj, k, extra[k]);
+    if (common) { for (const k in common) { if (extra?.[k] !== undefined) { continue; } _dictFixCheck(obj, k, common[k]); } }
+    if (common) Object.assign(obj, common);
+    if (extra) Object.assign(obj, extra);
+  }
+
+  function applyRuntimeDict(txt) {
+    if (typeof txt !== 'string' || !txt.startsWith('{')) return;
+    let d = null;
+    try { d = JSON.parse(txt); } catch (e) { return; }
+    if (!d || typeof d !== 'object') return;
+    const common = (d.common && typeof d.common === 'object') ? d.common : null;
+    // 五站层顺序固定；六层词表引用见 DICT_LAYERS（词典接口区）
+    const layers = ['main', 'ec', 'fc', 'ronka', 'acl'];
+    _dictFixesBuf = [];
+    try {
+      if (common) Object.assign(DICT_COMMON, common);
+      for (const key of layers) {
+        const obj = DICT_LAYERS[key];
+        if (!obj) continue;
+        _applyDictLayer(key, obj, d, common);
+      }
+    } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
+    _dictRevision++;   // 词典修订号（getRevision 提供）
+    // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）——统一经词典失效入口
+    try { dictInvalidate(); } catch (e) {}
+    // 定向替换：旧译 → 新译（去重后单次全页扫描）
+    const fixes = _dictFixesBuf;
+    _dictFixesBuf = null;
+    try { _sweepDictFixes(fixes); } catch (e) {}
+  }
+  // v1.2.x：去重与单节点扫描拆出（降认知复杂度）
+  function _sweepDedupe(fixes) {
+    const seen = new Set();
+    const uniq = [];
+    for (const [oldV, newV] of fixes) {
+      if (!oldV || !newV || oldV === newV) continue;
+      const k = oldV + '\u0000' + newV;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      uniq.push([oldV, newV]);
+    }
+    return uniq;
+  }
+
+  function _sweepNode(n, uniq) {
+    let v = n.nodeValue;
+    if (!v) return;
+    let changed = false;
+    for (const [oldV, newV] of uniq) {
+      if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
+    }
+    if (changed) { try { n.nodeValue = v; } catch (e) {} }
+  }
+
+  function _sweepDictFixes(fixes) {
+    if (!fixes?.length) return;
+    const uniq = _sweepDedupe(fixes);
+    // 防御上限：正常维护场景远小于此；超出时截断并告警（收敛供应链滥用面）
+    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) {} uniq.length = 500; }
+    if (!uniq.length || !document.body) return;
+    const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement && skipTags[n.parentElement.tagName]) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const batch = [];
+    while (walk.nextNode()) batch.push(walk.currentNode);
+    for (const n of batch) _sweepNode(n, uniq);
+  }
+
+  /* ── 词典对外接口（v1.4 Phase 5）：六层词表访问 + 修订号 + 派生缓存失效 ──
+     get/has 为翻译器与后续模块的统一查询面（当前翻译器仍直查词表对象，
+     站点拆分阶段迁移）；update = dict.json 文本原地合并；invalidate = 清词典派生缓存。 */
+  let _dictRevision = 0;
+  // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
+  const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };
+  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.prototype.hasOwnProperty.call(o, key)) ? o[key] : undefined; }
+  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.prototype.hasOwnProperty.call(o, key); }
+  function dictGetRevision() { return _dictRevision; }
+  function dictInvalidate() { _fcSubstrCache = null; _allKeysCache = null; }
+  function dictUpdate(txt) { return applyRuntimeDict(txt); }
+  /* @zhixia:core-dictionary-end */
+
+  /* @zhixia:core-translator-start */
+  /* ── Core Translator（v1.4 Phase 5）：翻译统一接口层——按 profile（站点 id）
+       分发到各站翻译器；本层不改变任何翻译结果（各站函数原样调用）。Phase 15
+       模块化构建时，本区段将原样抽出为 src/core/translator.js。 */
+  const TEXT_TRANSLATORS = {
+    mirapri: (text) => tr(text),
+    ec: (text) => trEC(text),
+    fc: (text) => trFC(text),
+    ronka: (text) => trRonka(text),
+    acl: (text) => trACL(text),
+  };
+  const NODE_TRANSLATORS = {
+    mirapri: (node) => trNode(node),
+    ec: (node) => trimECNode(node),
+    fc: (node) => trimFCNode(node),
+    ronka: (node) => trimRonkaNode(node),
+    acl: (node) => trimACLNode(node),
+  };
+  // 属性翻译：ec 为「以该元素为根的子树扫描」语义（translateECAttrs 既有行为）、
+  // fc/mirapri 为单元素（placeholder / value）；acl、ronka 无独立实现（不注册）。
+  const ATTR_TRANSLATORS = {
+    mirapri: (el) => trEl(el),
+    ec: (el) => translateECAttrs(el),
+    fc: (el) => _wowFCInput(el),
+  };
+  function translateText(text, profile) { const f = TEXT_TRANSLATORS[profile]; return f ? f(text) : text; }
+  function translateNode(node, profile) { const f = NODE_TRANSLATORS[profile]; if (f) f(node); }
+  function translateAttributes(element, profile) { const f = ATTR_TRANSLATORS[profile]; if (f) f(element); }
+  /* @zhixia:core-translator-end */
 
   function lookupZh(a, name) {
     if (a) {

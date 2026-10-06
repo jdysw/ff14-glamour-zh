@@ -113,7 +113,9 @@ console.log('\n── 区段哨兵（标记与装配） ──');
     eq(`${tag} 区段数（start）`, counts[tag], n);
     eq(`${tag} 区段数（end）`, DIST_TEXT.split(`/* @zhixia:${tag}-end */`).length - 1, n);
   }
-  eq('core-* 标记总数（8 对 = 16）', DIST_TEXT.split('@zhixia:core-').length - 1, 16);
+  // 本文件提取的 6 类共 8 对；其他段（dictionary / translator 等）由各自测试覆盖
+  const coreTot = DIST_TEXT.split('@zhixia:core-').length - 1;
+  ok('core-* 标记成对且 ≥ 本文件提取的 8 对', coreTot % 2 === 0 && coreTot >= 16, `实际=${coreTot}`);
   const api = buildCore(makeEnv());
   for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', '_readCachedTable', '_writeCachedTable', 'safe', 'dedupeByAncestor', 'observeLocal']) {
     eq(`${f} 装配后可调用`, typeof api[f], 'function');
