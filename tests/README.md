@@ -14,7 +14,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 
 | 目录 | 内容 | 需要 Chrome | 需要外网 |
 |---|---|---|---|
-| `unit/` | 纯 Node 单元测试（正则行为） | 否 | 否 |
+| `unit/` | 纯 Node 单元测试（正则行为、数据层 golden） | 否 | 否 |
 | `integration/` | 夹具（fixtures）级集成测试 + 构建幂等 | 是（自动维护） | 否 |
 | `live/` | 真站连通测试（fc / ronka / ACL / 数据站 e2e） | 是 | **是** |
 | `benchmark/` | 读取路径性能基准（PR #15 工具） | 是 | 否 |
@@ -56,5 +56,7 @@ npm test          # = unit + integration（离线可跑；自动确保 headless 
 - **测试产物**（注入副本、日志、Chrome profile、词库生成物）一律写 `tests/.cache/`（已 gitignore），不污染工作区。
 - **锚点纪律**：测试用「锚点计数断言 + split/join 全量替换」从 `src` 生成测试副本；
   修改 `src` 的分发区段 / `neededTables` / `buildTables` 等被锚定区段时，**必须同步检查相关测试的锚点计数**（历史多次踩坑）。
+- **数据层测试（`unit/test-data-layer.mjs`）**：按锚点从 `dist` 提取数据层代码段、在 Node 内装配运行（无需 Chrome / 外网）；
+  改动数据层函数的首尾特征文本时，提取会以「锚缺失 / 锚不唯一」明确报错，按报错更新该文件的 `ANCHORS` 即可。
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。
