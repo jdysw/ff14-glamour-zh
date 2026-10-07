@@ -92,7 +92,27 @@ console.log('\n── C：GET 搜索 URL 重写 ──');
   eq('表单页码覆盖 action 中旧值', u.searchParams.get('page'), '3');
 }
 
-console.log('\\n── D：提交时转换中文查询 ──');
+console.log('\n── C2：空值参数剔除（1.4.2 后续修复）──');
+{
+  const api = buildSearch();
+  // mirapri 实测：空值筛选参数会被站方视为「生效的无效筛选」→ 结果恒 0 条；必须剔除。
+  const allEmpty = [
+    ['period', ''], ['sort', ''], ['g', ''], ['cl', ''], ['j', ''],
+    ['r', ''], ['t', ''], ['c', ''], ['fav', ''], ['keyword', '旧值'],
+  ];
+  const u2 = new URL(api.buildSearchUrl('/', allEmpty, 'keyword', 'メイドリストドレス', 'https://mirapri.com/'));
+  eq('空值全部剔除：仅剩 keyword', [...u2.searchParams.keys()].join(','), 'keyword');
+  eq('空值全部剔除：keyword 为日文名', u2.searchParams.get('keyword'), 'メイドリストドレス');
+  eq('空值全部剔除：输出无空值参数', [...u2.searchParams.values()].filter((v) => v === '').length, 0);
+
+  const mixed = [['g', ''], ['j', '15'], ['fav', ''], ['cl', ''], ['keyword', '旧值'], ['period', '0']];
+  const u3 = new URL(api.buildSearchUrl('https://mirapri.com/', mixed, 'keyword', 'メイドリストドレス', 'https://mirapri.com/'));
+  eq('混合：空值剔除、有效筛选保留', [...u3.searchParams.keys()].sort().join(','), 'j,keyword,period');
+  eq('混合：j=15 原样保留', u3.searchParams.get('j'), '15');
+  eq('混合：period=0 原样保留（0 不被当作空值）', u3.searchParams.get('period'), '0');
+}
+
+console.log('\n── D：提交时转换中文查询 ──');
 {
   const api = buildSearch();
   const input = {
@@ -134,7 +154,7 @@ console.log('\\n── D：提交时转换中文查询 ──');
   eq('中文查询提交时停止继续传播', event.stopped, true);
   eq('最终搜索 URL 使用日文名称', calls[0], 'https://mirapri.com/?page=3&keyword=%E3%82%A2');
 }
-console.log('\\n════════ 汇总 ════════');
+console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);
 if (fail > 0) process.exit(1);
 console.log('── ✅ 通过（exit=0）');

@@ -84,7 +84,10 @@ function buildSearchUrl(action, entries, inputName, native, baseHref) {
 
   const grouped = new Map();
   for (const [key, value] of entries || []) {
-    if (!key || typeof value !== 'string') continue;
+    // 1.4.2 后续修复：空值参数不得进入搜索 URL —— mirapri 实测（2026-10-07）：
+    // 空筛选参数（cl/j/r/t/c/fav 等）会被站方当作「生效的无效筛选」→ 搜索恒为 0 结果；
+    // 剔除空值后 ?keyword=X 正常返回（25 条/页），有效筛选（如 j=15）保留后亦正常。
+    if (!key || typeof value !== 'string' || value === '') continue;
     const values = grouped.get(key) || [];
     values.push(value);
     grouped.set(key, values);
