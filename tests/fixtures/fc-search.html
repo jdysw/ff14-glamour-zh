@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>fc-search fixture</title>
+</head>
+<body>
+  <div class="search-wrap">
+    <!-- fc 风格搜索表单（S&F 结构；测试只依赖「form 内的搜索框」契约） -->
+    <form id="search-filter-form-9999" class="searchandfilter" action="/equipment_series_search/" method="post" data-ajax="1">
+      <input type="text" name="_sf_search[]" placeholder="装備名の一部を入力して検索">
+      <input type="submit" name="_sf_submit" value="検索">
+    </form>
+  </div>
+  <div id="results"><p>初期コンテンツ</p></div>
+</body>
+</html>

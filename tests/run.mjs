@@ -31,6 +31,7 @@ const SUITES = {
     'integration/test-mirapri.mjs',
     'integration/test-chinese-search-submit.mjs',
     'integration/test-ronka-search-inline.mjs',
+    'integration/test-fc-search-candidates.mjs',
     'integration/test-probe.mjs',
     'integration/test-dict-single-source.mjs',
     'integration/test-version-consistency.mjs',
