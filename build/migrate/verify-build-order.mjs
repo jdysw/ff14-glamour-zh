@@ -34,11 +34,7 @@ console.log('实际模块数：' + actual.length);
 const duplicate = actual.filter((x, i) => actual.indexOf(x) !== i);
 const missing = expected.filter((x) => !actual.includes(x));
 const extra = actual.filter((x) => !expected.includes(x));
-const expectedSet = new Set(expected);
-const actualSet = new Set(actual);
-const exact = !duplicate.length && !missing.length && !extra.length && actual.length === expected.length && actualSet.size === expectedSet.size;
-
-if (!exact) console.error('模块顺序已由 Rollup 依赖图决定；此处仅要求模块集合完整且唯一。');
+const exact = !duplicate.length && !missing.length && !extra.length && actual.length === expected.length && actual.every((x, i) => x === expected[i]);
 
 if (duplicate.length) console.error('重复模块标记：' + [...new Set(duplicate)].join(', '));
 if (missing.length) console.error('缺失模块标记：' + missing.join(', '));
