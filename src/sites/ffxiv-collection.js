@@ -4,6 +4,7 @@ import './ff14-fc.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DATA_TEXT } from '../core/data-manager.js';
 import { DICT_ACL } from '../core/dictionary.js';
+import { _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -180,8 +181,8 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     }
   }
 
-  function replaceACLLodestone() {
-    const links = document.querySelectorAll('a.item-link-1[href*="lodestone"]');
+  function replaceACLLodestone(rootArg) {
+    const links = queryIn(localScope(rootArg), 'a.item-link-1[href*="lodestone"]');
     for (const a of links) {
       const box = a.closest('.item-name');
       if (!box) continue;
@@ -231,13 +232,14 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
+    _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: _aclAcceptNode,
     });
     const batch = [];
     while (w.nextNode()) batch.push(w.currentNode);
     for (const n of batch) _procACLNode(n);
-    safe(replaceACLLodestone, 'ACL lodestone 替换')();
+    safe(replaceACLLodestone, 'ACL lodestone 替换')(rootArg);
   }
 
   function translateACLTitle() {
