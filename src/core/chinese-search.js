@@ -254,6 +254,10 @@ function showSuggestions(input) {
     hideSuggestions(true);
     return;
   }
+  if (!_suggestDataReady) {
+    hideSuggestions(true);
+    return;
+  }
 
   const rows = suggestByZh(query, SUGGEST_LIMIT);
 
@@ -273,10 +277,6 @@ function showSuggestions(input) {
   _suggestBox.replaceChildren();
 
   if (!rows.length) {
-    if (!_suggestDataReady) {
-      hideSuggestions(true);
-      return;
-    }
     const message = document.createElement('div');
     message.className = 'zhx-suggest-empty';
     message.textContent = '未找到对应装备';
