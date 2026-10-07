@@ -38,7 +38,7 @@ const ANCHORS = {
   jp2zhStart: 'const _jp2zhCache = new Map();',
   jp2zhEnd: '// ── 系列名前缀查找（v1.12.0）',
   seriesStart: '// ── 系列名前缀查找（v1.12.0）',
-  seriesEnd: '// v1.12.3：职能/类别词',
+  seriesEnd: 'const FC_ROLE_ZH = {',
   ronkaCacheStart: 'const RONKA_ITEM_CACHE = Object.create(null);',
   ronkaCacheEnd: '// 逐条翻译：',
   lookupZhStart: 'function lookupZh(a, name) {',
