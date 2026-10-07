@@ -1,6 +1,5 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
-import './constants.js';
 import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
 import { applyRuntimeDict } from './dictionary.js';
@@ -17,10 +16,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
      外置版：数据异步到达并建表后触发；内嵌版：建表完成时触发。
      需要等数据就绪的补扫 / 刷新，通过 onTablesReady(fn) 登记。 */
   // 数据版本（外置版由加载器在版本清单到达后赋值；内嵌版保持空 = 随脚本版本）
-  let DATA_VER = '';
+  let DATA_VER = ''; // NOSONAR — 数据版本由远程 manifest 生命周期更新
 
   const _readyCbs = [];
-  let _tablesReady = false;
+  let _tablesReady = false; // NOSONAR — ready 状态由数据完成生命周期更新
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
     if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } return; }
@@ -40,14 +39,14 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
 
-  let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过
-  let SERIES_TEXT = '';
-  let ACL_CFC_TEXT = '';
+  let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过 // NOSONAR — 运行时数据表状态
+  let SERIES_TEXT = ''; // NOSONAR — 运行时数据表状态
+  let ACL_CFC_TEXT = ''; // NOSONAR — 运行时数据表状态
 
-  let itemHash = null;   // hash -> 中文名（EC / mirapri 用）
-  let ecidMap = null;    // 中文名 -> EC_ID（wiki / EC 链接用）
-  let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用）
-  let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用）
+  let itemHash = null;   // hash -> 中文名（EC / mirapri 用） // NOSONAR — 数据就绪后替换索引
+  let ecidMap = null;    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR — 数据就绪后替换索引
+  let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR — 数据就绪后替换索引
+  let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR — 数据就绪后替换索引
 
   // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
   // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
@@ -169,7 +168,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
        提供统一 API：ensure / ready / getTable / getIndex / invalidate。
        缓存与版本探测契约见 Core Cache（段1/2）；Phase 15 模块化构建时，
        本区段将原样抽出为 src/core/data-manager.js。 */
-  let _ensurePromise = null;
+  let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
   // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
   // Phase 19：数据来源统计（cache=本地缓存交付 / net=网络下载交付 / fallback=下载失败旧缓存兜底）
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
@@ -268,7 +267,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     });
   }
 
-  let _buildScope = null;   // 本页索引构建范围（按站裁剪；null = 全建）
+  let _buildScope = null;   // 本页索引构建范围（按站裁剪；null = 全建） // NOSONAR — 站点数据范围按启动阶段更新
 
   // ── Runtime Data v3（v1.4 Phase 12）：按站最小数据 + manifest ——
   // 加载顺序：v3 →（失败 / schema 不兼容）→ v2 → 缓存 / 内嵌 fallback。
@@ -276,7 +275,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   // 染剂回退展开、'-' 行跳过等语义等价处理；此处直接建索引一次赋值）。
   // 缓存：manifest（zhx.v3.manifest = t + '\n' + 原文）；文件（zhx.v3.f.<site>.<name>
   // = sha256 + '\n' + 文本）。sha256 校验在 crypto.subtle 可用时执行，不可用不阻塞。
-  let _v3Applied = false;
+  let _v3Applied = false; // NOSONAR — v3 数据应用状态按加载结果更新
 
   // 「键\t值...」文本 → 映射（多值模式收集为数组；行内/键首列已由生成器去重）
   function _v3Pairs(txt, multi) {
@@ -504,8 +503,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
        （历史优先，禁止随机）。Phase 15 模块化构建时，本区段将原样抽出为
        src/core/item-resolver.js。 */
 
-  let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序）
-  let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分）
+  let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR — resolver 派生索引按数据生命周期更新
+  let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR — resolver 派生索引按数据生命周期更新
 
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
   // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
