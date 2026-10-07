@@ -62,6 +62,17 @@ const SAMPLE_TSV = [
   '8\t炎灵\tF\tカ\t바\th8\t107\t',
 ].join('\n');
 
+// Legacy alias fixture：专门冻结 Phase 6 原有别名注册表契约。
+// 中文智能输入新增装备数据不应改变这个 golden test 的覆盖范围。
+const LEGACY_SAMPLE_TSV = [
+  'key\tzh\ten\tja\tko\thash\tecid\talias',
+  '1\t甲\tA\tア\t가\th1\t100\t',
+  '2\t乙\tA\tア\t가\th2\t101\t',
+  '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
+  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
+  '5\t丁\tC\tウ\t다\th5\t104\t',
+].join('\\n');
+
 // nameMap 预置映射（模拟「已按首行胜构建完成」的状态；与样例首行一致）
 const PRESET_NAME_MAP = {
   A: '甲', 'ア': '甲', '가': '甲',
@@ -160,7 +171,7 @@ const mkEnv = (over = {}) => ({
   // 未构建时：回退主索引行为
   eq('未构建：resolveAllByName 回退首行', JSON.stringify(api.resolveAllByName('A')), JSON.stringify(['甲']));
 
-  const r = api._irBuildAux(SAMPLE_TSV);
+  const r = api._irBuildAux(LEGACY_SAMPLE_TSV);
   eq('_irBuildAux 返回 true', r, true);
   eq('中文装备名 → 当前站点日文名', api.resolveByZh('甲'), 'ア');
   eq('中文别名 → 当前站点日文名', api.resolveByZh('丙组合'), 'イ');
@@ -188,7 +199,7 @@ const mkEnv = (over = {}) => ({
 
   eq('别名登记（单值）', JSON.stringify(maps.ali['丙组合']), JSON.stringify(['丙']));
   eq('别名登记（分号拆分）', JSON.stringify(maps.ali['丙套装']), JSON.stringify(['丙']));
-  eq('主体别名含全部拆分键', Object.keys(maps.ali).sort().join(','), '丙套装,丙组合,炎灵袍,炎灵裤');
+  eq('主体别名含全部拆分键', Object.keys(maps.ali).sort().join(','), '丙套装,丙组合');
 
   eq('resolveAllByName 真歧义 → 全量（行序）', JSON.stringify(api.resolveAllByName('A')), JSON.stringify(['甲', '乙']));
   eq('resolveAllByName 非重名 → 单值数组', JSON.stringify(api.resolveAllByName('B')), JSON.stringify(['丙']));
@@ -199,7 +210,7 @@ const mkEnv = (over = {}) => ({
   // 容错与幂等
   eq('_irBuildAux 空文本 → false', api._irBuildAux(''), false);
   eq('_irBuildAux null → false', api._irBuildAux(null), false);
-  eq('_irBuildAux 幂等（重复构建同结果）', api._irBuildAux(SAMPLE_TSV) && JSON.stringify(api.__maps().dup.A), JSON.stringify(['甲', '乙']));
+  eq('_irBuildAux 幂等（重复构建同结果）', api._irBuildAux(LEGACY_SAMPLE_TSV) && JSON.stringify(api.__maps().dup.A), JSON.stringify(['甲', '乙']));
   const kept = api.resolveAllByName('A');
   ok('返回数组为副本（修改不污染注册表）', (() => { kept.push('x'); return api.resolveAllByName('A').length === 2; })());
 }
@@ -247,7 +258,7 @@ const mkEnv = (over = {}) => ({
 // ─────────────────────────────────────────────────────────────
 {
   const cbs = [];
-  const env = mkEnv({ itemDbReady: (cb) => { cbs.push(cb); } });
+  const env = mkEnv({ text: LEGACY_SAMPLE_TSV, itemDbReady: (cb) => { cbs.push(cb); } });
   const api = buildResolver(env);
   eq('装配后注册 1 个就绪回调', cbs.length, 1);
   // 触发回调 → 用 env.text 构建辅助表
