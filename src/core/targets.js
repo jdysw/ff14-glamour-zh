@@ -3,6 +3,7 @@
 import { observeLocal } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { itemDbReady, resolveByName } from './data-manager.js';
+import { localScope, queryIn } from './dom.js';
 import { _perfNow, lookupZh, safe } from './runtime.js';
 export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
@@ -171,8 +172,8 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     'Filter': '筛选',
   };
 
-  function applyPlaceholder() {
-    document.querySelectorAll('input[placeholder], textarea[placeholder]').forEach((el) => {
+  function applyPlaceholder(rootArg) {
+    queryIn(localScope(rootArg), 'input[placeholder], textarea[placeholder]').forEach((el) => {
       if (el.dataset.zhixiaPh === '1') return;
       const t = (el.getAttribute('placeholder') || '').trim();
       if (!t) return;

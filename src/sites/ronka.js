@@ -4,6 +4,7 @@ import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/dictionary.js';
+import { _markScan, localScope, queryIn } from '../core/dom.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
@@ -93,8 +94,8 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
   // 装备块 lodestone（官方指南）链接 → 灰机 wiki（图标 + 中文物品页）
   // 选择器只匹配 href 含 lodestone 的 <a>，替换后不再匹配 → 天然幂等；
   // React 若恢复原 href 会自动再次命中重替换。装备中文名来自同块 [data-zhx-item]。
-  function replaceRonkaLodestone() {
-    const links = document.querySelectorAll('.post-search-modal a[href*="lodestone"]');
+  function replaceRonkaLodestone(rootArg) {
+    const links = queryIn(localScope(rootArg), '.post-search-modal a[href*="lodestone"]');
     for (const a of links) {
       const box = a.closest('.item-searcher');
       const itemEl = box?.querySelector('[data-zhx-item]');
@@ -119,7 +120,7 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
     '게시물 중 파이널판타지14 운영정책 제7.4항 에 해당하는 ‘홈페이지 제재 항목’ 대상의 경우 작성자에게 사전통지 없이 해당 게시물을 삭제할 수 있으며, 이를 작성한 계정은 경고 1회 후 게시글 삭제': '帖子中属于最终幻想14运营政策第 7.4 条「官网处罚事项」的，可在不事先通知作者的情况下删除该帖子，相关账号警告 1 次后删除帖子',
   };
   function translateRonkaRules() {
-    const lis = document.querySelectorAll('.rule-list-wrap li, .rule-block-wrap li');
+    const lis = queryIn(null, '.rule-list-wrap li, .rule-block-wrap li');   // v1.4.1：统一查询入口（全页调用）
     for (const li of lis) {
       if (li.dataset.zhxRule) continue;
       const key = (li.textContent || '').trim();
@@ -182,13 +183,14 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
     if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
+    _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: _ronkaAcceptNode,
     });
     const batch = [];
     while (w.nextNode()) batch.push(w.currentNode);
     for (const n of batch) _procRonkaNode(n);
-    safe(replaceRonkaLodestone, 'Ronka lodestone 替换')();
+    safe(replaceRonkaLodestone, 'Ronka lodestone 替换')(rootArg);
   }
 
   function translateRonkaTitle() {
@@ -209,8 +211,8 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
       characterData: true,
       filter: (m) => !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),
       debounce: 120,
-      handler: () => {
-        safe(translateRonkaPage, 'Ronka 局部')();
+      handler: (nodes) => {
+        for (const n of nodes) safe(translateRonkaPage, 'Ronka 局部')(n);
         safe(translateRonkaTitle, 'Ronka 标题')();
       },
     });

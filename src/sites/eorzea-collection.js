@@ -1,7 +1,7 @@
 /* @phase15-module-order:sites/eorzea-collection */
 /* @phase15-order-link:sites/eorzea-collection<-core/dictionary */
 import { DICT_EC } from '../core/dictionary.js';
-import { _zhixiaTitleKeep } from '../core/dom.js';
+import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -105,9 +105,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   let ecBusy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
   function translateECAttrs(rootArg) {
-    const attrRoot = rootArg?.querySelectorAll ? rootArg : document;
+    const scope = localScope(rootArg);
     ['alt', 'aria-label'].forEach((attr) => {
-      attrRoot.querySelectorAll('[' + attr + ']').forEach((el) => {
+      queryIn(scope, '[' + attr + ']').forEach((el) => {
         const flag = 'zhixiaA' + (attr === 'alt' ? 'lt' : 'Lbl');
         if (el.dataset[flag]) return;
         const v = el.getAttribute(attr);
@@ -119,7 +119,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         }
       });
     });
-    document.querySelectorAll('[title]').forEach((el) => {
+    queryIn(scope, '[title]').forEach((el) => {
       if (_zhixiaTitleKeep.has(el)) return;
       if (el.dataset.zhixiaTitleDone) return;
       const v = el.getAttribute('title');
@@ -138,6 +138,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     try {
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
+      _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
           if (n.nodeType === 1) {
@@ -159,7 +160,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
           if (ph) { const nn = trEC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
         }
       }
-      translateECAttrs();
+      translateECAttrs(rootArg);
     } finally {
       ecBusy = false;
     }
@@ -179,9 +180,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     'banner-wrist-piece.png': '腕部',
     'banner-ring-piece.png': '手指',
   };
-  function bindECPieceTiles() {
+  function bindECPieceTiles(rootArg) {
     let changed = false;
-    document.querySelectorAll('a > img[src*="/pages/header/banner-"]').forEach((img) => {
+    queryIn(localScope(rootArg), 'a > img[src*="/pages/header/banner-"]').forEach((img) => {
       const a = img.parentElement;
       if (!a || a.dataset.zhixiaPiece) return;
       const m = /banner-[\w-]+\.png/.exec(img.getAttribute('src') || '');
@@ -204,8 +205,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     safe(translateECPage, 'EC 全扫')();
     safe(bindECPieceTiles, 'EC 部位图')();
     observeLocal((nodes) => {
-      for (const n of nodes) safe(translateECPage, 'EC 局部')(n);
-      safe(bindECPieceTiles, 'EC 部位图')();
+      for (const n of nodes) {
+        safe(translateECPage, 'EC 局部')(n);
+        safe(bindECPieceTiles, 'EC 部位图')(n);   // v1.4.1：随批次节点局部扫描（原为每批全页）
+      }
     }, 300);
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }
