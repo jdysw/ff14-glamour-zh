@@ -71,7 +71,7 @@ const LEGACY_SAMPLE_TSV = [
   '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
   '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
   '5\t丁\tC\tウ\t다\th5\t104\t',
-].join('\\n');
+].join('\n');
 
 // nameMap 预置映射（模拟「已按首行胜构建完成」的状态；与样例首行一致）
 const PRESET_NAME_MAP = {
