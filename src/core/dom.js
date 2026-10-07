@@ -43,7 +43,11 @@ export { _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, 
   const _scanStats = { global: 0, local: 0 };
 
   // 局部根解析：元素 → 自身；文本节点 → 父元素；缺省（全页调用）→ null。
-  const localScope = (rootArg) => (rootArg == null ? null : (rootArg.nodeType === 1 ? rootArg : (rootArg.parentElement || null)));
+  const localScope = (rootArg) => {
+    if (rootArg == null) return null;
+    if (rootArg.nodeType === 1) return rootArg;
+    return rootArg.parentElement || null;
+  };
 
   // 扫描计数：scopeEl 非空记 local，否则记 global。
   const _markScan = (scopeEl) => { if (scopeEl) _scanStats.local++; else _scanStats.global++; };

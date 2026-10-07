@@ -33,6 +33,8 @@ export { _obsStats, createObserver, observeLocal };
     let timer = null;
     let pending = [];
     let pendingCD = [];              // v1.4.1：characterData 变更目标（与 pending 分列；nodes 语义不变）
+    // v1.4.1：变更目标入队（独立函数——为 collectMuts 控制认知复杂度预算）
+    const _queueCD = (t) => { if (t) pendingCD.push(t); };
     // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
     const collectMuts = (muts) => {
       let hitCD = false;
@@ -41,7 +43,7 @@ export { _obsStats, createObserver, observeLocal };
           if (!o.characterData) continue;                 // 未开启：完全忽略
           if (o.filter && !o.filter(m)) continue;         // 站点过滤（如 RONKA_KR）
           hitCD = true;
-          if (m.target) pendingCD.push(m.target);         // v1.4.1：变更目标经第二参数传出（供局部处理）
+          _queueCD(m.target);                             // v1.4.1：变更目标经第二参数传出（供局部处理）
           continue;
         }
         for (const n of m.addedNodes) {

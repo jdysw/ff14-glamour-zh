@@ -40,7 +40,7 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   // 元素在当前视口下是否可见（用于 hide-m / hide-pc 双份结构：
   // 灰机移动版把同一内容渲染两份，仅其中一份对当前端可见）
   function _visible(el) {
-    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+    for (let n = el; n?.nodeType === 1; n = n.parentElement) {
       let cs;
       try { cs = getComputedStyle(n); } catch (e) { /* 忽略：样式读取失败不影响判定 */ }
       if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
