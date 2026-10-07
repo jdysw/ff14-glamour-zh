@@ -54,6 +54,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     if (source && typeof source === 'object') Object.assign(target, source);
   }
 
+  function _replaceMap(target, source) { for (const k of Object.keys(target)) delete target[k]; if (source) Object.assign(target, source); }
+
   // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
   function _btHashRow(p, zh, t) {
     if (p[0] === '-') return;
