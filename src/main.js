@@ -5,6 +5,7 @@ import { DATA_REMOTE } from './core/constants.js';
 import { DATA_TEXT, _irBuildAux, ensureTables, itemDbReady } from './core/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
+import { startChineseSearch } from './core/chinese-search.js';
 
 
   // 数据就绪后建立衍生注册表（加载早期未注册时保持 null——查询路径均有回退）。
@@ -22,6 +23,7 @@ import { findSite } from './core/site-registry.js';
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   const __site = findSite();
+  safe(startChineseSearch, '中文装备搜索')(__site?.id);
   if (__site) { try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); } }   // 站点入口（Site Registry 配置驱动；Phase 18 边界）
 
   // v1.3：bfcache 兜底——页面从浏览器缓存恢复（快速刷新/后退前进）时可能带着
