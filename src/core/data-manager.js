@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, itemHash, koByZh, loadManifest, nameMap, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, itemHash, koByZh, loadManifest, nameMap, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -43,12 +43,17 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   let SERIES_TEXT = ''; // NOSONAR — 运行时数据表状态
   let ACL_CFC_TEXT = ''; // NOSONAR — 运行时数据表状态
 
-  let itemHash = null;   // hash -> 中文名（EC / mirapri 用） // NOSONAR
-  let ecidMap = null;    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR
-  let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR
-  let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR
+  const itemHash = Object.create(null);   // hash -> 中文名（EC / mirapri 用） // NOSONAR
+  const ecidMap = Object.create(null);    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR
+  const nameMap = Object.create(null);    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR
+  const koByZh = Object.create(null);     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR
 
   // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
+  function _replaceMap(target, source) {
+    for (const k of Object.keys(target)) delete target[k];
+    if (source && typeof source === 'object') Object.assign(target, source);
+  }
+
   // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
   function _btHashRow(p, zh, t) {
     if (p[0] === '-') return;
@@ -147,7 +152,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
           if (t.nameMap[base] === undefined) t.nameMap[base] = t.nameMap[key];
         }
       }
-      itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;
+      _replaceMap(itemHash, t.itemHash); _replaceMap(ecidMap, t.ecidMap); _replaceMap(nameMap, t.nameMap); _replaceMap(koByZh, t.koByZh);
     } catch (e) { /* 忽略：构建收尾 best-effort */ }
   }
 
@@ -309,10 +314,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
       const ko = take('ko');
       const ali = take('alias', true);
       const dup = take('dup', true);
-      if (names) nameMap = names;
-      if (hash) itemHash = hash;
-      if (ecid) ecidMap = ecid;
-      if (ko) koByZh = ko;
+      if (names) _replaceMap(nameMap, names);
+      if (hash) _replaceMap(itemHash, hash);
+      if (ecid) _replaceMap(ecidMap, ecid);
+      if (ko) _replaceMap(koByZh, ko);
       if (ali) _irAliasMap = ali;
       if (dup) _irDupMap = dup;
       if (files.series) SERIES_TEXT = '\n' + files.series;
@@ -469,10 +474,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   function dataGetIndex(name) {
     // 索引引用（数据层与核心模块内部/调试用途；业务侧查询一律走 Item Resolver）
     switch (name) {
-      case 'itemHash': return itemHash || null;
-      case 'nameMap': return nameMap || null;
-      case 'ecidMap': return ecidMap || null;
-      case 'koByZh': return koByZh || null;
+      case 'itemHash': return _tablesReady ? itemHash : null;
+      case 'nameMap': return _tablesReady ? nameMap : null;
+      case 'ecidMap': return _tablesReady ? ecidMap : null;
+      case 'koByZh': return _tablesReady ? koByZh : null;
       default: return null;
     }
   }
@@ -510,7 +515,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
   function _irBuildAux(text) {
     if (_v3Applied) return true;   // v3：dup/alias 已由服务端预构建直读（Phase 13），跳过全表二次扫描
-    if (typeof text !== 'string' || !text || !nameMap) return false;
+    if (!_tablesReady || typeof text !== 'string' || !text) return false;
     const dup = Object.create(null);
     const ali = Object.create(null);
     for (const ln of text.split('\n')) {
