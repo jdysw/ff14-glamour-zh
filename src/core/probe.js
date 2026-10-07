@@ -25,7 +25,9 @@ export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBt
    * 数据规模 / wiki 专项），供手机端实测反馈。默认关闭、近零开销；报告仅本地
    * 显示，不写入存储、不发送任何网络请求。
    * ===================================================================== */
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关 // NOSONAR — 运行时探测开关需要跨函数更新
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let __zhxDiagFlag = false;   // Phase 19：独立测量开关（读取 window.__zhxDiagOn；仅时间线/统计记录，无面板） // NOSONAR — 诊断开关在启动时更新
   const __zhxProbeBtnCss = 'padding:6px 10px;font-size:12px;border:1px solid #8ab4d8;border-radius:8px;background:#eaf4fe;color:#1d5c96;cursor:pointer;';
 
