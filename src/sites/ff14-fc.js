@@ -1,6 +1,5 @@
 /* @phase15-module-order:sites/ff14-fc */
 /* @phase15-order-link:sites/ff14-fc<-core/cache */
-import '../core/cache.js';
 import { _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, resolveByHash } from '../core/data-manager.js';
