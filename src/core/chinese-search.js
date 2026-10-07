@@ -1,6 +1,6 @@
 /* @phase23-module-order:core/chinese-search */
 /* @phase23-order-link:core/chinese-search<-core/data-manager */
-import { resolveByZh } from './data-manager.js';
+import { onTablesReady, resolveByZh, suggestByZh } from './data-manager.js';
 
 const SEARCH_SITES = Object.freeze({
   mirapri: true,
@@ -103,6 +103,253 @@ function rewriteInputTemporarily(input, native) {
   }, 0);
 }
 
+
+const SUGGEST_MIN_CHARS = 2;
+const SUGGEST_LIMIT = 8;
+const SUGGEST_DEBOUNCE_MS = 70;
+const SUGGEST_HIDE_DELAY_MS = 120;
+
+let _suggestBox = null;
+let _suggestInput = null;
+let _suggestRows = [];
+let _suggestActive = -1;
+let _suggestTimer = null;
+let _suggestHideTimer = null;
+let _suggestStyleReady = false;
+const _composingInputs = new WeakSet();
+
+function isSearchInput(input) {
+  const form = input?.form;
+  return !!form && findSearchInput(form) === input;
+}
+
+function isSuggestionQuery(value) {
+  const query = normalizeSearchQuery(value);
+  return query.length >= SUGGEST_MIN_CHARS && /[\u3400-\u9fff]/u.test(query);
+}
+
+function ensureSuggestionStyle() {
+  if (_suggestStyleReady || typeof document === 'undefined') return;
+  const host = document.head || document.documentElement;
+  if (!host?.appendChild || !document.createElement) return;
+  const style = document.createElement('style');
+  style.textContent = [
+    '[data-zhx-chinese-suggest]{position:fixed;display:block;box-sizing:border-box;overflow:auto;margin:0;padding:4px;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:2147483647;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}',
+    '[data-zhx-chinese-suggest][hidden]{display:none;}',
+    '[data-zhx-chinese-suggest] button{display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;width:100%;min-height:40px;margin:0;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:#222;text-align:left;cursor:pointer;}',
+    '[data-zhx-chinese-suggest] button:hover,[data-zhx-chinese-suggest] button[data-active="1"]{background:#f0f2f5;}',
+    '[data-zhx-chinese-suggest] .zhx-suggest-zh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '[data-zhx-chinese-suggest] .zhx-suggest-native{margin-left:12px;overflow:hidden;color:#777;font-size:12px;text-overflow:ellipsis;white-space:nowrap;}',
+  ].join('');
+  host.appendChild(style);
+  _suggestStyleReady = true;
+}
+
+function positionSuggestionBox(input) {
+  if (!_suggestBox || _suggestBox.hidden || !input?.getBoundingClientRect) return;
+  const rect = input.getBoundingClientRect();
+  const gap = 4;
+  const margin = 8;
+  const viewportWidth = Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
+  const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
+  const width = Math.min(Math.max(rect.width, 180), Math.max(180, viewportWidth - margin * 2));
+  const left = Math.min(Math.max(margin, rect.left), Math.max(margin, viewportWidth - width - margin));
+  const below = rect.bottom + gap;
+  const maxHeight = Math.min(320, Math.max(120, viewportHeight - below - margin));
+  _suggestBox.style.left = left + 'px';
+  _suggestBox.style.top = below + 'px';
+  _suggestBox.style.width = width + 'px';
+  _suggestBox.style.maxHeight = maxHeight + 'px';
+}
+
+function hideSuggestions(clearInputState = false) {
+  if (_suggestTimer) {
+    clearTimeout(_suggestTimer);
+    _suggestTimer = null;
+  }
+  if (_suggestHideTimer) {
+    clearTimeout(_suggestHideTimer);
+    _suggestHideTimer = null;
+  }
+  if (_suggestBox) _suggestBox.hidden = true;
+  if (_suggestInput) {
+    _suggestInput.setAttribute('aria-expanded', 'false');
+    if (clearInputState) _suggestInput.removeAttribute('aria-activedescendant');
+  }
+  _suggestRows = [];
+  _suggestActive = -1;
+}
+
+function scheduleSuggestions(input) {
+  if (_suggestTimer) clearTimeout(_suggestTimer);
+  _suggestTimer = setTimeout(() => {
+    _suggestTimer = null;
+    showSuggestions(input);
+  }, SUGGEST_DEBOUNCE_MS);
+}
+
+function selectSuggestion(index) {
+  const row = _suggestRows[index];
+  if (!row || !_suggestInput) return;
+  const input = _suggestInput;
+  input.focus({ preventScroll: true });
+  input.value = row.zh;
+  hideSuggestions(true);
+  try {
+    input.setSelectionRange(input.value.length, input.value.length);
+  } catch {
+    /* 输入类型变化时忽略光标定位失败 */
+  }
+}
+
+function updateSuggestionActive(index) {
+  if (!_suggestBox) return;
+  _suggestActive = index;
+  const buttons = _suggestBox.querySelectorAll('button[data-zhx-index]');
+  for (const button of buttons) {
+    const active = Number(button.getAttribute('data-zhx-index')) === index;
+    button.setAttribute('data-active', active ? '1' : '0');
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+  const activeButton = buttons[index];
+  if (activeButton) {
+    activeButton.scrollIntoView({ block: 'nearest' });
+    if (activeButton.id) _suggestInput?.setAttribute('aria-activedescendant', activeButton.id);
+  } else {
+    _suggestInput?.removeAttribute('aria-activedescendant');
+  }
+}
+
+function showSuggestions(input) {
+  if (!isSearchInput(input) || !input.isConnected) {
+    hideSuggestions(true);
+    return;
+  }
+  const query = normalizeSearchQuery(input.value);
+  if (!isSuggestionQuery(query)) {
+    hideSuggestions(true);
+    return;
+  }
+
+  const rows = suggestByZh(query, SUGGEST_LIMIT);
+  if (!rows.length) {
+    hideSuggestions(true);
+    return;
+  }
+
+  ensureSuggestionStyle();
+  if (!_suggestBox) {
+    _suggestBox = document.createElement('div');
+    _suggestBox.id = 'zhx-chinese-suggest-list';
+    _suggestBox.setAttribute('data-zhx-chinese-suggest', '');
+    _suggestBox.setAttribute('role', 'listbox');
+    (document.body || document.documentElement)?.appendChild(_suggestBox);
+  }
+  if (!_suggestBox) return;
+
+  _suggestInput = input;
+  _suggestRows = rows;
+  _suggestActive = -1;
+  _suggestBox.replaceChildren();
+
+  rows.forEach((row, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'zhx-chinese-suggest-' + index;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
+    button.setAttribute('data-zhx-index', String(index));
+    const zh = document.createElement('span');
+    zh.className = 'zhx-suggest-zh';
+    zh.textContent = row.zh;
+    const native = document.createElement('span');
+    native.className = 'zhx-suggest-native';
+    native.textContent = row.native;
+    button.append(zh, native);
+    _suggestBox.appendChild(button);
+  });
+
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'true');
+  input.setAttribute('aria-controls', _suggestBox.id);
+  _suggestBox.hidden = false;
+  positionSuggestionBox(input);
+}
+
+function handleSearchInput(event) {
+  const input = event.target;
+  if (!isSearchInput(input)) {
+    if (_suggestInput === input) hideSuggestions(true);
+    return;
+  }
+  if (_composingInputs.has(input)) return;
+  scheduleSuggestions(input);
+}
+
+function handleSearchFocus(event) {
+  const input = event.target;
+  if (!isSearchInput(input) || _composingInputs.has(input)) return;
+  scheduleSuggestions(input);
+}
+
+function handleSearchBlur(event) {
+  if (_suggestInput !== event.target) return;
+  if (_suggestHideTimer) clearTimeout(_suggestHideTimer);
+  _suggestHideTimer = setTimeout(() => hideSuggestions(true), SUGGEST_HIDE_DELAY_MS);
+}
+
+function handleSearchKeydown(event) {
+  if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    updateSuggestionActive((_suggestActive + 1) % _suggestRows.length);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    updateSuggestionActive((_suggestActive + _suggestRows.length - 1) % _suggestRows.length);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    hideSuggestions(true);
+  } else if (event.key === 'Enter' && _suggestActive >= 0) {
+    event.preventDefault();
+    event.stopPropagation();
+    selectSuggestion(_suggestActive);
+  }
+}
+
+function handleSuggestionPointerDown(event) {
+  const button = event.target?.closest?.('button[data-zhx-index]');
+  if (!button || !_suggestBox?.contains(button)) return;
+  event.preventDefault();
+  selectSuggestion(Number(button.getAttribute('data-zhx-index')));
+}
+
+function handleCompositionStart(event) {
+  const input = event.target;
+  if (isSearchInput(input)) {
+    _composingInputs.add(input);
+    if (_suggestInput === input) hideSuggestions(true);
+  }
+}
+
+function handleCompositionEnd(event) {
+  const input = event.target;
+  if (!isSearchInput(input)) return;
+  _composingInputs.delete(input);
+  scheduleSuggestions(input);
+}
+
+function bindChineseSearchUi() {
+  document.addEventListener('input', handleSearchInput, true);
+  document.addEventListener('focusin', handleSearchFocus, true);
+  document.addEventListener('focusout', handleSearchBlur, true);
+  document.addEventListener('keydown', handleSearchKeydown, true);
+  document.addEventListener('compositionstart', handleCompositionStart, true);
+  document.addEventListener('compositionend', handleCompositionEnd, true);
+  document.addEventListener('pointerdown', handleSuggestionPointerDown, true);
+  document.addEventListener('scroll', () => hideSuggestions(), true);
+  globalThis.addEventListener?.('resize', () => hideSuggestions());
+}
+
 function handleChineseSearchSubmit(event, siteId) {
   if (!SEARCH_SITES[siteId]) return;
   const form = event.target;
@@ -138,6 +385,10 @@ function startChineseSearch(siteId) {
   if (typeof document === 'undefined' || !document.addEventListener) return;
   if (globalThis.__zhxChineseSearchBound) return;
   globalThis.__zhxChineseSearchBound = true;
+  bindChineseSearchUi();
+  onTablesReady(() => {
+    if (_suggestInput?.isConnected && isSuggestionQuery(_suggestInput.value)) showSuggestions(_suggestInput);
+  });
   document.addEventListener('submit', (event) => {
     try {
       handleChineseSearchSubmit(event, siteId);
