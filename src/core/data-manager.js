@@ -574,6 +574,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return lo;
   }
 
+  function _irBuildSearchAliases(out, aliasText, native) {
+    if (!aliasText) return;
+    for (const part of aliasText.split('；')) {
+      const alias = part.trim();
+      if (/^[\u3400-\u9fff]/.test(alias)) _irSearchPut(out, alias, native);
+    }
+  }
+
   function _irBuildSearchFromText(text) {
     const out = Object.create(null);
     const localeIndex = _irSearchLocaleIndex();
@@ -583,19 +591,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
-      const zh = p[1];
       const native = p[localeIndex];
-      _irSearchPut(out, zh, native);
-      if (p.length > 7 && p[7]) {
-        for (const part of p[7].split('；')) {
-          const alias = part.trim();
-          if (/^[\u3400-\u9fff]/.test(alias)) _irSearchPut(out, alias, native);
-        }
-      }
+      _irSearchPut(out, p[1], native);
+      _irBuildSearchAliases(out, p[7], native);
     }
     return out;
   }
-
 
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
   // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
