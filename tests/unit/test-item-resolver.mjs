@@ -167,6 +167,8 @@ const mkEnv = (over = {}) => ({
   eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
   eq('智能输入：前缀返回按键序候选', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
     { zh: '炎灵', native: 'カ' },
+    { zh: '炎灵袍', native: 'エ' },
+    { zh: '炎灵裤', native: 'オ' },
     { zh: '炎灵长袍', native: 'エ' },
     { zh: '炎灵长裤', native: 'オ' },
   ]));
