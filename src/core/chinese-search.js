@@ -11,6 +11,7 @@ const SEARCH_SITES = Object.freeze({
 
 const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|password|作者|标题|标签|用户/i;
 const SEARCH_INPUT_TYPES = new Set(['', 'text', 'search']);
+const _searchInputCache = new WeakMap();
 
 function normalizeSearchQuery(value) {
   return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
@@ -44,6 +45,12 @@ function searchInputScore(input) {
 
 function findSearchInput(form) {
   if (!form?.querySelectorAll) return null;
+  const cached = _searchInputCache.get(form);
+  if (cached && cached.isConnected !== false
+      && (!form.contains || form.contains(cached))) {
+    return cached;
+  }
+
   const candidates = [...form.querySelectorAll('input')];
   let best = null;
   let bestScore = -Infinity;
@@ -54,9 +61,15 @@ function findSearchInput(form) {
       bestScore = score;
     }
   }
-  if (bestScore >= 5) return best;
-  const usable = candidates.filter((input) => searchInputScore(input) > -Infinity);
-  return usable.length === 1 ? usable[0] : null;
+
+  let result = null;
+  if (bestScore >= 5) result = best;
+  else {
+    const usable = candidates.filter((input) => searchInputScore(input) > -Infinity);
+    result = usable.length === 1 ? usable[0] : null;
+  }
+  if (result) _searchInputCache.set(form, result);
+  return result;
 }
 
 function buildSearchUrl(action, entries, inputName, native, baseHref) {
@@ -116,6 +129,7 @@ let _suggestActive = -1;
 let _suggestTimer = null;
 let _suggestHideTimer = null;
 let _suggestStyleReady = false;
+let _suggestDataReady = false;
 const _composingInputs = new WeakSet();
 
 function isSearchInput(input) {
@@ -140,6 +154,7 @@ function ensureSuggestionStyle() {
     '[data-zhx-chinese-suggest] button:hover,[data-zhx-chinese-suggest] button[data-active="1"]{background:#f0f2f5;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-zh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-native{margin-left:12px;overflow:hidden;color:#777;font-size:12px;text-overflow:ellipsis;white-space:nowrap;}',
+    '[data-zhx-chinese-suggest] .zhx-suggest-empty{box-sizing:border-box;min-height:40px;padding:10px;color:#777;text-align:center;}',
   ].join('');
   host.appendChild(style);
   _suggestStyleReady = true;
@@ -154,10 +169,16 @@ function positionSuggestionBox(input) {
   const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
   const width = Math.min(Math.max(rect.width, 180), Math.max(180, viewportWidth - margin * 2));
   const left = Math.min(Math.max(margin, rect.left), Math.max(margin, viewportWidth - width - margin));
-  const below = rect.bottom + gap;
-  const maxHeight = Math.min(320, Math.max(120, viewportHeight - below - margin));
+  const belowSpace = Math.max(0, viewportHeight - rect.bottom - gap - margin);
+  const aboveSpace = Math.max(0, rect.top - gap - margin);
+  const openBelow = belowSpace >= 120 || belowSpace >= aboveSpace;
+  const available = openBelow ? belowSpace : aboveSpace;
+  const maxHeight = Math.max(80, Math.min(320, available));
+  const top = openBelow
+    ? rect.bottom + gap
+    : Math.max(margin, rect.top - gap - maxHeight);
   _suggestBox.style.left = left + 'px';
-  _suggestBox.style.top = below + 'px';
+  _suggestBox.style.top = top + 'px';
   _suggestBox.style.width = width + 'px';
   _suggestBox.style.maxHeight = maxHeight + 'px';
 }
@@ -232,10 +253,6 @@ function showSuggestions(input) {
   }
 
   const rows = suggestByZh(query, SUGGEST_LIMIT);
-  if (!rows.length) {
-    hideSuggestions(true);
-    return;
-  }
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -252,6 +269,25 @@ function showSuggestions(input) {
   _suggestActive = -1;
   _suggestBox.replaceChildren();
 
+  if (!rows.length) {
+    if (!_suggestDataReady) {
+      hideSuggestions(true);
+      return;
+    }
+    const message = document.createElement('div');
+    message.className = 'zhx-suggest-empty';
+    message.textContent = '未找到对应装备';
+    message.setAttribute('role', 'status');
+    _suggestBox.setAttribute('role', 'status');
+    _suggestBox.appendChild(message);
+    input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-controls', _suggestBox.id);
+    _suggestBox.hidden = false;
+    positionSuggestionBox(input);
+    return;
+  }
+
+  _suggestBox.setAttribute('role', 'listbox');
   rows.forEach((row, index) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -353,6 +389,7 @@ function bindChineseSearchUi() {
 function handleChineseSearchSubmit(event, siteId) {
   if (!SEARCH_SITES[siteId]) return;
   const form = event.target;
+  _searchInputCache.delete(form);
   const input = findSearchInput(form);
   if (!input) return;
 
@@ -387,6 +424,7 @@ function startChineseSearch(siteId) {
   globalThis.__zhxChineseSearchBound = true;
   bindChineseSearchUi();
   onTablesReady(() => {
+    _suggestDataReady = true;
     if (_suggestInput?.isConnected && isSuggestionQuery(_suggestInput.value)) showSuggestions(_suggestInput);
   });
   document.addEventListener('submit', (event) => {
@@ -405,6 +443,7 @@ export {
   handleChineseSearchSubmit,
   isChineseSearchQuery,
   normalizeSearchQuery,
+  positionSuggestionBox,
   searchInputScore,
   startChineseSearch,
 };
