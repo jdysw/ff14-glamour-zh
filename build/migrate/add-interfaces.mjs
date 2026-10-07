@@ -22,7 +22,11 @@ function safeResolve(p, label) {
   }
   return abs;
 }
-const byCodeUnit = (a, b) => (a < b ? -1 : (a > b ? 1 : 0));
+const byCodeUnit = (a, b) => {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+};
 const IN_ROOT = safeResolve(process.argv[2] || path.join(repoRoot, '.cache', 'modules-v1'), '输入目录');
 const OUT_ROOT = safeResolve(process.argv[3] || path.join(repoRoot, '.cache', 'modules-v2'), '输出目录');
 
@@ -97,7 +101,7 @@ function noteUse(n, refCount, propCount) {
 
 const modules = fs.readdirSync(IN_ROOT, { recursive: true })
   .filter((f) => f.endsWith('.js'))
-  .map((f) => f.replace(/\\/g, '/'))
+  .map((f) => f.replaceAll('\\', '/'))
   .sort();
 
 const info = {};

@@ -44,4 +44,4 @@ const out = stmts.map((s) => {
 });
 
 console.error('共 ' + out.length + ' 个顶层块');
-console.log(JSON.stringify(out, null, 1));
+console.log(JSON.stringify(out, null, 1));   // NOSONAR —— 构建工具：stdout 即产物（块地图，build.sh 落盘）；输入为仓库自身源码，非敏感数据

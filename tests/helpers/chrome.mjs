@@ -75,36 +75,64 @@ export async function ensureChrome({ port = DEFAULT_PORT } = {}) {
     '--no-first-run',
     '--disable-gpu',
     '--noerrdialogs',
-    'about:blank',
   ];
   if (process.platform === 'linux') {
-    args.splice(args.length - 1, 0, '--ozone-platform=headless', '--ozone-override-screen-size=800,600', '--use-angle=swiftshader-webgl');
+    args.push('--ozone-platform=headless', '--ozone-override-screen-size=800,600', '--use-angle=swiftshader-webgl', '--disable-dev-shm-usage');
+    // CI 容器沙箱常受限（宿主禁 userns 等）→ 追加兼容旗标；仅 CI 生效，本机行为不变
+    if (process.env.CI) args.push('--no-sandbox');
   }
-  const child = spawn(bin, args, { detached: false, stdio: 'ignore' });
-  child.on('error', () => {});
-  for (let i = 0; i < 50; i++) {
-    await sleep(200);
-    if (await cdpAlive(port)) {
-      return {
-        port,
-        spawned: true,
-        child,
-        stop() {
-          try {
-            child.kill('SIGTERM');
-          } catch {
-            /* noop */
-          }
-        },
-      };
+  args.push('about:blank');
+
+  // 冷启动加固（PR#16 审查轮）：两轮各 ~40s 等待 + stderr 捕获，缓解 CI 冷启动抖动
+  const stderrChunks = [];
+  const WAIT_STEPS = 160; // 160 × 250ms ≈ 40s / 轮
+  for (let round = 1; round <= 2; round++) {
+    let dead = false;
+    const child = spawn(bin, args, { detached: false, stdio: ['ignore', 'ignore', 'pipe'] });
+    child.on('error', (e) => {
+      dead = true;
+      stderrChunks.push('[spawn] ' + e.message);
+    });
+    if (child.stderr) {
+      child.stderr.on('data', (d) => {
+        if (stderrChunks.length < 80) stderrChunks.push(String(d));
+      });
+    }
+    for (let i = 0; i < WAIT_STEPS && !dead; i++) {
+      await sleep(250);
+      if (await cdpAlive(port)) {
+        return {
+          port,
+          spawned: true,
+          child,
+          stop() {
+            try {
+              child.kill('SIGTERM');
+            } catch {
+              /* noop */
+            }
+          },
+        };
+      }
+      if (i === 40 || i === 110) console.error(`[chrome] 第 ${round} 轮等待 CDP 端口 ${port}…（已 ${Math.round(((i + 1) * 250) / 1000)}s）`);
+    }
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      /* noop */
+    }
+    if (round < 2) {
+      console.error(`[chrome] 第 ${round} 轮未就绪，1s 后重试…`);
+      await sleep(1000);
     }
   }
   try {
-    child.kill('SIGKILL');
+    fs.writeFileSync(path.join(cacheDir, 'chrome-stderr.log'), stderrChunks.join(''));
   } catch {
     /* noop */
   }
-  throw new Error(`Chrome 已拉起但 CDP 端口 ${port} 未就绪（等待 10s 超时）`);
+  const tail = stderrChunks.join('').trim().slice(-600);
+  throw new Error(`Chrome 已拉起但 CDP 端口 ${port} 未就绪（两轮等待超时）` + (tail ? `；chrome stderr 摘要：${tail}` : ''));
 }
 
 /** runner 结束兜底：仅停止"由本进程拉起"的实例 */

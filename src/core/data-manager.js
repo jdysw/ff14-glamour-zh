@@ -10,7 +10,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, itemDbReady, itemHash, koByZh, nameMap, onTablesReady, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, itemHash, koByZh, loadManifest, nameMap, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -352,59 +352,64 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     return txt;
   }
 
+  // v3 manifest 读取链（PR#16 审查：自 _ensureTryV3 提升为模块级，纯 IO 无外部捕获）。
+  // 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
+  async function readCachedManifest() {
+    try {
+      const mraw = await storeGetAsync('zhx.v3.manifest');
+      if (mraw) {
+        const i = mraw.indexOf('\n');
+        if (i > 0) return { manT: Number(mraw.slice(0, i)) || 0, man: JSON.parse(mraw.slice(i + 1)) };
+      }
+    } catch (e) { _zhxErr('v3manifest', e); }
+    return { manT: 0, man: null };
+  }
+
+  // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
+  async function fetchManifest() {
+    let txt = null;
+    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
+    if (typeof txt !== 'string' || !txt) return null;
+    try {
+      const m2 = JSON.parse(txt);
+      if (m2?.schema === 3 && m2.sites) {
+        const manT = Date.now();
+        try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+        return m2;
+      }
+    } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
+    return null;
+  }
+
+  // 缓存优先 → 必要时网络（站点是否在列由 _ensureTryV3 统一判断）
+  async function loadManifest() {
+    const c = await readCachedManifest();
+    const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
+    if (c.man && fresh && c.man.schema === 3 && c.man.sites) return c.man;
+    return await fetchManifest();
+  }
+
+  // 站点文件并行获取（含共享词库）
+  async function fetchStationFiles(siteId, names, sm, sharedDict) {
+    const files = {};
+    const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n])
+      .then((t) => { files[n] = t; }, () => { files[n] = null; }));
+    if (sharedDict) {
+      jobs.push(_v3FetchFile(siteId, 'dict', sharedDict)
+        .then((t) => { files.dict = t; }, () => { files.dict = null; }));
+    }
+    await Promise.all(jobs);
+    return files;
+  }
+
+  function allFilesReady(names, files, sharedDict) {
+    for (const n of names) { if (files[n] == null) return false; }
+    return !(sharedDict && files.dict == null);
+  }
+
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败/缺文件 → false（调用方回退 v2，不改变现有行为）。
   async function _ensureTryV3() {
-    // 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
-    async function readCachedManifest() {
-      try {
-        const mraw = await storeGetAsync('zhx.v3.manifest');
-        if (mraw) {
-          const i = mraw.indexOf('\n');
-          if (i > 0) return { manT: Number(mraw.slice(0, i)) || 0, man: JSON.parse(mraw.slice(i + 1)) };
-        }
-      } catch (e) { _zhxErr('v3manifest', e); }
-      return { manT: 0, man: null };
-    }
-    // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
-    async function fetchManifest() {
-      let txt = null;
-      try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
-      if (typeof txt !== 'string' || !txt) return null;
-      try {
-        const m2 = JSON.parse(txt);
-        if (m2?.schema === 3 && m2.sites) {
-          const manT = Date.now();
-          try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
-          return m2;
-        }
-      } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
-      return null;
-    }
-    // 缓存优先 → 必要时网络（站点是否在列由下方统一判断）
-    async function loadManifest() {
-      const c = await readCachedManifest();
-      const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
-      if (c.man && fresh && c.man.schema === 3 && c.man.sites) return c.man;
-      return await fetchManifest();
-    }
-    // 站点文件并行获取（含共享词库）
-    async function fetchStationFiles(siteId, names, sm, sharedDict) {
-      const files = {};
-      const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n])
-        .then((t) => { files[n] = t; }, () => { files[n] = null; }));
-      if (sharedDict) {
-        jobs.push(_v3FetchFile(siteId, 'dict', sharedDict)
-          .then((t) => { files.dict = t; }, () => { files.dict = null; }));
-      }
-      await Promise.all(jobs);
-      return files;
-    }
-    function allFilesReady(names, files, sharedDict) {
-      for (const n of names) { if (files[n] == null) return false; }
-      return !(sharedDict && files.dict == null);
-    }
-
     const site = findSite();
     if (!site?.id) return false;
     try {

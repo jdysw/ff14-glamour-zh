@@ -73,7 +73,7 @@ export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBt
   // Phase 19：可复用诊断记录 API（稳定 JSON 结构；基准 / 自动化与 Probe 共用）
   function __zhxDiagRecord() {
     const rec = { v: 1, boot: Math.round(__zhxBootAt || 0), marks: {}, obs: {}, dom: {}, dl: {}, res: {}, cache: {}, data: {}, dict: {} };
-    try { rec.marks = { ...(window.__zhxMarks || {}) }; } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
+    try { rec.marks = { ...window.__zhxMarks }; } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
     try { rec.obs = { ticks: _obsStats.ticks, nodes: _obsStats.nodes, ms: _obsStats.ms, maxMs: _obsStats.maxMs }; } catch (e) { /* 忽略：观察统计读取失败 */ }
     try { rec.dom = { calls: _domStats.calls, ms: _domStats.ms, maxMs: _domStats.maxMs, firstMs: _domStats.firstMs }; } catch (e) { /* 忽略：处理统计读取失败 */ }
     try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }

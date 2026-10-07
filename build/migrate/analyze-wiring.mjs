@@ -95,7 +95,11 @@ console.log('════ B. 循环依赖（import 图）════');
 const graph = new Map();
 // 所有依赖都进图（包括 main->core 等）
 for (const m of mods) graph.set(m.rel, [...m.deps]);
-const byName = (a, b) => (a < b ? -1 : (a > b ? 1 : 0));
+const byName = (a, b) => {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+};
 
 function minRotation(parts) {
   let mi = 0;
