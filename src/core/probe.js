@@ -7,7 +7,7 @@ import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
 import { _domStats } from './targets.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
-export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
+export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
 
 
   /* @zhixia:core-probe-start */
