@@ -250,6 +250,8 @@ function showSuggestions(input) {
     return;
   }
   const query = normalizeSearchQuery(input.value);
+  // 在数据尚未就绪时也要记住当前输入框，数据 ready 回调才能补显示候选。
+  _suggestInput = input;
   if (!isSuggestionQuery(query)) {
     hideSuggestions(true);
     return;
