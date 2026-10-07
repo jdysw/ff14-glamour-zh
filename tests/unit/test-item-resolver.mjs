@@ -46,7 +46,8 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver');
+const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver')
+  .map((seg) => seg.replaceAll('findSite()', '__testFindSite()'));
 
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
@@ -83,7 +84,7 @@ function buildResolver(env = {}) {
     'let ITEM_DB_TEXT = __env.text || "";',
     'const DATA_TEXT = { get items() { return ITEM_DB_TEXT; } };',
     'let _v3Applied = !!__env.v3Applied;',
-    'const findSite = () => __env.site || { id: "mirapri" };',
+    'const __testFindSite = () => __env.site || { id: "mirapri" };',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
