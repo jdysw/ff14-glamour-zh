@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -321,6 +321,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       const dup = take('dup', true);
       if (names) _replaceMap(nameMap, names);
       if (hash) _replaceMap(itemHash, hash);
+      _irSearchByZh = null;
+      _irSearchKeys = null;
       if (ecid) _replaceMap(ecidMap, ecid);
       if (ko) _replaceMap(koByZh, ko);
       if (ali) _irAliasMap = ali;
@@ -519,6 +521,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
   // 仅构建当前站点所需的原生语言映射，不扩大现有 v3 数据文件。
   let _irSearchByZh = null; // NOSONAR — 数据就绪后按当前站点数据重建
+  let _irSearchKeys = null;  // NOSONAR — 智能输入按需建立排序键表
 
   function _irNormZhSearch(value) {
     return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
@@ -555,6 +558,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return out;
   }
 
+  function _getIrSearchKeys() {
+    if (_irSearchKeys !== null) return _irSearchKeys;
+    _irSearchKeys = Object.keys(_irSearchByZh || {}).sort();
+    return _irSearchKeys;
+  }
+
+  function _irSearchLowerBound(keys, target) {
+    let lo = 0, hi = keys.length;
+    while (lo < hi) {
+      const mid = lo + ((hi - lo) >> 1);
+      if (keys[mid] < target) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
   function _irBuildSearchFromText(text) {
     const out = Object.create(null);
     const localeIndex = _irSearchLocaleIndex();
@@ -583,7 +602,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function _irBuildAux(text) {
     if (_v3Applied) {
       // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
-      if (_irSearchByZh === null) _irSearchByZh = _irBuildSearchFromNames(nameMap, _irAliasMap);
+      if (_irSearchByZh === null) {
+        _irSearchByZh = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        _irSearchKeys = null;
+      }
       return true;
     }
     if (!_tablesReady || typeof text !== 'string' || !text) return false;
@@ -595,6 +617,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     _irDupMap = dup;
     _irAliasMap = ali;
     _irSearchByZh = _irBuildSearchFromText(text);
+    _irSearchKeys = null;
     return true;
   }
 
@@ -641,6 +664,24 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     _irStats[z ? 'hit' : 'miss']++;
     return z;
   }
+
+  function suggestByZh(zh, limit = 8) {
+    const key = _irNormZhSearch(zh);
+    if (key.length < 2 || !/[\\u3400-\\u9fff]/u.test(key)) return [];
+    const map = _irSearchByZh;
+    if (!map) return [];
+    const keys = _getIrSearchKeys();
+    const max = Math.max(1, Math.min(8, Number(limit) || 8));
+    const start = _irSearchLowerBound(keys, key);
+    const out = [];
+    for (let i = start; i < keys.length && out.length < max; i++) {
+      const candidate = keys[i];
+      if (!candidate.startsWith(key)) break;
+      out.push({ zh: candidate, native: map[candidate] });
+    }
+    return out;
+  }
+
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
     const first = nameMap?.[name];
     if (!first) return [];
