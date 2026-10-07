@@ -80,12 +80,13 @@ function buildResolver(env = {}) {
     'let ITEM_DB_TEXT = __env.text || "";',
     'const DATA_TEXT = { get items() { return ITEM_DB_TEXT; } };',
     'let _v3Applied = !!__env.v3Applied;',
+    'const findSite = () => __env.site || { id: "mirapri" };',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
@@ -105,6 +106,7 @@ const mkEnv = (over = {}) => ({
   koByZh: { 甲: '가', 丙: '나' },
   text: SAMPLE_TSV,
   itemDbReady: undefined,
+  site: { id: 'mirapri' },
   ...over,
 });
 
@@ -121,7 +123,7 @@ const mkEnv = (over = {}) => ({
   eq('resolveByName 未命中 → null', api.resolveByName('nope'), null);
   eq('resolveByName 空输入 → null', api.resolveByName(null), null);
 
-  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
+  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveByZh', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
     .every((f) => typeof api[f] === 'function'), true);
 }
 
@@ -156,6 +158,8 @@ const mkEnv = (over = {}) => ({
 
   const r = api._irBuildAux(SAMPLE_TSV);
   eq('_irBuildAux 返回 true', r, true);
+  eq('中文装备名 → 当前站点日文名', api.resolveByZh('甲'), 'ア');
+  eq('中文别名 → 当前站点日文名', api.resolveByZh('丙组合'), 'イ');
   const maps = api.__maps();
 
   eq('真歧义登记（en）', JSON.stringify(maps.dup.A), JSON.stringify(['甲', '乙']));
@@ -182,6 +186,23 @@ const mkEnv = (over = {}) => ({
   eq('_irBuildAux 幂等（重复构建同结果）', api._irBuildAux(SAMPLE_TSV) && JSON.stringify(api.__maps().dup.A), JSON.stringify(['甲', '乙']));
   const kept = api.resolveAllByName('A');
   ok('返回数组为副本（修改不污染注册表）', (() => { kept.push('x'); return api.resolveAllByName('A').length === 2; })());
+}
+
+// ─────────────────────────────────────────────────────────────
+// B2. 中文搜索按站点语言倒排
+// ─────────────────────────────────────────────────────────────
+{
+  for (const [site, expected] of [
+    ['mirapri', 'ア'],
+    ['fc', 'ア'],
+    ['collection', 'ア'],
+    ['ronka', '가'],
+    ['ec', 'A'],
+  ]) {
+    const api = buildResolver(mkEnv({ site: { id: site } }));
+    api._irBuildAux(SAMPLE_TSV);
+    eq(`中文装备名 → ${site} 原生名`, api.resolveByZh('甲'), expected);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
