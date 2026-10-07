@@ -56,6 +56,9 @@ const SAMPLE_TSV = [
   '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
   '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
   '5\t丁\tC\tウ\t다\th5\t104\t',
+  '6\t炎灵长袍\tD\tエ\t라\th6\t105\t炎灵袍',
+  '7\t炎灵长裤\tE\tオ\t마\th7\t106\t炎灵裤',
+  '8\t炎灵\tF\tカ\t바\th8\t107\t',
 ].join('\n');
 
 // nameMap 预置映射（模拟「已按首行胜构建完成」的状态；与样例首行一致）
@@ -86,7 +89,7 @@ function buildResolver(env = {}) {
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
@@ -123,7 +126,7 @@ const mkEnv = (over = {}) => ({
   eq('resolveByName 未命中 → null', api.resolveByName('nope'), null);
   eq('resolveByName 空输入 → null', api.resolveByName(null), null);
 
-  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveByZh', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
+  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveByZh', 'suggestByZh', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
     .every((f) => typeof api[f] === 'function'), true);
 }
 
@@ -160,6 +163,16 @@ const mkEnv = (over = {}) => ({
   eq('_irBuildAux 返回 true', r, true);
   eq('中文装备名 → 当前站点日文名', api.resolveByZh('甲'), 'ア');
   eq('中文别名 → 当前站点日文名', api.resolveByZh('丙组合'), 'イ');
+  eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
+  eq('智能输入：前缀返回按键序候选', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
+    { zh: '炎灵', native: 'カ' },
+    { zh: '炎灵长袍', native: 'エ' },
+    { zh: '炎灵长裤', native: 'オ' },
+  ]));
+  eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
+    { zh: '炎灵袍', native: 'エ' },
+  ]));
+  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
   const maps = api.__maps();
 
   eq('真歧义登记（en）', JSON.stringify(maps.dup.A), JSON.stringify(['甲', '乙']));
