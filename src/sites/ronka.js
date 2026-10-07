@@ -1,6 +1,5 @@
 /* @phase15-module-order:sites/ronka */
 /* @phase15-order-link:sites/ronka<-sites/ffxiv-collection */
-import './ffxiv-collection.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/dictionary.js';
