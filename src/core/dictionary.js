@@ -1,6 +1,5 @@
 /* @phase15-module-order:core/dictionary */
 /* @phase15-order-link:core/dictionary<-core/runtime */
-import './runtime.js';
 import { cacheReset } from './cache.js';
 import { _zhxErr } from './runtime.js';
 export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
@@ -2184,7 +2183,7 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
      另收集「修正词条」（旧译→新译）做定向替换：已译文本会被中文幂等逻辑跳过，
      不替换则旧译残留到会话结束（新增词条无需此步——补扫会处理未译文本）。 */
   // v1.2.x：单层合并与修正收集拆出（降认知复杂度）
-  let _dictFixesBuf = null;
+  let _dictFixesBuf = null; // NOSONAR — 词典修正缓冲区按运行时应用阶段更新
 
   function _dictFixCheck(obj, k, newV) {
     const oldV = obj[k];
@@ -2268,7 +2267,7 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
   /* ── 词典对外接口（v1.4 Phase 5）：六层词表访问 + 修订号 + 派生缓存失效 ──
      get/has 为翻译器与后续模块的统一查询面（当前翻译器保持既有直查路径；
      接口契约由测试冻结）；update = dict.json 文本原地合并；invalidate = 清词典派生缓存。 */
-  let _dictRevision = 0;
+  let _dictRevision = 0; // NOSONAR — 词典修订号随运行时词典更新
   // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
   const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };
   function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.hasOwn(o, key)) ? o[key] : undefined; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
