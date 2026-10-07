@@ -37,13 +37,29 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   // EC 装备 ID 从内嵌主表第 4 列读取（中文名 -> EC_ID，由离线采集写入），
   // 不再实时调 EC 接口——那个请求会被 Cloudflare 拦，按钮永远等不到回调。
 
+  // 元素在当前视口下是否可见（用于 hide-m / hide-pc 双份结构：
+  // 灰机移动版把同一内容渲染两份，仅其中一份对当前端可见）
+  function _visible(el) {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      let cs;
+      try { cs = getComputedStyle(n); } catch (e) { /* 忽略：样式读取失败不影响判定 */ }
+      if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+    }
+    return true;
+  }
+
+  // 按标题找区块：同名多份时优先返回「当前端可见」的一份，
+  // 避免把反查块插进被 CSS 隐藏的副本（手机端不可见 bug 的根因）
   function blockByTitle(title) {
     const blocks = document.querySelectorAll('.ff14-content-box-block');
+    let firstAny = null;
     for (const b of blocks) {
       const t = b.querySelector('.ff14-content-box-block--title');
-      if (t && t.textContent.trim() === title) return b;
+      if (!(t && t.textContent.trim() === title)) continue;
+      if (!firstAny) firstAny = b;
+      if (_visible(b)) return b;
     }
-    return null;
+    return firstAny;
   }
 
   function getJapaneseName() {
@@ -207,13 +223,25 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     return block;
   }
 
+  // 从选择器命中的元素中取第一个「当前端可见」的（无可见项时退回第一项）
+  function _pickVisible(sel) {
+    const list = document.querySelectorAll(sel);
+    let first = null;
+    for (const el of list) {
+      if (!first) first = el;
+      if (_visible(el)) return el;
+    }
+    return first;
+  }
+
   function _mountReverseBlock(block, src) {
     // 位置：「其他站点链接」之后；无该区块时退回 infobox / 正文顶
+    // （双份结构下取当前端可见的那份，避免插进隐藏副本）
     if (src?.parentElement) {
       src.parentElement.insertBefore(block, src.nextSibling);
       return;
     }
-    const info = document.querySelector('.infobox, [class*="infobox"]');
+    const info = _pickVisible('.infobox, [class*="infobox"]');
     if (info?.parentElement) {
       info.parentElement.insertBefore(block, info.nextSibling);
       return;
