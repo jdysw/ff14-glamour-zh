@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/probe */
 /* @phase15-order-link:core/probe<-core/targets */
 import { cacheInfo } from './cache.js';
-import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';
+import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';
 import { DICT_LAYERS } from './dictionary.js';
 import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
@@ -78,7 +78,7 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
     try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }
     try { rec.res = { hit: _irStats.hit, miss: _irStats.miss }; } catch (e) { /* 忽略：解析统计读取失败 */ }
     try { rec.cache = cacheInfo(); } catch (e) { /* 忽略：缓存信息读取失败 */ }
-    try { rec.data = { items: ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0, series: SERIES_TEXT ? SERIES_TEXT.length : 0, acl: ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
+    try { rec.data = { items: DATA_TEXT.items ? DATA_TEXT.items.length : 0, series: DATA_TEXT.series ? DATA_TEXT.series.length : 0, acl: DATA_TEXT.acl ? DATA_TEXT.acl.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
     try { rec.dict = { chars: __zhxDictChars() }; } catch (e) { /* 忽略：词典规模读取失败 */ }
     return rec;
   }
@@ -87,9 +87,9 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
     L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
     try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats) + ' dom: ' + JSON.stringify(_domStats) + ' dl: ' + JSON.stringify(_dlStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
     try {
-      L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
-        + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
-        + ' acl=' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
+      L.push('data: items=' + (DATA_TEXT.items ? DATA_TEXT.items.length : 0)
+        + ' series=' + (DATA_TEXT.series ? DATA_TEXT.series.length : 0)
+        + ' acl=' + (DATA_TEXT.acl ? DATA_TEXT.acl.length : 0)
         + ' ver=' + (DATA_VER || 'n/a'));
     } catch (e) { /* 忽略：数据规模读取失败（可能尚未就绪） */ }
     try {

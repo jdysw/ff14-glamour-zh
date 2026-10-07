@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -38,10 +38,15 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
+  let ITEM_DB_TEXT = '';
+  let SERIES_TEXT = '';
+  let ACL_CFC_TEXT = '';
+  const DATA_TEXT = {
+    get items() { return ITEM_DB_TEXT; },
+    get series() { return SERIES_TEXT; },
+    get acl() { return ACL_CFC_TEXT; },
+  };
 
-  let ITEM_DB_TEXT = '';   // 数据到达前为空串，各查表函数静默跳过 // NOSONAR — 运行时数据表状态
-  let SERIES_TEXT = ''; // NOSONAR — 运行时数据表状态
-  let ACL_CFC_TEXT = ''; // NOSONAR — 运行时数据表状态
 
   const itemHash = Object.create(null);   // hash -> 中文名（EC / mirapri 用） // NOSONAR
   const ecidMap = Object.create(null);    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR

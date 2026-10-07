@@ -1,6 +1,6 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
-import { DATA_VER, SERIES_TEXT, dataGetIndex, resolveByName } from './data-manager.js';
+import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
 import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { storeGetAsync, storeSet } from './storage.js';
@@ -14,8 +14,8 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
   function _getSeriesMap() {
     if (_seriesMap) return _seriesMap;
     _seriesMap = new Map();
-    if (typeof SERIES_TEXT === 'string' && SERIES_TEXT) {
-      for (const line of SERIES_TEXT.split('\n')) {
+    if (typeof DATA_TEXT.series === 'string' && DATA_TEXT.series) {
+      for (const line of DATA_TEXT.series.split('\n')) {
         if (!line) continue;
         const i = line.indexOf('|');
         if (i > 0) _seriesMap.set(line.slice(0, i), line.slice(i + 1));
