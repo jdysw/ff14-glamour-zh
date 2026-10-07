@@ -4,6 +4,7 @@
 //       采用最小 DOM harness 驱动 canonical source，验证事件绑定、候选渲染、
 //       键盘 / pointer / IME、视口定位、未命中提示和搜索框缓存。
 //       数据层排序与解析契约由 test-item-resolver.mjs 独立验证。
+//       1.4.2 后续修复：新增 E 段——独立搜索框（无 form，如 ronka）自动转换。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,6 +50,7 @@ class FakeElement {
     this.focused = false;
     this.selection = null;
     this.scrolled = false;
+    this.dispatched = [];
   }
 
   setAttribute(name, value) {
@@ -129,6 +131,11 @@ class FakeElement {
   scrollIntoView() {
     this.scrolled = true;
   }
+
+  dispatchEvent(event) {
+    this.dispatched.push(event?.type || 'unknown');
+    return true;
+  }
 }
 
 class FakeDocument {
@@ -174,7 +181,7 @@ function buildSearchHarness() {
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
     'const onTablesReady = (cb) => { __ready.push(cb); };',
-    'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ"})[v] || null;',
+    'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
     'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',
@@ -367,6 +374,57 @@ try {
     eq('未命中提示文本', status?.textContent, '未找到对应装备');
     eq('未命中提示使用 status 语义', status?.getAttribute('role'), 'status');
     eq('未命中提示容器切换为 status', box.getAttribute('role'), 'status');
+  }
+
+  console.log('\n── E：独立搜索框（无 form）自动转换 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ronka');
+
+    const standalone = new FakeElement('input');
+    standalone.setAttribute('type', 'search');
+    standalone.setAttribute('placeholder', '검색어를 입력해주세요');
+    standalone.value = '炎灵';
+    document.dispatch('input', { target: standalone });
+    await sleep(750);
+    eq('独立搜索框：完整中文名自动转换为原生名', standalone.value, 'カ');
+    eq('转换后派发 input 事件（通知页面刷新建议）', (standalone.dispatched || []).includes('input'), true);
+
+    standalone.dispatched = [];
+    document.dispatch('input', { target: standalone });
+    await sleep(750);
+    eq('原生值不再重复转换', standalone.value, 'カ');
+    eq('原生值不产生额外 input 事件', (standalone.dispatched || []).length, 0);
+
+    const unknown = new FakeElement('input');
+    unknown.setAttribute('type', 'search');
+    unknown.setAttribute('placeholder', '검색어를 입력해주세요');
+    unknown.value = '不存在装备';
+    document.dispatch('input', { target: unknown });
+    await sleep(750);
+    eq('未命中中文名保持原样', unknown.value, '不存在装备');
+
+    const plain = new FakeElement('input');
+    plain.setAttribute('type', 'text');
+    plain.setAttribute('placeholder', '备注');
+    plain.value = '炎灵';
+    document.dispatch('input', { target: plain });
+    await sleep(750);
+    eq('非搜索语义输入框不转换', plain.value, '炎灵');
+
+    const form = new FakeElement('form');
+    const inForm = new FakeElement('input');
+    inForm.form = form;
+    inForm.setAttribute('type', 'search');
+    inForm.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(inForm);
+    inForm.value = '炎灵';
+    document.dispatch('input', { target: inForm });
+    await sleep(750);
+    eq('表单内搜索框不走独立转换（由提交路径处理）', inForm.value, '炎灵');
   }
 } finally {
   globalThis.document = previousDocument;

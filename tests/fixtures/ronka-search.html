@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>ronka-search fixture</title>
+</head>
+<body>
+  <header><h1>Lookbook 搜索夹具</h1></header>
+  <main>
+    <!-- ronka 风格：搜索框不属于任何 form（React SPA「输入即出建议」） -->
+    <div class="search-modal" role="dialog" aria-label="검색">
+      <input id="search-input" type="search" placeholder="검색어를 입력해주세요" autocomplete="off">
+      <button type="button" class="apply">필터적용</button>
+    </div>
+    <!-- 对照：普通表单搜索框，不应触发「独立搜索框自动转换」 -->
+    <form id="legacy-search" action="/search" method="get">
+      <input type="text" name="keyword" placeholder="검색">
+      <button type="submit">검색</button>
+    </form>
+  </main>
+</body>
+</html>

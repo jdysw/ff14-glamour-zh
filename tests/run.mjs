@@ -30,6 +30,7 @@ const SUITES = {
     'integration/test-ec.mjs',
     'integration/test-mirapri.mjs',
     'integration/test-chinese-search-submit.mjs',
+    'integration/test-ronka-search-inline.mjs',
     'integration/test-probe.mjs',
     'integration/test-dict-single-source.mjs',
     'integration/test-version-consistency.mjs',

@@ -388,8 +388,83 @@ function handleCompositionEnd(event) {
   scheduleSuggestions(input);
 }
 
+// ── 独立搜索框自动转换（1.4.2 后续修复）──
+// ronka 等站点的搜索框不属于任何 form（React 客户端过滤、无提交事件可拦）；
+// 输入停止后把完整中文装备名自动替换为站点原生名（React 兼容方式），让站内搜索照常工作。
+const STANDALONE_SEARCH_HINT_RE = /검색어|키워드|キーワード|搜索|搜尋|検索|search/i;
+const STANDALONE_CONVERT_DELAY_MS = 650;
+const STANDALONE_EXCLUDE_TYPES = new Set(['hidden', 'password', 'email', 'tel', 'url', 'number', 'date', 'datetime-local', 'month', 'week', 'time', 'color', 'range', 'file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image']);
+
+let _standaloneTimer = null;
+let _standaloneInput = null;
+
+function isStandaloneSearchInput(input) {
+  if (!input || input.form) return false;
+  if (String(input.tagName || '').toUpperCase() !== 'INPUT') return false;
+  const type = String(input.getAttribute?.('type') || '').toLowerCase();
+  if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
+  if (input.disabled || input.readOnly) return false;
+  const meta = [
+    input.getAttribute?.('placeholder'),
+    input.getAttribute?.('aria-label'),
+    input.getAttribute?.('name'),
+    input.getAttribute?.('id'),
+    input.getAttribute?.('title'),
+  ].filter(Boolean).join(' ');
+  return STANDALONE_SEARCH_HINT_RE.test(meta);
+}
+
+function rewriteInputNatively(input, native) {
+  let applied = false;
+  try {
+    const descriptor = typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype
+      ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      : null;
+    if (descriptor?.set) {
+      descriptor.set.call(input, native);
+      applied = input.value === native;
+    }
+  } catch { /* 回退：直接赋值 */ }
+  if (!applied) {
+    try {
+      input.value = native;
+      applied = input.value === native;
+    } catch { /* 忽略 */ }
+  }
+  if (!applied) return false;
+  try {
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  } catch { /* 事件派发失败不影响替换结果 */ }
+  return true;
+}
+
+function scheduleStandaloneConversion(input) {
+  if (_standaloneTimer) clearTimeout(_standaloneTimer);
+  _standaloneInput = input;
+  _standaloneTimer = setTimeout(() => {
+    _standaloneTimer = null;
+    const element = _standaloneInput;
+    _standaloneInput = null;
+    try {
+      if (!element || element.isConnected === false) return;
+      const query = normalizeSearchQuery(element.value);
+      if (query.length < 2 || !isChineseSearchQuery(query)) return;
+      const native = resolveByZh(query);
+      if (!native || native === query) return;
+      rewriteInputNatively(element, native);
+    } catch { /* 静默：转换失败不影响用户输入 */ }
+  }, STANDALONE_CONVERT_DELAY_MS);
+}
+
+function handleStandaloneSearchInput(event) {
+  const input = event.target;
+  if (isSearchInput(input)) return;
+  if (isStandaloneSearchInput(input)) scheduleStandaloneConversion(input);
+}
+
 function bindChineseSearchUi() {
   document.addEventListener('input', handleSearchInput, true);
+  document.addEventListener('input', handleStandaloneSearchInput, true);
   document.addEventListener('focusin', handleSearchFocus, true);
   document.addEventListener('focusout', handleSearchBlur, true);
   document.addEventListener('keydown', handleSearchKeydown, true);
