@@ -560,7 +560,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   function _getIrSearchKeys() {
     if (_irSearchKeys !== null) return _irSearchKeys;
-    _irSearchKeys = Object.keys(_irSearchByZh || {}).sort();
+    _irSearchKeys = Object.keys(_irSearchByZh || {}).sort((a, b) => a.localeCompare(b));
     return _irSearchKeys;
   }
 
@@ -568,7 +568,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     let lo = 0, hi = keys.length;
     while (lo < hi) {
       const mid = lo + ((hi - lo) >> 1);
-      if (keys[mid] < target) lo = mid + 1;
+      if (keys[mid].localeCompare(target) < 0) lo = mid + 1;
       else hi = mid;
     }
     return lo;
@@ -667,7 +667,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   function suggestByZh(zh, limit = 8) {
     const key = _irNormZhSearch(zh);
-    if (key.length < 2 || !/[\\u3400-\\u9fff]/u.test(key)) return [];
+    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _irSearchByZh;
     if (!map) return [];
     const keys = _getIrSearchKeys();
