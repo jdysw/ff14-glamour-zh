@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, itemHash, koByZh, loadManifest, nameMap, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -53,8 +53,6 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     for (const k of Object.keys(target)) delete target[k];
     if (source && typeof source === 'object') Object.assign(target, source);
   }
-
-  function _replaceMap(target, source) { for (const k of Object.keys(target)) delete target[k]; if (source) Object.assign(target, source); }
 
   // v1.2.x：单行解析拆出（降认知复杂度）；v1.3：按需写目标索引 + 染剂候选顺手收集
   function _btHashRow(p, zh, t) {
