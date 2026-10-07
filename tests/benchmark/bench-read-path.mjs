@@ -27,7 +27,7 @@ s = repl1(s, "function _ensureFinalize() {", "function _ensureFinalize() {\n    
 s = repl1(s, "      else setTimeout(go, 50);", "      else setTimeout(go, 50);\n      try { (window.__zhxT = window.__zhxT || {}).schedAt = performance.now(); } catch (e) {}", 't-schedAt');
 s = repl1(s, "        const go = () => {\n          __zhxMark('buildStart');", "        const go = () => {\n          try { (window.__zhxT = window.__zhxT || {}).buildStart = performance.now(); } catch (e) {}\n          __zhxMark('buildStart');", 't-buildStart');
 s = repl1(s, "    _tablesReady = true;", "    _tablesReady = true;\n    try { (window.__zhxT = window.__zhxT || {}).ready = performance.now(); } catch (e) {}", 't-ready');
-s = repl1(s, "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) {} }", "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) {} }\n      try { (window.__zhxT = window.__zhxT || {}).fireDone = performance.now(); } catch (e) {}", 't-fireDone');
+s = repl1(s, "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }", "      const cbs = _readyCbs.splice(0);\n      for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }\n      try { (window.__zhxT = window.__zhxT || {}).fireDone = performance.now(); } catch (e) {}", 't-fireDone');
 
 // v1.4：分片调度已内建（_btNext：MC 优先 + setTimeout 兜底），历史变体（mc2/full2）退役（见 git 历史）。
 const variant = 'base2';

@@ -77,4 +77,4 @@ node build/verify_dicts.js src/ff14-glamour-zh.external.user.js --dict-json "$CA
 printf '%s\n' '⑰ 版本一致性校验（package.json ≡ src ≡ header ≡ dist）'
 node build/version.mjs --check
 
-printf '\n%s\n' "✅ Phase 17 构建验收完成：$OUT"
+printf '\n%s\n' "✅ Phase 18 构建验收完成：$OUT"
