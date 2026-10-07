@@ -188,7 +188,7 @@ const mkEnv = (over = {}) => ({
 
   eq('别名登记（单值）', JSON.stringify(maps.ali['丙组合']), JSON.stringify(['丙']));
   eq('别名登记（分号拆分）', JSON.stringify(maps.ali['丙套装']), JSON.stringify(['丙']));
-  eq('主体别名含全部拆分键', Object.keys(maps.ali).sort().join(','), '丙套装,丙组合');
+  eq('主体别名含全部拆分键', Object.keys(maps.ali).sort().join(','), '丙套装,丙组合,炎灵袍,炎灵裤');
 
   eq('resolveAllByName 真歧义 → 全量（行序）', JSON.stringify(api.resolveAllByName('A')), JSON.stringify(['甲', '乙']));
   eq('resolveAllByName 非重名 → 单值数组', JSON.stringify(api.resolveAllByName('B')), JSON.stringify(['丙']));
