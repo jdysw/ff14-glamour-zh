@@ -1,13 +1,13 @@
 /* @phase15-module-order:core/probe */
 /* @phase15-order-link:core/probe<-core/targets */
 import { cacheInfo } from './cache.js';
-import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _dlStats, _irStats, ecidMap, itemHash, koByZh, nameMap, resolveKo } from './data-manager.js';
+import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';
 import { DICT_LAYERS } from './dictionary.js';
 import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
 import { _domStats } from './targets.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
-export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
+export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
 
 
   /* @zhixia:core-probe-start */
@@ -93,10 +93,11 @@ export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBt
         + ' ver=' + (DATA_VER || 'n/a'));
     } catch (e) { /* 忽略：数据规模读取失败（可能尚未就绪） */ }
     try {
-      L.push('idx: nameMap=' + (nameMap ? Object.keys(nameMap).length : 0)
-        + ' itemHash=' + (itemHash ? Object.keys(itemHash).length : 0)
-        + ' ecidMap=' + (ecidMap ? Object.keys(ecidMap).length : 0)
-        + ' koByZh=' + (koByZh ? Object.keys(koByZh).length : 0));
+      const idx = { nameMap: dataGetIndex('nameMap'), itemHash: dataGetIndex('itemHash'), ecidMap: dataGetIndex('ecidMap'), koByZh: dataGetIndex('koByZh') };
+    L.push('idx: nameMap=' + Object.keys(idx.nameMap || {}).length
+        + ' itemHash=' + Object.keys(idx.itemHash || {}).length
+        + ' ecidMap=' + Object.keys(idx.ecidMap || {}).length
+        + ' koByZh=' + Object.keys(idx.koByZh || {}).length);
     } catch (e) { /* 忽略：索引规模读取失败 */ }
     try { L.push('cache: ' + JSON.stringify(cacheInfo())); } catch (e) { /* 忽略：缓存信息读取失败 */ }
     try { L.push('dict: ' + __zhxDictChars()); } catch (e) { /* 忽略：词典规模读取失败 */ }
