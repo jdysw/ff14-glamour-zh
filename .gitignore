@@ -15,9 +15,6 @@ __pycache__/
 # 测试缓存（注入副本/日志/Chrome profile；v1.4 起测试资产在 tests/）
 tests/.cache/
 
-# extract_dicts.py 副产物（块位置信息，供临时脚本读取）
-dict/_blocks.json
-
 # 数据重建下载缓存（不入库）
 build/.cache/
 

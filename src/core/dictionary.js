@@ -2266,8 +2266,8 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
   }
 
   /* ── 词典对外接口（v1.4 Phase 5）：六层词表访问 + 修订号 + 派生缓存失效 ──
-     get/has 为翻译器与后续模块的统一查询面（当前翻译器仍直查词表对象，
-     站点拆分阶段迁移）；update = dict.json 文本原地合并；invalidate = 清词典派生缓存。 */
+     get/has 为翻译器与后续模块的统一查询面（当前翻译器保持既有直查路径；
+     接口契约由测试冻结）；update = dict.json 文本原地合并；invalidate = 清词典派生缓存。 */
   let _dictRevision = 0;
   // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
   const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };

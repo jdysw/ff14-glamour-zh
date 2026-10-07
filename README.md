@@ -80,7 +80,6 @@ ff14-glamour-zh/
 │   └── ff14-glamour-zh.external.user.js
 ├── build/                 — 构建脚本
 │   ├── inject_dicts.py    — 词典注入：dict/*.json → src/ 模板（构建时全量覆盖生成）
-│   ├── extract_dicts.py   — 历史工具：反向提取（仅一次性迁移；权威源 = dict/*.json）
 │   ├── verify_dicts.js    — 词典校验（src 内嵌 vs JSON 源 / vs 远程产物）
 │   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
 │   ├── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
@@ -159,7 +158,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 **词典单一源（v1.4 Phase 16）**：
 - `dict/*.json` 是词典唯一权威源；**只改 JSON，勿手改源码词典块**（块上方有「⚠️ 自动生成」标识，手改会被下次构建覆盖）。
 - 构建时自动生成两路产物并互核：源码内嵌兜底（`inject_dicts.py`）与数据站发布词库（`make_dict_json.py` → `dict.json`）；`build.sh` 第 ⑭/⑮/⑯ 步逐条校验「源 ≡ 内嵌 ≡ 远程」一致。
-- `extract_dicts.py` 为历史一次性迁移工具（仅「模板已先行改词、需搬回 JSON」时使用），日常勿用。
+- `extract_dicts.py`（反向提取工具）已于 v1.4 Phase 21 删除——`dict/*.json` 为唯一权威源，反向提取场景判定不再需要（如确需可从 git 历史取回）。
 
 ### 规则
 
@@ -180,7 +179,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **服务端预构建索引（v1.4 Phase 13）**：v3 数据按站裁剪语言列（每站 `names` 只含其翻译链实际查询的语言键：mirapri / fc / collection = 日文、ec = 英文、ronka = 韩文；`dup` 同步裁剪），单站全链 6.35MB → 4.14MB raw（gzip 1.95MB → 1.15MB）、parse 全链 ~270ms → ~55ms；客户端不再做任何二次计算（v3 就绪时 `_irBuildAux` 直接返回）；对比数据见 `tests/benchmark/bench-v3-load.mjs`（结论：维持 TSV 格式）。
 - **统一缓存体系（v1.4 Phase 14）**：`@zhixia:core-cache-registry` 把全部内存缓存集中登记（四类职责：`lookup` 名称查找 / `translate` 词典派生 / `derived` 数据派生 / `data` 持久数据由 DataManager 管理）——统一入口 `cacheReset(kind)`（按类清理，无参全清）、`cacheInfo()`（修订号 + 条目数观测）、`cacheGuard`（容量防线：查找缓存上限 5000 条，达限清空重建）；`_fireTablesReady` / `dictInvalidate` 的散落手工 reset 已清零（新增缓存只需登记一行）；机制由 `tests/unit/test-cache.mjs` 冻结。
 - **模块化构建（v1.4 Phase 15）**：构建方式 = 「单文件源 → 块切分 → 模块树 → Rollup 打包（`bash build.sh`，含静态验收门）」——`src/ff14-glamour-zh.external.user.js` 是切分母本与唯一手改入口；`src/main.js` / `src/core/*.js`（14）/ `src/sites/*.js`（6）均为构建链原样输出（**直接改模块会被下次构建覆盖**，改动一律落单文件源与 `build/` 链）；块→模块分配（`build/migrate/module-assign.json`）与模块输出顺序契约（`build/module-order.json`，顺序相邻关系 = 测试文本提取的正式约束）是构建约束；产物锚点体系不变（36 锚点 / 16 tag），全量回归由 `tests/` 冻结。
-- **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py` 降级为一次性迁移工具；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
+- **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py`（一次性迁移工具）已随 Phase 21 删除；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
 - **发布 / CI 单一源（v1.4 Phase 17）**：`package.json` 的 `version` 是唯一版本源——构建 ⓪ 步自动同步 `src` 模板与 `build/userscript-header.txt` 的 `@version`；`build/version.mjs --check` 校验「package ≡ src ≡ header ≡ dist」（进入构建 ⑰ 步与发布门）；数据文件结构校验由 `build/validate-data.py` 负责（CI 与数据部署前同源执行）；契约由 `tests/integration/test-version-consistency.mjs` 冻结。
 - **错误边界与统一记录（v1.4 Phase 18）**：运行时错误经统一设施 `_zhxErr(tag, err)` 记录（有界 20 条缓冲 + `console.warn`；不写存储、不发请求）；四类高风险边界（runtime 入口 / observer 回调 / 数据就绪回调 / 站点适配器入口）已加固——单点错误不拖垮站点、且不再静默；**禁止空 catch**（重要错误须经 `_zhxErr` 记录；良性路径须显式「忽略：原因」注释；纯函数区不设 catch）。`?zhx_probe=1` 时启动期错误随 `__zhxErrs` 一并在诊断面板呈现（报告含 `errs:` 行）。源文件增删顶层语句（块）后，先跑 `build/migrate/reindex-assign.py` 重算 `module-assign.json` 块索引再构建（构建 ⑤ 步会以「A3 遗漏行」哨兵报出索引错位）。
 - **性能测量基建（v1.4 Phase 19）**：测量长期化 + 基线对比。① 脚本侧开关：`?zhx_probe=1`（面板）或注入前置 `window.__zhxDiagOn = true`（无面板，基准 / 自动化用）——开启后时间线（`__zhxMarks`：finalize / readEnd / applied / buildStart / buildEnd / ready / fireDone）与统计面可经 `__zhxDiagRecord()` 读取（boot / obs / dom / dl / resolver / cache / 数据规模 / 词典规模）。② 仓库侧基准：`tests/benchmark/` 产标准报告（`zhx-bench/1` → `tests/.cache/bench/`）；`npm run bench:baseline` 存基线（`tests/benchmark/baseline/`）、`npm run bench:compare -- 旧 新 [--pct 10] [--strict]` 出「旧 / 新 / Δ%」对比表——**性能结论一律以基准数据为准，不凭体感**。

@@ -21,7 +21,7 @@ export { DATA_BASE, DATA_BASE_V3, DATA_FILES, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_I
 
   /* @zhixia:data-layer-start */
   /* ── 外置数据版（Greasy Fork 发布版）：按需下载 + 版本化本地缓存 ──
-     内嵌自用版由 build/make_embedded5.py 把本区块整体替换为内嵌数据。 */
+     内嵌自用版构建链已退役（v1.4），仅维护本外置版。 */
   /* @zhixia:core-constants-start */
   /* ── Core Constants（v1.4 Phase 4）：数据源与网络契约（DATA_BASE /
        DATA_FILES，均为 https）。Phase 15 模块化构建时，本区段将原样抽出为
