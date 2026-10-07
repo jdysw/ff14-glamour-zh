@@ -207,8 +207,8 @@ function updateSuggestionActive(index) {
   _suggestActive = index;
   const buttons = _suggestBox.querySelectorAll('button[data-zhx-index]');
   for (const button of buttons) {
-    const active = Number(button.getAttribute('data-zhx-index')) === index;
-    button.setAttribute('data-active', active ? '1' : '0');
+    const active = Number(button.dataset.zhxIndex) === index;
+    button.dataset.active = active ? '1' : '0';
     button.setAttribute('aria-selected', active ? 'true' : 'false');
   }
   const activeButton = buttons[index];
@@ -241,7 +241,7 @@ function showSuggestions(input) {
   if (!_suggestBox) {
     _suggestBox = document.createElement('div');
     _suggestBox.id = 'zhx-chinese-suggest-list';
-    _suggestBox.setAttribute('data-zhx-chinese-suggest', '');
+    _suggestBox.dataset.zhxChineseSuggest = '';
     _suggestBox.setAttribute('role', 'listbox');
     (document.body || document.documentElement)?.appendChild(_suggestBox);
   }
@@ -258,7 +258,7 @@ function showSuggestions(input) {
     button.id = 'zhx-chinese-suggest-' + index;
     button.setAttribute('role', 'option');
     button.setAttribute('aria-selected', 'false');
-    button.setAttribute('data-zhx-index', String(index));
+    button.dataset.zhxIndex = String(index);
     const zh = document.createElement('span');
     zh.className = 'zhx-suggest-zh';
     zh.textContent = row.zh;
@@ -320,7 +320,7 @@ function handleSuggestionPointerDown(event) {
   const button = event.target?.closest?.('button[data-zhx-index]');
   if (!button || !_suggestBox?.contains(button)) return;
   event.preventDefault();
-  selectSuggestion(Number(button.getAttribute('data-zhx-index')));
+  selectSuggestion(Number(button.dataset.zhxIndex));
 }
 
 function handleCompositionStart(event) {
