@@ -21,7 +21,8 @@
     "check:dist": "node --check dist/ff14-glamour-zh.greasyfork.user.js",
     "validate:data": "python3 build/validate-data.py",
     "version:check": "node build/version.mjs --check",
-    "version:sync": "node build/version.mjs"
+    "version:sync": "node build/version.mjs",
+    "check:source": "node build/verify-module-source.mjs"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

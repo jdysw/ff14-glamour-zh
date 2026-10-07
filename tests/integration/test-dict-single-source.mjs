@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { repoRoot, srcFile, cachePath } from '../helpers/paths.mjs';
+import { repoRoot, dictionaryFile, cachePath } from '../helpers/paths.mjs';
 
 let fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -32,7 +32,7 @@ function run(bin, args) {
   }
 }
 
-const SRC_REL = 'src/ff14-glamour-zh.external.user.js';
+const SRC_REL = 'src/core/dictionary.js';
 const tail = (s, n = 300) => s.slice(-n).replace(/\n+/g, ' ⏎ ');
 
 console.log('── A：src ≡ dict/*.json（verify 模式1）──');
@@ -40,7 +40,7 @@ const a = run('node', ['build/verify_dicts.js', SRC_REL]);
 ok('A1 verify 模式1 通过（src 内嵌与 JSON 源逐条一致）', a.code === 0, a.code !== 0 ? tail(a.out) : '');
 
 console.log('── B：六个词典块带「自动生成」标识 ──');
-const src = fs.readFileSync(srcFile, 'utf8');
+const src = fs.readFileSync(dictionaryFile, 'utf8');
 const srcLines = src.split('\n');
 const BLOCKS = [
   ['DICT_COMMON', 'dict-common.json'],
@@ -66,7 +66,7 @@ console.log('── C：篡改防护（改副本 → 必失败；inject 再生 �
 const dir = cachePath('dict-single-source');
 fs.mkdirSync(dir, { recursive: true });
 const copyPath = path.join(dir, 'tamper.user.js');
-fs.copyFileSync(srcFile, copyPath);
+fs.copyFileSync(dictionaryFile, copyPath);
 
 // 选一条「无引号/反斜杠」的简单条目做篡改（避免 JS 字符串转义干扰）
 const fcData = JSON.parse(fs.readFileSync(path.join(repoRoot, 'dict', 'dict-fc.json'), 'utf8'));

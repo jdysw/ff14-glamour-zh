@@ -3,13 +3,12 @@
 //
 // 单一版本源 = package.json 的 "version"。
 // 其余 @version 位置一律由本脚本同步生成（禁止手改，防多套手工版本漂移）：
-//   - src/ff14-glamour-zh.external.user.js（模板头）
 //   - build/userscript-header.txt（dist 元数据模板，rollup banner 输入）
 //   - dist/ff14-glamour-zh.greasyfork.user.js（构建产物，只校验不同步）
 //
 // 用法：
-//   node build/version.mjs           # 同步：package.json → src 模板 + header 模板（幂等）
-//   node build/version.mjs --check   # 校验：package.json ≡ src ≡ header ≡ dist（dist 存在时）
+//   node build/version.mjs           # 同步：package.json → header 模板（幂等）
+//   node build/version.mjs --check   # 校验：package.json ≡ header ≡ dist（dist 存在时）
 // 退出码：0 通过；1 不一致（打印明细）。
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PKG_FILE = 'package.json';
 const SYNC_FILES = [
-  'src/ff14-glamour-zh.external.user.js',
   'build/userscript-header.txt',
 ];
 const DIST_FILE = 'dist/ff14-glamour-zh.greasyfork.user.js';
@@ -64,7 +62,7 @@ if (CHECK) {
   process.exit(0);
 }
 
-// —— 同步模式：package.json → src 模板 + header 模板（幂等）——
+// —— 同步模式：package.json → userscript header 模板（幂等）——
 for (const rel of SYNC_FILES) {
   const { text, prefix, suffix, ver } = readVersion(rel);
   if (ver === VERSION) {

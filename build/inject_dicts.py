@@ -1,10 +1,10 @@
-# inject_dicts.py —— 从 dict/*.json 生成词典 JS 块并回填模板（v3：common 复用 + 对象展开形态）
-# 用法: python3 inject_dicts.py [目标模板路径]
+# inject_dicts.py —— 从 dict/*.json 生成词典 JS 块并写入 canonical module（v3：common 复用 + 对象展开形态）
+# 用法: python3 inject_dicts.py [目标 JS 路径]
 # 输出格式：
 #   const DICT_COMMON = {...};              ← 通用层（注入一次，四站共享）
 #   const DICT  = { ...DICT_COMMON, {...} };← 站层（覆盖 common；v3 起 Object.assign → 展开语法）
 #   （DICT_EC / DICT_FC / DICT_RONKA 同理）
-# Phase 16（词典源单一化）：dict/*.json 为词典唯一权威源——本脚本每次构建全量覆盖
+# dict/*.json 为词典唯一权威源——本脚本每次构建全量覆盖 src/core/dictionary.js 中的 6 个词典块
 # 生成 6 个词典块，并在每块上方维护一行「⚠️ 自动生成」标识（存在即更新、缺失即插入，
 # 幂等；对块与标识的任何手改都会被下一次构建覆盖）。
 import re, json, sys, os
@@ -18,7 +18,7 @@ def _guard(p):
         raise SystemExit(f'目标路径越界（仅允许仓库内）: {p}')
     return rp
 
-TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/ff14-glamour-zh.external.user.js'))
+TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/core/dictionary.js'))
 
 # (变量名, 文件名, kind, 是否站点层)
 FILES = [

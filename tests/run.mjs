@@ -32,6 +32,7 @@ const SUITES = {
     'integration/test-probe.mjs',
     'integration/test-dict-single-source.mjs',
     'integration/test-version-consistency.mjs',
+    'integration/test-module-source.mjs',
   ],
   live: [
     'live/test-kasuga.mjs',

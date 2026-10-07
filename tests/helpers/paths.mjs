@@ -10,7 +10,8 @@ export const repoRoot = path.resolve(__dirname, '..', '..');
 
 /** 待测产物 / 数据 */
 export const distFile = path.join(repoRoot, 'dist', 'ff14-glamour-zh.greasyfork.user.js');
-export const srcFile = path.join(repoRoot, 'src', 'ff14-glamour-zh.external.user.js');
+export const srcFile = path.join(repoRoot, 'src', 'main.js');
+export const dictionaryFile = path.join(repoRoot, 'src', 'core', 'dictionary.js');
 export const dataDirPath = path.join(repoRoot, 'data');
 export const itemsTsvPath = path.join(dataDirPath, 'ff14-items.tsv');
 
