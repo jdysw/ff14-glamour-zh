@@ -391,7 +391,7 @@ function handleCompositionEnd(event) {
 // ── 独立搜索框自动转换（1.4.2 后续修复）──
 // ronka 等站点的搜索框不属于任何 form（React 客户端过滤、无提交事件可拦）；
 // 输入停止后把完整中文装备名自动替换为站点原生名（React 兼容方式），让站内搜索照常工作。
-const STANDALONE_SEARCH_HINT_RE = /검색어|키워드|キーワード|搜索|搜尋|検索|search/i;
+const STANDALONE_SEARCH_HINT_RE = /검색어|키워드|キーワード|搜索|搜尋|検索|search|关键词|關鍵詞|keyword/i;
 const STANDALONE_CONVERT_DELAY_MS = 650;
 const STANDALONE_EXCLUDE_TYPES = new Set(['hidden', 'password', 'email', 'tel', 'url', 'number', 'date', 'datetime-local', 'month', 'week', 'time', 'color', 'range', 'file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image']);
 
