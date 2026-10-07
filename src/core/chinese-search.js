@@ -134,7 +134,10 @@ const _composingInputs = new WeakSet();
 
 function isSearchInput(input) {
   const form = input?.form;
-  return !!form && findSearchInput(form) === input;
+  if (!form) return false;
+  const cached = _searchInputCache.get(form);
+  if (cached && cached !== input) _searchInputCache.delete(form);
+  return findSearchInput(form) === input;
 }
 
 function isSuggestionQuery(value) {
