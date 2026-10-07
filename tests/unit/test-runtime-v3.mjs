@@ -208,6 +208,7 @@ const NAMES = [
   'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
   'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
+  '_replaceMap',
   // 注意：_ensureTryFast / _ensureFetchAll / _waitPageLoad 在提取段内有真实定义，
   // 它们会遮蔽同名参数——因此不列入桩清单（其网络访问仍经下面的 httpGet 桩记录）。
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
@@ -221,7 +222,7 @@ function makeWorld(over = {}) {
     storeSet: (k, v) => { store[k] = v; rec.set.push([k, v]); },
     httpGet: (url) => { rec.xhr.push(url); return (over.http || (() => Promise.reject(new Error('net down'))))(url); },
     ITEM_DB_TEXT: '', SERIES_TEXT: '', ACL_CFC_TEXT: '',
-    itemHash: null, nameMap: null, ecidMap: null, koByZh: null,
+    itemHash: Object.create(null), nameMap: Object.create(null), ecidMap: Object.create(null), koByZh: Object.create(null),
     DATA_VER: '',
     DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
@@ -234,6 +235,7 @@ function makeWorld(over = {}) {
     findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri' })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
     _irAliasMap: null, _irDupMap: null,
+    _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     _ensureTryFast: async () => { rec.tryFast++; return over.fast === null ? null : (over.fast || { local: {} }); },
     _ensureFetchAll: async () => { rec.fetchAll++; },
@@ -325,7 +327,7 @@ const manText = JSON.stringify(man);
   const dm = buildDM(w);
   const r = await dm._ensureTryV3();
   eq('B12 manifest 404 → false', r, false);
-  eq('B13 失败时不应用（nameMap 保持 null）', dm._peek().nm, null);
+  eq('B13 失败时不应用（nameMap 为空容器）', Object.keys(dm._peek().nm).length, 0);
 }
 
 // B4: schema 不兼容 → false

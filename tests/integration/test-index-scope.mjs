@@ -10,7 +10,7 @@ const FIXTURE = fixtureUrl('ec-page.html');
 
 // ── 生成测试副本：__zhxDebug 暴露（v1.4 Phase 3：测试 hook 已内建于 src）──
 let s = readDist();
-const n3 = "      itemHash = t.itemHash; ecidMap = t.ecidMap; nameMap = t.nameMap; koByZh = t.koByZh;";
+const n3 = "        _replaceMap(itemHash, t.itemHash); _replaceMap(ecidMap, t.ecidMap); _replaceMap(nameMap, t.nameMap); _replaceMap(koByZh, t.koByZh);";
 if (s.split(n3).length - 1 !== 1) throw new Error('n3 计数异常: ' + (s.split(n3).length - 1));
 s = s.replace(n3, n3 + "\n      window.__zhxDebug = { itemHash: t.itemHash, ecidMap: t.ecidMap, nameMap: t.nameMap, koByZh: t.koByZh, dyeCount: t.dye.length };");
 fs.writeFileSync(cachePath('gf-idx-test.user.js'), s);

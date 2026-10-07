@@ -56,6 +56,7 @@ const NAMES = [
   'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
   'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
+  '_tablesReady', '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
 
@@ -71,6 +72,8 @@ function makeWorld(over = {}) {
     SERIES_TEXT: '',
     ACL_CFC_TEXT: '',
     itemHash: null, nameMap: null, ecidMap: null, koByZh: null,
+    _tablesReady: false,
+    _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     DATA_VER: '',
     DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',

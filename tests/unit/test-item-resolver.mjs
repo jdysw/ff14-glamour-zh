@@ -72,11 +72,13 @@ const PRESET_NAME_MAP = {
 function buildResolver(env = {}) {
   const rec = { tryCalls: [], readyCbs: [], errs: [] };
   const stubs = [
+    'let _tablesReady = true;',
     'let itemHash = __env.itemHash;',
     'let nameMap = __env.nameMap;',
     'let ecidMap = __env.ecidMap;',
     'let koByZh = __env.koByZh;',
     'let ITEM_DB_TEXT = __env.text || "";',
+    'const DATA_TEXT = { get items() { return ITEM_DB_TEXT; } };',
     'let _v3Applied = !!__env.v3Applied;',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',

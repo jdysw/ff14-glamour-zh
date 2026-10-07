@@ -243,8 +243,11 @@ async function main() {
     await build(b, ['nameMap'], 'scope');
     const sb = b.snap();
     ok('scope=[nameMap]：该索引建立', sb.nameMap !== null && Object.keys(sb.nameMap).length > 0);
+    // 容器语义（v1.4）：置空 = 空容器或 null 均视为已清空
     ok('scope=[nameMap]：其余索引置空（重建语义）',
-      sb.itemHash === null && sb.ecidMap === null && sb.koByZh === null);
+      (sb.itemHash === null || Object.keys(sb.itemHash).length === 0)
+      && (sb.ecidMap === null || Object.keys(sb.ecidMap).length === 0)
+      && (sb.koByZh === null || Object.keys(sb.koByZh).length === 0));
     eq('scope=[nameMap]：EC_ID 查询 → null', b.resolveEcId('测试甲'), null);
   }
 
