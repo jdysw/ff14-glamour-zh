@@ -12,3 +12,8 @@
 
 /ff14/v2/acl.txt
   Content-Type: text/plain; charset=utf-8
+
+# Runtime Data v3（v1.4 Phase 12）：按站数据与 manifest 均以字符串解析读取；
+# .tsv 默认 MIME（text/tab-separated-values）不在 CF 压缩白名单，统一声明 text/plain
+/ff14/v3/*
+  Content-Type: text/plain; charset=utf-8

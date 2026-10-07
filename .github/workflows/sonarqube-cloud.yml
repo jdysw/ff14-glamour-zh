@@ -28,3 +28,23 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Temporary PR diagnostics: expose the exact new-code Sonar issues to the CI log.
+      - name: Dump Sonar PR issues
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          set -euo pipefail
+          export SONAR_AUTH="Authorization: Bearer $SONAR_TOKEN"
+          task_id="$(sed -n 's/^ceTaskId=//p' .scannerwork/report-task.txt)"
+          for i in $(seq 1 30); do
+            status="$(curl -fsSL -H "$SONAR_AUTH" "https://sonarcloud.io/api/ce/task?id=${task_id}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["task"].get("status",""))')"
+            [ "$status" = "SUCCESS" ] && break
+            [ "$status" = "FAILED" ] && { echo "Sonar CE task failed"; exit 1; }
+            sleep 5
+          done
+          test "$status" = "SUCCESS"
+          curl -fsSL -H "$SONAR_AUTH" "https://sonarcloud.io/api/issues/search?componentKeys=jdysw_ff14-glamour-zh&pullRequest=${{ github.event.pull_request.number }}&resolved=false&ps=500" \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get("issues",[]), ensure_ascii=False, indent=2))'

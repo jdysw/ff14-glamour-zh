@@ -56,6 +56,15 @@ def main() -> int:
     ver = {'v': datetime.date.today().strftime('%Y%m%d'), 'files': files}
     (v2 / 'version.json').write_text(json.dumps(ver, indent=1), encoding='utf-8')
     print('  version.json 已生成')
+    # Runtime Data v3（v1.4 Phase 12）：按站数据 + manifest → site/ff14/v3/
+    r = subprocess.run(
+        [sys.executable, str(ROOT / 'build' / 'make-runtime-data.py'), '--out', str(OUT / 'ff14' / 'v3')],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        print('✗ Runtime Data v3 生成失败'); print(r.stdout); print(r.stderr)
+        return 1
+    m = re.search(r'version=([0-9a-f]{12})', r.stdout or '')
+    print(f'  [v3     ] <- build/make-runtime-data.py  version={m.group(1) if m else "?"}')
     shutil.copy2(Path(__file__).resolve().parent / 'index.html', OUT / 'index.html')
     # 响应头规则：让 CF 压缩 items.tsv（text/tab-separated-values 不在 CF 压缩白名单，
     # 6.7MB → 约 1.76MB）——与本地备用通道 ~/zhixia-data/_headers 保持一致

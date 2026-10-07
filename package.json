@@ -1,0 +1,31 @@
+{
+  "name": "ff14-glamour-zh",
+  "version": "1.3.1",
+  "private": true,
+  "description": "FF14 幻化站中文化 · 与灰机 wiki 双向互查（userscript）",
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "bash build.sh",
+    "test": "node tests/run.mjs --suite=unit,integration",
+    "test:unit": "node tests/run.mjs --suite=unit",
+    "test:integration": "node tests/run.mjs --suite=integration",
+    "test:live": "node tests/run.mjs --suite=live",
+    "test:all": "node tests/run.mjs --suite=all",
+    "test:core": "node tests/run.mjs --suite=core",
+    "test:bench": "node tests/run.mjs --suite=benchmark",
+    "bench:baseline": "node tests/benchmark/bench-lifecycle.mjs --save && node tests/benchmark/bench-read-path.mjs --save",
+    "bench:compare": "node tests/benchmark/compare.mjs",
+    "check:dist": "node --check dist/ff14-glamour-zh.greasyfork.user.js",
+    "validate:data": "python3 build/validate-data.py",
+    "version:check": "node build/version.mjs --check",
+    "version:sync": "node build/version.mjs",
+    "check:source": "node build/verify-module-source.mjs"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "rollup": "^4.64.0"
+  }
+}

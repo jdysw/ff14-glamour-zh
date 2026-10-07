@@ -1,11 +1,12 @@
-# inject_dicts.py —— 从 dict/*.json 生成词典 JS 块并回填模板（v3：common 复用 + 对象展开形态）
-# 用法: python3 inject_dicts.py [目标模板路径]
+# inject_dicts.py —— 从 dict/*.json 生成词典 JS 块并写入 canonical module（v3：common 复用 + 对象展开形态）
+# 用法: python3 inject_dicts.py [目标 JS 路径]
 # 输出格式：
 #   const DICT_COMMON = {...};              ← 通用层（注入一次，四站共享）
 #   const DICT  = { ...DICT_COMMON, {...} };← 站层（覆盖 common；v3 起 Object.assign → 展开语法）
 #   （DICT_EC / DICT_FC / DICT_RONKA 同理）
-# v3 变更：站层形态 Object.assign({}, DICT_COMMON, {...}) → { ...DICT_COMMON, ... }（Sonar S6661）；
-#           find_block 兼容两种历史形态，可将旧模板一次性升级；再次运行幂等。
+# dict/*.json 为词典唯一权威源——本脚本每次构建全量覆盖 src/core/dictionary.js 中的 6 个词典块
+# 生成 6 个词典块，并在每块上方维护一行「⚠️ 自动生成」标识（存在即更新、缺失即插入，
+# 幂等；对块与标识的任何手改都会被下一次构建覆盖）。
 import re, json, sys, os
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根（脚本相对，去机器绑定）
@@ -17,7 +18,7 @@ def _guard(p):
         raise SystemExit(f'目标路径越界（仅允许仓库内）: {p}')
     return rp
 
-TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/ff14-glamour-zh.external.user.js'))
+TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/core/dictionary.js'))
 
 # (变量名, 文件名, kind, 是否站点层)
 FILES = [
@@ -108,6 +109,29 @@ def find_block(s, name):
         j += 1
     return (stmt_start, j)
 
+
+def banner_line(fn):
+    """词典块上方的「自动生成」标识行（Phase 16）。"""
+    return '  // ⚠️ 自动生成（dict/%s → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建' % fn
+
+
+def ensure_banner(s, name, fn):
+    """在词典块上方维护标识行：已有则校正为现行文本，缺失则插入；幂等。"""
+    r = find_block(s, name)
+    if not r:
+        return s
+    start = r[0]
+    want = banner_line(fn)
+    pe = start - 1                      # 上一行的终止符 '\n'
+    if pe > 0 and s[pe] == '\n':
+        ps = s.rfind('\n', 0, pe) + 1   # 上一行行首
+        prev = s[ps:pe]
+        if re.match(r'^\s*// ⚠️ 自动生成.*inject_dicts\.py', prev):
+            if prev == want:
+                return s
+            return s[:ps] + want + s[pe:]
+    return s[:start] + want + '\n' + s[start:]
+
 s = open(TARGET, encoding='utf-8').read()
 
 # 0) 确保 DICT_COMMON 块存在（首次插入到 `const DICT = ` 之前）
@@ -137,6 +161,7 @@ for name, fn, kind, is_site in FILES:
         print(name, '块未找到'); continue
     start, end = r
     s = s[:start] + new_stmt + s[end:]
+    s = ensure_banner(s, name, fn)
     n = len(entries)
     total += n
     print('%-12s 注入 %d 条%s' % (name, n, '（展开站层）' if is_site else '（共享层）'))

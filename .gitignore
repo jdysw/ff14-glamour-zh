@@ -2,6 +2,9 @@
 # dist/：本地构建产物（build.sh 生成，供测试与手动验证）；发布走 GitHub Releases
 dist/
 
+# 构建链缓存（build.sh 的 CACHE_DIR：块地图 / 模块草案）
+.cache/
+
 # —— 杂项 ——
 *.bak-*
 *.tmp
@@ -9,11 +12,14 @@ dist/
 node_modules/
 __pycache__/
 
-# extract_dicts.py 副产物（块位置信息，供临时脚本读取）
-dict/_blocks.json
+# 测试缓存（注入副本/日志/Chrome profile；v1.4 起测试资产在 tests/）
+tests/.cache/
 
 # 数据重建下载缓存（不入库）
 build/.cache/
 
 # 数据站部署产物（.github/deploy/prepare.py 生成）
 site/
+
+# Runtime Data v3 生成产物（build/make-runtime-data.py 生成；部署时在 CI / prepare 内重建）
+data/v3/
