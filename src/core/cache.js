@@ -7,7 +7,7 @@ import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { storeGetAsync, storeSet } from './storage.js';
 import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
 import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _readCachedTable, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, _writeCachedTable, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _readCachedTable, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, _writeCachedTable, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
 
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
@@ -208,24 +208,23 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
                    失效：数据到达（_fireTablesReady）；容量由数据表规模界定
      统一入口：cacheReset(kind) 按类清理；cacheInfo() 观测（修订号 + 条目数）。 */
   const _cacheReg = new Map();
-  const CACHE_KINDS = ['data', 'lookup', 'translate', 'derived'];
   const CACHE_CAP_LOOKUP = 5000;   // lookup 类容量防线：超出即清空重建（避免长会话无界增长）
   function cacheRegister(name, kind, reset, size) { _cacheReg.set(name, { kind, reset, size }); }
   function cacheReset(kind) {
-    for (const [name, e] of _cacheReg) {
+    for (const e of _cacheReg.values()) {
       if (kind && e.kind !== kind) continue;
-      try { e.reset(); } catch (e2) { /* 忽略：单个缓存清理失败不阻断其余 */ }
+      try { e.reset(); } catch (error_) { /* 忽略：单个缓存清理失败不阻断其余 */ }
     }
   }
   function cacheInfo() {
     const entries = {};
     for (const [name, e] of _cacheReg) {
-      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
+      try { entries[name] = e.size ? e.size() : null; } catch (error_) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
     }
     return {
       entries,
       rev: {
-        data: (typeof DATA_VER !== 'undefined' ? DATA_VER : ''),
+        data: (typeof DATA_VER === 'string' ? DATA_VER : ''),
         dict: (typeof dictGetRevision === 'function' ? dictGetRevision() : 0),
       },
     };
@@ -235,7 +234,7 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
   function cacheGuard(cache, cap, count) {
     if (!cache) return false;
     let n = (typeof count === 'number') ? count : cache.size;
-    if (typeof n !== 'number') { n = 0; for (const k in cache) n++; }
+    if (typeof n !== 'number') n = Object.keys(cache).length;
     if (n < cap) return false;
     if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) { /* 忽略：清空失败则重建继续（正确性不受影响） */ } return true; }
     for (const k in cache) { try { delete cache[k]; } catch (e) { /* 忽略：同上（清空失败无碍） */ } }
@@ -244,7 +243,7 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
   /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */
   cacheRegister('en2zh', 'lookup', () => { _en2zhCache.clear(); }, () => _en2zhCache.size);
   cacheRegister('jp2zh', 'lookup', () => { _jp2zhCache.clear(); }, () => _jp2zhCache.size);
-  cacheRegister('ronkaItems', 'lookup', () => { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; _ronkaCacheN = 0; }, () => _ronkaCacheN);
+  cacheRegister('ronkaItems', 'lookup', () => { for (const k in RONKA_ITEM_CACHE) { delete RONKA_ITEM_CACHE[k]; } _ronkaCacheN = 0; }, () => _ronkaCacheN);
   cacheRegister('seriesMap', 'derived', () => { _seriesMap = null; }, () => (_seriesMap ? _seriesMap.size : 0));
   cacheRegister('seriesPfx', 'derived', () => { _seriesPfxCache = null; }, () => (_seriesPfxCache ? _seriesPfxCache.size : 0));
   cacheRegister('itemPfx', 'derived', () => { _itemPfxCache = null; }, () => (_itemPfxCache ? _itemPfxCache.size : 0));

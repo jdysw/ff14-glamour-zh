@@ -32,45 +32,55 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
       return cands;
     };
 
-    // item：装备链接（两站均用 eorzeadb_link 标记）
-    for (const a of scan('a.eorzeadb_link')) {
-      if (a.classList.contains('zhixia-item-zh')) continue;
-      const el = a.querySelector('span') || a;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 2 || name.length > 48) continue;
-      if (/^(https?:|\/)/.test(name)) continue;
-      list.push({ type: 'item', element: a, text: name, context: { el } });
-    }
-
-    // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
-    for (const sp of scan('span[class*="has-text-rarity-"]')) {
-      if (sp.classList.contains('zhixia-item-zh')) continue;
-      const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ type: 'plain-item', element: sp, text: name, context: {} });
-    }
-
-    // card：EC 列表页卡片标题（外层 <a> 指向站内页）
-    for (const el of scan(EC_CARD_SEL)) {
-      if (el.dataset.zhixiaCard) continue;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ type: 'card', element: el, text: name, context: {} });
-    }
-
-    // dye：染剂标签（「⬤ Ink Blue」）
-    for (const el of scan('div.tag, span.tag')) {
-      if (el.classList.contains('zhixia-dye-zh')) continue;
-      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
-      if (!m) continue;
-      const name = m[2].trim();
-      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
-      if (!zh) continue;
-      list.push({ type: 'dye', element: el, text: name, context: { zh } });
-    }
+    // 四类采集拆为局部函数（仅降复杂度；判定、顺序与产物逐字不变）
+    const pushItems = () => {
+      // item：装备链接（两站均用 eorzeadb_link 标记）
+      for (const a of scan('a.eorzeadb_link')) {
+        if (a.classList.contains('zhixia-item-zh')) continue;
+        const el = a.querySelector('span') || a;
+        const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 2 || name.length > 48) continue;
+        if (/^(https?:|\/)/.test(name)) continue;
+        list.push({ type: 'item', element: a, text: name, context: { el } });
+      }
+    };
+    const pushPlainItems = () => {
+      // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
+      for (const sp of scan('span[class*="has-text-rarity-"]')) {
+        if (sp.classList.contains('zhixia-item-zh')) continue;
+        const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 3 || name.length > 48) continue;
+        if (!resolveByName(name)) continue;
+        list.push({ type: 'plain-item', element: sp, text: name, context: {} });
+      }
+    };
+    const pushCards = () => {
+      // card：EC 列表页卡片标题（外层 <a> 指向站内页）
+      for (const el of scan(EC_CARD_SEL)) {
+        if (el.dataset.zhixiaCard) continue;
+        const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 3 || name.length > 48) continue;
+        if (!resolveByName(name)) continue;
+        list.push({ type: 'card', element: el, text: name, context: {} });
+      }
+    };
+    const pushDyes = () => {
+      // dye：染剂标签（「⬤ Ink Blue」）
+      for (const el of scan('div.tag, span.tag')) {
+        if (el.classList.contains('zhixia-dye-zh')) continue;
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
+        if (!m) continue;
+        const name = m[2].trim();
+        const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
+        if (!zh) continue;
+        list.push({ type: 'dye', element: el, text: name, context: { zh } });
+      }
+    };
+    pushItems();
+    pushPlainItems();
+    pushCards();
+    pushDyes();
 
     return list;
   }
@@ -80,7 +90,10 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
   function dispatchTargets(targets, applyMap) {
     const m = applyMap || {};
     const by = {};
-    for (const t of targets) (by[t.type] = by[t.type] || []).push(t);
+    for (const t of targets) {
+      if (!by[t.type]) by[t.type] = [];
+      by[t.type].push(t);
+    }
     if (m.item && by.item) m.item(by.item);
     if (m['plain-item'] && by['plain-item']) m['plain-item'](by['plain-item']);
     if (m.card && by.card) m.card(by.card);

@@ -22,8 +22,8 @@ function walk(node, fn) {
   for (const k of Object.keys(node)) {
     if (k === 'type' || k === 'loc') continue;
     const v = node[k];
-    if (Array.isArray(v)) { for (const c of v) if (c && typeof c.type === 'string') walk(c, fn); }
-    else if (v && typeof v.type === 'string') walk(v, fn);
+    if (Array.isArray(v)) v.forEach((c) => walk(c, fn));
+    else walk(v, fn);
   }
 }
 
@@ -93,25 +93,37 @@ if (cnt > 0) {
 console.log('');
 console.log('════ B. 循环依赖（import 图）════');
 const graph = new Map();
-for (const m of mods) graph.set(m.rel, [...m.deps].filter((d) => graph_has(m, d) || true));
-function graph_has() { return true; } // 所有依赖都进图（包括 main->core 等）
+// 所有依赖都进图（包括 main->core 等）
+for (const m of mods) graph.set(m.rel, [...m.deps]);
+const byName = (a, b) => (a < b ? -1 : (a > b ? 1 : 0));
+
+function minRotation(parts) {
+  let mi = 0;
+  for (let i = 1; i < parts.length; i++) if (parts[i] < parts[mi]) mi = i;
+  return parts.slice(mi).concat(parts.slice(0, mi)).join(' -> ');
+}
+
+function cyclesFrom(start, g) {
+  const out = [];
+  const stack = [[start, [start]]];
+  while (stack.length) {
+    const [cur, p] = stack.pop();
+    if (p.length > 12) continue;
+    for (const nx of g.get(cur) || []) {
+      if (nx === start && p.length > 1) out.push(p.slice());
+      else if (!p.includes(nx)) stack.push([nx, [...p, nx]]);
+    }
+  }
+  return out;
+}
+
 function findCycles(g) {
   const seen = new Map();
   const out = [];
-  const nodes = [...g.keys()].sort();
-  for (const start of nodes) {
-    const stack = [[start, [start]]];
-    while (stack.length) {
-      const [cur, p] = stack.pop();
-      if (p.length > 12) continue;
-      for (const nx of g.get(cur) || []) {
-        if (nx === start && p.length > 1) {
-          const parts = p.slice();
-          let mi = 0; for (let i = 1; i < parts.length; i++) if (parts[i] < parts[mi]) mi = i;
-          const rot = parts.slice(mi).concat(parts.slice(0, mi)).join(' -> ');
-          if (!seen.has(rot)) { seen.set(rot, true); out.push(rot); }
-        } else if (!p.includes(nx)) stack.push([nx, [...p, nx]]);
-      }
+  for (const start of [...g.keys()].sort(byName)) {
+    for (const parts of cyclesFrom(start, g)) {
+      const rot = minRotation(parts);
+      if (!seen.has(rot)) { seen.set(rot, true); out.push(rot); }
     }
   }
   return out;

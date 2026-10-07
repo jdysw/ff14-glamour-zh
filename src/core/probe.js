@@ -8,7 +8,7 @@ import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
 import { _domStats } from './targets.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
-export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki };
+export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
 
 
   /* @zhixia:core-probe-start */
@@ -59,17 +59,21 @@ export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBt
 
   // Phase 19：内嵌词典规模（字符数近似：各层 JSON 序列化长度求和；仅诊断读取）
   function __zhxDictChars() {
-    try {
+    const size = () => {
       let n = 0;
       for (const k of Object.keys(DICT_LAYERS)) { const o = DICT_LAYERS[k]; if (o) n += JSON.stringify(o).length; }
       return n;
-    } catch (e) { return 0; /* 忽略：规模统计失败返回 0 */ }
+    };
+    try {
+      return size();
+    } catch (e) { /* 忽略：规模统计失败按 0 计（诊断不阻断） */ }
+    return 0;
   }
 
   // Phase 19：可复用诊断记录 API（稳定 JSON 结构；基准 / 自动化与 Probe 共用）
   function __zhxDiagRecord() {
     const rec = { v: 1, boot: Math.round(__zhxBootAt || 0), marks: {}, obs: {}, dom: {}, dl: {}, res: {}, cache: {}, data: {}, dict: {} };
-    try { rec.marks = Object.assign({}, window.__zhxMarks || {}); } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
+    try { rec.marks = { ...(window.__zhxMarks || {}) }; } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
     try { rec.obs = { ticks: _obsStats.ticks, nodes: _obsStats.nodes, ms: _obsStats.ms, maxMs: _obsStats.maxMs }; } catch (e) { /* 忽略：观察统计读取失败 */ }
     try { rec.dom = { calls: _domStats.calls, ms: _domStats.ms, maxMs: _domStats.maxMs, firstMs: _domStats.firstMs }; } catch (e) { /* 忽略：处理统计读取失败 */ }
     try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }
@@ -236,10 +240,14 @@ export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBt
   __zhxProbeFlag = __zhxProbeOn();
   __zhxDiagFlag = false;
   try { __zhxDiagFlag = !!window.__zhxDiagOn; } catch (e) { /* 忽略：开关读取失败按未启用 */ }
-  if (__zhxProbeFlag) {
-    try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+  // 探测初始化与诊断入口注册（收束为函数：降低 IIFE 认知复杂度；防护语义不变）
+  function _bootProbeTail() {
+    if (__zhxProbeFlag) {
+      try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+    }
+    if (__zhxProbeFlag || __zhxDiagFlag) {
+      try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
+    }
   }
-  if (__zhxProbeFlag || __zhxDiagFlag) {
-    try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
-  }
+  _bootProbeTail();
   /* @zhixia:core-probe-end */

@@ -11,6 +11,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const headerFile = path.join(__dirname, 'userscript-header.txt');
 
+// 归一化头部尾换行：连续结尾换行折叠为一个（等价原 /\n+$/ 替换；纯循环无回溯）
+const mergeTrailingLF = (s) => {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '\n') i -= 1;
+  return i === s.length ? s : s.slice(0, i) + '\n';
+};
+
 export default {
   input: path.join(repoRoot, 'src', 'main.js'),
   treeshake: false, // 脚本型入口：保持全部顶层代码，禁 tree-shaking
@@ -18,6 +25,6 @@ export default {
     file: process.env.ZHX_OUT || path.join(repoRoot, 'dist', 'ff14-glamour-zh.greasyfork.user.js'),
     format: 'iife',
     strict: true,
-    banner: () => fs.readFileSync(headerFile, 'utf8').replace(/\n+$/, '\n'),
+    banner: () => mergeTrailingLF(fs.readFileSync(headerFile, 'utf8')),
   },
 };

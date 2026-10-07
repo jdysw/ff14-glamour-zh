@@ -37,7 +37,9 @@ const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
 const dictJson = ensureDictJson();
 
 const FP = 'benchl0001';
-const preset = (k, txt) => `(() => { localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(FP + '\n' + txt)}); return 1; })()`;
+// 预置写入经 CDP callFunctionOn 传参执行（数据不走代码拼接；CodeQL: js/bad-code-sanitization）
+const SET_ITEM_FN = 'function (k, v) { localStorage.setItem(k, v); return 1; }';
+const seedItem = (c, k, txt) => c.callFn(SET_ITEM_FN, [k, FP + '\n' + txt]);
 const clear = `(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`;
 
 const MUT_JS = `(() => {
@@ -60,11 +62,11 @@ const runOne = async (round) => {
     await sleep(400);
     await c.eval(clear);
     await c.eval("window.__zhxTestSite = 'ec'; window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash']; window.__zhxDiagOn = true;");
-    await c.eval(preset('gm:zhx.dt.items', itemsTsv));
-    await c.eval(preset('gm:zhx.dt.dict', dictJson));
-    await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'bench', t: Date.now() })); return 1; })()`);
+    await seedItem(c, 'gm:zhx.dt.items', itemsTsv);
+    await seedItem(c, 'gm:zhx.dt.dict', dictJson);
+    await c.callFn('function (v) { localStorage.setItem("gm:zhx.meta", v); return 1; }', [JSON.stringify({ v: 'bench', t: Date.now() })]);
     // v3 探测预置：新鲜 manifest + 空 sites → 静默回退 v2（零网络、确定行为）
-    await c.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))}); return 1; })()`);
+    await c.callFn('function (v) { localStorage.setItem("gm:zhx.v3.manifest", v); return 1; }', [String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} })]);
     await c.eval(gmStub);
     await c.eval(wrap(GF));
     let rec1 = null;

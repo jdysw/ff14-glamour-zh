@@ -2271,9 +2271,9 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
   let _dictRevision = 0;
   // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
   const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };
-  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.prototype.hasOwnProperty.call(o, key)) ? o[key] : undefined; }
-  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.prototype.hasOwnProperty.call(o, key); }
+  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.hasOwn(o, key)) ? o[key] : undefined; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.hasOwn(o, key); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictGetRevision() { return _dictRevision; }
   function dictInvalidate() { cacheReset('translate'); }
-  function dictUpdate(txt) { return applyRuntimeDict(txt); }
+  function dictUpdate(txt) { return applyRuntimeDict(txt); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   /* @zhixia:core-dictionary-end */

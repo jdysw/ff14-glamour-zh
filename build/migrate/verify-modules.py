@@ -4,71 +4,28 @@
 # 校验:
 #   A. 完整性：原文件 23..尾 的每一行恰好被一个模块覆盖（不重不漏）。
 #   B. 保真性：每个模块文件逐行等于原文件对应行号的内容（顺序一致）。
-# 块地图默认 /tmp/block-map.json；无 /tmp 的环境可用环境变量 ZHX_BLOCK_MAP
+# 块地图默认 <仓库>/.cache/block-map.json；可用环境变量 ZHX_BLOCK_MAP
 # 或第 2 个位置参数指定（须与 gen-modules.py 取同一份）。
 import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _blocks_common import build_regions, repo_path  # noqa: E402
+
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(BASE, 'src', 'ff14-glamour-zh.external.user.js')
 ASSIGN = os.path.join(BASE, 'build', 'migrate', 'module-assign.json')
-mod_root = sys.argv[1] if len(sys.argv) > 1 else '/tmp/modules-v1'
-block_map_file = (sys.argv[2] if len(sys.argv) > 2
-                  else os.environ.get('ZHX_BLOCK_MAP') or '/tmp/block-map.json')
+mod_root = repo_path(BASE, sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, '.cache', 'modules-v1'), '模块目录')
+block_map_file = repo_path(BASE, sys.argv[2] if len(sys.argv) > 2
+                  else os.environ.get('ZHX_BLOCK_MAP') or os.path.join(BASE, '.cache', 'block-map.json'), '块地图')
 
 blocks = json.load(open(block_map_file, encoding='utf-8'))
 assign = json.load(open(ASSIGN, encoding='utf-8'))
 src_lines = open(SRC, encoding='utf-8').read().split('\n')
-total = len(src_lines)
 
-# 文件尾容器收尾剔除（与 gen-modules.py 一致）
-end_limit = total
-while end_limit > 1:
-    s = src_lines[end_limit - 1].strip()
-    if s == '' or s == '})();':
-        end_limit -= 1
-    else:
-        break
-
-# 块起点前的「注释带」归属（与 gen-modules.py 一致）
-def cut_point(start):
-    gap_end = start - 1
-    i = gap_end
-    in_block = False
-    while i >= 23:
-        st = src_lines[i - 1].strip()
-        if st == '':
-            i -= 1
-            continue
-        if in_block:
-            if '/*' in st:
-                in_block = False
-            i -= 1
-            continue
-        if st.startswith('//'):
-            i -= 1
-            continue
-        if st.endswith('*/'):
-            if '/*' not in st:
-                in_block = True
-            i -= 1
-            continue
-        break
-    g = i + 1
-    if g > gap_end:
-        return start
-    for j in range(gap_end, g - 1, -1):
-        if '@zhixia:' in src_lines[j - 1] and '-end' in src_lines[j - 1]:
-            return j + 1
-    return g
-
-cuts = [cut_point(b['start']) for b in blocks]
-regions = {}
-for i in range(len(blocks)):
-    s = cuts[i]
-    e = (cuts[i + 1] - 1) if i + 1 < len(blocks) else end_limit
-    regions[i] = (s, e)
+# 块区间（与 gen-modules.py 共用实现：行尾容器剔除 + 注释带归属）
+regions, end_limit = build_regions(blocks, src_lines)
 
 # A. 完整性
 cover = {}
@@ -78,6 +35,8 @@ for mod, idxs in assign.items():
         continue
     for i in idxs:
         s, e = regions[i]
+        if not (isinstance(s, int) and isinstance(e, int) and 23 <= s <= e <= end_limit):
+            sys.exit(f'块区间异常（{mod} #{i}：{s}..{e}）')
         for ln in range(s, e + 1):
             if ln in cover:
                 dup.append((ln, cover[ln], mod))

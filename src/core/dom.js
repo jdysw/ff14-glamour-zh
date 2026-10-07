@@ -20,17 +20,18 @@ export { _zhixiaTitleKeep, dedupeByAncestor };
     const elems = new Set();
     for (const n of uniq) if (n.nodeType === 1) elems.add(n);
     if (!elems.size) return uniq;
+    // 祖先链查询拆为局部函数（仅降复杂度；语义不变）
+    const covered = (n) => {
+      let p = n.parentNode;
+      while (p) {
+        if (elems.has(p)) return true;
+        p = p.parentNode;
+      }
+      return false;
+    };
     const out = [];
     for (const n of uniq) {
-      if (n.nodeType === 1) {
-        let p = n.parentNode;
-        let covered = false;
-        while (p) {
-          if (elems.has(p)) { covered = true; break; }
-          p = p.parentNode;
-        }
-        if (covered) continue;
-      }
+      if (n.nodeType === 1 && covered(n)) continue;
       out.push(n);
     }
     return out;

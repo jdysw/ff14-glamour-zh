@@ -21,6 +21,9 @@ import os
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _blocks_common import repo_path  # noqa: E402
+
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ASSIGN = os.path.join(BASE, 'build', 'migrate', 'module-assign.json')
 USAGE = '用法: reindex-assign.py <旧源文件> <新源文件> [--add 模块:块号,块号] [--note 注释] [--dry]'
@@ -72,22 +75,28 @@ def sigs(src_path, blocks):
     return out
 
 
+def _pair_pass(olds, news, mp, match):
+    """一趟配对：旧块各取首个未用匹配新块；返回（未配对旧, 未配对新）"""
+    used = set()
+    o_left = []
+    for o in olds:
+        hit = None
+        for n in news:
+            if n not in used and match(o, n):
+                hit = n
+                break
+        if hit is None:
+            o_left.append(o)
+        else:
+            mp[o] = hit
+            used.add(hit)
+    return o_left, [n for n in news if n not in used]
+
+
 def pair_replace_region(old_s, new_s, olds, news, mp):
     """replace 带内配对：① 全文精确 ② 首行+类型 ③ 余量等量按位置；返回未配对的新块索引"""
-    for o in list(olds):
-        for n in list(news):
-            if old_s[o]['sig'] == new_s[n]['sig']:
-                mp[o] = n
-                olds.remove(o)
-                news.remove(n)
-                break
-    for o in list(olds):
-        for n in list(news):
-            if old_s[o]['head'] == new_s[n]['head'] and old_s[o]['type'] == new_s[n]['type']:
-                mp[o] = n
-                olds.remove(o)
-                news.remove(n)
-                break
+    olds, news = _pair_pass(olds, news, mp, lambda o, n: old_s[o]['sig'] == new_s[n]['sig'])
+    olds, news = _pair_pass(olds, news, mp, lambda o, n: old_s[o]['head'] == new_s[n]['head'] and old_s[o]['type'] == new_s[n]['type'])
     if not olds:
         return news
     if len(olds) == len(news):
@@ -157,6 +166,19 @@ def parse_additions(add_spec, still_new, new_s):
     return additions
 
 
+def _translate_module(mod, v, mp, additions):
+    """单模块索引翻译 + 新增块并入（保序去重）"""
+    bad = [i for i in v if i not in mp]
+    if bad:
+        sys.exit(f'{mod} 含无法映射的旧索引 {bad}')
+    newv = sorted(mp[i] for i in v)
+    for x in additions.get(mod, []):
+        if x not in newv:
+            newv.append(x)
+    newv.sort()
+    return newv
+
+
 def translate_assign(assign, mp, additions):
     """按映射翻译分配表；登记新增块归属"""
     out = {}
@@ -164,14 +186,7 @@ def translate_assign(assign, mp, additions):
         if mod.startswith('comment'):
             out[mod] = v
             continue
-        bad = [i for i in v if i not in mp]
-        if bad:
-            sys.exit(f'{mod} 含无法映射的旧索引 {bad}')
-        newv = sorted(mp[i] for i in v)
-        for x in additions.get(mod, []):
-            if x not in newv:
-                newv.append(x)
-        newv.sort()
+        newv = _translate_module(mod, v, mp, additions)
         out[mod] = newv
         if newv != v:
             print(f'{mod}: {len(v)} 块 → {len(newv)} 块  {v if len(v) <= 10 else "…"} → {newv if len(newv) <= 10 else "…"}')
@@ -192,7 +207,8 @@ def main():
     dry, add_spec, note, pos = parse_args(sys.argv[1:])
     if len(pos) != 2:
         sys.exit(USAGE)
-    old_src, new_src = pos
+    old_src = repo_path(BASE, pos[0], '旧源文件')
+    new_src = repo_path(BASE, pos[1], '新源文件')
     old_blocks, new_blocks = block_map(old_src), block_map(new_src)
     old_s, new_s = sigs(old_src, old_blocks), sigs(new_src, new_blocks)
     print(f'旧块数 {len(old_blocks)} / 新块数 {len(new_blocks)}')

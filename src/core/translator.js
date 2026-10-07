@@ -35,7 +35,7 @@ export { ATTR_TRANSLATORS, NODE_TRANSLATORS, TEXT_TRANSLATORS, translateAttribut
     ec: (el) => translateECAttrs(el),
     fc: (el) => _wowFCInput(el),
   };
-  function translateText(text, profile) { const f = TEXT_TRANSLATORS[profile]; return f ? f(text) : text; }
-  function translateNode(node, profile) { const f = NODE_TRANSLATORS[profile]; if (f) f(node); }
-  function translateAttributes(element, profile) { const f = ATTR_TRANSLATORS[profile]; if (f) f(element); }
+  function translateText(text, profile) { const f = TEXT_TRANSLATORS[profile]; return f ? f(text) : text; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function translateNode(node, profile) { const f = NODE_TRANSLATORS[profile]; if (f) f(node); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function translateAttributes(element, profile) { const f = ATTR_TRANSLATORS[profile]; if (f) f(element); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   /* @zhixia:core-translator-end */

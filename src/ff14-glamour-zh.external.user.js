@@ -4287,24 +4287,23 @@
                    失效：数据到达（_fireTablesReady）；容量由数据表规模界定
      统一入口：cacheReset(kind) 按类清理；cacheInfo() 观测（修订号 + 条目数）。 */
   const _cacheReg = new Map();
-  const CACHE_KINDS = ['data', 'lookup', 'translate', 'derived'];
   const CACHE_CAP_LOOKUP = 5000;   // lookup 类容量防线：超出即清空重建（避免长会话无界增长）
   function cacheRegister(name, kind, reset, size) { _cacheReg.set(name, { kind, reset, size }); }
   function cacheReset(kind) {
-    for (const [name, e] of _cacheReg) {
+    for (const e of _cacheReg.values()) {
       if (kind && e.kind !== kind) continue;
-      try { e.reset(); } catch (e2) { /* 忽略：单个缓存清理失败不阻断其余 */ }
+      try { e.reset(); } catch (error_) { /* 忽略：单个缓存清理失败不阻断其余 */ }
     }
   }
   function cacheInfo() {
     const entries = {};
     for (const [name, e] of _cacheReg) {
-      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
+      try { entries[name] = e.size ? e.size() : null; } catch (error_) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
     }
     return {
       entries,
       rev: {
-        data: (typeof DATA_VER !== 'undefined' ? DATA_VER : ''),
+        data: (typeof DATA_VER === 'string' ? DATA_VER : ''),
         dict: (typeof dictGetRevision === 'function' ? dictGetRevision() : 0),
       },
     };
@@ -4314,7 +4313,7 @@
   function cacheGuard(cache, cap, count) {
     if (!cache) return false;
     let n = (typeof count === 'number') ? count : cache.size;
-    if (typeof n !== 'number') { n = 0; for (const k in cache) n++; }
+    if (typeof n !== 'number') n = Object.keys(cache).length;
     if (n < cap) return false;
     if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) { /* 忽略：清空失败则重建继续（正确性不受影响） */ } return true; }
     for (const k in cache) { try { delete cache[k]; } catch (e) { /* 忽略：同上（清空失败无碍） */ } }
@@ -4323,7 +4322,7 @@
   /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */
   cacheRegister('en2zh', 'lookup', () => { _en2zhCache.clear(); }, () => _en2zhCache.size);
   cacheRegister('jp2zh', 'lookup', () => { _jp2zhCache.clear(); }, () => _jp2zhCache.size);
-  cacheRegister('ronkaItems', 'lookup', () => { for (const k in RONKA_ITEM_CACHE) delete RONKA_ITEM_CACHE[k]; _ronkaCacheN = 0; }, () => _ronkaCacheN);
+  cacheRegister('ronkaItems', 'lookup', () => { for (const k in RONKA_ITEM_CACHE) { delete RONKA_ITEM_CACHE[k]; } _ronkaCacheN = 0; }, () => _ronkaCacheN);
   cacheRegister('seriesMap', 'derived', () => { _seriesMap = null; }, () => (_seriesMap ? _seriesMap.size : 0));
   cacheRegister('seriesPfx', 'derived', () => { _seriesPfxCache = null; }, () => (_seriesPfxCache ? _seriesPfxCache.size : 0));
   cacheRegister('itemPfx', 'derived', () => { _itemPfxCache = null; }, () => (_itemPfxCache ? _itemPfxCache.size : 0));
@@ -4450,13 +4449,17 @@
   // 「键\t值...」文本 → 映射（多值模式收集为数组；行内/键首列已由生成器去重）
   function _v3Pairs(txt, multi) {
     const m = Object.create(null);
+    // 多值收集拆为局部函数（仅降复杂度；判定与产物不变）
+    const collectMulti = (d, parts) => {
+      for (let i = 1; i < parts.length; i++) { if (parts[i] && !d.includes(parts[i])) d.push(parts[i]); }
+    };
     for (const ln of String(txt).split('\n')) {
       if (!ln) continue;
       const p = ln.split('\t');
       if (!p[0]) continue;
       if (multi) {
-        const d = m[p[0]] || (m[p[0]] = []);
-        for (let i = 1; i < p.length; i++) { if (p[i] && !d.includes(p[i])) d.push(p[i]); }
+        if (!m[p[0]]) m[p[0]] = [];
+        collectMulti(m[p[0]], p);
       } else if (p[1] !== undefined && m[p[0]] === undefined) {
         m[p[0]] = p[1];
       }
@@ -4466,13 +4469,15 @@
 
   // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
   function _applyV3(files) {
+    // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
+    const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
-      const names = files.names ? _v3Pairs(files.names) : null;
-      const hash = files.hash ? _v3Pairs(files.hash) : null;
-      const ecid = files.ecid ? _v3Pairs(files.ecid) : null;
-      const ko = files.ko ? _v3Pairs(files.ko) : null;
-      const ali = files.alias ? _v3Pairs(files.alias, true) : null;
-      const dup = files.dup ? _v3Pairs(files.dup, true) : null;
+      const names = take('names');
+      const hash = take('hash');
+      const ecid = take('ecid');
+      const ko = take('ko');
+      const ali = take('alias', true);
+      const dup = take('dup', true);
       if (names) nameMap = names;
       if (hash) itemHash = hash;
       if (ecid) ecidMap = ecid;
@@ -4485,13 +4490,14 @@
       _v3Applied = true;
       return true;
     } catch (e) {
+      _zhxErr('v3apply', e);
       return false;
     }
   }
 
   // v3 单文件获取：缓存命中且 sha 一致直接用；否则下载 + sha 校验 + 写缓存
   async function _v3FetchFile(siteId, name, meta) {
-    if (!meta || !meta.url) return null;
+    if (!meta?.url) return null;
     const ck = 'zhx.v3.f.' + siteId + '.' + name;
     try {
       const raw = await storeGetAsync(ck);
@@ -4504,7 +4510,7 @@
     try { txt = await httpGet(DATA_BASE_V3 + meta.url, 25000); } catch (e) { txt = null; }
     if (typeof txt !== 'string' || !txt) return null;
     try {
-      if (meta.sha256 && typeof crypto !== 'undefined' && crypto && crypto.subtle && typeof TextEncoder === 'function') {
+      if (meta.sha256 && typeof crypto !== 'undefined' && crypto?.subtle && typeof TextEncoder === 'function') {
         const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
         const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
         if (hex !== meta.sha256) return null;
@@ -4517,55 +4523,74 @@
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败/缺文件 → false（调用方回退 v2，不改变现有行为）。
   async function _ensureTryV3() {
-    const site = findSite();
-    if (!site || !site.id) return false;
-    try {
-      let man = null, manT = 0;
+    // 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
+    async function readCachedManifest() {
       try {
         const mraw = await storeGetAsync('zhx.v3.manifest');
         if (mraw) {
           const i = mraw.indexOf('\n');
-          if (i > 0) { manT = Number(mraw.slice(0, i)) || 0; man = JSON.parse(mraw.slice(i + 1)); }
+          if (i > 0) return { manT: Number(mraw.slice(0, i)) || 0, man: JSON.parse(mraw.slice(i + 1)) };
         }
-      } catch (e) { man = null; }
-      const fresh = !!(manT && (Date.now() - manT < DAY_MS));
-      // 本地无新鲜 manifest（或结构无效）→ 拉取一次（每日至多一次探测）；
-      // 站点是否在列由下方统一判断（不在列 → 直接回退，不额外请求）
-      if (!man || !fresh || man.schema !== 3 || !man.sites) {
-        let txt = null;
-        try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
-        man = null;
-        if (typeof txt === 'string' && txt) {
-          try {
-            const m2 = JSON.parse(txt);
-            if (m2 && m2.schema === 3 && m2.sites) {
-              man = m2; manT = Date.now();
-              try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略 */ }
-            }
-          } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
+      } catch (e) { _zhxErr('v3manifest', e); }
+      return { manT: 0, man: null };
+    }
+    // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
+    async function fetchManifest() {
+      let txt = null;
+      try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
+      if (typeof txt !== 'string' || !txt) return null;
+      try {
+        const m2 = JSON.parse(txt);
+        if (m2?.schema === 3 && m2.sites) {
+          const manT = Date.now();
+          try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+          return m2;
         }
+      } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
+      return null;
+    }
+    // 缓存优先 → 必要时网络（站点是否在列由下方统一判断）
+    async function loadManifest() {
+      const c = await readCachedManifest();
+      const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
+      if (c.man && fresh && c.man.schema === 3 && c.man.sites) return c.man;
+      return await fetchManifest();
+    }
+    // 站点文件并行获取（含共享词库）
+    async function fetchStationFiles(siteId, names, sm, sharedDict) {
+      const files = {};
+      const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n])
+        .then((t) => { files[n] = t; }, () => { files[n] = null; }));
+      if (sharedDict) {
+        jobs.push(_v3FetchFile(siteId, 'dict', sharedDict)
+          .then((t) => { files.dict = t; }, () => { files.dict = null; }));
       }
-      if (!man || !man.sites || !man.sites[site.id]) return false;
+      await Promise.all(jobs);
+      return files;
+    }
+    function allFilesReady(names, files, sharedDict) {
+      for (const n of names) { if (files[n] == null) return false; }
+      return !(sharedDict && files.dict == null);
+    }
+
+    const site = findSite();
+    if (!site?.id) return false;
+    try {
+      const man = await loadManifest();
+      if (!man?.sites?.[site.id]) return false;
       const sm = man.sites[site.id].files || {};
       const names = Object.keys(sm);
       if (!names.length) return false;
       const need = neededTables();
-      const files = {};
-      const jobs = names.map((n) => _v3FetchFile(site.id, n, sm[n])
-        .then((t) => { files[n] = t; }, () => { files[n] = null; }));
       // 共享词库（manifest.shared.dict；neededTables 含 dict 的站点拉取）
-      const sharedDict = need.includes('dict') && man.shared && man.shared.dict ? man.shared.dict : null;
-      if (sharedDict) {
-        jobs.push(_v3FetchFile(site.id, 'dict', sharedDict)
-          .then((t) => { files.dict = t; }, () => { files.dict = null; }));
-      }
-      await Promise.all(jobs);
-      for (const n of names) { if (files[n] == null) return false; }
-      if (sharedDict && files.dict == null) return false;
+      const sharedDict = (need.includes('dict') && man.shared?.dict) || null;
+      const files = await fetchStationFiles(site.id, names, sm, sharedDict);
+      if (!allFilesReady(names, files, sharedDict)) return false;
       if (!_applyV3(files)) return false;
       try { if (man.version) DATA_VER = String(man.version); } catch (e) { /* 忽略 */ }
       return true;
     } catch (e) {
+      _zhxErr('v3', e);
       return false;
     }
   }
@@ -4621,7 +4646,7 @@
     DATA_VER = '';
     try { storeSet(META_KEY, ''); } catch (e) { /* 忽略：元数据清除失败不影响主流程 */ }
   }
-  const dataManager = {
+  const dataManager = {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
     ensure(site) { return ensureTables(); },                       // site：预留（见上）
     ready(cb) {
       const p = ensureTables();
@@ -4697,7 +4722,7 @@
   const _irStats = { hit: 0, miss: 0 };
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveByName(name) { const z = (name && nameMap?.[name]) ? nameMap[name] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
-  function resolveAllByName(name) {
+  function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
     const first = nameMap?.[name];
     if (!first) return [];
     const d = _irDupMap?.[name];
@@ -4831,11 +4856,11 @@
   let _dictRevision = 0;
   // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
   const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };
-  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.prototype.hasOwnProperty.call(o, key)) ? o[key] : undefined; }
-  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.prototype.hasOwnProperty.call(o, key); }
+  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.hasOwn(o, key)) ? o[key] : undefined; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.hasOwn(o, key); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictGetRevision() { return _dictRevision; }
   function dictInvalidate() { cacheReset('translate'); }
-  function dictUpdate(txt) { return applyRuntimeDict(txt); }
+  function dictUpdate(txt) { return applyRuntimeDict(txt); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   /* @zhixia:core-dictionary-end */
 
   /* @zhixia:core-translator-start */
@@ -4863,9 +4888,9 @@
     ec: (el) => translateECAttrs(el),
     fc: (el) => _wowFCInput(el),
   };
-  function translateText(text, profile) { const f = TEXT_TRANSLATORS[profile]; return f ? f(text) : text; }
-  function translateNode(node, profile) { const f = NODE_TRANSLATORS[profile]; if (f) f(node); }
-  function translateAttributes(element, profile) { const f = ATTR_TRANSLATORS[profile]; if (f) f(element); }
+  function translateText(text, profile) { const f = TEXT_TRANSLATORS[profile]; return f ? f(text) : text; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function translateNode(node, profile) { const f = NODE_TRANSLATORS[profile]; if (f) f(node); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  function translateAttributes(element, profile) { const f = ATTR_TRANSLATORS[profile]; if (f) f(element); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   /* @zhixia:core-translator-end */
 
   function lookupZh(a, name) {
@@ -4913,17 +4938,18 @@
     const elems = new Set();
     for (const n of uniq) if (n.nodeType === 1) elems.add(n);
     if (!elems.size) return uniq;
+    // 祖先链查询拆为局部函数（仅降复杂度；语义不变）
+    const covered = (n) => {
+      let p = n.parentNode;
+      while (p) {
+        if (elems.has(p)) return true;
+        p = p.parentNode;
+      }
+      return false;
+    };
     const out = [];
     for (const n of uniq) {
-      if (n.nodeType === 1) {
-        let p = n.parentNode;
-        let covered = false;
-        while (p) {
-          if (elems.has(p)) { covered = true; break; }
-          p = p.parentNode;
-        }
-        if (covered) continue;
-      }
+      if (n.nodeType === 1 && covered(n)) continue;
       out.push(n);
     }
     return out;
@@ -4957,7 +4983,8 @@
     const root = o.root || document.body || document.documentElement;
     let timer = null;
     let pending = [];
-    const mo = new MutationObserver((muts) => {
+    // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
+    const collectMuts = (muts) => {
       let hitCD = false;
       for (const m of muts) {
         if (m.type === 'characterData') {
@@ -4970,6 +4997,10 @@
           if (n.nodeType === 1 || n.nodeType === 3) pending.push(n);
         }
       }
+      return hitCD;
+    };
+    const mo = new MutationObserver((muts) => {
+      const hitCD = collectMuts(muts);
       const flood = pending.length > floodLimit;          // 洪峰保护：避免 pending 无限增长
       if (flood && timer) { clearTimeout(timer); timer = null; }
       if (timer || (!pending.length && !hitCD)) return;
@@ -5021,45 +5052,55 @@
       return cands;
     };
 
-    // item：装备链接（两站均用 eorzeadb_link 标记）
-    for (const a of scan('a.eorzeadb_link')) {
-      if (a.classList.contains('zhixia-item-zh')) continue;
-      const el = a.querySelector('span') || a;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 2 || name.length > 48) continue;
-      if (/^(https?:|\/)/.test(name)) continue;
-      list.push({ type: 'item', element: a, text: name, context: { el } });
-    }
-
-    // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
-    for (const sp of scan('span[class*="has-text-rarity-"]')) {
-      if (sp.classList.contains('zhixia-item-zh')) continue;
-      const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ type: 'plain-item', element: sp, text: name, context: {} });
-    }
-
-    // card：EC 列表页卡片标题（外层 <a> 指向站内页）
-    for (const el of scan(EC_CARD_SEL)) {
-      if (el.dataset.zhixiaCard) continue;
-      const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!name || name.length < 3 || name.length > 48) continue;
-      if (!resolveByName(name)) continue;
-      list.push({ type: 'card', element: el, text: name, context: {} });
-    }
-
-    // dye：染剂标签（「⬤ Ink Blue」）
-    for (const el of scan('div.tag, span.tag')) {
-      if (el.classList.contains('zhixia-dye-zh')) continue;
-      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
-      if (!m) continue;
-      const name = m[2].trim();
-      const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
-      if (!zh) continue;
-      list.push({ type: 'dye', element: el, text: name, context: { zh } });
-    }
+    // 四类采集拆为局部函数（仅降复杂度；判定、顺序与产物逐字不变）
+    const pushItems = () => {
+      // item：装备链接（两站均用 eorzeadb_link 标记）
+      for (const a of scan('a.eorzeadb_link')) {
+        if (a.classList.contains('zhixia-item-zh')) continue;
+        const el = a.querySelector('span') || a;
+        const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 2 || name.length > 48) continue;
+        if (/^(https?:|\/)/.test(name)) continue;
+        list.push({ type: 'item', element: a, text: name, context: { el } });
+      }
+    };
+    const pushPlainItems = () => {
+      // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
+      for (const sp of scan('span[class*="has-text-rarity-"]')) {
+        if (sp.classList.contains('zhixia-item-zh')) continue;
+        const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 3 || name.length > 48) continue;
+        if (!resolveByName(name)) continue;
+        list.push({ type: 'plain-item', element: sp, text: name, context: {} });
+      }
+    };
+    const pushCards = () => {
+      // card：EC 列表页卡片标题（外层 <a> 指向站内页）
+      for (const el of scan(EC_CARD_SEL)) {
+        if (el.dataset.zhixiaCard) continue;
+        const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length < 3 || name.length > 48) continue;
+        if (!resolveByName(name)) continue;
+        list.push({ type: 'card', element: el, text: name, context: {} });
+      }
+    };
+    const pushDyes = () => {
+      // dye：染剂标签（「⬤ Ink Blue」）
+      for (const el of scan('div.tag, span.tag')) {
+        if (el.classList.contains('zhixia-dye-zh')) continue;
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        const m = /^([\u25EF\u2B24\u25CB\u25CF])\s{0,8}(.{1,200})$/.exec(t);
+        if (!m) continue;
+        const name = m[2].trim();
+        const zh = resolveByName(name) || (name === 'Undyed' ? '未染色' : null);
+        if (!zh) continue;
+        list.push({ type: 'dye', element: el, text: name, context: { zh } });
+      }
+    };
+    pushItems();
+    pushPlainItems();
+    pushCards();
+    pushDyes();
 
     return list;
   }
@@ -5069,7 +5110,10 @@
   function dispatchTargets(targets, applyMap) {
     const m = applyMap || {};
     const by = {};
-    for (const t of targets) (by[t.type] = by[t.type] || []).push(t);
+    for (const t of targets) {
+      if (!by[t.type]) by[t.type] = [];
+      by[t.type].push(t);
+    }
     if (m.item && by.item) m.item(by.item);
     if (m['plain-item'] && by['plain-item']) m['plain-item'](by['plain-item']);
     if (m.card && by.card) m.card(by.card);
@@ -5321,17 +5365,21 @@
 
   // Phase 19：内嵌词典规模（字符数近似：各层 JSON 序列化长度求和；仅诊断读取）
   function __zhxDictChars() {
-    try {
+    const size = () => {
       let n = 0;
       for (const k of Object.keys(DICT_LAYERS)) { const o = DICT_LAYERS[k]; if (o) n += JSON.stringify(o).length; }
       return n;
-    } catch (e) { return 0; /* 忽略：规模统计失败返回 0 */ }
+    };
+    try {
+      return size();
+    } catch (e) { /* 忽略：规模统计失败按 0 计（诊断不阻断） */ }
+    return 0;
   }
 
   // Phase 19：可复用诊断记录 API（稳定 JSON 结构；基准 / 自动化与 Probe 共用）
   function __zhxDiagRecord() {
     const rec = { v: 1, boot: Math.round(__zhxBootAt || 0), marks: {}, obs: {}, dom: {}, dl: {}, res: {}, cache: {}, data: {}, dict: {} };
-    try { rec.marks = Object.assign({}, window.__zhxMarks || {}); } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
+    try { rec.marks = { ...(window.__zhxMarks || {}) }; } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
     try { rec.obs = { ticks: _obsStats.ticks, nodes: _obsStats.nodes, ms: _obsStats.ms, maxMs: _obsStats.maxMs }; } catch (e) { /* 忽略：观察统计读取失败 */ }
     try { rec.dom = { calls: _domStats.calls, ms: _domStats.ms, maxMs: _domStats.maxMs, firstMs: _domStats.firstMs }; } catch (e) { /* 忽略：处理统计读取失败 */ }
     try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }
@@ -5498,11 +5546,15 @@
   __zhxProbeFlag = __zhxProbeOn();
   __zhxDiagFlag = false;
   try { __zhxDiagFlag = !!window.__zhxDiagOn; } catch (e) { /* 忽略：开关读取失败按未启用 */ }
-  if (__zhxProbeFlag) {
-    try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+  // 探测初始化与诊断入口注册（收束为函数：降低 IIFE 认知复杂度；防护语义不变）
+  function _bootProbeTail() {
+    if (__zhxProbeFlag) {
+      try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+    }
+    if (__zhxProbeFlag || __zhxDiagFlag) {
+      try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
+    }
   }
-  if (__zhxProbeFlag || __zhxDiagFlag) {
-    try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
-  }
+  _bootProbeTail();
   /* @zhixia:core-probe-end */
 })();

@@ -71,6 +71,27 @@ export class CDP {
     }
     return r.result ? r.result.value : undefined;
   }
+  async callFn(fnSource, args = [], { awaitPromise = true } = {}) {
+    const f = await this.send('Runtime.evaluate', {
+      expression: `(${fnSource})`, returnByValue: false, timeout: 120000,
+    });
+    const fnObj = f.result && f.result.objectId;
+    if (!fnObj) throw new Error('callFn: 函数对象创建失败');
+    try {
+      const out = await this.send('Runtime.callFunctionOn', {
+        objectId: fnObj,
+        functionDeclaration: 'function (...a) { return this(...a); }',
+        arguments: args.map((v) => ({ value: v })),
+        returnByValue: true, awaitPromise, timeout: 120000,
+      });
+      if (out.exceptionDetails) {
+        throw new Error('callFn 异常: ' + JSON.stringify(out.exceptionDetails).slice(0, 500));
+      }
+      return out.result ? out.result.value : undefined;
+    } finally {
+      try { await this.send('Runtime.releaseObject', { objectId: fnObj }); } catch (e) { /* 忽略：释放失败不影响用例 */ }
+    }
+  }
   waitForEvent(method, timeoutMs = 30000) {
     return new Promise((res, rej) => {
       const timer = setTimeout(() => rej(new Error('等待事件超时: ' + method)), timeoutMs);

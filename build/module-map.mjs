@@ -9,7 +9,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const file = process.argv[2] || path.join(repoRoot, 'src', 'ff14-glamour-zh.external.user.js');
+// ── 路径净化：结果必须位于仓库内（防路径穿越；CLI 参数不可信）──
+function safeResolve(p, label) {
+  const abs = path.resolve(p);
+  const rel = path.relative(repoRoot, abs);
+  if (rel !== '' && (rel.startsWith('..') || path.isAbsolute(rel))) {
+    throw new Error(`${label}越界（仅允许仓库内路径）: ${p}`);
+  }
+  return abs;
+}
+const file = safeResolve(process.argv[2] || path.join(repoRoot, 'src', 'ff14-glamour-zh.external.user.js'), '源文件');
 const src = fs.readFileSync(file, 'utf8');
 const lines = src.split('\n');
 
@@ -34,5 +43,5 @@ const out = stmts.map((s) => {
   return { start, end, type: s.type, head, head2 };
 });
 
-console.error(`共 ${out.length} 个顶层块（${file}）`);
+console.error('共 ' + out.length + ' 个顶层块');
 console.log(JSON.stringify(out, null, 1));

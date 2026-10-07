@@ -32,7 +32,8 @@ export { _obsStats, createObserver, observeLocal };
     const root = o.root || document.body || document.documentElement;
     let timer = null;
     let pending = [];
-    const mo = new MutationObserver((muts) => {
+    // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
+    const collectMuts = (muts) => {
       let hitCD = false;
       for (const m of muts) {
         if (m.type === 'characterData') {
@@ -45,6 +46,10 @@ export { _obsStats, createObserver, observeLocal };
           if (n.nodeType === 1 || n.nodeType === 3) pending.push(n);
         }
       }
+      return hitCD;
+    };
+    const mo = new MutationObserver((muts) => {
+      const hitCD = collectMuts(muts);
       const flood = pending.length > floodLimit;          // 洪峰保护：避免 pending 无限增长
       if (flood && timer) { clearTimeout(timer); timer = null; }
       if (timer || (!pending.length && !hitCD)) return;

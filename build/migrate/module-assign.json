@@ -5,11 +5,11 @@
     0,
     1,
     2,
+    258,
     259,
     260,
     261,
-    262,
-    263
+    262
   ],
   "core/constants": [
     145,
@@ -63,8 +63,7 @@
     198,
     199,
     200,
-    201,
-    202
+    201
   ],
   "core/site-registry": [
     179,
@@ -97,6 +96,7 @@
     170,
     171,
     185,
+    202,
     203,
     204,
     205,
@@ -130,8 +130,7 @@
     233,
     234,
     235,
-    236,
-    237
+    236
   ],
   "core/item-resolver": [
     8,
@@ -151,6 +150,7 @@
     46,
     47,
     101,
+    238,
     239,
     240,
     241,
@@ -163,27 +163,27 @@
     248,
     249,
     250,
-    251,
-    252
+    251
   ],
   "core/translator": [
+    252,
     253,
     254,
     255,
     256,
-    257,
-    258
+    257
   ],
   "core/dom": [
     13,
-    264
+    263
   ],
   "core/observer": [
+    264,
     265,
-    266,
-    267
+    266
   ],
   "core/targets": [
+    267,
     268,
     269,
     270,
@@ -198,10 +198,10 @@
     279,
     280,
     281,
-    282,
-    283
+    282
   ],
   "core/probe": [
+    290,
     291,
     292,
     293,
@@ -221,8 +221,7 @@
     307,
     308,
     309,
-    310,
-    311
+    310
   ],
   "sites/mirapri": [
     19,
@@ -346,16 +345,17 @@
     121
   ],
   "main": [
-    238,
+    237,
+    283,
     284,
     285,
     286,
     287,
     288,
-    289,
-    290
+    289
   ],
   "comment3": "修复（Phase 15 收尾）：① 块 151 归入 core/constants，使 @zhixia:core-constants 锚点区间完整；② 块 187-201（Core Cache Registry 整段）连同被其写入的缓存实体（49-50 / 64-76 / 124-125）统一归入 core/cache，使 @zhixia:core-cache-registry 锚点区间完整且无跨模块写；③ 块 228-235（resolve* 查询族）归入 core/data-manager，与 _irDupMap/_irAliasMap 的声明及 _applyV3 的写入同模块，使 @zhixia:core-item-resolver 锚点区间完整；④ 块 257（lookupZh）归入 core/runtime，紧邻「通用工具层」注释所依附的块 258；⑤ 块 9（trEC）归入 core/item-resolver，紧随 _en2zhCache/tryEnToZh，使「_en2zhCache → trEC」与「_jp2zhCache → 系列名前缀查找」两个提取窗口不重叠；⑥ 块 236（数据就绪后建立衍生注册表调用，含其段尾 @zhixia:core-item-resolver-end 注释）归入 main：修复原顺序下（data-manager 先于 site-registry 执行）该顶层调用经 itemDbReady → _siteIndexes → findSite 触发 SITE_REGISTRY TDZ 的运行时缺陷——调用改在全部模块（含 site-registry）初始化完成后由 boot 执行；锚点 start/end 仍闭合（测试提取窗口自适应）。",
   "comment4": "Phase 18：源新增 3 顶层块（ERR_LOG_CAP/_errLog/_zhxErr，错误边界设施）→ 旧索引 ≥258 全体 +3；新块归入 core/runtime。",
-  "comment5": "Phase 19：测量基建 +9 顶层块（runtime _perfNow / data-manager _dlStats / targets _domStats / probe DiagFlag·DictChars·DiagRecord·段尾初始化）"
+  "comment5": "Phase 19：测量基建 +9 顶层块（runtime _perfNow / data-manager _dlStats / targets _domStats / probe DiagFlag·DictChars·DiagRecord·段尾初始化）",
+  "comment6": "v1.4 收尾清理（PR#16 审查轮）：删除块 #189（CACHE_KINDS 死常量）→ 旧索引 >189 全体 -1（312→311 块）；配套修复见模板与 build/migrate（复杂度拆分、optional-chaining、空 catch 显式化、NOSONAR 标注等）。"
 }

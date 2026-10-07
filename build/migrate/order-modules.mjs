@@ -19,8 +19,18 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
-const root = path.resolve(process.argv[2] || path.join(repoRoot, 'src'));
-const orderFile = path.resolve(process.argv[3] || path.join(repoRoot, 'build', 'module-order.json'));
+
+// ── 路径净化：结果必须位于仓库内（防路径穿越；CLI 参数不可信）──
+function safeResolve(p, label) {
+  const abs = path.resolve(p);
+  const rel = path.relative(repoRoot, abs);
+  if (rel !== '' && (rel.startsWith('..') || path.isAbsolute(rel))) {
+    throw new Error(`${label}越界（仅允许仓库内路径）: ${p}`);
+  }
+  return abs;
+}
+const root = safeResolve(process.argv[2] || path.join(repoRoot, 'src'), '模块根目录');
+const orderFile = safeResolve(process.argv[3] || path.join(repoRoot, 'build', 'module-order.json'), '顺序表');
 
 const data = JSON.parse(fs.readFileSync(orderFile, 'utf8'));
 const order = Array.isArray(data.order) ? data.order.slice() : [];
@@ -43,8 +53,8 @@ for (const sub of ['core', 'sites']) {
     if (f.endsWith('.js')) actual.push(`${sub}/${f.slice(0, -3)}`);
   }
 }
-actual.sort();
-const listed = order.slice().sort();
+actual.sort((a, b) => a.localeCompare(b));
+const listed = order.slice().sort((a, b) => a.localeCompare(b));
 const missing = actual.filter((m) => !listed.includes(m));
 const extra = listed.filter((m) => !actual.includes(m));
 if (missing.length || extra.length) {
@@ -87,14 +97,13 @@ function cleanGeneratedPrefix(code, rel) {
 }
 
 function writeModule(rel, prev = null) {
-  const file = path.join(root, rel + '.js');
+  const file = safeResolve(path.join(root, rel + '.js'), '模块文件');
   let code = fs.readFileSync(file, 'utf8');
   code = cleanGeneratedPrefix(code, rel);
   const lines = [`/* @phase15-module-order:${rel} */`];
   if (prev) {
     const imp = relOf(rel, prev) + '.js';
-    lines.push(`/* @phase15-order-link:${rel}<- ${prev} */`.replace('<- ', '<-'));
-    lines.push(`import '${imp}';`);
+    lines.push(`/* @phase15-order-link:${rel}<- ${prev} */`.replace('<- ', '<-'), `import '${imp}';`);
   }
   fs.writeFileSync(file, lines.join('\n') + '\n' + code, 'utf8');
 }
@@ -102,9 +111,9 @@ function writeModule(rel, prev = null) {
 for (let i = 0; i < order.length; i++) writeModule(order[i], i ? order[i - 1] : null);
 
 const mainRel = entry;
-const mainFile = path.join(root, mainRel + '.js');
+const mainFile = safeResolve(path.join(root, mainRel + '.js'), '入口文件');
 if (!fs.existsSync(mainFile)) {
-  console.error('入口不存在：' + mainFile);
+  console.error('入口文件不存在（检查 entry 配置与 src 结构）');
   process.exit(1);
 }
 let mainCode = fs.readFileSync(mainFile, 'utf8');
@@ -116,5 +125,5 @@ fs.writeFileSync(
   'utf8',
 );
 
-console.log(`顺序契约已应用：${order.length} 个模块 + ${mainRel}`);
-console.log(`  ${order.join(' → ')} → ${mainRel}`);
+console.log('顺序契约已应用：' + order.length + ' 个模块 + 入口');
+console.log('  顺序明细见 build/module-order.json');

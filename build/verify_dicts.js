@@ -175,7 +175,7 @@ if (dictJsonIdx >= 0) {
     const d = extractDict(a, n);
     if (d.value === undefined) { console.log(n, '提取失败', d.missing ? '(src 中缺失)' : ''); allEq = false; continue; }
     // 期望值：站点层 = common + 本站增量（与运行时合并 / dict.json 语义一致）
-    const expect = (n === 'DICT_COMMON') ? { ...common } : { ...common, ...(dj[key] || {}) };
+    const expect = (n === 'DICT_COMMON') ? { ...common } : { ...common, ...dj[key] };
     if (!diffOne(n, d.value, expect, 'src', 'dict.json')) allEq = false;
   }
   console.log(`（对照物: ${djPath}  fp=${fp}）`);
