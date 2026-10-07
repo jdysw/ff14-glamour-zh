@@ -244,7 +244,7 @@ try {
 
     document.dispatch('focusin', { target: input });
     await sleep();
-    eq('数据未就绪时不展示候选', findSuggestBox(document)?.hidden, true);
+    eq('数据未就绪时不创建候选框', !!findSuggestBox(document), false);
 
     ready[0]();
     await sleep();
