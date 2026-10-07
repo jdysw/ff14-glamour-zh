@@ -1,6 +1,5 @@
 /* @phase15-module-order:sites/mirapri */
 /* @phase15-order-link:sites/mirapri<-core/dom */
-import '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
 import { _zhixiaTitleKeep } from '../core/dom.js';
 import { observeLocal } from '../core/observer.js';
@@ -22,7 +21,7 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
   ];
 
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
-  let busy = false;
+  let busy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
   function tr(text) {
     if (!text) return text;
