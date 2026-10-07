@@ -35,6 +35,7 @@ function searchInputScore(input) {
   ].filter(Boolean).join(' ');
   if (SEARCH_EXCLUDE_RE.test(meta)) return -1000;
   let score = 0;
+  if (/装備名(?:の一部)?を入力して検索|装備名.*検索|検索.*装備名/u.test(meta)) score += 120;
   if (/keyword/i.test(meta)) score += 100;
   if (/search/i.test(meta)) score += 80;
   if (/query|(^|[-_])q([-_]|$)/i.test(meta)) score += 70;
