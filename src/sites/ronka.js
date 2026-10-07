@@ -1,11 +1,11 @@
 /* @phase15-module-order:sites/ronka */
 /* @phase15-order-link:sites/ronka<-sites/ffxiv-collection */
+import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/dictionary.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
 import { SKIP_TAGS } from './mirapri.js';
 export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
 

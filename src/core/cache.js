@@ -1,8 +1,8 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
+import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
-import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { storeGetAsync, storeSet } from './storage.js';
 import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
 import { RONKA_ITEM_CACHE } from '../sites/ronka.js';

@@ -1,7 +1,7 @@
 /* @phase15-module-order:sites/mirapri */
 /* @phase15-order-link:sites/mirapri<-core/dom */
-import { DICT } from '../core/dictionary.js';
 import { _zhixiaTitleKeep } from '../core/dom.js';
+import { DICT } from '../core/dictionary.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePage };

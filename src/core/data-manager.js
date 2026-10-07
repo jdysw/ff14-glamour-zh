@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
-import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
+import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';

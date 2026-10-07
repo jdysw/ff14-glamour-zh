@@ -1,11 +1,11 @@
 /* @phase15-module-order:core/probe */
 /* @phase15-order-link:core/probe<-core/targets */
+import { _domStats } from './targets.js';
 import { cacheInfo } from './cache.js';
 import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';
 import { DICT_LAYERS } from './dictionary.js';
 import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
-import { _domStats } from './targets.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
 export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
 

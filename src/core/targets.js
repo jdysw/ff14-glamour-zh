@@ -1,8 +1,8 @@
 /* @phase15-module-order:core/targets */
 /* @phase15-order-link:core/targets<-core/observer */
+import { observeLocal } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { itemDbReady, resolveByName } from './data-manager.js';
-import { observeLocal } from './observer.js';
 import { _perfNow, lookupZh, safe } from './runtime.js';
 export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
