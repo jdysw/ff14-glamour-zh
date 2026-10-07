@@ -322,7 +322,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (names) _replaceMap(nameMap, names);
       if (hash) _replaceMap(itemHash, hash);
       _irSearchByZh = null;
+      _irSearchKind = null;
       _irSearchKeys = null;
+      _irSearchCanonicalKeys = null;
+      _irSearchAliasKeys = null;
       if (ecid) _replaceMap(ecidMap, ecid);
       if (ko) _replaceMap(koByZh, ko);
       if (ali) _irAliasMap = ali;
@@ -521,18 +524,24 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
   // 仅构建当前站点所需的原生语言映射，不扩大现有 v3 数据文件。
   let _irSearchByZh = null; // NOSONAR — 数据就绪后按当前站点数据重建
+  let _irSearchKind = null;  // 0=正式名称，1=中文别名
   let _irSearchKeys = null;  // NOSONAR — 智能输入按需建立排序键表
+  let _irSearchCanonicalKeys = null;
+  let _irSearchAliasKeys = null;
 
   function _irNormZhSearch(value) {
     return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
   }
 
-  function _irSearchPut(map, zh, native) {
+  function _irSearchPut(map, zh, native, kind, kindMap) {
     if (!map || !zh || !native) return;
     const key = _irNormZhSearch(zh);
     const value = _irNormZhSearch(native);
     if (!key || !value) return;
-    if (map[key] === undefined) map[key] = value;
+    if (map[key] === undefined) {
+      map[key] = value;
+      if (kindMap) kindMap[key] = kind;
+    }
   }
 
   function _irSearchLocaleIndex() {
@@ -545,23 +554,38 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   function _irBuildSearchFromNames(names, ali) {
     const out = Object.create(null);
-    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native);
+    const kind = Object.create(null);
+    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native, 0, kind);
     for (const [alias, zhs] of Object.entries(ali || {})) {
       const key = _irNormZhSearch(alias);
       if (!key || out[key] !== undefined) continue;
       const list = Array.isArray(zhs) ? zhs : [zhs];
       for (const zh of list) {
         const native = out[_irNormZhSearch(zh)];
-        if (native) { out[key] = native; break; }
+        if (native) {
+          out[key] = native;
+          kind[key] = 1;
+          break;
+        }
       }
     }
-    return out;
+    return { map: out, kind };
   }
 
   function _getIrSearchKeys() {
     if (_irSearchKeys !== null) return _irSearchKeys;
     _irSearchKeys = Object.keys(_irSearchByZh || {}).sort((a, b) => a.localeCompare(b));
     return _irSearchKeys;
+  }
+
+  function _getIrSearchKeysByKind(kind) {
+    if (kind === 0 && _irSearchCanonicalKeys !== null) return _irSearchCanonicalKeys;
+    if (kind === 1 && _irSearchAliasKeys !== null) return _irSearchAliasKeys;
+    const out = Object.keys(_irSearchByZh || {}).filter((k) => _irSearchKind?.[k] === kind);
+    out.sort((a, b) => a.localeCompare(b));
+    if (kind === 0) _irSearchCanonicalKeys = out;
+    else _irSearchAliasKeys = out;
+    return out;
   }
 
   function _irSearchLowerBound(keys, target) {
@@ -574,28 +598,38 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return lo;
   }
 
-  function _irBuildSearchAliases(out, aliasText, native) {
+  function _irSearchCollectPrefix(keys, target, limit, out, excluded) {
+    const start = _irSearchLowerBound(keys, target);
+    for (let i = start; i < keys.length && out.length < limit; i++) {
+      const candidate = keys[i];
+      if (!candidate.startsWith(target)) break;
+      if (candidate !== excluded) out.push(candidate);
+    }
+  }
+
+  function _irBuildSearchAliases(out, aliasText, native, kind) {
     if (!aliasText) return;
     for (const part of aliasText.split('；')) {
       const alias = part.trim();
-      if (/^[\u3400-\u9fff]/.test(alias)) _irSearchPut(out, alias, native);
+      if (/^[\u3400-\u9fff]/.test(alias)) _irSearchPut(out, alias, native, 1, kind);
     }
   }
 
   function _irBuildSearchFromText(text) {
     const out = Object.create(null);
+    const kind = Object.create(null);
     const localeIndex = _irSearchLocaleIndex();
-    if (!localeIndex || typeof text !== 'string' || !text) return out;
+    if (!localeIndex || typeof text !== 'string' || !text) return { map: out, kind };
     for (const ln of text.split('\n')) {
       const c0 = ln.codePointAt(0);
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
       const native = p[localeIndex];
-      _irSearchPut(out, p[1], native);
-      _irBuildSearchAliases(out, p[7], native);
+      _irSearchPut(out, p[1], native, 0, kind);
+      _irBuildSearchAliases(out, p[7], native, kind);
     }
-    return out;
+    return { map: out, kind };
   }
 
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
@@ -604,8 +638,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (_v3Applied) {
       // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
       if (_irSearchByZh === null) {
-        _irSearchByZh = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        const built = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        _irSearchByZh = built.map;
+        _irSearchKind = built.kind;
         _irSearchKeys = null;
+        _irSearchCanonicalKeys = null;
+        _irSearchAliasKeys = null;
       }
       return true;
     }
@@ -617,8 +655,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
     _irDupMap = dup;
     _irAliasMap = ali;
-    _irSearchByZh = _irBuildSearchFromText(text);
+    const built = _irBuildSearchFromText(text);
+    _irSearchByZh = built.map;
+    _irSearchKind = built.kind;
     _irSearchKeys = null;
+    _irSearchCanonicalKeys = null;
+    _irSearchAliasKeys = null;
     return true;
   }
 
@@ -671,16 +713,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _irSearchByZh;
     if (!map) return [];
-    const keys = _getIrSearchKeys();
     const max = Math.max(1, Math.min(8, Number(limit) || 8));
-    const start = _irSearchLowerBound(keys, key);
     const out = [];
-    for (let i = start; i < keys.length && out.length < max; i++) {
-      const candidate = keys[i];
-      if (!candidate.startsWith(key)) break;
-      out.push({ zh: candidate, native: map[candidate] });
+    const exact = map[key];
+    if (exact) out.push({ zh: key, native: exact });
+
+    const canonical = [];
+    _irSearchCollectPrefix(_getIrSearchKeysByKind(0), key, max, canonical, exact ? key : '');
+    for (const candidate of canonical) out.push({ zh: candidate, native: map[candidate] });
+    if (out.length < max) {
+      const aliases = [];
+      _irSearchCollectPrefix(_getIrSearchKeysByKind(1), key, max - out.length, aliases, exact ? key : '');
+      for (const candidate of aliases) out.push({ zh: candidate, native: map[candidate] });
     }
-    return out;
+    return out.slice(0, max);
   }
 
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
