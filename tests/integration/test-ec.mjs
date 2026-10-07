@@ -43,6 +43,7 @@ const dump = `(() => {
     card: card ? { text: (card.textContent || '').trim(), flag: card.dataset.zhixiaCard || '' } : null,
     dyes: [...document.querySelectorAll('div.tag, span.tag')].map((d) => (d.textContent || '').trim()),
     ph: ph ? ph.getAttribute('placeholder') : null,
+    attrs: (() => { const n = document.querySelector('img.nav-ic'); return n ? { alt: n.getAttribute('alt'), aria: n.getAttribute('aria-label'), title: n.getAttribute('title') } : null; })(),
     reqUrls: (window.__reqLog || []),
   };
 })()`;
@@ -68,6 +69,17 @@ const r = await c.eval(dump);
 console.log('\n--- 结果 ---');
 console.log(JSON.stringify(r, null, 1));
 
+// Phase 20：卡片点击 → 灰机 wiki（window.open 捕获；zhApplyCards 绑定）
+await c.eval(`(() => {
+  window.__opened = [];
+  window.open = (u) => { window.__opened.push(String(u)); return null; };
+  const card = document.querySelector('p.title.has-text-text.is-5');
+  if (card) card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  return 1;
+})()`);
+await sleep(600);
+const opened = await c.eval(`window.__opened || []`);
+
 console.log('\n--- 断言 ---');
 const checks = [
   ['① 链接文本 → 中文', r.link && r.link.text === ZH, r.link && r.link.text],
@@ -81,6 +93,10 @@ const checks = [
   ['④b 色名回退 → 中文', r.dyes && r.dyes[1] === '⬤ 油墨蓝染剂', r.dyes && r.dyes[1]],
   ['⑤ 占位符 → 中文', r.ph === '按标题搜索', r.ph],
   ['⑥ 零网络（缓存路径）', r.reqUrls.length === 0, JSON.stringify(r.reqUrls)],
+  ['⑦ 卡片点击 → 灰机 wiki', opened.length >= 1 && opened[0] === WIKI, JSON.stringify(opened)],
+  ['⑧ alt 属性 → 加载中…', r.attrs && r.attrs.alt === '加载中…', JSON.stringify(r.attrs)],
+  ['⑨ aria-label 属性 → 第 2 页', r.attrs && r.attrs.aria === '第 2 页', JSON.stringify(r.attrs)],
+  ['⑩ title 属性 → 5 点赞', r.attrs && r.attrs.title === '5 点赞', JSON.stringify(r.attrs)],
 ];
 let pass = 0;
 for (const [name, ok, got] of checks) {

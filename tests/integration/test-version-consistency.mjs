@@ -79,5 +79,17 @@ ok('E2 release.yml 含 npm ci + 发布前一致性门', ry.includes('npm ci') &&
 const ty = read(path.join(repoRoot, '.github', 'workflows', 'test.yml'));
 ok('E3 test.yml 含「构建 + 数据校验 + 测试」三步', ty.includes('npm run build') && ty.includes('validate:data') && ty.includes('npm test'));
 
+console.log('── F：userscript 元数据完整性（Phase 20）──');
+const srcText = read(srcFile);
+const headText = read(headerPath);
+const distText = dist ? read(distFile) : '';
+const MATCHES = ['mirapri.com', 'ffxiv.eorzeacollection.com', 'ff14.huijiwiki.com', 'ff14-fc.com', 'lookbook.ronkacloset.com', 'www.ffxivcollection.com'];
+ok('F1 六站 @match 齐备（src/header/dist）', MATCHES.every((h) => srcText.includes(h) && headText.includes(h) && distText.includes(h)));
+const GRANTS = ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue'];
+ok('F2 @grant 三件套齐备（src/header/dist）', GRANTS.every((g) => srcText.includes(g) && headText.includes(g) && distText.includes(g)));
+ok('F3 @connect zhixia-data.pages.dev（src/header）', srcText.includes('zhixia-data.pages.dev') && headText.includes('zhixia-data.pages.dev'));
+ok('F4 @run-at document-idle + @noframes', srcText.includes('document-idle') && srcText.includes('@noframes') && headText.includes('document-idle') && headText.includes('@noframes'));
+ok('F5 dist 含 @name/@namespace/@version/@match', distText.includes('@name') && distText.includes('@namespace') && distText.includes('@version') && distText.includes('@match'));
+
 console.log(fail ? `\n失败 ${fail} 项` : `\n版本单一源契约通过 ${total}/${total}`);
 process.exit(fail ? 1 : 0);

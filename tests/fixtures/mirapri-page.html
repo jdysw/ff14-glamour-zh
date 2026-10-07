@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>FF14ミラプリSS投稿・共有サイト</title>
+</head>
+<body>
+<header>
+  <nav>
+    <!-- PATTERNS：全身を切り取る → 裁切全身（trNode 会给父元素挂 title=原文） -->
+    <span>全身を切り取る</span>
+    <a href="/">ホーム</a>
+  </nav>
+</header>
+<main>
+  <!-- 搜索框（PATTERNS：装備品名等を入力 → 输入装备名等） -->
+  <div class="search">
+    <input type="text" placeholder="装備品名等を入力">
+    <div class="hint">Loading...</div>
+  </div>
+
+  <!-- 装备链接（物品链 item：a.eorzeadb_link + lodestone hash） -->
+  <div class="post">
+    <a class="eorzeadb_link" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/0000c0de7ff/">
+      <span>トロイアン・レンジャーバンデージ</span>
+    </a>
+  </div>
+
+  <!-- 纯文本装备名（plain-item：span.has-text-rarity-*） -->
+  <section class="set">
+    <span class="has-text-rarity-4">トロイアン・レンジャーバンデージ</span>
+  </section>
+
+  <!-- 染剂 tag -->
+  <div class="tags">
+    <div class="tag">⬤ Abyssal Blue Dye</div>
+  </div>
+</main>
+</body>
+</html>

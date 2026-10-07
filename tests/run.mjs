@@ -4,7 +4,7 @@
 //   node tests/run.mjs --suite=unit           # 纯 Node 单元测试（秒级，无需 Chrome）
 //   node tests/run.mjs --suite=integration    # 离线夹具集成测试（自动确保 headless Chrome）
 //   node tests/run.mjs --suite=live           # 真站连通测试（需要外网）
-//   node tests/run.mjs --suite=core           # 发布前核心 8 项（跨套件，需要外网）
+//   node tests/run.mjs --suite=core           # 发布前核心 9 项（跨套件，需要外网）
 //   node tests/run.mjs --suite=benchmark      # 基准测试（耗时较长）
 //   node tests/run.mjs --suite=all            # unit + integration + live
 //   node tests/run.mjs test-wiki test-ec      # 按名称选择（子串匹配）
@@ -28,6 +28,7 @@ const SUITES = {
     'integration/test-wiki-fallback.mjs',
     'integration/test-index-scope.mjs',
     'integration/test-ec.mjs',
+    'integration/test-mirapri.mjs',
     'integration/test-probe.mjs',
     'integration/test-dict-single-source.mjs',
     'integration/test-version-consistency.mjs',
@@ -51,6 +52,7 @@ const SUITES = {
     'integration/test-index-scope.mjs',
     'live/test-kasuga.mjs',
     'integration/test-ec.mjs',
+    'integration/test-mirapri.mjs',
     'live/test-ronka.mjs',
     'live/test-acl-1.mjs',
   ],

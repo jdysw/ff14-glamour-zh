@@ -20,7 +20,7 @@ CI（`.github/workflows/test.yml`）：push / PR 自动跑「数据校验 → �
 | `integration/` | 夹具（fixtures）级集成测试 + 构建幂等 | 是（自动维护） | 否 |
 | `live/` | 真站连通测试（fc / ronka / ACL / 数据站 e2e） | 是 | **是** |
 | `benchmark/` | 性能基准（读取路径细分 + v2/v3 parse 对比） | 是 | 否 |
-| `fixtures/` | 静态夹具页面（wiki / EC 页结构） | — | — |
+| `fixtures/` | 静态夹具页面（wiki / EC / mirapri 页结构） | — | — |
 | `helpers/` | CDP 客户端、Chrome 守护、路径解析、词典生成 | — | — |
 
 ## 命令
@@ -32,7 +32,7 @@ CI（`.github/workflows/test.yml`）：push / PR 自动跑「数据校验 → �
 | `npm run test:integration` | 夹具集成测试 |
 | `npm run test:live` | 真站测试（需要外网） |
 | `npm run test:all` | unit + integration + live |
-| `npm run test:core` | 发布前核心 8 项（跨套件快跑） |
+| `npm run test:core` | 发布前核心 9 项（跨套件快跑） |
 | `npm run test:bench` | 性能基准（耗时较长） |
 | `npm run validate:data` | 数据与词典结构校验（秒级，CI 同源） |
 | `npm run version:check` | 版本单一源校验（package ≡ src ≡ header ≡ dist） |
@@ -91,5 +91,6 @@ CI（`.github/workflows/test.yml`）：push / PR 自动跑「数据校验 → �
 - **Phase 17 发布 / CI 重构**：版本单一源 = `package.json`（`build/version.mjs` 同步 → `--check` 四源校验；build.sh ⓪/⑰ 步、release 发布门前置）；`integration/test-version-consistency.mjs`（13 断言）冻结契约（四源一致 / 唯一性 / 治理工具 / release.yml 与 test.yml 关键步骤）；数据侧 `build/validate-data.py`（`npm run validate:data`）做结构校验；`.github/workflows/test.yml`（push/PR）按「数据校验 → 构建 → 产物语法 → 生成物一致性 → 测试」跑全链，deploy-data.yml 部署前同源校验。改版本链路 / 工作流 / package.json scripts 后须全量回归。
 - **Phase 18 错误边界**：`@zhixia:core-runtime` 段2 的 `_zhxErr` 为统一记录设施（有界 20 条 + `console.warn`；Probe 开启后镜像 `__zhxErrs`）——各装配体以「记录桩」注入（缺桩会中断就绪链路，装错先查桩）；新增断言：core +6（记录 / 上限 / 镜像）、observer +3（回调边界）、site-registry +5（适配器入口边界）、`integration/test-probe` +1（`errs:` 行）。**源文件增删顶层块后：先 `build/migrate/reindex-assign.py` 重算块索引**（`--dry` 干跑看 Δ 分布 → `--add 模块:块号` 归入新增块 → 复跑构建至 ⑤ 零遗漏）再全量回归。
 - **Phase 19 性能测量基建**：两层冻结——脚本侧（`integration/test-probe.mjs` E1 新行断言 + E3 `__zhxDiagOn` 无面板测量场景）与工具侧（`unit/test-bench-report.mjs` 冻结 `benchmark/report.mjs` 的展开 / 对比 / 阈值逻辑）。约定：报告 = `zhx-bench/1`（写 `.cache/bench/`；`--save` 存 `benchmark/baseline/`）；对比 = `npm run bench:compare -- 旧 新 [--pct 10] [--strict]`；`bench-lifecycle.mjs` 为锚点无关基准（经 `__zhxDiagRecord()` 读取，dist 形态变化零影响），`bench-read-path.mjs` 维持文本锚细分（失配即哨兵报错，属既定行为）。改动测量面（`__zhxMarks` / `_obsStats` / `_domStats` / `_dlStats` / `__zhxDiagRecord`）后须复跑 benchmark 套件。
+- **Phase 20 完整回归补强**：① 新增 `integration/test-mirapri.mjs`——真站（mirapri.com）自云端被 Cloudflare 拦，以 `fixtures/mirapri-page.html` 冻结本站在核心链路的行为（PATTERNS 文本 / title=原文 keep / 占位符 / 物品链（`eorzeadb_link`→灰机；纯文本包装）/ 染剂 / `document.title`），并含 **bfcache 断言**（`window.__zhxDiagOn` + `__zhxDiagRecord().dom.calls` 差值：`persisted:false` 不补跑 / `persisted:true` 补跑一次）；② `test-ec.mjs` 增属性链（alt / aria-label / title 经 trEC）与卡片点击（window.open 捕获）断言；③ `test-wiki.mjs` 场景 A 增「数据不可用 → 优雅降级」断言；④ live 由 dump-only 升级为断言（fc 9 / ronka 11【含零网络缓存与动态追加节点】/ acl-1 7 / acl-2 9【含点击捕获与 lodestone 零残留】）；⑤ `test-version-consistency.mjs` 增 F 段（六站 `@match` / `@grant` / `@connect` / `@run-at` / dist 元数据）。**改动上述测试文件后须复跑对应套件；夹具页即站点的行为契约，站点结构大改时先更新夹具。**
 - 失败返回非 0；runner 汇总结果见 `tests/.cache/logs/last-summary.txt`。
 - 本目录基线来自 PR #15 的 16 项回归 + 构建幂等测试（新增）；迁移历史见仓库提交记录。

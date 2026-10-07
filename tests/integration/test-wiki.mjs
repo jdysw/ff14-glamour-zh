@@ -59,6 +59,15 @@ await sleep(6000);
 const rA = await c1.eval(dumpBlock);
 console.log(JSON.stringify(rA, null, 1));
 console.log('console A:', c1.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 700));
+// 场景 A 断言（Phase 20）：数据不可用 → 优雅降级（区块保留可用条目、不含依赖本地数据的条目、不阻塞）
+let aFail = 0;
+const aLinks = rA.blockLinks || [];
+const aHasDataDep = aLinks.some((x) => x.h.indexOf('eorzeacollection') >= 0 || x.h.indexOf('lookbook.ronkacloset') >= 0);
+if (rA.blockLinks !== null && aLinks.length >= 1 && aLinks.length <= 3 && !aHasDataDep) { console.log('✅ A1 降级形态：链接 ' + aLinks.length + ' 条、不含依赖数据的条目'); } else { console.log('❌ A1 降级形态不符', JSON.stringify(aLinks)); aFail++; }
+const aErr = c1.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
+if (!aErr) { console.log('✅ A2 无 [TEST-INJECT] 错误'); } else { console.log('❌ A2 存在注入错误'); aFail++; }
+if (rA.reqUrls.length >= 1) { console.log('✅ A3 尝试过数据下载且未阻塞'); } else { console.log('❌ A3 未尝试数据下载'); aFail++; }
+console.log(aFail ? '场景 A 失败 ' + aFail + ' 项' : '场景 A 通过 3/3');
 await closePage(PORT, t1.target.id);
 
 // ============ 场景 B：预置数据、零网络 ============
@@ -113,4 +122,4 @@ const olC = rC.otherLinks || [];
 if (!olC.some((h) => /risingstones/.test(h))) { console.log('❌ C2 光之收藏家链接被误删'); cFail++; } else { console.log('✅ C2 「其他站点链接」保持原样'); }
 console.log(cFail ? '场景 C 失败 ' + cFail + ' 项' : '场景 C 通过 2/2');
 await closePage(PORT, t3.target.id);
-process.exit(bFail + cFail ? 1 : 0);
+process.exit(aFail + bFail + cFail ? 1 : 0);
