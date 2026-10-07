@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -516,10 +516,76 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
+  // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
+  // 仅构建当前站点所需的原生语言映射，不扩大现有 v3 数据文件。
+  let _irSearchByZh = null; // NOSONAR — 数据就绪后按当前站点数据重建
+
+  function _irNormZhSearch(value) {
+    return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
+  }
+
+  function _irSearchPut(map, zh, native) {
+    if (!map || !zh || !native) return;
+    const key = _irNormZhSearch(zh);
+    const value = _irNormZhSearch(native);
+    if (!key || !value) return;
+    if (map[key] === undefined) map[key] = value;
+  }
+
+  function _irSearchLocaleIndex() {
+    const id = findSite()?.id;
+    if (id === 'ec') return 2; // en
+    if (id === 'ronka') return 4; // ko
+    if (id === 'mirapri' || id === 'fc' || id === 'collection') return 3; // ja
+    return null;
+  }
+
+  function _irBuildSearchFromNames(names, ali) {
+    const out = Object.create(null);
+    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native);
+    for (const [alias, zhs] of Object.entries(ali || {})) {
+      const key = _irNormZhSearch(alias);
+      if (!key || out[key] !== undefined) continue;
+      const list = Array.isArray(zhs) ? zhs : [zhs];
+      for (const zh of list) {
+        const native = out[_irNormZhSearch(zh)];
+        if (native) { out[key] = native; break; }
+      }
+    }
+    return out;
+  }
+
+  function _irBuildSearchFromText(text) {
+    const out = Object.create(null);
+    const localeIndex = _irSearchLocaleIndex();
+    if (!localeIndex || typeof text !== 'string' || !text) return out;
+    for (const ln of text.split('\n')) {
+      const c0 = ln.codePointAt(0);
+      if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
+      const p = ln.split('\t');
+      if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
+      const zh = p[1];
+      const native = p[localeIndex];
+      _irSearchPut(out, zh, native);
+      if (p.length > 7 && p[7]) {
+        for (const part of p[7].split('；')) {
+          const alias = part.trim();
+          if (/^[\u3400-\u9fff]/.test(alias)) _irSearchPut(out, alias, native);
+        }
+      }
+    }
+    return out;
+  }
+
+
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
   // 未就绪或异常时保持/回退 null——所有查询路径对空表安全（等同主索引既有行为）。
   function _irBuildAux(text) {
-    if (_v3Applied) return true;   // v3：dup/alias 已由服务端预构建直读（Phase 13），跳过全表二次扫描
+    if (_v3Applied) {
+      // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
+      if (_irSearchByZh === null) _irSearchByZh = _irBuildSearchFromNames(nameMap, _irAliasMap);
+      return true;
+    }
     if (!_tablesReady || typeof text !== 'string' || !text) return false;
     const dup = Object.create(null);
     const ali = Object.create(null);
@@ -528,6 +594,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
     _irDupMap = dup;
     _irAliasMap = ali;
+    _irSearchByZh = _irBuildSearchFromText(text);
     return true;
   }
 
@@ -568,6 +635,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   const _irStats = { hit: 0, miss: 0 };
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveByName(name) { const z = (name && nameMap?.[name]) ? nameMap[name] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
+  function resolveByZh(zh) {
+    const key = _irNormZhSearch(zh);
+    const z = (key && _irSearchByZh?.[key]) ? _irSearchByZh[key] : null;
+    _irStats[z ? 'hit' : 'miss']++;
+    return z;
+  }
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
     const first = nameMap?.[name];
     if (!first) return [];
