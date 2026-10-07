@@ -1,6 +1,6 @@
 /* @phase15-module-order:core/runtime */
 import { resolve } from './data-manager.js';
-export { ERR_LOG_CAP, __zhxBootAt, _errLog, _zhxErr, lookupZh, safe };
+export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, lookupZh, safe };
 
   'use strict';
 
@@ -10,6 +10,8 @@ export { ERR_LOG_CAP, __zhxBootAt, _errLog, _zhxErr, lookupZh, safe };
        模块化构建时，本区段将原样抽出为 src/core/runtime.js。 */
   // 运行探测（URL 带 zhx_probe 参数时启用）用：脚本注入时刻；未启用时零开销
   let __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  // Phase 19：测量用单调时钟（performance 缺失时回退 Date.now；供处理统计与时间线共用）
+  function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
   /* @zhixia:core-runtime-end */
 
   function lookupZh(a, name) {

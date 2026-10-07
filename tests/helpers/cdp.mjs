@@ -49,14 +49,17 @@ export class CDP {
   send(method, params = {}, timeoutMs = 180000) {
     const id = ++this.id;
     return new Promise((res, rej) => {
-      this.pending.set(id, { res, rej });
-      this.ws.send(JSON.stringify({ id, method, params }));
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
           rej(new Error('CDP 超时: ' + method));
         }
       }, timeoutMs);
+      // Phase 19：响应/出错即清理超时定时器——否则残留定时器（最长 timeoutMs）拖住
+      //   进程收尾，令每个使用 CDP 的测试文件多等最多 ~3 分钟（套件级悬挂）
+      const wrap = (fn) => (v) => { clearTimeout(timer); fn(v); };
+      this.pending.set(id, { res: wrap(res), rej: wrap(rej) });
+      this.ws.send(JSON.stringify({ id, method, params }));
     });
   }
   async eval(expr, { awaitPromise = true } = {}) {

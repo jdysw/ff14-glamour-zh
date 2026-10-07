@@ -1,18 +1,23 @@
 /* @phase15-module-order:core/probe */
 /* @phase15-order-link:core/probe<-core/targets */
 import './targets.js';
-import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _irStats, ecidMap, itemHash, koByZh, nameMap, resolveKo } from './data-manager.js';
+import { cacheInfo } from './cache.js';
+import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _dlStats, _irStats, ecidMap, itemHash, koByZh, nameMap, resolveKo } from './data-manager.js';
+import { DICT_LAYERS } from './dictionary.js';
 import { _obsStats } from './observer.js';
-import { __zhxBootAt, _errLog } from './runtime.js';
+import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
+import { _domStats } from './targets.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
-export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki };
+export { __zhxDiagFlag, __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki };
 
 
   /* @zhixia:core-probe-start */
   /* ── Core Probe（v1.4 Phase 10 独立化）：运行与性能探测——默认关闭、近零
      开销、不写存储、不发网络请求、不影响正常执行路径。读取面：runtime
      timeline（__zhxMarks）/ data stats / observer stats（_obsStats）/
-     resolver hit-miss（_irStats）/ Wiki stats。Phase 15 模块化构建时，本区段
+     resolver hit-miss（_irStats）/ 处理统计（_domStats）/ 数据来源（_dlStats）/
+     Wiki stats；Phase 19 起另提供 __zhxDiagRecord() JSON 记录与
+     window.__zhxDiagOn 无面板测量开关（基准 / 自动化用）。Phase 15 模块化构建时，本区段
      将原样抽出为 src/core/probe.js（或 src/dev/probe.js，由构建系统决定是否
      保留生产能力）。 */
   /* =====================================================================
@@ -22,13 +27,14 @@ export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbe
    * 显示，不写入存储、不发送任何网络请求。
    * ===================================================================== */
   let __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关
+  let __zhxDiagFlag = false;   // Phase 19：独立测量开关（读取 window.__zhxDiagOn；仅时间线/统计记录，无面板）
   const __zhxProbeBtnCss = 'padding:6px 10px;font-size:12px;border:1px solid #8ab4d8;border-radius:8px;background:#eaf4fe;color:#1d5c96;cursor:pointer;';
 
   function __zhxMark(name) {
     try {
-      if (!__zhxProbeFlag) return;
+      if (!__zhxProbeFlag && !__zhxDiagFlag) return;
       const m = (window.__zhxMarks = window.__zhxMarks || {});
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const now = _perfNow();
       m[name] = Math.round(now - (__zhxBootAt || 0));
     } catch (e) { /* 忽略：探测永不阻断主流程 */ }
   }
@@ -51,9 +57,32 @@ export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbe
       'gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
   }
 
+  // Phase 19：内嵌词典规模（字符数近似：各层 JSON 序列化长度求和；仅诊断读取）
+  function __zhxDictChars() {
+    try {
+      let n = 0;
+      for (const k of Object.keys(DICT_LAYERS)) { const o = DICT_LAYERS[k]; if (o) n += JSON.stringify(o).length; }
+      return n;
+    } catch (e) { return 0; /* 忽略：规模统计失败返回 0 */ }
+  }
+
+  // Phase 19：可复用诊断记录 API（稳定 JSON 结构；基准 / 自动化与 Probe 共用）
+  function __zhxDiagRecord() {
+    const rec = { v: 1, boot: Math.round(__zhxBootAt || 0), marks: {}, obs: {}, dom: {}, dl: {}, res: {}, cache: {}, data: {}, dict: {} };
+    try { rec.marks = Object.assign({}, window.__zhxMarks || {}); } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
+    try { rec.obs = { ticks: _obsStats.ticks, nodes: _obsStats.nodes, ms: _obsStats.ms, maxMs: _obsStats.maxMs }; } catch (e) { /* 忽略：观察统计读取失败 */ }
+    try { rec.dom = { calls: _domStats.calls, ms: _domStats.ms, maxMs: _domStats.maxMs, firstMs: _domStats.firstMs }; } catch (e) { /* 忽略：处理统计读取失败 */ }
+    try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }
+    try { rec.res = { hit: _irStats.hit, miss: _irStats.miss }; } catch (e) { /* 忽略：解析统计读取失败 */ }
+    try { rec.cache = cacheInfo(); } catch (e) { /* 忽略：缓存信息读取失败 */ }
+    try { rec.data = { items: ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0, series: SERIES_TEXT ? SERIES_TEXT.length : 0, acl: ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
+    try { rec.dict = { chars: __zhxDictChars() }; } catch (e) { /* 忽略：词典规模读取失败 */ }
+    return rec;
+  }
+
   function __zhxProbeData(L) {
     L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
-    try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
+    try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats) + ' dom: ' + JSON.stringify(_domStats) + ' dl: ' + JSON.stringify(_dlStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
     try {
       L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
         + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
@@ -66,6 +95,8 @@ export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbe
         + ' ecidMap=' + (ecidMap ? Object.keys(ecidMap).length : 0)
         + ' koByZh=' + (koByZh ? Object.keys(koByZh).length : 0));
     } catch (e) { /* 忽略：索引规模读取失败 */ }
+    try { L.push('cache: ' + JSON.stringify(cacheInfo())); } catch (e) { /* 忽略：缓存信息读取失败 */ }
+    try { L.push('dict: ' + __zhxDictChars()); } catch (e) { /* 忽略：词典规模读取失败 */ }
   }
 
   function __zhxProbeWiki(L) {
@@ -203,7 +234,12 @@ export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbe
 
   // 探测启用判断（必须在任何异步回调前定值；未启用时各 mark 直接短路）
   __zhxProbeFlag = __zhxProbeOn();
+  __zhxDiagFlag = false;
+  try { __zhxDiagFlag = !!window.__zhxDiagOn; } catch (e) { /* 忽略：开关读取失败按未启用 */ }
   if (__zhxProbeFlag) {
     try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+  }
+  if (__zhxProbeFlag || __zhxDiagFlag) {
+    try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
   }
   /* @zhixia:core-probe-end */

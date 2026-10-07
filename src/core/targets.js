@@ -4,8 +4,8 @@ import './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { itemDbReady, resolveByName } from './data-manager.js';
 import { observeLocal } from './observer.js';
-import { lookupZh, safe } from './runtime.js';
-export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
+import { _perfNow, lookupZh, safe } from './runtime.js';
+export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
 
   /* @zhixia:core-targets-start */
@@ -89,10 +89,18 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, applyItemZh
 
   // 统一处理路径：全页（root 缺省）与局部（元素）同路径；
   // context.applyMap 提供各 type 的处理器；返回本次采集到的 targets。
+  // Phase 19：处理统计（次数 / 累计 / 峰值 / 首次耗时；整数与毫秒累加，无行为影响）
+  const _domStats = { calls: 0, ms: 0, maxMs: 0, firstMs: -1 };
   function processRoot(root, context) {
     const c = context || {};
+    const t0 = _perfNow();
     const targets = collectTargets(root);
     dispatchTargets(targets, c.applyMap);
+    const dt = _perfNow() - t0;
+    _domStats.calls++;
+    _domStats.ms += dt;
+    if (dt > _domStats.maxMs) _domStats.maxMs = dt;
+    if (_domStats.firstMs < 0) _domStats.firstMs = dt;
     return targets;
   }
   /* @zhixia:core-targets-end */

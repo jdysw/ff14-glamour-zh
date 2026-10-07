@@ -62,6 +62,8 @@ console.log('\n════ 场景 E1：zhx_probe=1 ════');
   check('wiki 段含 slot 判定', txt.includes('"slot":'));
   check('wiki 段 slot 命中头部防具', txt.includes('头部防具/headPiece'));
   check('wiki 段含注入完成标志字段', txt.includes('"done":'));
+  check('报告含 dom / dl 统计（Phase 19）', txt.includes('dom: ') && txt.includes('dl: '));
+  check('报告含 cache / dict 行（Phase 19）', txt.includes('cache: ') && txt.includes('dict: '));
   await closePage(PORT, t.target.id);
 }
 
@@ -88,6 +90,40 @@ console.log('\n════ 场景 E2：无参数（零影响）════');
   check('未暴露 dump', r.dump === 'undefined');
   check('marks 未记录（探测短路）', r.marks === '{}');
   check('errs 未注册', r.errs === 'none');
+  await closePage(PORT, t.target.id);
+}
+
+// ============ E3：测量开关（__zhxDiagOn，无面板）============
+console.log('\n════ 场景 E3：__zhxDiagOn（无面板测量）════');
+{
+  const t = await newPage(PORT, fixtureUrl('wiki-item.html'));
+  const c = t.cdp;
+  await sleep(700);
+  await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
+  await c.eval("window.__zhxTestSite = 'wiki';");
+  await c.eval("window.__zhxTestTables = [];");
+  await c.eval('window.__zhxDiagOn = true;');
+  await c.eval(gmStub);
+  await c.eval(wrap(GF));
+  let ready = false;
+  for (let i = 0; i < 40; i++) {
+    await sleep(300);
+    ready = await c.eval("(typeof window.__zhxDiagRecord === 'function') && !!(window.__zhxDiagRecord().marks || {}).fireDone");
+    if (ready) break;
+  }
+  const r = await c.eval(`(() => {
+    const box = !!document.getElementById('zhx-probe-box');
+    const dump = typeof window.__zhxProbeDump;
+    const rec = typeof window.__zhxDiagRecord === 'function' ? window.__zhxDiagRecord() : null;
+    return { box, dump, rec };
+  })()`);
+  console.log('面板:', r.box, '| dump:', r.dump, '| marks:', JSON.stringify(r.rec && r.rec.marks));
+  check('无面板（测量开关不带 UI）', r.box === false);
+  check('未暴露 ProbeDump（探测未启用）', r.dump === 'undefined');
+  check('__zhxDiagRecord 已暴露', typeof r.rec === 'object' && r.rec !== null);
+  check('时间线已记录（含 fireDone）', !!(r.rec && r.rec.marks && r.rec.marks.fireDone));
+  check('统计面（obs/dom/dl/cache/data）齐备', !!(r.rec && r.rec.obs && r.rec.dom && r.rec.dl && r.rec.cache && r.rec.data));
+  check('boot 字段为数值', typeof r.rec.boot === 'number');
   await closePage(PORT, t.target.id);
 }
 

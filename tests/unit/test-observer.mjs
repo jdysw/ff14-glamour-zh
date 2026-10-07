@@ -79,6 +79,7 @@ function makeEnv() {
     setTimeout: (fn, ms) => { const id = ++timerSeq; timers.push({ id, fn, ms, cleared: false, done: false }); return id; },
     clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.cleared = true; },
     MutationObserver: FakeMO,
+    _perfNow: () => performance.now(),
     rec,
     fakeDoc,
   };
@@ -88,9 +89,9 @@ function buildObs(env) {
   const parts = [...sliceAll(DIST_TEXT, 'core-dom'), ...sliceAll(DIST_TEXT, 'core-observer')];
   const ret = 'return { createObserver, observeLocal, dedupeByAncestor, __obsStats: () => ({ ..._obsStats }) };';
   try {
-    const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr',
+    const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr', '_perfNow',
       parts.join('\n') + '\n' + ret);
-    return fn(env.document, env.console, env.setTimeout, env.clearTimeout, env.MutationObserver, env._zhxErr);
+    return fn(env.document, env.console, env.setTimeout, env.clearTimeout, env.MutationObserver, env._zhxErr, env._perfNow);
   } catch (e) {
     throw new Error('Observer 装配失败：' + e.message);
   }
@@ -272,12 +273,14 @@ console.log('\n── H：观察统计（v1.4 Phase 10）──');
   const z1 = api.__obsStats();
   eq('一次调度后 ticks=1', z1.ticks, 1);
   eq('nodes 累计（2 节点）', z1.nodes, 2);
+  eq('处理时长字段存在且非负', typeof z1.ms === 'number' && typeof z1.maxMs === 'number' && z1.ms >= 0 && z1.maxMs >= 0, true);
 
   mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
   runTimer();
   const z2 = api.__obsStats();
   eq('二次调度后 ticks=2', z2.ticks, 2);
   eq('nodes 累计（3 节点）', z2.nodes, 3);
+  eq('时长累计单调不减且 ≥ 峰值', z2.ms >= z1.ms && z2.ms >= z2.maxMs, true);
 }
 
 console.log('\n── I：handler 抛错边界（Phase 18）──');

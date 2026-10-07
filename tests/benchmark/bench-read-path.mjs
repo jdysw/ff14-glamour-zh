@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { distFile, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
 import { ensureDictJson } from '../helpers/dict.mjs';
+import { writeReport } from './report.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('ec-page.html');
@@ -112,3 +113,17 @@ for (const rate of rates) {
   const f1 = (x) => (Number.isFinite(x) ? x.toFixed(1) : '-').padStart(7);
   console.log(`${rate}x  | ${f1(m('injectAt', 'readEnd'))} | ${f1(m('readEnd', 'applied'))} | ${f1(m('applied', 'schedAt'))} | ${f1(m('schedAt', 'buildStart'))} | ${f1(m('buildStart', 'ready'))} | ${f1(m('ready', 'fireDone'))} | ${f1(m('injectAt', 'fireDone'))}`);
 }
+
+// ── 报告（v1.4 Phase 19）：标准 JSON（zhx-bench/1）→ tests/.cache/bench/；--save 另存基线 ──
+const report = { rates: {} };
+for (const rate of rates) {
+  const runs = all[rate].filter((z) => z && z.fireDone);
+  if (!runs.length) { report.rates[rate] = null; continue; }
+  const m2 = (a, b) => med(runs.map((z) => z[b] - z[a]));
+  report.rates[rate] = {
+    total: m2('injectAt', 'fireDone'), read: m2('injectAt', 'readEnd'), apply: m2('readEnd', 'applied'),
+    sched: m2('applied', 'schedAt'), wait: m2('schedAt', 'buildStart'), build: m2('buildStart', 'ready'),
+    fire: m2('ready', 'fireDone'), runs: runs.length,
+  };
+}
+writeReport('read-path-ec', report, { save: process.argv.includes('--save'), args: ['rates=' + rates.join('/'), 'rounds=3'] });

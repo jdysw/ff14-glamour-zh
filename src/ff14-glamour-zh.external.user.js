@@ -28,6 +28,8 @@
        模块化构建时，本区段将原样抽出为 src/core/runtime.js。 */
   // 运行探测（URL 带 zhx_probe 参数时启用）用：脚本注入时刻；未启用时零开销
   let __zhxBootAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  // Phase 19：测量用单调时钟（performance 缺失时回退 Date.now；供处理统计与时间线共用）
+  function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
   /* @zhixia:core-runtime-end */
 
   /* =====================================================================
@@ -3886,6 +3888,7 @@
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
+    __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
 
   /* @zhixia:data-layer-start */
@@ -4337,6 +4340,8 @@
        本区段将原样抽出为 src/core/data-manager.js。 */
   let _ensurePromise = null;
   // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
+  // Phase 19：数据来源统计（cache=本地缓存交付 / net=网络下载交付 / fallback=下载失败旧缓存兜底）
+  const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureReadLocal(need) {
     const local = {};
     return Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {}))).then(() => local);
@@ -4345,8 +4350,8 @@
   async function _ensureFetchTable(t, vfps, local) {
     const fp = vfps?.[t] ? String(vfps[t]) : null;
     const cached = local[t] || null;
-    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
-    if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
+    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }
+    if (!fp && cached) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }   // 无版本信息时不盲刷
     let txt = null;
     try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
     catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
@@ -4354,9 +4359,10 @@
     if (txt && txt.length > 100 && fmtOk) {
       applyTable(t, txt);
       _writeCachedTable(t, fp, txt);
+      _dlStats.net++;
       return 1;
     }
-    if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
+    if (cached) { applyTable(t, cached.tx); _dlStats.fallback++; return 1; }   // 下载失败 → 兜底旧缓存
     return 0;
   }
 
@@ -4364,6 +4370,7 @@
   // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
   async function _ensureTryFast(need) {
     const local = await _ensureReadLocal(need);
+    __zhxMark('readEnd');   // Phase 19：本地读取结束
     let meta = null;
     try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
     const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
@@ -4371,6 +4378,8 @@
     if (!allCached || !fresh) return { local };
     for (const t of need) applyTable(t, local[t].tx);
     DATA_VER = (meta.v ? String(meta.v) : '');
+    _dlStats.cache += need.length;
+    __zhxMark('applied');   // Phase 19：缓存文本应用完成
     return null;
   }
 
@@ -4382,6 +4391,7 @@
     let okCount = 0;
     (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
+    __zhxMark('applied');   // Phase 19：表格拉取/应用完成
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
     }
@@ -4939,7 +4949,7 @@
   // }
   // 返回 { disconnect } 便于站点销毁（现状站点均为常驻，保留扩展位）。
   // 观察统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
-  const _obsStats = { ticks: 0, nodes: 0 };
+  const _obsStats = { ticks: 0, nodes: 0, ms: 0, maxMs: 0 };   // Phase 19：ms/maxMs = 回调处理时长累计/峰值（mutation processing）
   function createObserver(opts) {
     const o = opts || {};
     const debounce = o.debounce || 350;
@@ -4968,7 +4978,11 @@
         const nodes = dedupeByAncestor(pending);
         pending = [];
         _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
+        const t0 = _perfNow();                                // Phase 19：处理时长统计
         try { o.handler(nodes); } catch (e) { _zhxErr('createObserver', e); }
+        const dt = _perfNow() - t0;
+        _obsStats.ms += dt;
+        if (dt > _obsStats.maxMs) _obsStats.maxMs = dt;
       }, debounce);
     });
     mo.observe(root, o.characterData
@@ -5064,10 +5078,18 @@
 
   // 统一处理路径：全页（root 缺省）与局部（元素）同路径；
   // context.applyMap 提供各 type 的处理器；返回本次采集到的 targets。
+  // Phase 19：处理统计（次数 / 累计 / 峰值 / 首次耗时；整数与毫秒累加，无行为影响）
+  const _domStats = { calls: 0, ms: 0, maxMs: 0, firstMs: -1 };
   function processRoot(root, context) {
     const c = context || {};
+    const t0 = _perfNow();
     const targets = collectTargets(root);
     dispatchTargets(targets, c.applyMap);
+    const dt = _perfNow() - t0;
+    _domStats.calls++;
+    _domStats.ms += dt;
+    if (dt > _domStats.maxMs) _domStats.maxMs = dt;
+    if (_domStats.firstMs < 0) _domStats.firstMs = dt;
     return targets;
   }
   /* @zhixia:core-targets-end */
@@ -5255,7 +5277,9 @@
   /* ── Core Probe（v1.4 Phase 10 独立化）：运行与性能探测——默认关闭、近零
      开销、不写存储、不发网络请求、不影响正常执行路径。读取面：runtime
      timeline（__zhxMarks）/ data stats / observer stats（_obsStats）/
-     resolver hit-miss（_irStats）/ Wiki stats。Phase 15 模块化构建时，本区段
+     resolver hit-miss（_irStats）/ 处理统计（_domStats）/ 数据来源（_dlStats）/
+     Wiki stats；Phase 19 起另提供 __zhxDiagRecord() JSON 记录与
+     window.__zhxDiagOn 无面板测量开关（基准 / 自动化用）。Phase 15 模块化构建时，本区段
      将原样抽出为 src/core/probe.js（或 src/dev/probe.js，由构建系统决定是否
      保留生产能力）。 */
   /* =====================================================================
@@ -5265,13 +5289,14 @@
    * 显示，不写入存储、不发送任何网络请求。
    * ===================================================================== */
   let __zhxProbeFlag = null;   // null=尚未初始化；true/false=探测开关
+  let __zhxDiagFlag = false;   // Phase 19：独立测量开关（读取 window.__zhxDiagOn；仅时间线/统计记录，无面板）
   const __zhxProbeBtnCss = 'padding:6px 10px;font-size:12px;border:1px solid #8ab4d8;border-radius:8px;background:#eaf4fe;color:#1d5c96;cursor:pointer;';
 
   function __zhxMark(name) {
     try {
-      if (!__zhxProbeFlag) return;
+      if (!__zhxProbeFlag && !__zhxDiagFlag) return;
       const m = (window.__zhxMarks = window.__zhxMarks || {});
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const now = _perfNow();
       m[name] = Math.round(now - (__zhxBootAt || 0));
     } catch (e) { /* 忽略：探测永不阻断主流程 */ }
   }
@@ -5294,9 +5319,32 @@
       'gm: get=' + typeof GM_getValue + ' set=' + typeof GM_setValue + ' xhr=' + typeof GM_xmlhttpRequest);
   }
 
+  // Phase 19：内嵌词典规模（字符数近似：各层 JSON 序列化长度求和；仅诊断读取）
+  function __zhxDictChars() {
+    try {
+      let n = 0;
+      for (const k of Object.keys(DICT_LAYERS)) { const o = DICT_LAYERS[k]; if (o) n += JSON.stringify(o).length; }
+      return n;
+    } catch (e) { return 0; /* 忽略：规模统计失败返回 0 */ }
+  }
+
+  // Phase 19：可复用诊断记录 API（稳定 JSON 结构；基准 / 自动化与 Probe 共用）
+  function __zhxDiagRecord() {
+    const rec = { v: 1, boot: Math.round(__zhxBootAt || 0), marks: {}, obs: {}, dom: {}, dl: {}, res: {}, cache: {}, data: {}, dict: {} };
+    try { rec.marks = Object.assign({}, window.__zhxMarks || {}); } catch (e) { /* 忽略：时间线读取失败（返回空） */ }
+    try { rec.obs = { ticks: _obsStats.ticks, nodes: _obsStats.nodes, ms: _obsStats.ms, maxMs: _obsStats.maxMs }; } catch (e) { /* 忽略：观察统计读取失败 */ }
+    try { rec.dom = { calls: _domStats.calls, ms: _domStats.ms, maxMs: _domStats.maxMs, firstMs: _domStats.firstMs }; } catch (e) { /* 忽略：处理统计读取失败 */ }
+    try { rec.dl = { cache: _dlStats.cache, net: _dlStats.net, fallback: _dlStats.fallback }; } catch (e) { /* 忽略：数据来源统计读取失败 */ }
+    try { rec.res = { hit: _irStats.hit, miss: _irStats.miss }; } catch (e) { /* 忽略：解析统计读取失败 */ }
+    try { rec.cache = cacheInfo(); } catch (e) { /* 忽略：缓存信息读取失败 */ }
+    try { rec.data = { items: ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0, series: SERIES_TEXT ? SERIES_TEXT.length : 0, acl: ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
+    try { rec.dict = { chars: __zhxDictChars() }; } catch (e) { /* 忽略：词典规模读取失败 */ }
+    return rec;
+  }
+
   function __zhxProbeData(L) {
     L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
-    try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
+    try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats) + ' dom: ' + JSON.stringify(_domStats) + ' dl: ' + JSON.stringify(_dlStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
     try {
       L.push('data: items=' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
         + ' series=' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
@@ -5309,6 +5357,8 @@
         + ' ecidMap=' + (ecidMap ? Object.keys(ecidMap).length : 0)
         + ' koByZh=' + (koByZh ? Object.keys(koByZh).length : 0));
     } catch (e) { /* 忽略：索引规模读取失败 */ }
+    try { L.push('cache: ' + JSON.stringify(cacheInfo())); } catch (e) { /* 忽略：缓存信息读取失败 */ }
+    try { L.push('dict: ' + __zhxDictChars()); } catch (e) { /* 忽略：词典规模读取失败 */ }
   }
 
   function __zhxProbeWiki(L) {
@@ -5446,8 +5496,13 @@
 
   // 探测启用判断（必须在任何异步回调前定值；未启用时各 mark 直接短路）
   __zhxProbeFlag = __zhxProbeOn();
+  __zhxDiagFlag = false;
+  try { __zhxDiagFlag = !!window.__zhxDiagOn; } catch (e) { /* 忽略：开关读取失败按未启用 */ }
   if (__zhxProbeFlag) {
     try { __zhxProbeSetup(); } catch (e) { /* 忽略：探测初始化失败不影响脚本主功能 */ }
+  }
+  if (__zhxProbeFlag || __zhxDiagFlag) {
+    try { window.__zhxDiagRecord = __zhxDiagRecord; } catch (e) { /* 忽略：诊断入口注册失败 */ }
   }
   /* @zhixia:core-probe-end */
 })();

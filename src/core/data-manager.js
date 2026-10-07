@@ -10,7 +10,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, itemDbReady, itemHash, koByZh, nameMap, onTablesReady, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
+export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, itemDbReady, itemHash, koByZh, nameMap, onTablesReady, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -36,6 +36,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.splice(0);
     for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
+    __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
 
@@ -170,6 +171,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
        本区段将原样抽出为 src/core/data-manager.js。 */
   let _ensurePromise = null;
   // v1.2.x：局部缓存读取与单表拉取拆出（降认知复杂度）
+  // Phase 19：数据来源统计（cache=本地缓存交付 / net=网络下载交付 / fallback=下载失败旧缓存兜底）
+  const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureReadLocal(need) {
     const local = {};
     return Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {}))).then(() => local);
@@ -178,8 +181,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   async function _ensureFetchTable(t, vfps, local) {
     const fp = vfps?.[t] ? String(vfps[t]) : null;
     const cached = local[t] || null;
-    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
-    if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
+    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }
+    if (!fp && cached) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }   // 无版本信息时不盲刷
     let txt = null;
     try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
     catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
@@ -187,9 +190,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     if (txt && txt.length > 100 && fmtOk) {
       applyTable(t, txt);
       _writeCachedTable(t, fp, txt);
+      _dlStats.net++;
       return 1;
     }
-    if (cached) { applyTable(t, cached.tx); return 1; }   // 下载失败 → 兜底旧缓存
+    if (cached) { applyTable(t, cached.tx); _dlStats.fallback++; return 1; }   // 下载失败 → 兜底旧缓存
     return 0;
   }
 
@@ -197,6 +201,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
   async function _ensureTryFast(need) {
     const local = await _ensureReadLocal(need);
+    __zhxMark('readEnd');   // Phase 19：本地读取结束
     let meta = null;
     try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
     const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
@@ -204,6 +209,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     if (!allCached || !fresh) return { local };
     for (const t of need) applyTable(t, local[t].tx);
     DATA_VER = (meta.v ? String(meta.v) : '');
+    _dlStats.cache += need.length;
+    __zhxMark('applied');   // Phase 19：缓存文本应用完成
     return null;
   }
 
@@ -215,6 +222,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     let okCount = 0;
     (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
+    __zhxMark('applied');   // Phase 19：表格拉取/应用完成
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
     }

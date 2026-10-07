@@ -1,0 +1,231 @@
+{
+  "schema": "zhx-bench/1",
+  "bench": "lifecycle-ec",
+  "when": "2026-10-07T02:20:44.194Z",
+  "env": {
+    "node": "v26.8.1",
+    "host": "VM-0-14-ubuntu",
+    "dist": "191efc97ea3e",
+    "args": [
+      "rounds=3"
+    ]
+  },
+  "metrics": {
+    "summary": {
+      "boot": 1242,
+      "read": 37,
+      "apply": 18,
+      "schedWait": 8,
+      "build": 226,
+      "fire": 1,
+      "total": 314,
+      "domCalls": 1,
+      "domFirstMs": 1.5,
+      "domMs": 1.5,
+      "obsMs": 0,
+      "mutTicks": 4,
+      "mutMs": 6.500000029802322,
+      "dlCache": 2,
+      "dlNet": 0,
+      "resHit": 7,
+      "resMiss": 4,
+      "itemsChars": 3918871,
+      "dictChars": 75780,
+      "runs": 3
+    },
+    "runs": [
+      {
+        "i": 1,
+        "marks": {
+          "readEnd": 133,
+          "applied": 146,
+          "finalize": 146,
+          "buildStart": 168,
+          "buildEnd": 393,
+          "fireDone": 394,
+          "ready": 394
+        },
+        "dom": {
+          "calls": 1,
+          "ms": 12.800000011920929,
+          "maxMs": 12.800000011920929,
+          "firstMs": 12.800000011920929
+        },
+        "obs1": {
+          "ticks": 0,
+          "nodes": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        "obs2": {
+          "ticks": 4,
+          "nodes": 45,
+          "ms": 7.799999982118607,
+          "maxMs": 5.5999999940395355
+        },
+        "dl": {
+          "cache": 2,
+          "net": 0,
+          "fallback": 0
+        },
+        "res": {
+          "hit": 7,
+          "miss": 4
+        },
+        "cache": {
+          "entries": {
+            "en2zh": 2,
+            "jp2zh": 0,
+            "ronkaItems": 0,
+            "seriesMap": 0,
+            "seriesPfx": 0,
+            "itemPfx": 0,
+            "fcSubstr": 0,
+            "allKeys": 0
+          },
+          "rev": {
+            "data": "bench",
+            "dict": 1
+          }
+        },
+        "data": {
+          "items": 3918871,
+          "series": 0,
+          "acl": 0,
+          "ver": "bench"
+        },
+        "dict": {
+          "chars": 75780
+        }
+      },
+      {
+        "i": 2,
+        "marks": {
+          "readEnd": 32,
+          "applied": 52,
+          "finalize": 58,
+          "buildStart": 60,
+          "buildEnd": 286,
+          "fireDone": 300,
+          "ready": 300
+        },
+        "dom": {
+          "calls": 1,
+          "ms": 1.5,
+          "maxMs": 1.5,
+          "firstMs": 1.5
+        },
+        "obs1": {
+          "ticks": 0,
+          "nodes": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        "obs2": {
+          "ticks": 4,
+          "nodes": 45,
+          "ms": 6.299999982118607,
+          "maxMs": 4.9000000059604645
+        },
+        "dl": {
+          "cache": 2,
+          "net": 0,
+          "fallback": 0
+        },
+        "res": {
+          "hit": 7,
+          "miss": 4
+        },
+        "cache": {
+          "entries": {
+            "en2zh": 2,
+            "jp2zh": 0,
+            "ronkaItems": 0,
+            "seriesMap": 0,
+            "seriesPfx": 0,
+            "itemPfx": 0,
+            "fcSubstr": 0,
+            "allKeys": 0
+          },
+          "rev": {
+            "data": "bench",
+            "dict": 1
+          }
+        },
+        "data": {
+          "items": 3918871,
+          "series": 0,
+          "acl": 0,
+          "ver": "bench"
+        },
+        "dict": {
+          "chars": 75780
+        }
+      },
+      {
+        "i": 3,
+        "marks": {
+          "readEnd": 37,
+          "applied": 55,
+          "finalize": 55,
+          "buildStart": 56,
+          "buildEnd": 314,
+          "fireDone": 314,
+          "ready": 314
+        },
+        "dom": {
+          "calls": 1,
+          "ms": 1.5,
+          "maxMs": 1.5,
+          "firstMs": 1.5
+        },
+        "obs1": {
+          "ticks": 0,
+          "nodes": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        "obs2": {
+          "ticks": 4,
+          "nodes": 45,
+          "ms": 6.500000029802322,
+          "maxMs": 5.100000023841858
+        },
+        "dl": {
+          "cache": 2,
+          "net": 0,
+          "fallback": 0
+        },
+        "res": {
+          "hit": 7,
+          "miss": 4
+        },
+        "cache": {
+          "entries": {
+            "en2zh": 2,
+            "jp2zh": 0,
+            "ronkaItems": 0,
+            "seriesMap": 0,
+            "seriesPfx": 0,
+            "itemPfx": 0,
+            "fcSubstr": 0,
+            "allKeys": 0
+          },
+          "rev": {
+            "data": "bench",
+            "dict": 1
+          }
+        },
+        "data": {
+          "items": 3918871,
+          "series": 0,
+          "acl": 0,
+          "ver": "bench"
+        },
+        "dict": {
+          "chars": 75780
+        }
+      }
+    ]
+  }
+}

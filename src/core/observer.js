@@ -2,7 +2,7 @@
 /* @phase15-order-link:core/observer<-core/translator */
 import './translator.js';
 import { dedupeByAncestor } from './dom.js';
-import { _zhxErr } from './runtime.js';
+import { _perfNow, _zhxErr } from './runtime.js';
 export { _obsStats, createObserver, observeLocal };
 
 
@@ -24,7 +24,7 @@ export { _obsStats, createObserver, observeLocal };
   // }
   // 返回 { disconnect } 便于站点销毁（现状站点均为常驻，保留扩展位）。
   // 观察统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
-  const _obsStats = { ticks: 0, nodes: 0 };
+  const _obsStats = { ticks: 0, nodes: 0, ms: 0, maxMs: 0 };   // Phase 19：ms/maxMs = 回调处理时长累计/峰值（mutation processing）
   function createObserver(opts) {
     const o = opts || {};
     const debounce = o.debounce || 350;
@@ -53,7 +53,11 @@ export { _obsStats, createObserver, observeLocal };
         const nodes = dedupeByAncestor(pending);
         pending = [];
         _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
+        const t0 = _perfNow();                                // Phase 19：处理时长统计
         try { o.handler(nodes); } catch (e) { _zhxErr('createObserver', e); }
+        const dt = _perfNow() - t0;
+        _obsStats.ms += dt;
+        if (dt > _obsStats.maxMs) _obsStats.maxMs = dt;
       }, debounce);
     });
     mo.observe(root, o.characterData

@@ -77,11 +77,11 @@ const resolveByName = (n) => KNOWN[n] || null;
 
 function buildTargets(doc) {
   const parts = sliceAll(DIST_TEXT, 'core-targets');
-  const ret = 'return { collectTargets, dispatchTargets, processRoot };';
+  const ret = 'return { collectTargets, dispatchTargets, processRoot, __domStats: () => ({ ..._domStats }) };';
   try {
-    const fn = new Function('document', 'resolveByName', 'EC_CARD_SEL',
+    const fn = new Function('document', 'resolveByName', 'EC_CARD_SEL', '_perfNow',
       parts.join('\n') + '\n' + ret);
-    return fn(doc, resolveByName, CARD);
+    return fn(doc, resolveByName, CARD, () => performance.now());
   } catch (e) {
     throw new Error('Targets 装配失败：' + e.message);
   }
@@ -225,6 +225,21 @@ console.log('\n── F：幂等（第二次处理：跳过已标记元素；Rea
   const doc2 = { querySelectorAll: (sel) => (sel === SEL ? [rebuilt] : []) };
   const api2 = buildTargets(doc2);
   eq('React 重建（新节点无标记）：重新采集', api2.collectTargets().length, 1);
+}
+
+console.log('\n── G：处理统计（v1.4 Phase 19）──');
+{
+  const doc = { querySelectorAll: (sel) => (sel === SEL ? [fakeEl({ text: 'Ao Dai' })] : []) };
+  const api = buildTargets(doc);
+  const z0 = api.__domStats();
+  eq('初始统计：0 次 / firstMs=-1', z0.calls === 0 && z0.firstMs === -1, true);
+  api.processRoot(null, {});
+  const z1 = api.__domStats();
+  eq('一次处理后 calls=1 且首次耗时已记', z1.calls === 1 && z1.firstMs >= 0, true);
+  api.processRoot(null, {});
+  const z2 = api.__domStats();
+  eq('二次处理后 calls=2', z2.calls, 2);
+  eq('累计 ≥ 峰值 ≥ 首次（毫秒口径）', z2.ms >= z2.maxMs && z2.maxMs >= z2.firstMs, true);
 }
 
 console.log(`\n════════ 汇总 ════════`);

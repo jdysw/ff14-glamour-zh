@@ -20,7 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
 const SUITES = {
-  unit: ['unit/test-regex-1b.mjs', 'unit/decor-regex-test.mjs', 'unit/test-data-layer.mjs', 'unit/test-data-manager.mjs', 'unit/test-runtime-v3.mjs', 'unit/test-site-registry.mjs', 'unit/test-core.mjs', 'unit/test-cache.mjs', 'unit/test-dictionary.mjs', 'unit/test-item-resolver.mjs', 'unit/test-observer.mjs', 'unit/test-targets.mjs'],
+  unit: ['unit/test-regex-1b.mjs', 'unit/decor-regex-test.mjs', 'unit/test-data-layer.mjs', 'unit/test-data-manager.mjs', 'unit/test-runtime-v3.mjs', 'unit/test-site-registry.mjs', 'unit/test-core.mjs', 'unit/test-cache.mjs', 'unit/test-dictionary.mjs', 'unit/test-item-resolver.mjs', 'unit/test-observer.mjs', 'unit/test-targets.mjs', 'unit/test-bench-report.mjs'],
   integration: [
     'integration/test-build-idempotent.mjs',
     'integration/test-wiki.mjs',
@@ -43,7 +43,7 @@ const SUITES = {
     'live/test-dict-rt.mjs',
     'live/e2e-real-dict.mjs',
   ],
-  benchmark: ['benchmark/bench-read-path.mjs', 'benchmark/bench-v3-load.mjs'],
+  benchmark: ['benchmark/bench-read-path.mjs', 'benchmark/bench-v3-load.mjs', 'benchmark/bench-lifecycle.mjs'],
   core: [
     'integration/test-wiki-slow.mjs',
     'integration/test-wiki.mjs',

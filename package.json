@@ -16,6 +16,8 @@
     "test:all": "node tests/run.mjs --suite=all",
     "test:core": "node tests/run.mjs --suite=core",
     "test:bench": "node tests/run.mjs --suite=benchmark",
+    "bench:baseline": "node tests/benchmark/bench-lifecycle.mjs --save && node tests/benchmark/bench-read-path.mjs --save",
+    "bench:compare": "node tests/benchmark/compare.mjs",
     "check:dist": "node --check dist/ff14-glamour-zh.greasyfork.user.js",
     "validate:data": "python3 build/validate-data.py",
     "version:check": "node build/version.mjs --check",
