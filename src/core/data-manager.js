@@ -43,9 +43,14 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   let SERIES_TEXT = ''; // NOSONAR — 运行时数据表状态
   let ACL_CFC_TEXT = ''; // NOSONAR — 运行时数据表状态
 
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
+
   let itemHash = null;   // hash -> 中文名（EC / mirapri 用） // NOSONAR — 数据就绪后替换索引
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let ecidMap = null;    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR — 数据就绪后替换索引
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let nameMap = null;    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR — 数据就绪后替换索引
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let koByZh = null;     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR — 数据就绪后替换索引
 
   // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
@@ -266,6 +271,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
       setTimeout(fin, 12000);
     });
   }
+
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
 
   let _buildScope = null;   // 本页索引构建范围（按站裁剪；null = 全建） // NOSONAR — 站点数据范围按启动阶段更新
 
@@ -503,7 +510,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
        （历史优先，禁止随机）。Phase 15 模块化构建时，本区段将原样抽出为
        src/core/item-resolver.js。 */
 
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
+
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR — resolver 派生索引按数据生命周期更新
+  // NOSONAR — 有意导出的可变运行时状态（由生命周期/诊断阶段更新）
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR — resolver 派生索引按数据生命周期更新
 
   // 从物品总表建立衍生注册表（重名 / 别名）。须在 nameMap 就绪后调用（itemDbReady 钩子）；
