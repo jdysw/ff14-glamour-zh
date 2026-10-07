@@ -252,7 +252,8 @@ try {
     eq('数据就绪后展示候选框', box?.hidden, false);
     eq('候选框使用 listbox 语义', box?.getAttribute('role'), 'listbox');
     eq('候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
-    eq('候选框底部空间不足时向上弹出', Number(box?.style.top) < input._rect.top, true);
+    const popupTop = Number.parseFloat(box?.style.top);
+    eq('候选框底部空间不足时向上弹出', popupTop < input._rect.top, true);
     eq('输入框 aria-expanded=true', input.getAttribute('aria-expanded'), 'true');
   }
 
