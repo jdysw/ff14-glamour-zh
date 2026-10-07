@@ -183,7 +183,8 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py` 降级为一次性迁移工具；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
 - **发布 / CI 单一源（v1.4 Phase 17）**：`package.json` 的 `version` 是唯一版本源——构建 ⓪ 步自动同步 `src` 模板与 `build/userscript-header.txt` 的 `@version`；`build/version.mjs --check` 校验「package ≡ src ≡ header ≡ dist」（进入构建 ⑰ 步与发布门）；数据文件结构校验由 `build/validate-data.py` 负责（CI 与数据部署前同源执行）；契约由 `tests/integration/test-version-consistency.mjs` 冻结。
 - **错误边界与统一记录（v1.4 Phase 18）**：运行时错误经统一设施 `_zhxErr(tag, err)` 记录（有界 20 条缓冲 + `console.warn`；不写存储、不发请求）；四类高风险边界（runtime 入口 / observer 回调 / 数据就绪回调 / 站点适配器入口）已加固——单点错误不拖垮站点、且不再静默；**禁止空 catch**（重要错误须经 `_zhxErr` 记录；良性路径须显式「忽略：原因」注释；纯函数区不设 catch）。`?zhx_probe=1` 时启动期错误随 `__zhxErrs` 一并在诊断面板呈现（报告含 `errs:` 行）。源文件增删顶层语句（块）后，先跑 `build/migrate/reindex-assign.py` 重算 `module-assign.json` 块索引再构建（构建 ⑤ 步会以「A3 遗漏行」哨兵报出索引错位）。
-- **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
+- **性能测量基建（v1.4 Phase 19）**：测量长期化 + 基线对比。① 脚本侧开关：`?zhx_probe=1`（面板）或注入前置 `window.__zhxDiagOn = true`（无面板，基准 / 自动化用）——开启后时间线（`__zhxMarks`：finalize / readEnd / applied / buildStart / buildEnd / ready / fireDone）与统计面可经 `__zhxDiagRecord()` 读取（boot / obs / dom / dl / resolver / cache / 数据规模 / 词典规模）。② 仓库侧基准：`tests/benchmark/` 产标准报告（`zhx-bench/1` → `tests/.cache/bench/`）；`npm run bench:baseline` 存基线（`tests/benchmark/baseline/`）、`npm run bench:compare -- 旧 新 [--pct 10] [--strict]` 出「旧 / 新 / Δ%」对比表——**性能结论一律以基准数据为准，不凭体感**。
+- **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。无面板测量开关（`window.__zhxDiagOn`）与结构化记录 API（`__zhxDiagRecord()`）见上条「性能测量基建（v1.4 Phase 19）」。
 
 </details>
 
