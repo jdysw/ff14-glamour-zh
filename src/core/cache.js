@@ -184,7 +184,7 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
     // v1.3：大字符串（数 MB 级）写入推迟到页面空闲，避免同步写造成瞬时卡顿；
     // 写入失败仅影响下次重新下载，可接受
     const key = DT_PREFIX + t, val = fp + '\n' + tx;
-    const put = () => { try { storeSet(key, val); } catch (e) {} };
+    const put = () => { try { storeSet(key, val); } catch (e) { /* 忽略：缓存写入失败仅影响下次重新下载（见上注释） */ } };
     if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
     else setTimeout(put, 50);
   }
@@ -220,7 +220,7 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
   function cacheInfo() {
     const entries = {};
     for (const [name, e] of _cacheReg) {
-      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; }
+      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
     }
     return {
       entries,
@@ -237,8 +237,8 @@ export { CACHE_CAP_LOOKUP, CACHE_KINDS, DAY_MS, DT_PREFIX, META_KEY, _allKeysCac
     let n = (typeof count === 'number') ? count : cache.size;
     if (typeof n !== 'number') { n = 0; for (const k in cache) n++; }
     if (n < cap) return false;
-    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) {} return true; }
-    for (const k in cache) { try { delete cache[k]; } catch (e) {} }
+    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) { /* 忽略：清空失败则重建继续（正确性不受影响） */ } return true; }
+    for (const k in cache) { try { delete cache[k]; } catch (e) { /* 忽略：同上（清空失败无碍） */ } }
     return true;
   }
   /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */

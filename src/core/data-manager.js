@@ -7,6 +7,7 @@ import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';
 import { __zhxMark } from './probe.js';
+import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
 export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _buildScope, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irAliasMap, _irBuildAux, _irDupMap, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ecidMap, ensureTables, itemDbReady, itemHash, koByZh, nameMap, onTablesReady, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveEcId, resolveKo };
@@ -22,7 +23,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   let _tablesReady = false;
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
-    if (_tablesReady) { try { fn(); } catch (e) {} return; }
+    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } return; }
     _readyCbs.push(fn);
   }
   function _fireTablesReady() {
@@ -30,11 +31,11 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     _tablesReady = true;
     // 清空「查不到」负缓存与派生缓存：外置版中数据到达前生成的结果必须作废
     //（新增缓存时在 Core Cache Registry 登记即被本处按类清理，勿在此手工追加）
-    try { cacheReset('lookup'); } catch (e) {}
-    try { cacheReset('translate'); } catch (e) {}
-    try { cacheReset('derived'); } catch (e) {}
+    try { cacheReset('lookup'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
+    try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
+    try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.splice(0);
-    for (const f of cbs) { try { f(); } catch (e) {} }
+    for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
 
@@ -180,7 +181,8 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
     if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
     let txt = null;
-    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
+    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
+    catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
     const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
     if (txt && txt.length > 100 && fmtOk) {
       applyTable(t, txt);
@@ -208,10 +210,10 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
   async function _ensureFetchAll(need, local) {
     let ver = null;
-    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
+    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; _zhxErr('version', e); }
     const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
     let okCount = 0;
-    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch(() => 0)))).forEach((v) => { okCount += v; });
+    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
@@ -227,14 +229,14 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
         __zhxMark('buildStart');
         const finish = () => {
           __zhxMark('buildEnd');
-          try { _fireTablesReady(); } catch (e) {}
+          try { _fireTablesReady(); } catch (e) { _zhxErr('fireReady', e); }
           __zhxMark('ready');
           try {
             console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
               + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
               + ' / 副本表 ' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
               + ' / 数据版本 ' + (DATA_VER || '未记录'));
-          } catch (e) {}
+          } catch (e) { /* 忽略：日志输出失败不影响就绪 */ }
           resolve();
         };
         if (_v3Applied) { finish(); return; }   // v3：索引已直接就绪，跳过 v2 建表
@@ -406,11 +408,11 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
-    _ensurePromise = _ensureMain().catch(() => {}).then(_ensureFinalize);
+    _ensurePromise = _ensureMain().catch((e) => { _zhxErr('ensureMain', e); }).then(_ensureFinalize);
     return _ensurePromise;
   }
   function itemDbReady(cb) {
-    ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) {} });
+    ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) { _zhxErr('readyCb', e); } });
   }
 
   // ── DataManager 统一 API（v1.4 Phase 11）─────────────────────────────
@@ -446,7 +448,7 @@ export { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _applyV3, _btApplyTa
     ensure(site) { return ensureTables(); },                       // site：预留（见上）
     ready(cb) {
       const p = ensureTables();
-      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) {} });
+      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) { _zhxErr('readyCb', e); } });
       return p;
     },
     getTable(name) { return dataGetTable(name); },

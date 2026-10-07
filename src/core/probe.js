@@ -3,7 +3,7 @@
 import './targets.js';
 import { ACL_CFC_TEXT, DATA_VER, ITEM_DB_TEXT, SERIES_TEXT, _irStats, ecidMap, itemHash, koByZh, nameMap, resolveKo } from './data-manager.js';
 import { _obsStats } from './observer.js';
-import { __zhxBootAt } from './runtime.js';
+import { __zhxBootAt, _errLog } from './runtime.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
 export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeFlag, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki };
 
@@ -185,6 +185,8 @@ export { __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbe
     try { window.__zhxProbeDump = __zhxProbeText; } catch (e) { /* 忽略：控制台辅助入口注册失败 */ }
     try {
       window.__zhxErrs = window.__zhxErrs || [];
+      // Phase 18：把启用前已记录的边界错误转移进诊断列表（保留启动早期失败信息）
+      try { for (const m of _errLog) { if (window.__zhxErrs.length >= 20) break; window.__zhxErrs.push(m); } } catch (e) { /* 忽略：既有日志转移失败 */ }
       window.addEventListener('error', (ev) => {
         try {
           if (window.__zhxErrs.length < 20) {

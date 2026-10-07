@@ -2,6 +2,7 @@
 /* @phase15-order-link:core/dictionary<-core/runtime */
 import './runtime.js';
 import { cacheReset } from './cache.js';
+import { _zhxErr } from './runtime.js';
 export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
 
 
@@ -2216,14 +2217,14 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
         if (!obj) continue;
         _applyDictLayer(key, obj, d, common);
       }
-    } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
+    } catch (e) { _zhxErr('dictApply', e); /* 词库应用 best-effort：失败不阻断，但记录 */ }
     _dictRevision++;   // 词典修订号（getRevision 提供）
     // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）——统一经词典失效入口
-    try { dictInvalidate(); } catch (e) {}
+    try { dictInvalidate(); } catch (e) { /* 忽略：派生缓存失效内部按类防护 */ }
     // 定向替换：旧译 → 新译（去重后单次全页扫描）
     const fixes = _dictFixesBuf;
     _dictFixesBuf = null;
-    try { _sweepDictFixes(fixes); } catch (e) {}
+    try { _sweepDictFixes(fixes); } catch (e) { _zhxErr('dictSweep', e); }
   }
   // v1.2.x：去重与单节点扫描拆出（降认知复杂度）
   function _sweepDedupe(fixes) {
@@ -2246,14 +2247,14 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
     for (const [oldV, newV] of uniq) {
       if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
     }
-    if (changed) { try { n.nodeValue = v; } catch (e) {} }
+    if (changed) { try { n.nodeValue = v; } catch (e) { /* 忽略：节点已失效（渲染替换）——修正跳过 */ } }
   }
 
   function _sweepDictFixes(fixes) {
     if (!fixes?.length) return;
     const uniq = _sweepDedupe(fixes);
     // 防御上限：正常维护场景远小于此；超出时截断并告警（收敛供应链滥用面）
-    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) {} uniq.length = 500; }
+    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) { /* 忽略：日志输出失败不影响截断 */ } uniq.length = 500; }
     if (!uniq.length || !document.body) return;
     const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {

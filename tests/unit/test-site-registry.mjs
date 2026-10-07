@@ -45,17 +45,20 @@ const STUB_NAMES = [
   'translateACLPage', 'translateACLTitle', 'injectWikiButton',
 ];
 
-function buildDevice(dataRemote) {
-  const stubs = { calls: [], ready: [] };
+function buildDevice(dataRemote, opts = {}) {
+  const stubs = { calls: [], ready: [], errs: [] };
   const stubDefs = 'function safe(fn) { return fn; }\n'
-    + STUB_NAMES.map((n) => `function ${n}() { __stubCalls.push('${n}'); }`).join('\n');
+    + 'function _zhxErr(where, e) { __stubErrs.push([String(where), String((e && e.message) || e)]); }\n'
+    + STUB_NAMES.map((n) => (opts.throwOn && opts.throwOn.includes(n))
+      ? `function ${n}() { __stubCalls.push('${n}'); throw new Error('bang:${n}'); }`
+      : `function ${n}() { __stubCalls.push('${n}'); }`).join('\n');
   const body = DIST_TEXT.slice(DIST_TEXT.indexOf(START) + START.length, DIST_TEXT.indexOf(END));
-  const factory = new Function('location', 'window', 'DATA_REMOTE', 'onTablesReady', '__stubCalls',
+  const factory = new Function('location', 'window', 'DATA_REMOTE', 'onTablesReady', '__stubCalls', '__stubErrs',
     stubDefs + '\n' + body + '\nreturn { findSite, neededTables, _siteIndexes, SITE_REGISTRY, createSiteAdapter };');
   let host = '';
   const locStub = { get hostname() { return host; } };
   const winStub = {};
-  const device = factory(locStub, winStub, dataRemote, (fn) => stubs.ready.push(fn), stubs.calls);
+  const device = factory(locStub, winStub, dataRemote, (fn) => stubs.ready.push(fn), stubs.calls, stubs.errs);
   return {
     ...device,
     stubs,
@@ -197,6 +200,28 @@ section('G：Site Adapter 统一接口');
   const g2 = buildDevice(false);
   g2.SITE_REGISTRY.find((s) => s.id === 'ronka').boot();
   eq('G8 DATA_REMOTE=false：不注册补扫', g2.stubs.ready.length, 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+// H. 适配器错误边界（Phase 18：站点入口抛错 → _zhxErr 记录，不炸出）
+// ─────────────────────────────────────────────────────────────
+section('H：适配器错误边界（Phase 18）');
+{
+  const g = buildDevice(true, { throwOn: ['startRonka'] });
+  const ronka = g.SITE_REGISTRY.find((s) => s.id === 'ronka');
+  let threw = false;
+  try { ronka.boot(); } catch (e) { threw = true; }
+  ok('H1 start 抛错：boot() 不抛出', !threw);
+  eq('H2 错误被记录（boot:ronka）', JSON.stringify(g.stubs.errs), JSON.stringify([['boot:ronka', 'bang:startRonka']]));
+  eq('H3 start 抛错后仍注册 onDataReady', g.stubs.ready.length, 1);
+}
+{
+  const g = buildDevice(true, { throwOn: ['translateRonkaPage'] });
+  const ronka = g.SITE_REGISTRY.find((s) => s.id === 'ronka');
+  let threw = false;
+  try { ronka.pageshow(); } catch (e) { threw = true; }
+  ok('H4 onPageShow 抛错：pageshow() 不抛出', !threw);
+  ok('H5 错误被记录（pageshow:ronka）', g.stubs.errs.some(([w]) => w === 'pageshow:ronka'), JSON.stringify(g.stubs.errs));
 }
 
 console.log('\n════════ 汇总 ════════');

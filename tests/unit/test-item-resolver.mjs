@@ -70,7 +70,7 @@ const PRESET_NAME_MAP = {
  * @param {object} env 覆盖项：itemHash / nameMap / text / itemDbReady
  */
 function buildResolver(env = {}) {
-  const rec = { tryCalls: [], readyCbs: [] };
+  const rec = { tryCalls: [], readyCbs: [], errs: [] };
   const stubs = [
     'let itemHash = __env.itemHash;',
     'let nameMap = __env.nameMap;',
@@ -80,6 +80,7 @@ function buildResolver(env = {}) {
     'let _v3Applied = !!__env.v3Applied;',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
+    'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
     'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',

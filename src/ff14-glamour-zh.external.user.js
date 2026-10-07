@@ -3873,7 +3873,7 @@
   let _tablesReady = false;
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
-    if (_tablesReady) { try { fn(); } catch (e) {} return; }
+    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } return; }
     _readyCbs.push(fn);
   }
   function _fireTablesReady() {
@@ -3881,11 +3881,11 @@
     _tablesReady = true;
     // 清空「查不到」负缓存与派生缓存：外置版中数据到达前生成的结果必须作废
     //（新增缓存时在 Core Cache Registry 登记即被本处按类清理，勿在此手工追加）
-    try { cacheReset('lookup'); } catch (e) {}
-    try { cacheReset('translate'); } catch (e) {}
-    try { cacheReset('derived'); } catch (e) {}
+    try { cacheReset('lookup'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
+    try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
+    try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.splice(0);
-    for (const f of cbs) { try { f(); } catch (e) {} }
+    for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
   }
 
   /* @zhixia:data-layer-start */
@@ -4082,23 +4082,23 @@
           });
           return;
         }
-      } catch (e) {}
+      } catch (e) { /* 忽略：GM 通道不可用——按序尝试 fetch 兜底 */ }
       try {
         if (typeof fetch === 'function') {
           let ctl = null, tm = null;
           try {
             if (typeof AbortController === 'function') {
               ctl = new AbortController();
-              tm = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, timeout || 20000);
+              tm = setTimeout(() => { try { ctl.abort(); } catch (e) { /* 忽略：abort 清理调用失败无碍 */ } }, timeout || 20000);
             }
-          } catch (e) {}
+          } catch (e) { /* 忽略：无 AbortController——不设置取消 */ }
           fetch(url, ctl ? { signal: ctl.signal } : {}).then(
             (r) => { if (tm) { clearTimeout(tm); } return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); },
             (e) => { if (tm) { clearTimeout(tm); } throw e; }
           ).then(ok, bad);
           return;
         }
-      } catch (e) {}
+      } catch (e) { /* 忽略：fetch 不可用——走最后兜底 */ }
       bad(new Error('no http transport'));
     });
   }
@@ -4146,13 +4146,14 @@
       tables: c.tables || [],
       indexes: c.indexes || [],
       boot() {
-        if (typeof c.start === 'function') c.start();
+        // Phase 18：适配器入口错误边界——单站启动失败不影响脚本其余部分（其余站点/兜底/探测照常）
+        if (typeof c.start === 'function') { try { c.start(); } catch (e) { _zhxErr('boot:' + (c.id || 'site'), e); } }
         if (DATA_REMOTE && typeof c.onDataReady === 'function') {
-          onTablesReady(() => { try { c.onDataReady(); } catch (e) { console.warn('站点数据就绪处理失败：', e); } });
+          onTablesReady(() => { try { c.onDataReady(); } catch (e) { _zhxErr('dataReady:' + (c.id || 'site'), e); } });
         }
       },
       pageshow() {
-        if (typeof c.onPageShow === 'function') c.onPageShow();
+        if (typeof c.onPageShow === 'function') { try { c.onPageShow(); } catch (e) { _zhxErr('pageshow:' + (c.id || 'site'), e); } }
       },
       processRoot: typeof c.processRoot === 'function' ? c.processRoot : () => {},
       destroy: typeof c.destroy === 'function' ? c.destroy : () => {},
@@ -4259,7 +4260,7 @@
     // v1.3：大字符串（数 MB 级）写入推迟到页面空闲，避免同步写造成瞬时卡顿；
     // 写入失败仅影响下次重新下载，可接受
     const key = DT_PREFIX + t, val = fp + '\n' + tx;
-    const put = () => { try { storeSet(key, val); } catch (e) {} };
+    const put = () => { try { storeSet(key, val); } catch (e) { /* 忽略：缓存写入失败仅影响下次重新下载（见上注释） */ } };
     if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
     else setTimeout(put, 50);
   }
@@ -4295,7 +4296,7 @@
   function cacheInfo() {
     const entries = {};
     for (const [name, e] of _cacheReg) {
-      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; }
+      try { entries[name] = e.size ? e.size() : null; } catch (e2) { entries[name] = null; /* 忽略：单项尺寸读取失败记 null（诊断不中断） */ }
     }
     return {
       entries,
@@ -4312,8 +4313,8 @@
     let n = (typeof count === 'number') ? count : cache.size;
     if (typeof n !== 'number') { n = 0; for (const k in cache) n++; }
     if (n < cap) return false;
-    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) {} return true; }
-    for (const k in cache) { try { delete cache[k]; } catch (e) {} }
+    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) { /* 忽略：清空失败则重建继续（正确性不受影响） */ } return true; }
+    for (const k in cache) { try { delete cache[k]; } catch (e) { /* 忽略：同上（清空失败无碍） */ } }
     return true;
   }
   /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */
@@ -4347,7 +4348,8 @@
     if (fp && cached?.fp === fp) { applyTable(t, cached.tx); return 1; }
     if (!fp && cached) { applyTable(t, cached.tx); return 1; }   // 无版本信息时不盲刷
     let txt = null;
-    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); } catch (e) { txt = null; }
+    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
+    catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
     const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
     if (txt && txt.length > 100 && fmtOk) {
       applyTable(t, txt);
@@ -4375,10 +4377,10 @@
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
   async function _ensureFetchAll(need, local) {
     let ver = null;
-    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; }
+    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; _zhxErr('version', e); }
     const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
     let okCount = 0;
-    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch(() => 0)))).forEach((v) => { okCount += v; });
+    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
@@ -4394,14 +4396,14 @@
         __zhxMark('buildStart');
         const finish = () => {
           __zhxMark('buildEnd');
-          try { _fireTablesReady(); } catch (e) {}
+          try { _fireTablesReady(); } catch (e) { _zhxErr('fireReady', e); }
           __zhxMark('ready');
           try {
             console.info('幻化数据就绪 → 物品表 ' + (ITEM_DB_TEXT ? ITEM_DB_TEXT.length : 0)
               + ' / 系列表 ' + (SERIES_TEXT ? SERIES_TEXT.length : 0)
               + ' / 副本表 ' + (ACL_CFC_TEXT ? ACL_CFC_TEXT.length : 0)
               + ' / 数据版本 ' + (DATA_VER || '未记录'));
-          } catch (e) {}
+          } catch (e) { /* 忽略：日志输出失败不影响就绪 */ }
           resolve();
         };
         if (_v3Applied) { finish(); return; }   // v3：索引已直接就绪，跳过 v2 建表
@@ -4573,11 +4575,11 @@
 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
-    _ensurePromise = _ensureMain().catch(() => {}).then(_ensureFinalize);
+    _ensurePromise = _ensureMain().catch((e) => { _zhxErr('ensureMain', e); }).then(_ensureFinalize);
     return _ensurePromise;
   }
   function itemDbReady(cb) {
-    ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) {} });
+    ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) { _zhxErr('readyCb', e); } });
   }
 
   // ── DataManager 统一 API（v1.4 Phase 11）─────────────────────────────
@@ -4613,7 +4615,7 @@
     ensure(site) { return ensureTables(); },                       // site：预留（见上）
     ready(cb) {
       const p = ensureTables();
-      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) {} });
+      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) { _zhxErr('readyCb', e); } });
       return p;
     },
     getTable(name) { return dataGetTable(name); },
@@ -4714,7 +4716,8 @@
 
   // 数据就绪后建立衍生注册表（加载早期未注册时保持 null——查询路径均有回退）。
   if (typeof itemDbReady === 'function') {
-    try { itemDbReady(() => { try { _irBuildAux(ITEM_DB_TEXT); } catch (e) {} }); } catch (e) {}
+    try { itemDbReady(() => { try { _irBuildAux(ITEM_DB_TEXT); } catch (e) { _zhxErr('resolverAux', e); } }); }
+    catch (e) { _zhxErr('itemDbReady', e); }
   }
   /* @zhixia:core-item-resolver-end */
 
@@ -4764,14 +4767,14 @@
         if (!obj) continue;
         _applyDictLayer(key, obj, d, common);
       }
-    } catch (e) { /* 忽略：词库应用 best-effort，失败不阻断 */ }
+    } catch (e) { _zhxErr('dictApply', e); /* 词库应用 best-effort：失败不阻断，但记录 */ }
     _dictRevision++;   // 词典修订号（getRevision 提供）
     // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）——统一经词典失效入口
-    try { dictInvalidate(); } catch (e) {}
+    try { dictInvalidate(); } catch (e) { /* 忽略：派生缓存失效内部按类防护 */ }
     // 定向替换：旧译 → 新译（去重后单次全页扫描）
     const fixes = _dictFixesBuf;
     _dictFixesBuf = null;
-    try { _sweepDictFixes(fixes); } catch (e) {}
+    try { _sweepDictFixes(fixes); } catch (e) { _zhxErr('dictSweep', e); }
   }
   // v1.2.x：去重与单节点扫描拆出（降认知复杂度）
   function _sweepDedupe(fixes) {
@@ -4794,14 +4797,14 @@
     for (const [oldV, newV] of uniq) {
       if (v.includes(oldV)) { v = v.split(oldV).join(newV); changed = true; }
     }
-    if (changed) { try { n.nodeValue = v; } catch (e) {} }
+    if (changed) { try { n.nodeValue = v; } catch (e) { /* 忽略：节点已失效（渲染替换）——修正跳过 */ } }
   }
 
   function _sweepDictFixes(fixes) {
     if (!fixes?.length) return;
     const uniq = _sweepDedupe(fixes);
     // 防御上限：正常维护场景远小于此；超出时截断并告警（收敛供应链滥用面）
-    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) {} uniq.length = 500; }
+    if (uniq.length > 500) { try { console.warn('词典修正集超出 500 条上限，已截断'); } catch (e) { /* 忽略：日志输出失败不影响截断 */ } uniq.length = 500; }
     if (!uniq.length || !document.body) return;
     const skipTags = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -4865,12 +4868,24 @@
 
   /* @zhixia:core-runtime-start */
   /* ── Core Runtime（段2/2）：错误边界——包住关键函数，单点出错不拖垮整批
-       翻译。Phase 15 随段1 一同抽出为 src/core/runtime.js。 */
+       翻译；Phase 18 起统一经 _zhxErr 记录（降低静默失败；Probe 开启时同时
+       保留到 __zhxErrs 供诊断）。Phase 15 随段1 一同抽出为 src/core/runtime.js。 */
+  // 错误记录：有界缓冲（常驻、极小）+ console.warn；Probe 开启后同时镜像 __zhxErrs
+  const ERR_LOG_CAP = 20;
+  const _errLog = [];
+  function _zhxErr(where, e) {
+    try {
+      const msg = String(where || 'safe') + '：' + String((e && (e.message || e)) || 'e').slice(0, 100);
+      if (_errLog.length < ERR_LOG_CAP) _errLog.push(msg);
+      if (Array.isArray(window.__zhxErrs) && window.__zhxErrs.length < ERR_LOG_CAP) window.__zhxErrs.push(msg);
+    } catch (_e) { /* 忽略：记录缓冲失败不影响警告输出 */ }
+    try { console.warn((where || 'safe') + '：', e); } catch (_e) { /* 忽略：控制台不可用时静默 */ }
+  }
   // 错误边界：包住关键函数，单点出错不拖垮整批翻译
   function safe(fn, tag) {
     return function () {
       try { return fn.apply(this, arguments); }
-      catch (e) { console.warn((tag || fn.name || 'safe') + '：', e); }
+      catch (e) { _zhxErr(tag || fn.name || 'safe', e); }
     };
   }
 
@@ -4953,7 +4968,7 @@
         const nodes = dedupeByAncestor(pending);
         pending = [];
         _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
-        try { o.handler(nodes); } catch (e) { console.warn('createObserver：', e); }
+        try { o.handler(nodes); } catch (e) { _zhxErr('createObserver', e); }
       }, debounce);
     });
     mo.observe(root, o.characterData
@@ -5224,7 +5239,7 @@
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   const __site = findSite();
-  if (__site) __site.boot();   // 站点入口（Site Registry 配置驱动）
+  if (__site) { try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); } }   // 站点入口（Site Registry 配置驱动；Phase 18 边界）
 
   // v1.3：bfcache 兜底——页面从浏览器缓存恢复（快速刷新/后退前进）时可能带着
   // 未完成的注入状态回来，补跑一次各站入口（全部幂等）+ 数据就绪检查。
@@ -5233,7 +5248,7 @@
     try {
       if (__site) __site.pageshow();   // 各站补跑入口（Site Registry 配置驱动）
       safe(ensureTables, 'pageshow 数据')();
-    } catch (err) { /* 忽略：兜底失败不影响主流程 */ }
+    } catch (err) { _zhxErr('pageshow', err); }
   });
 
   /* @zhixia:core-probe-start */
@@ -5413,6 +5428,8 @@
     try { window.__zhxProbeDump = __zhxProbeText; } catch (e) { /* 忽略：控制台辅助入口注册失败 */ }
     try {
       window.__zhxErrs = window.__zhxErrs || [];
+      // Phase 18：把启用前已记录的边界错误转移进诊断列表（保留启动早期失败信息）
+      try { for (const m of _errLog) { if (window.__zhxErrs.length >= 20) break; window.__zhxErrs.push(m); } } catch (e) { /* 忽略：既有日志转移失败 */ }
       window.addEventListener('error', (ev) => {
         try {
           if (window.__zhxErrs.length < 20) {

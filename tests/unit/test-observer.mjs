@@ -9,6 +9,7 @@
 // 覆盖（计划书 Phase 7 验收清单）：
 //   - 1 / 100 / 1000 nodes；parent + child；重复 mutation；flood；Ronka characterData。
 //   - 另有：root 默认、characterData 默认关闭、站点独立 debounce、disconnect 扩展位。
+//   - Phase 18：handler 抛错 → _zhxErr 记录且不中断后续调度。
 //
 // 注意：假宿主桩必须在 buildObs(env) 之前设置：装配参数为「值捕获」。
 //
@@ -69,11 +70,12 @@ function makeEnv() {
   timers = [];
   timerSeq = 0;
   FakeMO.all = [];
-  const rec = { warns: [] };
+  const rec = { warns: [], errs: [] };
   const fakeDoc = { body: { tag: 'body' }, documentElement: { tag: 'html' } };
   return {
     document: fakeDoc,
     console: { warn: (...a) => rec.warns.push(a) },
+    _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     setTimeout: (fn, ms) => { const id = ++timerSeq; timers.push({ id, fn, ms, cleared: false, done: false }); return id; },
     clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.cleared = true; },
     MutationObserver: FakeMO,
@@ -86,9 +88,9 @@ function buildObs(env) {
   const parts = [...sliceAll(DIST_TEXT, 'core-dom'), ...sliceAll(DIST_TEXT, 'core-observer')];
   const ret = 'return { createObserver, observeLocal, dedupeByAncestor, __obsStats: () => ({ ..._obsStats }) };';
   try {
-    const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver',
+    const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr',
       parts.join('\n') + '\n' + ret);
-    return fn(env.document, env.console, env.setTimeout, env.clearTimeout, env.MutationObserver);
+    return fn(env.document, env.console, env.setTimeout, env.clearTimeout, env.MutationObserver, env._zhxErr);
   } catch (e) {
     throw new Error('Observer 装配失败：' + e.message);
   }
@@ -276,6 +278,22 @@ console.log('\n── H：观察统计（v1.4 Phase 10）──');
   const z2 = api.__obsStats();
   eq('二次调度后 ticks=2', z2.ticks, 2);
   eq('nodes 累计（3 节点）', z2.nodes, 3);
+}
+
+console.log('\n── I：handler 抛错边界（Phase 18）──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  let calls = 0;
+  api.observeLocal(() => { calls++; if (calls === 1) throw new Error('boom1'); }, 0);
+  const mo = FakeMO.last;
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  runTimer();
+  eq('抛错不炸出（handler 已调用）', calls, 1);
+  eq('错误被记录（createObserver）', JSON.stringify(env.rec.errs), JSON.stringify([['createObserver', 'boom1']]));
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  runTimer();
+  eq('后续批次继续调度', calls, 2);
 }
 
 console.log(`\n════════ 汇总 ════════`);

@@ -2,6 +2,7 @@
 /* @phase15-order-link:core/observer<-core/translator */
 import './translator.js';
 import { dedupeByAncestor } from './dom.js';
+import { _zhxErr } from './runtime.js';
 export { _obsStats, createObserver, observeLocal };
 
 
@@ -52,7 +53,7 @@ export { _obsStats, createObserver, observeLocal };
         const nodes = dedupeByAncestor(pending);
         pending = [];
         _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
-        try { o.handler(nodes); } catch (e) { console.warn('createObserver：', e); }
+        try { o.handler(nodes); } catch (e) { _zhxErr('createObserver', e); }
       }, debounce);
     });
     mo.observe(root, o.characterData

@@ -207,14 +207,14 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
   // 注意：_ensureTryFast / _ensureFetchAll / _waitPageLoad 在提取段内有真实定义，
   // 它们会遮蔽同名参数——因此不列入桩清单（其网络访问仍经下面的 httpGet 桩记录）。
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
 
 function makeWorld(over = {}) {
-  const rec = { xhr: [], set: [], timers: [], fires: [], builds: 0, tryFast: 0, fetchAll: 0, waitLoad: 0, dict: [] };
+  const rec = { xhr: [], set: [], timers: [], fires: [], builds: 0, tryFast: 0, fetchAll: 0, waitLoad: 0, dict: [], errs: [] };
   const store = Object.assign({}, over.store || {});
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
@@ -234,6 +234,7 @@ function makeWorld(over = {}) {
     findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri' })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
     _irAliasMap: null, _irDupMap: null,
+    _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     _ensureTryFast: async () => { rec.tryFast++; return over.fast === null ? null : (over.fast || { local: {} }); },
     _ensureFetchAll: async () => { rec.fetchAll++; },
     _waitPageLoad: async () => { rec.waitLoad++; },

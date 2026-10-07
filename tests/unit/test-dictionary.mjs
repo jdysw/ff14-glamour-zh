@@ -65,6 +65,7 @@ const STUB_LINES = [
   '  trimRonkaNode = (n) => __rec.calls.push(["trimRonkaNode", n]), trimACLNode = (n) => __rec.calls.push(["trimACLNode", n]);',
   'const trEl = (el) => __rec.calls.push(["trEl", el]), translateECAttrs = (el) => __rec.calls.push(["translateECAttrs", el]),',
   '  _wowFCInput = (el) => __rec.calls.push(["wowFCInput", el]);',
+  'const _zhxErr = (where, e) => __rec.calls.push(["zhxErr", String(where)]);',
 ];
 
 const RETURN_STMT = [

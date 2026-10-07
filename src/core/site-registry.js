@@ -3,7 +3,7 @@
 import './http.js';
 import { DATA_REMOTE } from './constants.js';
 import { onTablesReady } from './data-manager.js';
-import { safe } from './runtime.js';
+import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, startItems } from './targets.js';
 import { bindECPieceTiles, startEC, translateECPage } from '../sites/eorzea-collection.js';
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
@@ -42,13 +42,14 @@ export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables,
       tables: c.tables || [],
       indexes: c.indexes || [],
       boot() {
-        if (typeof c.start === 'function') c.start();
+        // Phase 18：适配器入口错误边界——单站启动失败不影响脚本其余部分（其余站点/兜底/探测照常）
+        if (typeof c.start === 'function') { try { c.start(); } catch (e) { _zhxErr('boot:' + (c.id || 'site'), e); } }
         if (DATA_REMOTE && typeof c.onDataReady === 'function') {
-          onTablesReady(() => { try { c.onDataReady(); } catch (e) { console.warn('站点数据就绪处理失败：', e); } });
+          onTablesReady(() => { try { c.onDataReady(); } catch (e) { _zhxErr('dataReady:' + (c.id || 'site'), e); } });
         }
       },
       pageshow() {
-        if (typeof c.onPageShow === 'function') c.onPageShow();
+        if (typeof c.onPageShow === 'function') { try { c.onPageShow(); } catch (e) { _zhxErr('pageshow:' + (c.id || 'site'), e); } }
       },
       processRoot: typeof c.processRoot === 'function' ? c.processRoot : () => {},
       destroy: typeof c.destroy === 'function' ? c.destroy : () => {},

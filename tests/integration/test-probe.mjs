@@ -56,6 +56,7 @@ console.log('\n════ 场景 E1：zhx_probe=1 ════');
   check('报告含 site 行', txt.includes('site: '));
   check('报告含 marks 行', txt.includes('marks: '));
   check('报告含 data 行', txt.includes('data: '));
+  check('报告含 errs 行（Phase 18）', txt.includes('errs: '));
   check('报告含 obs / resolver 统计行', txt.includes('obs: ') && txt.includes('resolver: '));
   check('报告含 wiki 段', txt.includes('wiki: '));
   check('wiki 段含 slot 判定', txt.includes('"slot":'));

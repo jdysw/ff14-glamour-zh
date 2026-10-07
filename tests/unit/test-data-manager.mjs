@@ -55,13 +55,13 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
 
 /** 构造桩世界：记录器 + 参数值 + flushTimers。 */
 function makeWorld(over = {}) {
-  const rec = { apply: [], xhr: [], set: [], timers: [], marks: [], fires: [], builds: 0, need: 0 };
+  const rec = { apply: [], xhr: [], set: [], timers: [], marks: [], fires: [], builds: 0, need: 0, errs: [] };
   const store = Object.assign({}, over.store || {});
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
@@ -78,6 +78,7 @@ function makeWorld(over = {}) {
     findSite: () => null,
     applyRuntimeDict: () => {},
     _irAliasMap: null, _irDupMap: null,
+    _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
     applyTable: (n, t) => { rec.apply.push([n, t]); },
     neededTables: () => { rec.need++; return over.need || ['items']; },

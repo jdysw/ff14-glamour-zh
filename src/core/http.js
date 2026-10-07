@@ -26,23 +26,23 @@ export { httpGet };
           });
           return;
         }
-      } catch (e) {}
+      } catch (e) { /* 忽略：GM 通道不可用——按序尝试 fetch 兜底 */ }
       try {
         if (typeof fetch === 'function') {
           let ctl = null, tm = null;
           try {
             if (typeof AbortController === 'function') {
               ctl = new AbortController();
-              tm = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, timeout || 20000);
+              tm = setTimeout(() => { try { ctl.abort(); } catch (e) { /* 忽略：abort 清理调用失败无碍 */ } }, timeout || 20000);
             }
-          } catch (e) {}
+          } catch (e) { /* 忽略：无 AbortController——不设置取消 */ }
           fetch(url, ctl ? { signal: ctl.signal } : {}).then(
             (r) => { if (tm) { clearTimeout(tm); } return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); },
             (e) => { if (tm) { clearTimeout(tm); } throw e; }
           ).then(ok, bad);
           return;
         }
-      } catch (e) {}
+      } catch (e) { /* 忽略：fetch 不可用——走最后兜底 */ }
       bad(new Error('no http transport'));
     });
   }

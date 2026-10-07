@@ -69,6 +69,7 @@ function buildLayer() {
     // 数据层测试不触发 resolver 的 itemDbReady 注册链（会级联 ensureTables → _ensureFinalize，
     // 而装配体未含探测区函数）；注册行为由 test-item-resolver.mjs 专测。
     'itemDbReady = undefined;',
+    'function _zhxErr(where, e) { /* Phase 18 桩：数据层装配不触发错误记录 */ }',
     sliceBetween(DIST_TEXT, '/* @zhixia:core-item-resolver-start */', '/* @zhixia:core-item-resolver-end */'),
     `return {
       setDb: (t) => { ITEM_DB_TEXT = t; },

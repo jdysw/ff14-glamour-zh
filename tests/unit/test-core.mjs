@@ -67,7 +67,7 @@ const ARG_NAMES = ['window', 'document', 'console', 'performance', 'GM', 'GM_get
   'MutationObserver'];
 
 const RETURN_STMT = `return { _storeNorm, storeGetAsync, storeSet, httpGet, _readCachedTable, _writeCachedTable,
-  safe, dedupeByAncestor, observeLocal, __zhxBootAt, __cacheReg: _cacheReg, cacheGuard,
+  safe, dedupeByAncestor, observeLocal, __zhxBootAt, __cacheReg: _cacheReg, cacheGuard, _zhxErr, __errLog: _errLog,
   C: { DAY_MS, META_KEY, DT_PREFIX, DATA_BASE, DATA_FILES, DATA_REMOTE } };`;
 
 function buildCore(env) {
@@ -415,6 +415,29 @@ console.log('\n── dom / runtime：去重 / 错误边界 ──');
   eq('safe：异常被 console.warn 记录', env.rec.warns.length, 1);
   eq('safe：tag 进入警告前缀', String(env.rec.warns[0]?.[0] || '').startsWith('tag2'), true);
   eq('safe：返回 undefined', g(), undefined);
+}
+{
+  // Phase 18：错误记录器（_zhxErr）—— 控制台 / 缓冲 / 封顶
+  const env = makeEnv();
+  const api = buildCore(env);
+  api._zhxErr('t1', new Error('boom'));
+  eq('_zhxErr：console.warn 前缀', String(env.rec.warns[0]?.[0] || ''), 't1：');
+  eq('_zhxErr：消息进缓冲', api.__errLog.length, 1);
+  eq('_zhxErr：消息格式（位置 + 消息）', api.__errLog[0], 't1：boom');
+  for (let i = 0; i < 30; i++) api._zhxErr('cap' + i, new Error('x'));
+  eq('_zhxErr：缓冲封顶 20 条', api.__errLog.length, 20);
+}
+{
+  // Phase 18：Probe 镜像 —— 仅当 __zhxErrs 已存在时追加（不主动创建）
+  const env = makeEnv();
+  env.window = { __zhxErrs: [] };
+  const api = buildCore(env);
+  api._zhxErr('mirror', new Error('m'));
+  eq('Probe 镜像：写入既有 __zhxErrs', env.window.__zhxErrs[0], 'mirror：m');
+  const env2 = makeEnv();
+  const api2 = buildCore(env2);
+  api2._zhxErr('nope', new Error('n'));
+  eq('未启用 Probe：不创建 __zhxErrs', env2.window.__zhxErrs, undefined);
 }
 {
   const api = buildCore(makeEnv({ performance: undefined }));
