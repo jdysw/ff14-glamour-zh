@@ -175,18 +175,6 @@ const mkEnv = (over = {}) => ({
   eq('_irBuildAux 返回 true', r, true);
   eq('中文装备名 → 当前站点日文名', api.resolveByZh('甲'), 'ア');
   eq('中文别名 → 当前站点日文名', api.resolveByZh('丙组合'), 'イ');
-  eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
-  eq('智能输入：前缀返回按键序候选', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
-    { zh: '炎灵', native: 'カ' },
-    { zh: '炎灵袍', native: 'エ' },
-    { zh: '炎灵裤', native: 'オ' },
-    { zh: '炎灵长袍', native: 'エ' },
-    { zh: '炎灵长裤', native: 'オ' },
-  ]));
-  eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
-    { zh: '炎灵袍', native: 'エ' },
-  ]));
-  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
   const maps = api.__maps();
 
   eq('真歧义登记（en）', JSON.stringify(maps.dup.A), JSON.stringify(['甲', '乙']));
@@ -216,6 +204,26 @@ const mkEnv = (over = {}) => ({
 }
 
 // ─────────────────────────────────────────────────────────────
+// B1. 中文智能输入（独立夹具：仅验证新增补全索引契约）
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv());
+  api._irBuildAux(SAMPLE_TSV);
+
+  eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
+  eq('智能输入：前缀返回按键序候选', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
+    { zh: '炎灵', native: 'カ' },
+    { zh: '炎灵袍', native: 'エ' },
+    { zh: '炎灵裤', native: 'オ' },
+    { zh: '炎灵长袍', native: 'エ' },
+    { zh: '炎灵长裤', native: 'オ' },
+  ]));
+  eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
+    { zh: '炎灵袍', native: 'エ' },
+  ]));
+  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
+}
+
 // B2. 中文搜索按站点语言倒排
 // ─────────────────────────────────────────────────────────────
 {
