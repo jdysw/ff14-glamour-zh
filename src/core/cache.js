@@ -1,6 +1,5 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
-import './item-resolver.js';
 import { DATA_VER, SERIES_TEXT, nameMap, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
 import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
@@ -11,7 +10,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
 
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
-  let _seriesMap = null;
+  let _seriesMap = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
   function _getSeriesMap() {
     if (_seriesMap) return _seriesMap;
     _seriesMap = new Map();
@@ -27,7 +26,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
 
   // 子串替换词表：长度 ≥ 2 的键按长→短排序（用于长句/alt 兜底）
   // v1.2.0：改为懒构建函数——词库运行时更新（dict.json）后清缓存即可重算
-  let _fcSubstrCache = null;
+  let _fcSubstrCache = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
   function _getFCSubstrKeys() {
     if (_fcSubstrCache) return _fcSubstrCache;
     _fcSubstrCache = Object.keys(DICT_FC)
@@ -40,8 +39,8 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
   // 用途：长标题等「裸前缀」场景（如 H1「ファントムヴィジョン・法系装备」）；严格双验证：
   //   ① 条目尾部是已知职业词（FC_ROLE_ZH）② 译文以该职业译名结尾 → 切出前缀译
   //   仅当同一前缀所有样本译名一致（set.size === 1）才启用；带缓存，数据就绪后懒构建。
-  let _seriesPfxCache = null;
-  let _allKeysCache = null;
+  let _seriesPfxCache = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
+  let _allKeysCache = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
   // v1.2.7：_seriesPfxCollect 拆为子步骤（降认知复杂度）
   function _seriesPfxCollect(map, cand) {
     for (const [jp, zh] of map) {
@@ -85,7 +84,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
   // 用途：fc 卡片标题等「裸系列名」场景（ネオイシュガルディアン、イディル、キングダムテール 等）
   // 算法：按「・」前段分组，求组内中文名的最长公共子串（≥90% 覆盖、≥2 字）；
   //   处理「改良型×」等修饰词混入（公共子串而非前缀，规避前段差异）。带缓存，数据就绪后懒构建。
-  let _itemPfxCache = null;
+  let _itemPfxCache = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
   // v1.2.7：_itemPfxGroup 拆为子步骤（降认知复杂度）
   function _itemPfxGroup(nm) {
     const groups = new Map();
@@ -141,7 +140,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
     }
     return null;
   }
-  let _ronkaCacheN = 0;
+  let _ronkaCacheN = 0; // NOSONAR — 缓存容量计数器随缓存写入/清理变化
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
     if (ko in RONKA_ITEM_CACHE) return RONKA_ITEM_CACHE[ko];
