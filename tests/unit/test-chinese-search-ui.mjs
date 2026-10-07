@@ -193,8 +193,12 @@ const previousInnerWidth = globalThis.innerWidth;
 const previousInnerHeight = globalThis.innerHeight;
 const previousBound = globalThis.__zhxChineseSearchBound;
 
-const document = new FakeDocument();
-globalThis.document = document;
+let document;
+const installDocument = () => {
+  document = new FakeDocument();
+  globalThis.document = document;
+};
+installDocument();
 globalThis.innerWidth = 360;
 globalThis.innerHeight = 600;
 globalThis.addEventListener = () => {};
@@ -222,6 +226,8 @@ try {
 
   console.log('\n── B：智能输入 UI 渲染 / 视口定位 ──');
   {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
     const harness = buildSearchHarness();
     const api = harness.api;
     const ready = harness.ready;
@@ -252,6 +258,8 @@ try {
 
   console.log('\n── C：键盘 / pointer 选择 ──');
   {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
     const harness = buildSearchHarness();
     const api = harness.api;
     const ready = harness.ready;
@@ -309,6 +317,8 @@ try {
 
   console.log('\n── D：IME / Esc / 未命中提示 ──');
   {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
     const harness = buildSearchHarness();
     const api = harness.api;
     const ready = harness.ready;
