@@ -1,6 +1,6 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
-import { DATA_VER, SERIES_TEXT, nameMap, resolveByName } from './data-manager.js';
+import { DATA_VER, SERIES_TEXT, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
 import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { storeGetAsync, storeSet } from './storage.js';
@@ -105,6 +105,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
     if (_itemPfxCache) return _itemPfxCache;
     _itemPfxCache = new Map();
     try {
+      const nameMap = dataGetIndex('nameMap');
       if (!nameMap) return _itemPfxCache;
       const groups = _itemPfxGroup(nameMap);
       for (const [key, list] of groups) {
