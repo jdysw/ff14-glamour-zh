@@ -1,6 +1,6 @@
 /* @phase15-module-order:sites/mirapri */
 /* @phase15-order-link:sites/mirapri<-core/dom */
-import { _zhixiaTitleKeep } from '../core/dom.js';
+import { _markScan, _zhixiaTitleKeep, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -61,6 +61,7 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
     try {
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
+      _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
           if (n.nodeType === 1 && SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;

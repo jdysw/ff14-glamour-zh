@@ -4,6 +4,7 @@ import { _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js'
 import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, resolveByHash } from '../core/data-manager.js';
 import { DICT_FC } from '../core/dictionary.js';
+import { _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -179,6 +180,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
+      _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: _fcAcceptNode,
       });
@@ -238,9 +240,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   }
 
   // v1.12.7：菜单「ID」→「副本装备」
-  function fixFCMenu() {
+  function fixFCMenu(rootArg) {
     let changed = false;
-    document.querySelectorAll('a[href*="/summary_equipment_id/"]').forEach((a) => {
+    queryIn(localScope(rootArg), 'a[href*="/summary_equipment_id/"]').forEach((a) => {
       if (a.dataset.zhixiaMenu) return;
       const t = (a.textContent || '').trim();
       if (t === 'ID' || t === 'id') {
@@ -342,9 +344,10 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     for (const r of FC_BANNER_RULES) if (r.match.test(probe)) return r;
     return null;
   }
-  function bindFCBanners() {
+  function bindFCBanners(rootArg) {
     let changed = false;
-    document.querySelectorAll('div.banner-wrap a').forEach((a) => {
+    const scope = localScope(rootArg);
+    queryIn(scope, 'div.banner-wrap a').forEach((a) => {
       if (a.dataset.zhixiaBanner) return;
       const img = a.querySelector('img');
       if (!img) return;
@@ -376,7 +379,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       a.appendChild(span);
     });
     // v1.12.8：武器页职业卡（26 张 SVG，文字为矢量路径无法改）→ 右侧叠中文
-    document.querySelectorAll('li.weapon-banner-item a').forEach((a) => {
+    queryIn(scope, 'li.weapon-banner-item a').forEach((a) => {
       if (a.dataset.zhixiaWeapon) return;
       const img = a.querySelector('img');
       if (!img) return;
@@ -415,9 +418,11 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     safe(fixFCMenu, 'FC 菜单')();
     safe(bindFCBanners, 'FC 横幅')();
     observeLocal((nodes) => {
-      for (const n of nodes) safe(translateFCPage, 'FC 局部')(n);
-      safe(fixFCMenu, 'FC 菜单')();
-      safe(bindFCBanners, 'FC 横幅')();
+      for (const n of nodes) {
+        safe(translateFCPage, 'FC 局部')(n);
+        safe(fixFCMenu, 'FC 菜单')(n);
+        safe(bindFCBanners, 'FC 横幅')(n);
+      }
     }, 300);
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

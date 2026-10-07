@@ -15,7 +15,7 @@ export { _obsStats, createObserver, observeLocal };
 
   // 统一观察器工厂。
   // opts: {
-  //   handler(nodes)       必填——批次处理器（nodes = 去重后的新增节点；signal 型站点可忽略）
+  //   handler(nodes, cds)  必填——批次处理器（nodes = 去重后的新增节点；cds = characterData 变更目标，未开启时为空；signal 型站点可忽略）
   //   debounce = 350       debounce 毫秒（站点独立）
   //   characterData false  是否纳入 characterData 变更（仅确需的站点开启，如 Ronka）
   //   filter = null        characterData 逐条过滤器：(mutation) => boolean
@@ -32,6 +32,9 @@ export { _obsStats, createObserver, observeLocal };
     const root = o.root || document.body || document.documentElement;
     let timer = null;
     let pending = [];
+    let pendingCD = [];              // v1.4.1：characterData 变更目标（与 pending 分列；nodes 语义不变）
+    // v1.4.1：变更目标入队（独立函数——为 collectMuts 控制认知复杂度预算）
+    const _queueCD = (t) => { if (t) pendingCD.push(t); };
     // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
     const collectMuts = (muts) => {
       let hitCD = false;
@@ -40,6 +43,7 @@ export { _obsStats, createObserver, observeLocal };
           if (!o.characterData) continue;                 // 未开启：完全忽略
           if (o.filter && !o.filter(m)) continue;         // 站点过滤（如 RONKA_KR）
           hitCD = true;
+          _queueCD(m.target);                             // v1.4.1：变更目标经第二参数传出（供局部处理）
           continue;
         }
         for (const n of m.addedNodes) {
@@ -56,10 +60,12 @@ export { _obsStats, createObserver, observeLocal };
       timer = setTimeout(() => {
         timer = null;
         const nodes = dedupeByAncestor(pending);
+        const cdTargets = dedupeByAncestor(pendingCD);        // v1.4.1：变更目标（去重后）随批次传出
         pending = [];
+        pendingCD = [];
         _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
         const t0 = _perfNow();                                // Phase 19：处理时长统计
-        try { o.handler(nodes); } catch (e) { _zhxErr('createObserver', e); }
+        try { o.handler(nodes, cdTargets); } catch (e) { _zhxErr('createObserver', e); }
         const dt = _perfNow() - t0;
         _obsStats.ms += dt;
         if (dt > _obsStats.maxMs) _obsStats.maxMs = dt;

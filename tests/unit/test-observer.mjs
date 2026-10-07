@@ -8,6 +8,7 @@
 //
 // 覆盖（计划书 Phase 7 验收清单）：
 //   - 1 / 100 / 1000 nodes；parent + child；重复 mutation；flood；Ronka characterData。
+//   - v1.4.1：characterData 变更目标经 handler 第二参数传出（nodes 语义不变）+ 扫描计数工具。
 //   - 另有：root 默认、characterData 默认关闭、站点独立 debounce、disconnect 扩展位。
 //   - Phase 18：handler 抛错 → _zhxErr 记录且不中断后续调度。
 //
@@ -87,7 +88,7 @@ function makeEnv() {
 
 function buildObs(env) {
   const parts = [...sliceAll(DIST_TEXT, 'core-dom'), ...sliceAll(DIST_TEXT, 'core-observer')];
-  const ret = 'return { createObserver, observeLocal, dedupeByAncestor, __obsStats: () => ({ ..._obsStats }) };';
+  const ret = 'return { createObserver, observeLocal, dedupeByAncestor, queryIn, localScope, __obsStats: () => ({ ..._obsStats }), __scanStats: () => ({ ..._scanStats }) };';
   try {
     const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr', '_perfNow',
       parts.join('\n') + '\n' + ret);
@@ -234,6 +235,57 @@ console.log('\n── F：Ronka characterData（显式开启 + filter）──')
   runTimer();
   eq('CD 调度执行 handler', seen.length, 1);
   eq('CD 型调度：nodes 为空数组（signal 型站点可忽略）', JSON.stringify(seen[0]), '[]');
+}
+
+console.log('\n── F2：characterData 变更目标传出（v1.4.1 新增）──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  const seen = [];
+  api.createObserver({
+    characterData: true,
+    filter: (m) => !!(m.target?.nodeValue && /[가-힣]/.test(m.target.nodeValue)),
+    debounce: 120,
+    handler: (nodes, cds) => seen.push({ nodes, cds }),
+  });
+  const mo = FakeMO.last;
+
+  const t1 = { nodeType: 3, nodeValue: '안녕', parentNode: null };
+  mo.trigger([{ type: 'characterData', target: t1 }]);
+  runTimer();
+  eq('CD 目标经第二参数传出', seen.length === 1 && seen[0].cds.length === 1 && seen[0].cds[0] === t1, true);
+  eq('第一参数仍为空数组（nodes 语义不变）', JSON.stringify(seen[0].nodes), '[]');
+
+  mo.trigger([{ type: 'characterData', target: t1 }]);
+  mo.trigger([{ type: 'characterData', target: t1 }]);
+  runTimer();
+  eq('同一目标重复变更：去重后只传 1 个', seen[1].cds.length, 1);
+
+  const el = mkNode();
+  mo.trigger([{ type: 'childList', addedNodes: [el] }, { type: 'characterData', target: t1 }]);
+  runTimer();
+  eq('混合批次：nodes=[新增节点]', seen[2].nodes.length === 1 && seen[2].nodes[0] === el, true);
+  eq('混合批次：cds=[变更目标]', seen[2].cds.length === 1 && seen[2].cds[0] === t1, true);
+}
+
+console.log('\n── F3：局部查询与扫描计数（v1.4.1 新增）──');
+{
+  const env = makeEnv();
+  const c1 = mkNode();
+  const c2 = mkNode();
+  const docEl = mkNode();
+  const scopeEl = { nodeType: 1, matches: (sel) => sel === 'x', querySelectorAll: (sel) => (sel === 'x' ? [c1, c2] : []) };
+  env.document.querySelectorAll = (sel) => (sel === 'x' ? [docEl] : []);
+  const api = buildObs(env);
+
+  const rLocal = api.queryIn(scopeEl, 'x');
+  eq('局部查询：自身 + 子树', rLocal.length === 3 && rLocal[0] === scopeEl && rLocal[1] === c1 && rLocal[2] === c2, true);
+  const rFull = api.queryIn(null, 'x');
+  eq('全页查询：document 级', rFull.length === 1 && rFull[0] === docEl, true);
+  const st = api.__scanStats();
+  eq('计数：local=1 / global=1', st.local === 1 && st.global === 1, true);
+  ok('localScope：文本节点 → 父元素', api.localScope({ nodeType: 3, parentElement: scopeEl }) === scopeEl, true);
+  ok('localScope：缺省 → null（全页）', api.localScope() === null, true);
 }
 
 console.log('\n── G：兼容包装与可配置性 ──');
