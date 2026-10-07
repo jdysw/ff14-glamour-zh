@@ -23,9 +23,9 @@ jobs:
         with:
           fetch-depth: 0 # 完整历史：新代码判定与逐行归属需要
 
-      # 官方扫描 action（v5 浮动标签，Sonar 会随安全修复移动该标签）
+      # 官方扫描 action（v6：使用当前受支持版本）
       - name: SonarQube Cloud scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 

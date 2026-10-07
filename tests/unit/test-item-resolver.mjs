@@ -46,10 +46,25 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver');
+const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver')
+  .map((seg) => seg.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
 
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
+  'key\tzh\ten\tja\tko\thash\tecid\talias',
+  '1\t甲\tA\tア\t가\th1\t100\t',
+  '2\t乙\tA\tア\t가\th2\t101\t',
+  '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
+  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
+  '5\t丁\tC\tウ\t다\th5\t104\t',
+  '6\t炎灵长袍\tD\tエ\t라\th6\t105\t炎灵袍',
+  '7\t炎灵长裤\tE\tオ\t마\th7\t106\t炎灵裤',
+  '8\t炎灵\tF\tカ\t바\th8\t107\t',
+].join('\n');
+
+// Legacy alias fixture：专门冻结 Phase 6 原有别名注册表契约。
+// 中文智能输入新增装备数据不应改变这个 golden test 的覆盖范围。
+const LEGACY_SAMPLE_TSV = [
   'key\tzh\ten\tja\tko\thash\tecid\talias',
   '1\t甲\tA\tア\t가\th1\t100\t',
   '2\t乙\tA\tア\t가\th2\t101\t',
@@ -80,12 +95,13 @@ function buildResolver(env = {}) {
     'let ITEM_DB_TEXT = __env.text || "";',
     'const DATA_TEXT = { get items() { return ITEM_DB_TEXT; } };',
     'let _v3Applied = !!__env.v3Applied;',
+    'const __testFindSite = () => __env.site || { id: "mirapri" };',
     'const itemDbReady = __env.itemDbReady;',
     'const tryEnToZh = (n) => { __rec.tryCalls.push(n); return (n === "KNOWN_EN") ? "英文名译" : null; };',
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
@@ -105,6 +121,7 @@ const mkEnv = (over = {}) => ({
   koByZh: { 甲: '가', 丙: '나' },
   text: SAMPLE_TSV,
   itemDbReady: undefined,
+  site: { id: 'mirapri' },
   ...over,
 });
 
@@ -121,7 +138,7 @@ const mkEnv = (over = {}) => ({
   eq('resolveByName 未命中 → null', api.resolveByName('nope'), null);
   eq('resolveByName 空输入 → null', api.resolveByName(null), null);
 
-  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
+  eq('接口函数齐备', ['resolveByHash', 'resolveByName', 'resolveByZh', 'suggestByZh', 'resolveAllByName', 'resolveAlias', 'resolve', 'resolveEcId', 'resolveKo', '_irBuildAux']
     .every((f) => typeof api[f] === 'function'), true);
 }
 
@@ -154,8 +171,10 @@ const mkEnv = (over = {}) => ({
   // 未构建时：回退主索引行为
   eq('未构建：resolveAllByName 回退首行', JSON.stringify(api.resolveAllByName('A')), JSON.stringify(['甲']));
 
-  const r = api._irBuildAux(SAMPLE_TSV);
+  const r = api._irBuildAux(LEGACY_SAMPLE_TSV);
   eq('_irBuildAux 返回 true', r, true);
+  eq('中文装备名 → 当前站点日文名', api.resolveByZh('甲'), 'ア');
+  eq('中文别名 → 当前站点日文名', api.resolveByZh('丙组合'), 'イ');
   const maps = api.__maps();
 
   eq('真歧义登记（en）', JSON.stringify(maps.dup.A), JSON.stringify(['甲', '乙']));
@@ -179,9 +198,46 @@ const mkEnv = (over = {}) => ({
   // 容错与幂等
   eq('_irBuildAux 空文本 → false', api._irBuildAux(''), false);
   eq('_irBuildAux null → false', api._irBuildAux(null), false);
-  eq('_irBuildAux 幂等（重复构建同结果）', api._irBuildAux(SAMPLE_TSV) && JSON.stringify(api.__maps().dup.A), JSON.stringify(['甲', '乙']));
+  eq('_irBuildAux 幂等（重复构建同结果）', api._irBuildAux(LEGACY_SAMPLE_TSV) && JSON.stringify(api.__maps().dup.A), JSON.stringify(['甲', '乙']));
   const kept = api.resolveAllByName('A');
   ok('返回数组为副本（修改不污染注册表）', (() => { kept.push('x'); return api.resolveAllByName('A').length === 2; })());
+}
+
+// ─────────────────────────────────────────────────────────────
+// B1. 中文智能输入（独立夹具：仅验证新增补全索引契约）
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv());
+  api._irBuildAux(SAMPLE_TSV);
+
+  eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
+  eq('智能输入：精确名称优先、正式名称次之、别名最后', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
+    { zh: '炎灵', native: 'カ' },
+    { zh: '炎灵长袍', native: 'エ' },
+    { zh: '炎灵长裤', native: 'オ' },
+    { zh: '炎灵袍', native: 'エ' },
+    { zh: '炎灵裤', native: 'オ' },
+  ]));
+  eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
+    { zh: '炎灵袍', native: 'エ' },
+  ]));
+  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
+}
+
+// B2. 中文搜索按站点语言倒排
+// ─────────────────────────────────────────────────────────────
+{
+  for (const [site, expected] of [
+    ['mirapri', 'ア'],
+    ['fc', 'ア'],
+    ['collection', 'ア'],
+    ['ronka', '가'],
+    ['ec', 'A'],
+  ]) {
+    const api = buildResolver(mkEnv({ site: { id: site } }));
+    api._irBuildAux(SAMPLE_TSV);
+    eq(`中文装备名 → ${site} 原生名`, api.resolveByZh('甲'), expected);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -210,7 +266,7 @@ const mkEnv = (over = {}) => ({
 // ─────────────────────────────────────────────────────────────
 {
   const cbs = [];
-  const env = mkEnv({ itemDbReady: (cb) => { cbs.push(cb); } });
+  const env = mkEnv({ text: LEGACY_SAMPLE_TSV, itemDbReady: (cb) => { cbs.push(cb); } });
   const api = buildResolver(env);
   eq('装配后注册 1 个就绪回调', cbs.length, 1);
   // 触发回调 → 用 env.text 构建辅助表
