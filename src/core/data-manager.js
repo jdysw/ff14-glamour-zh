@@ -323,7 +323,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (hash) _replaceMap(itemHash, hash);
       _irSearchByZh = null;
       _irSearchKind = null;
-      _irSearchKeys = null;
       _irSearchCanonicalKeys = null;
       _irSearchAliasKeys = null;
       if (ecid) _replaceMap(ecidMap, ecid);
@@ -525,7 +524,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   // 仅构建当前站点所需的原生语言映射，不扩大现有 v3 数据文件。
   let _irSearchByZh = null; // NOSONAR — 数据就绪后按当前站点数据重建
   let _irSearchKind = null;  // 0=正式名称，1=中文别名
-  let _irSearchKeys = null;  // NOSONAR — 智能输入按需建立排序键表
   let _irSearchCanonicalKeys = null;
   let _irSearchAliasKeys = null;
 
@@ -570,12 +568,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       }
     }
     return { map: out, kind };
-  }
-
-  function _getIrSearchKeys() {
-    if (_irSearchKeys !== null) return _irSearchKeys;
-    _irSearchKeys = Object.keys(_irSearchByZh || {}).sort((a, b) => a.localeCompare(b));
-    return _irSearchKeys;
   }
 
   function _getIrSearchKeysByKind(kind) {
@@ -641,7 +633,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
         const built = _irBuildSearchFromNames(nameMap, _irAliasMap);
         _irSearchByZh = built.map;
         _irSearchKind = built.kind;
-        _irSearchKeys = null;
         _irSearchCanonicalKeys = null;
         _irSearchAliasKeys = null;
       }
@@ -658,7 +649,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const built = _irBuildSearchFromText(text);
     _irSearchByZh = built.map;
     _irSearchKind = built.kind;
-    _irSearchKeys = null;
     _irSearchCanonicalKeys = null;
     _irSearchAliasKeys = null;
     return true;
