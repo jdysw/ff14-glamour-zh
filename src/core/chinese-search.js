@@ -13,12 +13,12 @@ const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|passwo
 const SEARCH_INPUT_TYPES = new Set(['', 'text', 'search']);
 
 function normalizeSearchQuery(value) {
-  return String(value ?? '').trim().replace(/[ \\t\\u00a0]+/g, ' ');
+  return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
 }
 
 function isChineseSearchQuery(value) {
   const q = normalizeSearchQuery(value);
-  return q.length > 0 && /[\\u3400-\\u9fff]/u.test(q);
+  return q.length > 0 && /[\u3400-\u9fff]/u.test(q);
 }
 
 function searchInputScore(input) {
