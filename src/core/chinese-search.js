@@ -177,9 +177,14 @@ function positionSuggestionBox(input) {
   const openBelow = belowSpace >= 120 || belowSpace >= aboveSpace;
   const available = openBelow ? belowSpace : aboveSpace;
   const maxHeight = Math.max(80, Math.min(320, available));
-  const top = openBelow
+  let top = openBelow
     ? rect.bottom + gap
     : Math.max(margin, rect.top - gap - maxHeight);
+  // 兜底：只要上方有足够空间，就不能让候选框仍落在输入框下方。
+  // 这样可以避免异常/不完整的视口尺寸信息造成错误的展开方向。
+  if (top >= rect.top && aboveSpace >= 120) {
+    top = Math.max(margin, rect.top - gap - maxHeight);
+  }
   _suggestBox.style.left = left + 'px';
   _suggestBox.style.top = top + 'px';
   _suggestBox.style.width = width + 'px';
