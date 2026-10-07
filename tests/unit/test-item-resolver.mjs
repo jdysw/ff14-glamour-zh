@@ -47,7 +47,7 @@ function sliceAll(s, tag) {
 }
 
 const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver')
-  .map((seg) => seg.replaceAll('findSite()', '__testFindSite()'));
+  .map((seg) => seg.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
 
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
