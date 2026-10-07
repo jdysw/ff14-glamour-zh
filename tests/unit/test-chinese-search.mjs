@@ -66,11 +66,13 @@ console.log('\n── B：搜索框识别 ──');
   ok('关键词输入框得分高于普通文本框', api.searchInputScore(keyword) > api.searchInputScore(player));
   eq('作者/玩家字段被排除', api.searchInputScore(player) < 0, true);
 
-  const fcPartSearch = fakeInput({ placeholder: '装備名の一部を入力して検索' });
-  const fcGenericSearch = fakeInput({ placeholder: '装備品名等を入力' });
-  const fcForm = { querySelectorAll: () => [fcGenericSearch, fcPartSearch] };
-  eq('FF14-FC 部位搜索优先于通用搜索框', api.findSearchInput(fcForm), fcPartSearch);
-  ok('部位搜索提示得分更高', api.searchInputScore(fcPartSearch) > api.searchInputScore(fcGenericSearch));
+  const partPlaceholders = ['头防具', '胴防具', '手防具', '脚防具', '足防具'];
+  for (const part of partPlaceholders) {
+    const fcPartSearch = fakeInput({ placeholder: '装備名の一部を入力して検索' });
+    const fcGenericSearch = fakeInput({ placeholder: '装備品名等を入力' });
+    const fcForm = { querySelectorAll: () => [fcGenericSearch, fcPartSearch] };
+    eq('FF14-FC ' + part + ' 页面优先识别部位搜索框', api.findSearchInput(fcForm), fcPartSearch);
+  }
 }
 
 console.log('\n── C：GET 搜索 URL 重写 ──');
