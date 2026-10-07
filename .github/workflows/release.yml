@@ -1,12 +1,17 @@
 name: Release
 
-# 版本发布自动化：src/ 推送到 main 且 @version 有变更 → 构建 → 创建 v<版本> tag + Release（附发布件）。
+# 版本发布自动化（v1.4 Phase 17：版本单一源 = package.json）。
+# 触发：src/、build/ 或 package.json 推送到 main → 读取 package.json 版本 → 幂等检查 →
+#       构建（build.sh 全链，含版本同步与词典三方核验）→ 一致性校验（package ≡ src ≡ header ≡ dist）
+#       → 创建 v<版本> tag + Release（附发布件）。
 # 版本号已有 Release 则自动跳过（幂等）；也可在 Actions 页手动触发（补发/演练）。
 on:
   push:
     branches: [main]
     paths:
       - 'src/**'
+      - 'build/**'
+      - 'package.json'
   workflow_dispatch:
 
 permissions:
@@ -23,11 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 提取版本号
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 读取版本号（单一源：package.json）
         id: v
         run: |
-          V=$(sed -n 's/.*@version[[:space:]]\+\([0-9][0-9.]*\).*/\1/p' src/ff14-glamour-zh.external.user.js | head -1)
-          [ -n "$V" ] || { echo "未找到 @version"; exit 1; }
+          V=$(node -p "require('./package.json').version")
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "package.json version 非法：$V"; exit 1; }
           echo "ver=$V" >> "$GITHUB_OUTPUT"
           echo "版本号：$V"
 
@@ -43,9 +54,17 @@ jobs:
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 构建
+      - name: 安装依赖（锁文件）
+        if: steps.chk.outputs.skip == '0'
+        run: npm ci
+
+      - name: 构建（build.sh 全链）
         if: steps.chk.outputs.skip == '0'
         run: bash build.sh
+
+      - name: 版本一致性校验（package ≡ src ≡ header ≡ dist）
+        if: steps.chk.outputs.skip == '0'
+        run: npm run version:check
 
       - name: 创建 Release
         if: steps.chk.outputs.skip == '0'

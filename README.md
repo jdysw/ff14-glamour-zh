@@ -3,6 +3,7 @@
 > 将 FF14 的多个国际服幻化网站进行全局汉化（以国服译名为准），并实现与灰机 wiki 双向互查。
 
 [![Release](https://img.shields.io/github/v/release/jdysw/ff14-glamour-zh)](https://github.com/jdysw/ff14-glamour-zh/releases/latest)
+[![Test](https://github.com/jdysw/ff14-glamour-zh/actions/workflows/test.yml/badge.svg)](https://github.com/jdysw/ff14-glamour-zh/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue)](./LICENSE)
 
 
@@ -82,11 +83,13 @@ ff14-glamour-zh/
 │   ├── extract_dicts.py   — 历史工具：反向提取（仅一次性迁移；权威源 = dict/*.json）
 │   ├── verify_dicts.js    — 词典校验（src 内嵌 vs JSON 源 / vs 远程产物）
 │   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
-│   └── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
+│   ├── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
+│   ├── version.mjs        — 版本单一源（package.json → @version 同步 / 校验）
+│   └── validate-data.py   — 数据与词典结构校验（CI / 提交前）
 ├── dist/                  — 构建产物：本地生成（不入库）
 │   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
 ├── .github/               — 仓库自动化
-│   ├── workflows/         — deploy-data（数据站部署）/ release（自动发布）/ sonarqube-cloud（代码质量）
+│   ├── workflows/         — deploy-data（数据站部署）/ release（自动发布）/ test（构建与测试）/ sonarqube-cloud（代码质量）
 │   └── deploy/            — 部署组装脚本（prepare.py）+ 数据站根页
 └── build.sh               — 一键全链构建
 ```
@@ -114,16 +117,17 @@ bash build.sh
 # ② 提交推送
 git add -A && git commit -m "..." && git push
 # ③ 数据站 —— data/、dict/ 变动时，推送 main 即自动部署
-# ④ 脚本发布 —— src/ 变动且 @version 提升时，Actions 自动构建并创建 Release
+# ④ 脚本发布 —— 改代码时 bump package.json 的 version（唯一源），推送 main 自动构建并创建 Release
 ```
 
 - 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）。
 - 只改**游戏数据**（data/）→ 重建后推送（③ 自动）。
-- 改**代码**（src/）→ ①④，建议同时将 `@version` +1，便于发布追踪。
+- 改**代码**（src/）→ ①④；发版前将 `package.json` 的 `version` +1（**唯一版本源**，构建自动同步脚本头与元数据）。
 - **数据站自动部署**：`data/` 三个数据文件、`dict/*.json`（词库）任一推送到 main →
   GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
   项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
   备用本地通道：`python3 ~/zhixia-data/update-data.py --deploy`。
+- **CI 测试**：push / PR 自动运行 `.github/workflows/test.yml`（数据校验 → 构建 → 产物语法 → 生成物一致性 → unit + integration），与本地命令同源。
 
 ### 数据更新流程（游戏版本更新后 / 数据表变动后）
 
@@ -137,7 +141,7 @@ git add data/ && git commit -m "data: 重建物品总表" && git push
 - 源数据＝四语 datamining Item.csv（中 / 英 / 日 / 韩）；hash / EC_ID / 别名由本表继承，不因重建丢失。
 - 指纹 = `sha256(文件内容) 前 12 位`（`.github/deploy/prepare.py` 与 update-data.py 算法一致），写入 version.json。
 - **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
-- **发布自动化**：`src/` 推送到 main 且 `@version` 有变更 → Actions（`.github/workflows/release.yml`）自动构建并创建 Release（附发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
+- **发布自动化**：`src/`、`build/` 或 `package.json` 推送到 main → Actions（`.github/workflows/release.yml`）读取 `package.json` 版本（唯一源）→ 构建 + 一致性校验 → 创建 Release（附发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
 
 ### 日常维护
 
@@ -177,6 +181,7 @@ git add dict/ && git commit -m "dict: ..." && git push
 - **统一缓存体系（v1.4 Phase 14）**：`@zhixia:core-cache-registry` 把全部内存缓存集中登记（四类职责：`lookup` 名称查找 / `translate` 词典派生 / `derived` 数据派生 / `data` 持久数据由 DataManager 管理）——统一入口 `cacheReset(kind)`（按类清理，无参全清）、`cacheInfo()`（修订号 + 条目数观测）、`cacheGuard`（容量防线：查找缓存上限 5000 条，达限清空重建）；`_fireTablesReady` / `dictInvalidate` 的散落手工 reset 已清零（新增缓存只需登记一行）；机制由 `tests/unit/test-cache.mjs` 冻结。
 - **模块化构建（v1.4 Phase 15）**：构建方式 = 「单文件源 → 块切分 → 模块树 → Rollup 打包（`bash build.sh`，含静态验收门）」——`src/ff14-glamour-zh.external.user.js` 是切分母本与唯一手改入口；`src/main.js` / `src/core/*.js`（14）/ `src/sites/*.js`（6）均为构建链原样输出（**直接改模块会被下次构建覆盖**，改动一律落单文件源与 `build/` 链）；块→模块分配（`build/migrate/module-assign.json`）与模块输出顺序契约（`build/module-order.json`，顺序相邻关系 = 测试文本提取的正式约束）是构建约束；产物锚点体系不变（36 锚点 / 16 tag），全量回归由 `tests/` 冻结。
 - **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py` 降级为一次性迁移工具；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
+- **发布 / CI 单一源（v1.4 Phase 17）**：`package.json` 的 `version` 是唯一版本源——构建 ⓪ 步自动同步 `src` 模板与 `build/userscript-header.txt` 的 `@version`；`build/version.mjs --check` 校验「package ≡ src ≡ header ≡ dist」（进入构建 ⑰ 步与发布门）；数据文件结构校验由 `build/validate-data.py` 负责（CI 与数据部署前同源执行）；契约由 `tests/integration/test-version-consistency.mjs` 冻结。
 - **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。
 
 </details>

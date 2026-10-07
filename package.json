@@ -15,7 +15,11 @@
     "test:live": "node tests/run.mjs --suite=live",
     "test:all": "node tests/run.mjs --suite=all",
     "test:core": "node tests/run.mjs --suite=core",
-    "test:bench": "node tests/run.mjs --suite=benchmark"
+    "test:bench": "node tests/run.mjs --suite=benchmark",
+    "check:dist": "node --check dist/ff14-glamour-zh.greasyfork.user.js",
+    "validate:data": "python3 build/validate-data.py",
+    "version:check": "node build/version.mjs --check",
+    "version:sync": "node build/version.mjs"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 16 一键构建：词典注入 → 单文件源语法 → 模块化链（块切分 → 接口 → 顺序契约 → Rollup）→ 静态验收（顺序 / 锚点 / wiring）→ 词典校验（源 + 远程产物）
+# Phase 17 一键构建：版本同步 → 词典注入 → 单文件源语法 → 模块化链（块切分 → 接口 → 顺序契约 → Rollup）→ 静态验收（顺序 / 锚点 / wiring）→ 词典校验（源 + 远程产物）→ 版本一致性校验
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -16,6 +16,9 @@ OUT="${ZHX_OUT:-dist/ff14-glamour-zh.greasyfork.user.js}"
 
 rm -rf "$CACHE_DIR"
 mkdir -p "$CACHE_DIR"
+
+printf '%s\n' '⓪ 版本同步（package.json → src 模板 + userscript-header.txt）'
+node build/version.mjs
 
 printf '%s\n' '① 词典注入（dict/*.json → src 模板）'
 "$PYTHON_BIN" build/inject_dicts.py
@@ -71,4 +74,7 @@ printf '%s\n' '⑮ 远程词库产物（dict/*.json → dict.json；数据站发
 printf '%s\n' '⑯ 词典单一源核验（src 内嵌 ≡ 远程产物）'
 node build/verify_dicts.js src/ff14-glamour-zh.external.user.js --dict-json "$CACHE_DIR/dict.json"
 
-printf '\n%s\n' "✅ Phase 16 构建验收完成：$OUT"
+printf '%s\n' '⑰ 版本一致性校验（package.json ≡ src ≡ header ≡ dist）'
+node build/version.mjs --check
+
+printf '\n%s\n' "✅ Phase 17 构建验收完成：$OUT"

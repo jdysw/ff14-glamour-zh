@@ -1,0 +1,52 @@
+name: Test
+
+# v1.4 Phase 17：CI 测试工作流（与本地同一入口，命令全部可本地复跑）。
+# 覆盖：数据文件结构校验 → 构建（build.sh 全链，含版本同步与词典三方核验）→
+#       产物语法检查 → 生成物一致性（构建后工作区应无差异）→ 单元 + 集成（离线夹具）测试。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖（锁文件）
+        run: npm ci
+
+      - name: 数据文件校验
+        run: npm run validate:data
+
+      - name: 构建（build.sh 全链）
+        run: npm run build
+
+      - name: 产物语法检查
+        run: npm run check:dist
+
+      # 生成物入库纪律：src 模块 / 词典块 / 版本号均为构建生成物，
+      # 构建后工作区应无差异（有差异 = 提交内容与构建链输出不同步）。
+      - name: 构建后工作区一致性
+        run: git diff --exit-code
+
+      - name: 单元 + 集成测试（离线夹具）
+        run: npm test
