@@ -89,15 +89,15 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     return text;
   }
 
-  // 副本名单条查找：「日文名|中文名」表（内嵌 ACL_CFC_TEXT）
+  // 副本名单条查找：「日文名|中文名」表（DATA_TEXT.acl）
   function lookupAclCfc(ja) {
-    if (!ja || typeof ACL_CFC_TEXT !== 'string' || !ACL_CFC_TEXT) return null;
+    if (!ja || typeof DATA_TEXT.acl !== 'string' || !DATA_TEXT.acl) return null;
     const key = '\n' + ja + '|';
-    const at = ACL_CFC_TEXT.indexOf(key);
+    const at = DATA_TEXT.acl.indexOf(key);
     if (at < 0) return null;
     const s0 = at + 1 + ja.length + 1;
-    const e0 = ACL_CFC_TEXT.indexOf('\n', s0);
-    const v = ACL_CFC_TEXT.slice(s0, e0 < 0 ? undefined : e0).trim();
+    const e0 = DATA_TEXT.acl.indexOf('\n', s0);
+    const v = DATA_TEXT.acl.slice(s0, e0 < 0 ? undefined : e0).trim();
     return v || null;
   }
 
