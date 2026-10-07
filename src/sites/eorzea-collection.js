@@ -1,6 +1,5 @@
 /* @phase15-module-order:sites/eorzea-collection */
 /* @phase15-order-link:sites/eorzea-collection<-core/dictionary */
-import '../core/dictionary.js';
 import { DICT_EC } from '../core/dictionary.js';
 import { _zhixiaTitleKeep } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
@@ -103,7 +102,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     }
   }
 
-  let ecBusy = false;
+  let ecBusy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
   function translateECAttrs(rootArg) {
     const attrRoot = rootArg?.querySelectorAll ? rootArg : document;
