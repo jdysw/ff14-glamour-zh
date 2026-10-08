@@ -69,7 +69,7 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     await c.send('Page.navigate', { url });
     // 等待页面完全加载 + 确认在目标域上（避免重定向过渡态/错误页）
     const cfg = SITES[site];
-    const expectHost = cfg.host;
+    const expectedHosts = cfg.hosts || [cfg.host];
     let pageOk = false;
     for (let i = 0; i < 40; i++) {
       await sleep(1000);
@@ -84,7 +84,7 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
           lsOk,
         };
       })()`).catch(() => ({}));
-      if (st && st.lsOk && st.ready === 'complete' && st.len > 50 && st.host === expectHost) {
+      if (st && st.lsOk && st.ready === 'complete' && st.len > 50 && expectedHosts.includes(st.host)) {
         pageOk = true;
         break;
       }
@@ -115,12 +115,17 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
 //   1. 生成一个独立的云扫描脚本（python）到缓存目录
 //   2. 通过 child_process 调用，收集 JSON 产物
 // 简化版：先输出「需云扫描」清单，由外部脚本处理。
-export function cloudScanPlan(site) {
+export function cloudScanPlan(site, opts = {}) {
   const cfg = SITES[site];
   if (!cfg) throw new Error('未知站点: ' + site);
   return {
     site,
     channel: 'cloud',
+    hosts: cfg.hosts || [cfg.host],
+    discover: !!opts.discover,
+    maxPages: opts.maxPages || 60,
+    maxDepth: opts.maxDepth ?? 2,
+    perTemplate: opts.perTemplate || 3,
     pages: cfg.pages.map((p) => ({ id: p.id, url: p.url, type: p.type })),
   };
 }
@@ -267,13 +272,15 @@ async function main() {
         '，独立 URL ' + visited.size + (discover ? '；动态发现已开启' : '；仅扫描种子页'));
     } else if (ch === 'cloud') {
       console.log('  云浏览器通道：生成云扫描计划（由 bu-*.py 执行，需 BROWSER_USE_API_KEY）');
-      const plan = cloudScanPlan(site);
+      const plan = cloudScanPlan(site, { discover, maxPages, maxDepth, perTemplate });
       console.log('  计划: ' + JSON.stringify(plan.pages.map((p) => p.id)));
       // 保存计划供云脚本读取
       fs.mkdirSync(CACHE_DIR, { recursive: true });
       fs.writeFileSync(path.join(CACHE_DIR, `cloud-plan-${site}.json`), JSON.stringify(plan, null, 2), 'utf8');
       console.log(`  计划已存: ${path.join(CACHE_DIR, `cloud-plan-${site}.json`)}`);
       console.log('  ⚠️ 云扫描尚未自动执行——请运行配套 Python 脚本（后续提供）或手动用云浏览器打开页面运行收集器。');
+    } else if (ch === 'fixture') {
+      console.log('  Wiki: 站点中文、反查功能由离线 integration 测试覆盖，真实站点扫描需浏览器授权');
     } else {
       console.error('未知通道: ' + ch);
       process.exit(2);
