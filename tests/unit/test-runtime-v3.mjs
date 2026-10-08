@@ -51,8 +51,8 @@ ok('A3 version 为 12 位 hex', /^[0-9a-f]{12}$/.test(man.version || ''), `versi
 ok('A4 generated 为 ISO 时间', /^\d{4}-\d{2}-\d{2}T/.test(man.generated || ''));
 ok('A5 shared.dict 存在', !!(man.shared && man.shared.dict && man.shared.dict.url === 'dict.json'));
 
-const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki'];
-eq('A6 六站齐备', Object.keys(man.sites || {}).sort().join(','), [...SITE_NAMES].sort().join(','));
+const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+eq('A6 七站齐备', Object.keys(man.sites || {}).sort().join(','), [...SITE_NAMES].sort().join(','));
 
 // 逐文件 sha256/bytes 全量校验
 let fileCount = 0; let badSha = 0; let badBytes = 0;

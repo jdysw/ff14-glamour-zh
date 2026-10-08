@@ -39,7 +39,7 @@ console.log('── A：src ≡ dict/*.json（verify 模式1）──');
 const a = run('node', ['build/verify_dicts.js', SRC_REL]);
 ok('A1 verify 模式1 通过（src 内嵌与 JSON 源逐条一致）', a.code === 0, a.code !== 0 ? tail(a.out) : '');
 
-console.log('── B：六个词典块带「自动生成」标识 ──');
+console.log('── B：七个词典块带「自动生成」标识 ──');
 const src = fs.readFileSync(dictionaryFile, 'utf8');
 const srcLines = src.split('\n');
 const BLOCKS = [
@@ -49,6 +49,7 @@ const BLOCKS = [
   ['DICT_FC', 'dict-fc.json'],
   ['DICT_RONKA', 'dict-ronka.json'],
   ['DICT_ACL', 'dict-acl.json'],
+  ['DICT_ENDCLOSET', 'dict-endcloset.json'],
 ];
 const missingBanner = [];
 for (const [name, fn] of BLOCKS) {
@@ -58,9 +59,9 @@ for (const [name, fn] of BLOCKS) {
     missingBanner.push(name);
   }
 }
-ok('B1 6 个词典块上方均带 inject 维护的标识行', missingBanner.length === 0, `缺: ${missingBanner.join(', ')}`);
+ok('B1 7 个词典块上方均带 inject 维护的标识行', missingBanner.length === 0, `缺: ${missingBanner.join(', ')}`);
 const bannerCount = srcLines.filter((l) => /^  \/\/ ⚠️ 自动生成.*inject_dicts\.py/.test(l)).length;
-ok('B2 标识行恰为 6 条（无散落/重复）', bannerCount === 6, `实际 ${bannerCount}`);
+ok('B2 标识行恰为 7 条（无散落/重复）', bannerCount === 7, `实际 ${bannerCount}`);
 
 console.log('── C：篡改防护（改副本 → 必失败；inject 再生 → 必恢复）──');
 const dir = cachePath('dict-single-source');
@@ -100,9 +101,9 @@ const d2 = run('node', ['build/verify_dicts.js', SRC_REL, '--dict-json', 'tests/
 ok('D2 verify --dict-json 通过（src 内嵌 ≡ 远程产物）', d2.code === 0, d2.code !== 0 ? tail(d2.out) : '');
 try {
   const keys = Object.keys(JSON.parse(fs.readFileSync(djPath, 'utf8'))).sort().join(',');
-  ok('D3 dict.json 结构完整（六层）', keys === 'acl,common,ec,fc,main,ronka', keys);
+  ok('D3 dict.json 结构完整（七层）', keys === 'acl,common,ec,endcloset,fc,main,ronka', keys);
 } catch (e) {
-  ok('D3 dict.json 结构完整（六层）', false, String(e).slice(0, 120));
+  ok('D3 dict.json 结构完整（七层）', false, String(e).slice(0, 120));
 }
 
 console.log('── E：构建链含两步（不缺环）──');

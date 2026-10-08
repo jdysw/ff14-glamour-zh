@@ -1,6 +1,6 @@
 // tests/unit/test-dictionary.mjs — Phase 5：冻结 Translator / Dictionary 行为（golden tests）
 //
-// 目的：把运行时词典（六层词表访问 / dict.json 原地合并 / 修订号 / 派生缓存失效）
+// 目的：把运行时词典（七层词表访问 / dict.json 原地合并 / 修订号 / 派生缓存失效）
 //       与翻译统一接口层（按 profile 分发）的当前行为用断言钉死。
 //       后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
@@ -55,8 +55,8 @@ const TR_SEG = sliceAll(DIST_TEXT, 'core-translator');
 const CACHE_REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
 
 const STUB_LINES = [
-  // ── 桩（必须先于区段：值捕获纪律；六层词表从空开始）──
-  'const DICT_COMMON = {}, DICT = {}, DICT_EC = {}, DICT_FC = {}, DICT_RONKA = {}, DICT_ACL = {};',
+  // ── 桩（必须先于区段：值捕获纪律；七层词表从空开始）──
+  'const DICT_COMMON = {}, DICT = {}, DICT_EC = {}, DICT_FC = {}, DICT_RONKA = {}, DICT_ACL = {}, DICT_ENDCLOSET = {};',
   'let _fcSubstrCache = null, _allKeysCache = null;',
   'const tr = (t) => "T-main:" + t, trEC = (t) => "T-ec:" + t, trFC = (t) => "T-fc:" + t,',
   '  trRonka = (t) => "T-ronka:" + t, trACL = (t) => "T-acl:" + t;',
@@ -143,8 +143,8 @@ function buildDict(mock = {}) {
   eq('同键冲突：main 层 extra 胜', api.dictGet('X'), '主站');
   eq('同键冲突：ec 层无 extra 取 common', api.dictGet('X', 'ec'), '公共');
 
-  // 六层引用齐备
-  eq('DICT_LAYERS 六层', Object.keys(api.DICT_LAYERS).sort().join(','), 'acl,common,ec,fc,main,ronka');
+  // 七层引用齐备
+  eq('DICT_LAYERS 七层', Object.keys(api.DICT_LAYERS).sort().join(','), 'acl,common,ec,endcloset,fc,main,ronka');
 }
 
 // ─────────────────────────────────────────────────────────────

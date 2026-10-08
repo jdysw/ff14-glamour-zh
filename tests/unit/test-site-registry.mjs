@@ -82,10 +82,10 @@ if (!api) {
 
 const { findSite, neededTables, _siteIndexes, SITE_REGISTRY, setHost, win } = api;
 
-ok('A3 SITE_REGISTRY 为数组且 6 站', Array.isArray(SITE_REGISTRY) && SITE_REGISTRY.length === 6,
+ok('A3 SITE_REGISTRY 为数组且 7 站', Array.isArray(SITE_REGISTRY) && SITE_REGISTRY.length === 7,
   `len=${SITE_REGISTRY && SITE_REGISTRY.length}`);
 const ids = SITE_REGISTRY.map((s) => s.id).join(',');
-eq('A4 站点顺序（即匹配优先级）', ids, 'mirapri,ec,wiki,fc,ronka,collection');
+eq('A4 站点顺序（即匹配优先级）', ids, 'mirapri,ec,wiki,fc,ronka,collection,endcloset');
 {
   const bad = SITE_REGISTRY.filter((s) =>
     !Array.isArray(s.hosts) || !s.hosts.length ||
@@ -180,8 +180,8 @@ section('G：Site Adapter 统一接口');
   const bad = g.SITE_REGISTRY.filter((s) =>
     typeof s.boot !== 'function' || typeof s.pageshow !== 'function' ||
     typeof s.processRoot !== 'function' || typeof s.destroy !== 'function');
-  ok('G1 六站接口齐全（boot/pageshow/processRoot/destroy）', bad.length === 0, bad.map((s) => s.id).join(','));
-  eq('G2 六站 processRoot 均为函数（缺省 noop）', g.SITE_REGISTRY.every((s) => typeof s.processRoot === 'function'), true);
+  ok('G1 七站接口齐全（boot/pageshow/processRoot/destroy）', bad.length === 0, bad.map((s) => s.id).join(','));
+  eq('G2 七站 processRoot 均为函数（缺省 noop）', g.SITE_REGISTRY.every((s) => typeof s.processRoot === 'function'), true);
 
   const ronka = g.SITE_REGISTRY.find((s) => s.id === 'ronka');
   ronka.boot();

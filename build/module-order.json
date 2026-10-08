@@ -20,6 +20,7 @@
     "core/data-manager",
     "core/storage",
     "core/http",
+    "sites/endcloset",
     "core/site-registry",
     "core/translator",
     "core/observer",

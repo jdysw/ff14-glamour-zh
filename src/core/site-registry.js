@@ -11,6 +11,7 @@ import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-co
 import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
 import { startMirapri, translatePage } from '../sites/mirapri.js';
 import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ronka.js';
+import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
 export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables, onHost };
 
 
@@ -98,6 +99,13 @@ export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables,
       processRoot(root) { safe(translateACLPage, 'ACL 处理')(root); },
       onDataReady() { safe(translateACLPage, 'ACL 补扫')(); safe(translateACLTitle, 'ACL 标题')(); },
       onPageShow() { safe(translateACLPage, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'endcloset', hosts: ['end-closet.com'], tables: ['items', 'dict'], indexes: ['nameMap'],
+      start() { startEndCloset(); },
+      processRoot(root) { safe(translateEndClosetPage, 'EndCloset 处理')(root); },
+      onDataReady() { safe(translateEndClosetPage, 'EndCloset 补扫')(); safe(translateEndClosetTitle, 'EndCloset 标题')(); },
+      onPageShow() { safe(translateEndClosetPage, 'pageshow')(); safe(translateEndClosetTitle, 'pageshow')(); },
     }),
   ];
 

@@ -2,7 +2,7 @@
 /* @phase15-order-link:core/dictionary<-core/runtime */
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache.js';
-export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
+export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
 
 
   /* =====================================================================
@@ -2170,6 +2170,73 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
     'AF': '校服',
   };
 
+  // ⚠️ 自动生成（dict/dict-endcloset.json → build/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
+  const DICT_ENDCLOSET = { ...DICT_COMMON,
+    '검색': '搜索',
+    '최신순': '最新',
+    '인기순': '热门',
+    '더보기': '更多',
+    '투영 세트': '投影套装',
+    '글래머 세트': '幻化套装',
+    '투영세트, 아이템 이름, 태그로 검색...': '搜索投影套装、装备名、标签...',
+    '아이템 이름이나 키워드로 검색...': '搜索装备名或关键词...',
+    '선택됨': '已选择',
+    '선택하지 않음': '未选择',
+    '새 아이템': '新装备',
+    '수정': '编辑',
+    '중복': '重复',
+    '레벨': '等级',
+    '아이템 목록': '装备列表',
+    '컨셉 룩': '概念穿搭',
+    '작성자 소개': '作者介绍',
+    '좋아요': '点赞',
+    '세트 최고 아이템 레벨': '套装最高装备等级',
+    '아이템 글씨 색상': '装备文字颜色',
+    '이미지 렌더링': '图片渲染',
+    '패널 배경 렌더링': '面板背景渲染',
+    '아이템 텍스트 렌더링': '装备文本渲染',
+    '아이템 아이콘 렌더링': '装备图标渲染',
+    '저작권 표시 렌더링': '版权显示渲染',
+    '한국어, 영어, 일본어 태그를 모두 입력해주세요.': '请输入韩文、英文、日文标签。',
+    '이미 존재하는 태그입니다.': '标签已存在。',
+    '키워드 추가 중 오류가 발생했습니다.': '添加关键词时出错。',
+    '한국어 이름은 최소한 입력해주세요.': '至少请输入韩文名称。',
+    '글래머 세트를 찾을 수 없습니다.': '找不到幻化套装。',
+    '투영했습니다': '已投影',
+    '글래머 세트가 성공적으로 업데이트되었습니다!': '幻化套装更新成功！',
+    '글래머 세트가 성공적으로 저장되었습니다!': '幻化套装保存成功！',
+    '글래머 세트 수정': '编辑幻化套装',
+    '글래머 세트 업데이트': '更新幻化套装',
+    '글래머 세트 내보내기': '导出幻化套装',
+    '글래머 세트 정보를 불러오지 못했어요.': '无法加载幻化套装信息。',
+    '글래머 세트가 삭제되었습니다.': '幻化套装已删除。',
+    '현재 적용된 패치 데이터 버전': '当前应用的补丁数据版本',
+    'Search glamour sets, item names, tags...': '搜索幻化套装、装备名、标签...',
+    'Search by item name or keyword...': '搜索装备名或关键词...',
+    'Item List': '装备列表',
+    'Concepts': '概念穿搭',
+    'Creators': '作者介绍',
+    'Max Item Level in Set': '套装最高装备等级',
+    'Selected': '已选择',
+    'No selection': '未选择',
+    'New Item': '新装备',
+    'Edit': '编辑',
+    'Duplicate': '重复',
+    'Level': '等级',
+    'グラマー セット、アイテム名、タグで検索...': '搜索幻化套装、装备名、标签...',
+    'アイテム名やキーワードで検索...': '搜索装备名或关键词...',
+    'アイテム一覧': '装备列表',
+    'コンセプト': '概念穿搭',
+    '作成者紹介': '作者介绍',
+    'セットの最高アイテムレベル': '套装最高装备等级',
+    '選択': '已选择',
+    '選択されていません': '未选择',
+    '新しいアイテム': '新装备',
+    '編集': '编辑',
+    '重複': '重复',
+    'レベル': '等级',
+  };
+
   /* @zhixia:core-dictionary-start */
   /* ── Core Dictionary（v1.4 Phase 5）：运行时词典——dict.json 六层原地合并
        （common + 5 站）、旧译→新译修正收集与定向替换、派生缓存失效，及对外接口
@@ -2268,8 +2335,8 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_FC, DICT_LAYERS, DICT_RONKA,
      get/has 为翻译器与后续模块的统一查询面（当前翻译器保持既有直查路径；
      接口契约由测试冻结）；update = dict.json 文本原地合并；invalidate = 清词典派生缓存。 */
   let _dictRevision = 0; // NOSONAR — 词典修订号随运行时词典更新
-  // 六层词表引用（common 为公共层；applyRuntimeDict 对 5 站层单独合并）
-  const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL };
+  // 七层词表引用（common 为公共层；applyRuntimeDict 对 6 站层单独合并）
+  const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL, endcloset: DICT_ENDCLOSET };
   function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.hasOwn(o, key)) ? o[key] : undefined; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.hasOwn(o, key); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictGetRevision() { return _dictRevision; }

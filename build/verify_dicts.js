@@ -195,7 +195,7 @@ if (dictJsonIdx >= 0) {
   }
   console.log(allEq ? '\n=== 全部等价 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
 } else {
-  // ── 模式1：src vs dict/*.json（6 组注入词典）──
+  // ── 模式1：src vs dict/*.json（7 组注入词典）──
   const dictDir = path.join(REPO_ROOT, 'dict');
   const MAP = [
     ['DICT_COMMON', 'dict-common.json'],
@@ -204,6 +204,7 @@ if (dictJsonIdx >= 0) {
     ['DICT_FC',     'dict-fc.json'],
     ['DICT_RONKA',  'dict-ronka.json'],
     ['DICT_ACL',    'dict-acl.json'],
+    ['DICT_ENDCLOSET', 'dict-endcloset.json'],
   ];
   const commonData = JSON.parse(fs.readFileSync(path.join(dictDir, 'dict-common.json'), 'utf8'));
   for (const [n, fn] of MAP) {
