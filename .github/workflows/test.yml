@@ -118,7 +118,7 @@ jobs:
         run: npm run build
 
       - name: 集成测试 B（站点适配组）
-        run: node tests/run.mjs test-ec test-mirapri test-probe
+        run: node tests/run.mjs test-ec test-mirapri test-probe test-chinese-search-submit test-ronka-search-inline test-fc-search-candidates test-collection-search-inline test-standalone-search-trigger
 
   integration-c:
     name: Integration C (Contracts)

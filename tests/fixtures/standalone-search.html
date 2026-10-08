@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><title>独立搜索回归</title></head><body>
+<div id="search-panel"><div><input id="equipment-search" placeholder="Search glamour sets, item names, tags..."></div>
+<button id="run-search" title="Run search (Enter)">Search</button></div>
+<button id="ordinary" title="Open menu" aria-label="Close menu">My Likes</button>
+<p id="count">총 739개의 투영 세트 중 20개 표시</p>
+<script>
+  window.__searches = [];
+  let current = '';
+  const input = document.getElementById('equipment-search');
+  input.addEventListener('input', () => { current = input.value; });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); window.__searches.push(current); }
+  });
+  document.getElementById('run-search').addEventListener('click', () => window.__searches.push(current));
+</script></body></html>

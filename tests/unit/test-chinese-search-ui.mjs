@@ -92,6 +92,7 @@ class FakeElement {
   }
 
   closest(selector) {
+    if (selector === 'button, input[type="submit"], [role="button"]' && this.tagName === 'BUTTON') return this;
     if (selector === 'button[data-zhx-index]' && this.tagName === 'BUTTON'
       && this.dataset.zhxIndex !== undefined) return this;
     return this.parentNode?.closest?.(selector) || null;
@@ -552,6 +553,59 @@ try {
     eq('H4 显示恢复为中文（搜索后输入框保留中文）', input.value, '炎灵');
     await sleep(700);
     eq('H5 恢复后保持中文（无额外事件）', input.value, '炎灵');
+  }
+  console.log('\n── I：独立框按回车与点击搜索按钮 ──');
+  for (const site of ['endcloset', 'ronka', 'collection', 'ec']) {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    harness.api.startChineseSearch(site);
+    const host = new FakeElement('div');
+    const input = new FakeElement('input');
+    input.setAttribute('placeholder', site === 'endcloset' ? '搜索投影套装、装备名、标签...' : '搜索装备名');
+    if (site === 'ec') input.className = 'vs__search';
+    const button = new FakeElement('button');
+    button.setAttribute('title', '执行搜索（回车）');
+    host.append(input, button);
+    const searched = [];
+    input.dispatchEvent = (event) => { searched.push([event.type, input.value]); return true; };
+    input.value = '炎灵';
+    let prevented = false;
+    document.dispatch('keydown', { target: input, key: 'Enter', preventDefault() { prevented = true; } });
+    eq(site + ' 回车前转换为原生名', input.value, 'カ');
+    eq(site + ' 保留站点回车事件', prevented, false);
+    ok(site + ' 通过 input 事件更新站点状态', searched.some(([type, value]) => type === 'input' && value === 'カ'));
+    await sleep();
+    eq(site + ' 回车后保留中文显示', input.value, '炎灵');
+    input.value = '炎灵';
+    document.dispatch('click', { target: button });
+    eq(site + ' 搜索按钮转换使用相同原生名', input.value, 'カ');
+    await sleep();
+    eq(site + ' 搜索按钮后保留中文显示', input.value, '炎灵');
+    input.value = '丙丁';
+    document.dispatch('keydown', { target: input, key: 'Enter' });
+    eq(site + ' 显式搜索支持部分中文词', input.value, 'ウエ');
+    await sleep();
+    input.value = '不存在装备';
+    document.dispatch('keydown', { target: input, key: 'Enter' });
+    eq(site + ' 未知中文词不改写', input.value, '不存在装备');
+    input.value = '炎灵';
+    document.dispatch('compositionstart', { target: input });
+    document.dispatch('keydown', { target: input, key: 'Enter', isComposing: true });
+    document.dispatch('click', { target: button });
+    eq(site + ' 输入法确认期间不触发转换', input.value, '炎灵');
+    document.dispatch('compositionend', { target: input });
+    await sleep();
+    input.value = '炎灵';
+    document.dispatch('keydown', { target: input, key: 'Enter' });
+    await sleep(150);
+    input.value = 'カ'; // 模拟 React 在结果加载后回写受控值。
+    await sleep(450);
+    eq(site + ' 受控框回写后再次恢复中文显示', input.value, '炎灵');
+    input.value = '用户继续输入';
+    document.dispatch('input', { target: input });
+    await sleep(1000);
+    eq(site + ' 延迟恢复不会覆盖后续输入', input.value, '用户继续输入');
   }
 } finally {
   globalThis.document = previousDocument;

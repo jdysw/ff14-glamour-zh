@@ -1,12 +1,10 @@
 /* @phase15-module-order:sites/endcloset */
 /* @phase15-order-link:sites/endcloset<-core/http */
 import '../core/http.js';
-import { trRonka } from './ronka.js';
-import { WIKI_ITEM } from '../core/constants.js';
 import { DICT_ENDCLOSET } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
-import { _markScan, localScope, queryIn } from '../core/dom.js';
+import { _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
@@ -61,18 +59,29 @@ function _trEndClosetItem(t0) {
   return zh || null;
 }
 
+function trEndClosetCount(text) {
+  const count = text.match(/^(\d[\d,]*)\s*(개 선택됨|개 아이템|개 투영세트|items|glamour sets)$/);
+  if (count) return count[1] + ({ '개 선택됨': ' 项已选择', '개 아이템': ' 件装备', 'items': ' 件装备' }[count[2]] || ' 套幻化');
+  const total = text.match(/^총\s+([\d,]+)개의\s+(투영 세트|아이템)\s+중\s+([\d,]+)개\s+표시$/);
+  if (total) return '共 ' + total[1] + (total[2] === '아이템' ? ' 件装备，显示 ' : ' 套幻化，显示 ') + total[3] + ' 项';
+  return null;
+}
+
 function trEndCloset(text) {
   if (!text) return text;
   const t0 = text.trim();
-  if (!t0 || t0.length > 120) return text;
+  if (!t0) return text;
+  const exact = DICT_ENDCLOSET[t0];
+  if (t0.length > 120 && !exact) return text;
   const hasForeign = EC_KR.test(t0) || EC_EN_WORD.test(t0) || EC_JA.test(t0);
   if (!hasForeign) return text;
-  let zh = DICT_ENDCLOSET[t0] || null;
+  let zh = exact || null;
+  if (zh == null) zh = trEndClosetCount(t0);
   if (zh == null) zh = _trEndClosetDye(t0);
   if (zh == null) zh = _trEndClosetItem(t0);
   if (zh == null) {
     const norm = t0.replace(/[ \t\u00a0]+/g, ' ');
-    if (norm !== t0) zh = DICT_ENDCLOSET[norm] || null;
+    if (norm !== t0) zh = DICT_ENDCLOSET[norm] || _trEndClosetItem(norm) || null;
   }
   if (zh == null || zh === t0) return text;
   const i = text.indexOf(t0);
@@ -105,9 +114,9 @@ function _ecInput(n) {
 
 function _ecImgAlt(n) {
   const alt = n.getAttribute('alt');
-  if (alt && alt.length >= 2 && alt.length <= 90) {
+  if (alt) {
     const nn = trEndCloset(alt);
-    if (nn !== alt && !n.dataset.zhixiaEndClosetAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaEndClosetAlt = '1'; }
+    if (nn !== alt) n.setAttribute('alt', nn);
   }
   const ti = n.getAttribute('title');
   if (ti) { const nn = trEndCloset(ti); if (nn !== ti) n.setAttribute('title', nn); }
@@ -132,9 +141,10 @@ function _ecProcNode(n) {
     }
     return;
   }
-  if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') { _ecInput(n); return; }
-  if (n.tagName === 'IMG' || n.hasAttribute('alt')) { _ecImgAlt(n); return; }
-  if (n.hasAttribute?.('aria-label')) _ecAria(n);
+  if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') _ecInput(n);
+  // title/alt/aria 不只存在于图片，按钮和普通元素也需要处理。
+  _ecImgAlt(n);
+  _ecAria(n);
 }
 
 function translateEndClosetPage(rootArg) {
@@ -145,6 +155,7 @@ function translateEndClosetPage(rootArg) {
   const root = rootArg || document.body || document.documentElement;
   if (!root) return;
   if (root.nodeType === 1) {
+    if (root.tagName === 'TEXTAREA') { _ecProcNode(root); return; }
     if (_ecAcceptNode(root) === NodeFilter.FILTER_REJECT) return;
     _ecProcNode(root);
   }
@@ -155,6 +166,8 @@ function translateEndClosetPage(rootArg) {
   const batch = [];
   while (w.nextNode()) batch.push(w.currentNode);
   for (const n of batch) _ecProcNode(n);
+  // 文本域内容属于用户输入，仍跳过；单独处理被跳过元素上的界面属性。
+  for (const n of root.querySelectorAll?.('textarea') || []) _ecProcNode(n);
 }
 
 function translateEndClosetTitle() {
@@ -173,7 +186,12 @@ function startEndCloset() {
   createObserver({
     root: document.documentElement,
     characterData: true,
-    filter: (m) => !!(m.target?.nodeValue && (EC_KR.test(m.target.nodeValue) || EC_EN_WORD.test(m.target.nodeValue) || EC_JA.test(m.target.nodeValue))),
+    attributes: true,
+    attributeFilter: ['placeholder', 'title', 'alt', 'aria-label'],
+    filter: (m) => {
+      const text = m.type === 'attributes' ? m.target?.getAttribute(m.attributeName) : m.target?.nodeValue;
+      return !!text && (EC_KR.test(text) || EC_EN_WORD.test(text) || EC_JA.test(text));
+    },
     debounce: 120,
     handler: (nodes, cds = []) => {
       for (const n of [...nodes, ...cds]) safe(translateEndClosetPage, 'EndCloset 局部')(n);

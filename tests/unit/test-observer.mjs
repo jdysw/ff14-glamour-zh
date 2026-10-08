@@ -351,6 +351,26 @@ console.log('\n── I：handler 抛错边界（Phase 18）──');
   eq('后续批次继续调度', calls, 2);
 }
 
+console.log('\n── J：可选属性变更的局部调度 ──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  const seen = [];
+  api.createObserver({ attributes: true, attributeFilter: ['title', 'placeholder'],
+    filter: (mutation) => mutation.target.getAttribute(mutation.attributeName) !== '已翻译',
+    handler: (nodes) => seen.push(nodes) });
+  const mo = FakeMO.last;
+  eq('显式启用属性订阅', mo.opts.attributes, true);
+  eq('仅订阅指定属性', JSON.stringify(mo.opts.attributeFilter), JSON.stringify(['title', 'placeholder']));
+  const translated = mkNode(null, { getAttribute: () => '已翻译' });
+  mo.trigger([{ type: 'attributes', attributeName: 'title', target: translated }]);
+  eq('忽略脚本已翻译的属性变更', activeTimers().length, 0);
+  const foreign = mkNode(null, { getAttribute: () => '검색' });
+  mo.trigger([{ type: 'attributes', attributeName: 'title', target: foreign }]);
+  runTimer();
+  eq('属性变化只传出目标元素', seen[0][0], foreign);
+}
+
 console.log(`\n════════ 汇总 ════════`);
 console.log(`通过 ${pass} / 失败 ${fail}`);
 if (fail > 0) process.exit(1);

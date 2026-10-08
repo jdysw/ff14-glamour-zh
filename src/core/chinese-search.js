@@ -147,6 +147,8 @@ let _suggestHideTimer = null;
 let _suggestStyleReady = false;
 let _suggestDataReady = false;
 const _composingInputs = new WeakSet();
+const _convertedInputs = new WeakMap();
+const _programmaticInputs = new WeakSet();
 
 function isSearchInput(input) {
   const form = input?.form;
@@ -378,6 +380,7 @@ function showSuggestions(input) {
 
 function handleSearchInput(event) {
   const input = event.target;
+  if (!_programmaticInputs.has(input)) _convertedInputs.delete(input);
   if (isSearchInput(input)) {
     if (_composingInputs.has(input)) return;
     scheduleSuggestions(input);
@@ -406,8 +409,8 @@ function handleSearchBlur(event) {
   }, SUGGEST_HIDE_DELAY_MS);
 }
 
-function handleSearchKeydown(event) {
-  if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return;
+function handleSuggestionKeydown(event) {
+  if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return false;
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     updateSuggestionActive((_suggestActive + 1) % _suggestRows.length);
@@ -421,7 +424,16 @@ function handleSearchKeydown(event) {
     event.preventDefault();
     event.stopPropagation();
     selectSuggestion(_suggestActive);
-  }
+  } else return false;
+  return true;
+}
+
+function handleSearchKeydown(event) {
+  const input = event.target;
+  if (event.isComposing || _composingInputs.has(input) || event.keyCode === 229) return;
+  if (handleSuggestionKeydown(event)) return;
+  // 显式搜索与候选点选使用同一转换链；保留原回车事件交给站点处理。
+  if (event.key === 'Enter' && isStandaloneSearchInput(input) && convertStandaloneForSearch(input, true)) hideSuggestions(true);
 }
 
 function handleSuggestionPointerDown(event) {
@@ -433,7 +445,7 @@ function handleSuggestionPointerDown(event) {
 
 function handleCompositionStart(event) {
   const input = event.target;
-  if (isSearchInput(input)) {
+  if (isSuggestibleInput(input)) {
     _composingInputs.add(input);
     if (_suggestInput === input) hideSuggestions(true);
   }
@@ -441,7 +453,7 @@ function handleCompositionStart(event) {
 
 function handleCompositionEnd(event) {
   const input = event.target;
-  if (!isSearchInput(input)) return;
+  if (!isSuggestibleInput(input)) return;
   _composingInputs.delete(input);
   scheduleSuggestions(input);
 }
@@ -471,6 +483,8 @@ function isStandaloneSearchInput(input) {
     input.getAttribute?.('id'),
     input.getAttribute?.('title'),
   ].filter(Boolean).join(' ');
+  const field = [input.getAttribute?.('name'), input.getAttribute?.('id')].filter(Boolean).join(' ');
+  if (SEARCH_EXCLUDE_RE.test(field) || /search by title|作者|用户名|评论|タイトル|プレイヤー|작성자/i.test(meta)) return false;
   return STANDALONE_SEARCH_HINT_RE.test(meta);
 }
 
@@ -492,30 +506,65 @@ function rewriteInputNatively(input, native) {
     } catch { /* 忽略 */ }
   }
   if (!applied) return false;
+  _programmaticInputs.add(input);
   try {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   } catch { /* 事件派发失败不影响替换结果 */ }
+  finally { _programmaticInputs.delete(input); }
   return true;
 }
 
 // b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
 // 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
-function convertStandaloneForSearch(input) {
+function convertStandaloneForSearch(input, allowPartial = false) {
   try {
-    if (!input || input.isConnected === false) return;
+    if (!input || input.isConnected === false || _composingInputs.has(input)) return false;
     const shown = input.value;
     const query = normalizeSearchQuery(shown);
-    if (query.length < 2 || !isChineseSearchQuery(query)) return;
-    const native = resolveByZh(query);
-    if (!native || native === query) return;
-    if (!rewriteInputNatively(input, native)) return;
+    if (query.length < 2 || !isChineseSearchQuery(query)) return false;
+    const native = resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
+    if (!native || native === query) return false;
+    if (!rewriteInputNatively(input, native)) return false;
+    restoreStandaloneDisplay(input, shown, native);
+    return true;
+  } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
+}
+
+function restoreStandaloneDisplay(input, shown, native) {
+  const token = {};
+  _convertedInputs.set(input, token);
+  // React 结果加载期间可能再次回写受控值；有限次恢复显示，用户继续输入即取消。
+  for (const delay of [0, 100, 500, 1500, 3000]) {
     setTimeout(() => {
-      try {
-        if (input.isConnected === false) return;
-        if (input.value === native) setInputValueSilently(input, shown);
-      } catch { /* 静默：恢复失败不影响搜索 */ }
-    }, 0);
-  } catch { /* 静默：转换失败不影响用户输入 */ }
+      if (_convertedInputs.get(input) !== token || input.isConnected === false) return;
+      if (input.value === native) setInputValueSilently(input, shown);
+      if (delay === 3000) _convertedInputs.delete(input);
+    }, delay);
+  }
+}
+
+// 从搜索按钮所在的最小容器查找独立搜索框，避免影响其他字段或候选按钮。
+function findStandaloneTriggerInput(button) {
+  let root = button.parentElement || button.parentNode;
+  for (let depth = 0; root && depth < 8; depth++, root = root.parentElement || root.parentNode) {
+    if (root === document.body || root === document.documentElement) return null;
+    const inputs = [...(root.querySelectorAll?.('input') || [])].filter(isStandaloneSearchInput);
+    if (_suggestInput && inputs.includes(_suggestInput)) return _suggestInput;
+    if (inputs.length === 1) return inputs[0];
+    if (inputs.length > 1 || root === document.body) return null;
+  }
+  return null;
+}
+
+function handleStandaloneSearchClick(event) {
+  const button = event.target?.closest?.('button, input[type="submit"], [role="button"]');
+  if (!button || button.disabled || _suggestBox?.contains(button)) return;
+  const label = [button.textContent, button.getAttribute?.('title'), button.getAttribute?.('aria-label'), button.value]
+    .filter(Boolean).join(' ').trim();
+  if (/clear|reset|取消|重置|清空|初期化|초기화|지우기/i.test(label)) return;
+  if (!/搜索|搜尋|查询|查找|검색|検索|\bsearch\b|필터\s*적용|应用筛选|適用|\bapply\b/i.test(label)) return;
+  const input = findStandaloneTriggerInput(button);
+  if (input && convertStandaloneForSearch(input, true)) hideSuggestions(true);
 }
 
 // 静默设值：更新输入框显示，但不派发 input 事件（避免二次触发站点检索）。
@@ -556,6 +605,7 @@ function bindChineseSearchUi() {
   document.addEventListener('compositionstart', handleCompositionStart, true);
   document.addEventListener('compositionend', handleCompositionEnd, true);
   document.addEventListener('pointerdown', handleSuggestionPointerDown, true);
+  document.addEventListener('click', handleStandaloneSearchClick, true);
   document.addEventListener('scroll', (event) => {
     // 列表自身滚动（滚轮翻看全部装备）无需处理；页面滚动只做同步——
     // 输入框仍在视口内则保持打开并跟随重定位，已滚出视口才关闭。
