@@ -72,8 +72,8 @@ jobs:
       - name: 单元测试（纯 Node，秒级）
         run: npm run test:unit
 
-  integration:
-    name: Integration Tests
+  integration-a:
+    name: Integration A (Wiki)
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -93,5 +93,53 @@ jobs:
       - name: 构建（build.sh 全链）
         run: npm run build
 
-      - name: 集成测试（离线夹具 + headless Chrome）
-        run: npm run test:integration
+      - name: 集成测试 A（wiki 夹具组）
+        run: node tests/run.mjs test-wiki test-wiki-slow test-wiki-fallback test-index-scope
+
+  integration-b:
+    name: Integration B (Sites)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖（锁文件）
+        run: npm ci
+
+      - name: 构建（build.sh 全链）
+        run: npm run build
+
+      - name: 集成测试 B（站点适配组）
+        run: node tests/run.mjs test-ec test-mirapri test-probe
+
+  integration-c:
+    name: Integration C (Contracts)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖（锁文件）
+        run: npm ci
+
+      - name: 构建（build.sh 全链）
+        run: npm run build
+
+      - name: 集成测试 C（契约/构建组）
+        run: node tests/run.mjs test-build-idempotent test-dict-single-source test-version-consistency test-module-source

@@ -74,7 +74,7 @@ const ry = read(path.join(repoRoot, '.github', 'workflows', 'release.yml'));
 ok('E1 release.yml 从 package.json 取版本（不再 sed src 提取）', ry.includes("require('./package.json').version") && !ry.includes('sed -n'));
 ok('E2 release.yml 含 npm ci + 发布前一致性门', ry.includes('npm ci') && ry.includes('npm run version:check'));
 const ty = read(path.join(repoRoot, '.github', 'workflows', 'test.yml'));
-ok('E3 test.yml 含「构建 + 数据校验 + 测试」三步', ty.includes('npm run build') && ty.includes('validate:data') && (ty.includes('npm run test:unit') || ty.includes('npm run test:integration')));
+ok('E3 test.yml 含「构建 + 数据校验 + 测试」三步', ty.includes('npm run build') && ty.includes('validate:data') && (ty.includes('npm run test:unit') || ty.includes('node tests/run.mjs')));
 
 console.log('── F：userscript 元数据完整性（Phase 20）──');
 const mainText = read(path.join(repoRoot, 'src', 'main.js'));
