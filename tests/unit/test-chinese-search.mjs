@@ -28,6 +28,7 @@ function buildSearch() {
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
     'const resolveByZh = (v) => ({\'甲\': \'ア\', \'乙\': \'ガ\'}[v] || null);',
+    'const resolvePartialByZh = (v) => ({\'丙\': \'ウ\'}[v] || null);',
     seg,
     'return { buildSearchUrl, findSearchInput, handleChineseSearchSubmit, isChineseSearchQuery, normalizeSearchQuery, searchInputScore };',
   ].join('\n');
@@ -73,6 +74,13 @@ console.log('\n── B：搜索框识别 ──');
     const fcForm = { querySelectorAll: () => [fcGenericSearch, fcPartSearch] };
     eq('FF14-FC ' + part + ' 页面优先识别部位搜索框', api.findSearchInput(fcForm), fcPartSearch);
   }
+
+  // 1.4.2 后续修复：vue-select 搜索框（EC 部位筛选器）不参与表单搜索框识别
+  const vsSearch = fakeInput({ placeholder: 'Any head' });
+  vsSearch.className = 'vs__search';
+  eq('vue-select 搜索框被排除（EC）', api.searchInputScore(vsSearch), -Infinity);
+  const vsForm = { querySelectorAll: () => [vsSearch, keyword] };
+  eq('含 vue-select 时仍优先识别关键词框', api.findSearchInput(vsForm), keyword);
 }
 
 console.log('\n── C：GET 搜索 URL 重写 ──');
@@ -92,7 +100,27 @@ console.log('\n── C：GET 搜索 URL 重写 ──');
   eq('表单页码覆盖 action 中旧值', u.searchParams.get('page'), '3');
 }
 
-console.log('\\n── D：提交时转换中文查询 ──');
+console.log('\n── C2：空值参数剔除（1.4.2 后续修复）──');
+{
+  const api = buildSearch();
+  // mirapri 实测：空值筛选参数会被站方视为「生效的无效筛选」→ 结果恒 0 条；必须剔除。
+  const allEmpty = [
+    ['period', ''], ['sort', ''], ['g', ''], ['cl', ''], ['j', ''],
+    ['r', ''], ['t', ''], ['c', ''], ['fav', ''], ['keyword', '旧值'],
+  ];
+  const u2 = new URL(api.buildSearchUrl('/', allEmpty, 'keyword', 'メイドリストドレス', 'https://mirapri.com/'));
+  eq('空值全部剔除：仅剩 keyword', [...u2.searchParams.keys()].join(','), 'keyword');
+  eq('空值全部剔除：keyword 为日文名', u2.searchParams.get('keyword'), 'メイドリストドレス');
+  eq('空值全部剔除：输出无空值参数', [...u2.searchParams.values()].filter((v) => v === '').length, 0);
+
+  const mixed = [['g', ''], ['j', '15'], ['fav', ''], ['cl', ''], ['keyword', '旧值'], ['period', '0']];
+  const u3 = new URL(api.buildSearchUrl('https://mirapri.com/', mixed, 'keyword', 'メイドリストドレス', 'https://mirapri.com/'));
+  eq('混合：空值剔除、有效筛选保留', [...u3.searchParams.keys()].sort().join(','), 'j,keyword,period');
+  eq('混合：j=15 原样保留', u3.searchParams.get('j'), '15');
+  eq('混合：period=0 原样保留（0 不被当作空值）', u3.searchParams.get('period'), '0');
+}
+
+console.log('\n── D：提交时转换中文查询 ──');
 {
   const api = buildSearch();
   const input = {
@@ -134,7 +162,39 @@ console.log('\\n── D：提交时转换中文查询 ──');
   eq('中文查询提交时停止继续传播', event.stopped, true);
   eq('最终搜索 URL 使用日文名称', calls[0], 'https://mirapri.com/?page=3&keyword=%E3%82%A2');
 }
-console.log('\\n════════ 汇总 ════════');
+
+console.log('\n── E：部分词提交（子串收集 → 公共子串）──');
+{
+  const api = buildSearch();
+  const makeInput = (v) => ({ value: v, name: 'keyword', disabled: false, readOnly: false,
+    getAttribute(name) { return name === 'name' ? 'keyword' : name === 'placeholder' ? '装備品名等を入力' : null; },
+    isConnected: true });
+  const makeForm = (i) => ({ getAttribute(name) { return name === 'method' ? 'get' : name === 'action' ? '/' : null; }, querySelectorAll() { return [i]; } });
+  const previousFormData = globalThis.FormData;
+  const previousLocation = globalThis.location;
+  try {
+    const input1 = makeInput('丙');
+    const calls1 = [];
+    globalThis.FormData = class { entries() { return [['keyword', input1.value]][Symbol.iterator](); } };
+    globalThis.location = { href: 'https://mirapri.com/', assign(url) { calls1.push(url); } };
+    const event1 = { target: makeForm(input1), prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    api.handleChineseSearchSubmit(event1, 'mirapri');
+    eq('部分词命中时用提取片段转换', calls1[0], 'https://mirapri.com/?keyword=%E3%82%A6');
+
+    const input2 = makeInput('戊');
+    globalThis.FormData = class { entries() { return [['keyword', input2.value]][Symbol.iterator](); } };
+    globalThis.location = { href: 'https://mirapri.com/', assign() {} };
+    const event2 = { target: makeForm(input2), prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    api.handleChineseSearchSubmit(event2, 'mirapri');
+    eq('部分词也无解时不拦截原提交', event2.prevented, false);
+  } finally {
+    globalThis.FormData = previousFormData;
+    globalThis.location = previousLocation;
+  }
+}
+console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);
 if (fail > 0) process.exit(1);
 console.log('── ✅ 通过（exit=0）');

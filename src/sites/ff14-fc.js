@@ -121,7 +121,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     return text;
   }
 
-  const FC_SKIP_SEL = 'script, style, noscript, textarea, .sns, .twitter, .line';
+  // #zhx-chinese-suggest-list：中文搜索候选（native span 有意保留日文原名，不参与汉化）
+  const FC_SKIP_SEL = 'script, style, noscript, textarea, .sns, .twitter, .line, #zhx-chinese-suggest-list';
 
   function trimFCNode(node) {
     const raw = node.nodeValue;

@@ -207,7 +207,7 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_zhxErr',
   '_replaceMap',
   // 注意：_ensureTryFast / _ensureFetchAll / _waitPageLoad 在提取段内有真实定义，
   // 它们会遮蔽同名参数——因此不列入桩清单（其网络访问仍经下面的 httpGet 桩记录）。
@@ -263,7 +263,7 @@ function buildDM(world) {
     'return {',
     '  dataManager, ensureTables, itemDbReady,',
     '  _ensureTryV3, _applyV3, _v3Pairs, _ensureMain, _ensureFinalize,',
-    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, series: SERIES_TEXT, acl: ACL_CFC_TEXT, v3: _v3Applied }),',
+    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, series: SERIES_TEXT, acl: ACL_CFC_TEXT, v3: _v3Applied }),',
     '};',
   ].join('\n');
   const fn = new Function(...NAMES, body + '\n' + ret);
@@ -426,6 +426,17 @@ const manText = JSON.stringify(man);
   eq('B26 多值去重追加', JSON.stringify(m.A), JSON.stringify(['甲', '乙', '丙']));
   const single = dm._v3Pairs('A\t甲\nA\t乙\n', false);
   eq('B27 单值首行胜', single.A, '甲');
+}
+
+// B13: v3 glam 解析——'1'/'0'/缺失三态（v1.4.2 后续：候选过滤；应用级见 test-item-resolver）
+{
+  const w = makeWorld({});
+  const dm = buildDM(w);
+  dm._applyV3({ names: 'A\t甲乙\t1\nB\t乙丙\t0\nC\t丙丁\n' });
+  const gl = dm._peek().gl || {};
+  eq('B28 glam=1 解析', gl['A'], '1');
+  eq('B29 glam=0 解析', gl['B'], '0');
+  eq('B30 无 glam 列 → 不标记', Object.prototype.hasOwnProperty.call(gl, 'C'), false);
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-runtime-v3：${pass}/${pass + fail} 通过`);

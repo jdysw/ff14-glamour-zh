@@ -2,7 +2,7 @@
 # build/validate-data.py — 数据与词典文件结构校验（v1.4 Phase 17；CI / 提交前复查）
 #
 # 只做结构完整性检查（不评判内容 / 翻译质量），失败即非零退出：
-#   data/ff14-items.tsv   表头 8 列、逐行列数一致、键非空、行数合理
+#   data/ff14-items.tsv   表头 9 列、逐行列数一致、键非空、行数合理
 #   data/ff14-series.txt  行数合理、逐行含 | 分隔
 #   data/acl-cfc.txt      行数合理、逐行含 | 分隔
 #   dict/dict-*.json×6    可解析、kind=kv、entries 为「字符串 → 字符串」
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ITEMS_COLS = ["key", "zh", "en", "ja", "ko", "hash", "ecid", "alias"]
+ITEMS_COLS = ["key", "zh", "en", "ja", "ko", "hash", "ecid", "alias", "glam"]
 ITEMS_MIN_ROWS = 10000
 SERIES_MIN_LINES = 100
 ACL_MIN_LINES = 10

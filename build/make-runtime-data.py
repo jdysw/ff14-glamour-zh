@@ -3,13 +3,13 @@
 """Runtime Data v3 生成器：canonical data → 按站 runtime 文件 + manifest。
 
 输入（canonical——人工维护，勿手改输出）：
-    data/ff14-items.tsv   8 列：key|zh|en|ja|ko|hash|ecid|alias
+    data/ff14-items.tsv   9 列：key|zh|en|ja|ko|hash|ecid|alias|glam
     data/ff14-series.txt  日文系列名|国服中文名
     data/acl-cfc.txt      日文副本名|国服中文名
 
 输出（默认 data/v3/——自动生成）：
     manifest.json          schema / version / generated / shared / sites（url+sha256+bytes）
-    <site>/names.tsv       该站语言的名称键 → zh（含染剂回退展开）
+    <site>/names.tsv       该站语言的名称键 → zh → glam（1/0/空；含染剂回退展开）
     <site>/hash.tsv        hash → zh（mirapri/ec/fc）
     <site>/alias.tsv       alias → zh 多值（全角分号拆分；中文键，全站一致）
     <site>/dup.tsv         歧义键 → zh 多值（同键多译；按站语言）
@@ -104,16 +104,18 @@ def _scan_hash_row(ln, p, hashes, ecid):
         ecid[zh] = e
 
 
-def _scan_main_line(ln, names, dyes, hashes, ecid, ko_by_zh):
+def _scan_main_line(ln, names, glams, dyes, hashes, ecid, ko_by_zh):
     """第一遍单行：名称键首行胜 + 染剂收集 + hash/ecid + koByZh。"""
     p = _row_parts(ln)
     if p is None or len(p) < 5:
         return
     zh, en, ja, ko = p[1], p[2], p[3], p[4]
+    g = p[8] if len(p) > 8 else ''
     _scan_hash_row(ln, p, hashes, ecid)
     for lang, key in zip(LANGS, (en, ja, ko)):
         if key and key not in names[lang]:
             names[lang][key] = zh
+            glams[lang][key] = g
             if len(key) > 4 and key.endswith(' Dye'):
                 dyes[lang].append(key)
     if zh and ko and zh not in ko_by_zh:
@@ -160,22 +162,24 @@ def _scan_aux_line(ln, names, dup_by_lang, ali):
             _reg_alias(part.strip(), zh, ali)
 
 
-def _dye_backfill(names, dyes):
+def _dye_backfill(names, glams, dyes):
     """染剂回退（_btApplyTargets）：「Xxx Dye → 中文名」补开「Xxx → 中文名」。"""
     for lang in LANGS:
         for key in dyes[lang]:
             base = key[:-4]
             if base not in names[lang]:
                 names[lang][base] = names[lang][key]
+                glams[lang][base] = glams[lang].get(key, '')
 
 
 def parse_items(text: str):
     """解析物品总表，复刻运行时语义。
 
-    返回 (names, hashes, ali, dup_by_lang, ecid, ko_by_zh)——
+    返回 (names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh)——
     names/dup 按语言分表（Phase 13 裁剪用）。
     """
     names = {lang: {} for lang in LANGS}   # 各语言键 → zh（首行胜；Python dict 保插入序）
+    glams = {lang: {} for lang in LANGS}   # 各语言键 → glam（与 names 同键同步）
     dyes = {lang: [] for lang in LANGS}    # 染剂候选（成功写入且形如「Xxx Dye」）
     hashes = {}  # hash → zh（首行胜；'-' 行跳过）
     ecid = {}    # zh → EC_ID（'-' 行跳过）
@@ -185,22 +189,26 @@ def parse_items(text: str):
 
     lines = text.split('\n')
     for ln in lines:
-        _scan_main_line(ln, names, dyes, hashes, ecid, ko_by_zh)
-    _dye_backfill(names, dyes)
+        _scan_main_line(ln, names, glams, dyes, hashes, ecid, ko_by_zh)
+    _dye_backfill(names, glams, dyes)
     for ln in lines:
         _scan_aux_line(ln, names, dup_by_lang, ali)
-    return names, hashes, ali, dup_by_lang, ecid, ko_by_zh
+    return names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh
 
 
 def _join_pairs(pairs):
     return ''.join(f'{k}\t{v}\n' for k, v in pairs)
 
 
+def _join_triples(pairs):
+    return ''.join(f'{k}\t{v}\t{g}\n' for k, v, g in pairs)
+
+
 def _join_multi(pairs):
     return ''.join(f'{k}\t' + '\t'.join(v) + '\n' for k, v in pairs)
 
 
-def build_files(names, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text):
+def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text):
     """生成 {(site, 文件名): bytes}——含按站语言裁剪。"""
     out = {}
 
@@ -208,8 +216,8 @@ def build_files(names, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, ac
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                pairs = [kv for lang in langs for kv in names[lang].items()]
-                out[(site, 'names.tsv')] = _join_pairs(pairs).encode('utf-8')
+                pairs = [(k, v, glams[lang].get(k, '')) for lang in langs for k, v in names[lang].items()]
+                out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
             elif name == 'dup':
                 pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]
                 out[(site, 'dup.tsv')] = _join_multi(pairs).encode('utf-8')
@@ -282,14 +290,14 @@ def main() -> int:
             return 1
 
     print('→ 解析 canonical 数据 ...')
-    names, hashes, ali, dup_by_lang, ecid, ko_by_zh = parse_items(CANON_ITEMS.read_text(encoding='utf-8'))
+    names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh = parse_items(CANON_ITEMS.read_text(encoding='utf-8'))
     series_text = CANON_SERIES.read_text(encoding='utf-8')
     acl_text = CANON_ACL.read_text(encoding='utf-8')
     dup_total = sum(len(dup_by_lang[l]) for l in LANGS)
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    files = build_files(names, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text)
+    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text)
 
     dict_bytes = _gen_dict_bytes(out_dir)
     if dict_bytes is None:

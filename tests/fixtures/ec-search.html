@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ec-search fixture</title>
+</head>
+<body>
+  <!-- EC 风格：glamours 筛选表单（form[name=filter]）+ 部位筛选器（vue-select 组件结构）。
+       search / author 框为「不转换」对照组（form 内、有 name，由提交路径处理）。 -->
+  <form name="filter" method="get">
+    <input type="text" name="search" placeholder="Search by title">
+    <input type="text" name="author" placeholder="Search by player">
+    <div class="vs__dropdown-toggle"><input type="search" class="vs__search" id="vs-head" placeholder="Any head"></div>
+    <div class="vs__dropdown-toggle"><input type="search" class="vs__search" id="vs-hands" placeholder="Any hands"></div>
+  </form>
+  <!-- 传统表单搜索框对照组（有 name，由提交路径处理） -->
+  <div id="legacy-search">
+    <form name="legacy" method="get">
+      <input type="text" name="keyword" placeholder="装備品名等を入力">
+    </form>
+  </div>
+  <div id="results"><p>content</p></div>
+</body>
+</html>

@@ -3,6 +3,7 @@
 //       点击装备名 → window.open 灰机 wiki（捕获式） / 无注入错误
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -39,10 +40,16 @@ if (!bodyOk) console.log('⚠️ body 等待超时');
 await c.eval(gmStub);
 const t0 = Date.now();
 await c.eval(wrap(GF));
-await sleep(7000);
+// 初始等 7s，再轮询至替换完成（对抗页面加载波动与偶发竞态；上限约 37s）
+// 背景：2026-10-08 复跑实测「护腿」卡偶发晚于 7s 窗口完成（探针显示正常时 5s 内全完成）
+for (let i = 0; i < 12; i++) {
+  await sleep(i === 0 ? 7000 : 2500);
+  const left = await c.eval(`document.querySelectorAll('a[href*="lodestone"]').length`).catch(() => -1);
+  if (left === 0) break;
+}
 
 const r = await c.eval(`(() => {
-  const T = document.body ? document.body.innerText : '';
+  const T = ${CLEAN_BODY_TEXT};
   const has = (s) => T.indexOf(s) >= 0;
   let ja = 0; for (const ch of T) { const cc = ch.codePointAt(0); if (cc >= 0x3040 && cc <= 0x30ff) ja++; }
   const h = (sel) => { const e = document.querySelector(sel); return e ? (e.textContent || '').trim().slice(0, 80) : null; };

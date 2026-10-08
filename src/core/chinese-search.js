@@ -1,12 +1,16 @@
 /* @phase23-module-order:core/chinese-search */
 /* @phase23-order-link:core/chinese-search<-core/data-manager */
-import { onTablesReady, resolveByZh, suggestByZh } from './data-manager.js';
+import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh } from './data-manager.js';
 
 const SEARCH_SITES = Object.freeze({
   mirapri: true,
   fc: true,
   ronka: true,
   collection: true,
+  // 1.4.2 后续修复：Eorzea Collection（英文站）——中文装备名 → 英文名。
+  // 覆盖场景：部位筛选器（vue-select，输入触发 POST /gear/<slot>/search）
+  // 与装备库页搜索框（/gearsets、/accessories 的 "Search..." 框）。
+  ec: true,
 });
 
 const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|password|作者|标题|标签|用户/i;
@@ -26,6 +30,9 @@ function searchInputScore(input) {
   if (!input) return -Infinity;
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
   if (!SEARCH_INPUT_TYPES.has(type) || input.disabled || input.readOnly) return -Infinity;
+  // 1.4.2 后续修复：vue-select 搜索框（EC 部位筛选器）不是表单搜索框——
+  // 其值不参与表单序列化，输入即触发站点检索；完全排除，交给独立搜索框路径处理。
+  if (/vs__search/.test(String(input.className || ''))) return -Infinity;
   const meta = [
     input.getAttribute?.('name'),
     input.getAttribute?.('id'),
@@ -84,7 +91,10 @@ function buildSearchUrl(action, entries, inputName, native, baseHref) {
 
   const grouped = new Map();
   for (const [key, value] of entries || []) {
-    if (!key || typeof value !== 'string') continue;
+    // 1.4.2 后续修复：空值参数不得进入搜索 URL —— mirapri 实测（2026-10-07）：
+    // 空筛选参数（cl/j/r/t/c/fav 等）会被站方当作「生效的无效筛选」→ 搜索恒为 0 结果；
+    // 剔除空值后 ?keyword=X 正常返回（25 条/页），有效筛选（如 j=15）保留后亦正常。
+    if (!key || typeof value !== 'string' || value === '') continue;
     const values = grouped.get(key) || [];
     values.push(value);
     grouped.set(key, values);
@@ -119,7 +129,10 @@ function rewriteInputTemporarily(input, native) {
 
 
 const SUGGEST_MIN_CHARS = 2;
-const SUGGEST_LIMIT = 8;
+// 候选列表可视行数：数据全量渲染（显示所有含输入字的装备），
+// 列表高度限 8 行，超出的通过滚轮在列表内滑动翻看。
+const SUGGEST_VISIBLE_ROWS = 8;
+const SUGGEST_ROW_HEIGHT = 40;   // 与 CSS 中 button min-height:40px 对齐
 const SUGGEST_DEBOUNCE_MS = 70;
 const SUGGEST_HIDE_DELAY_MS = 120;
 
@@ -139,6 +152,14 @@ function isSearchInput(input) {
   const cached = _searchInputCache.get(form);
   if (cached && cached !== input) _searchInputCache.delete(form);
   return findSearchInput(form) === input;
+}
+
+// 1.4.2 后续修复（b 方案）：可挂候选面板的输入框 = 表单搜索框 + 独立搜索框
+// （ronka / collection 无 form 站，以及 EC vue-select 部位筛选器）。
+// 输入停顿一律不自动转换；仅候选面板点选（转换式搜索）与表单提交（临时替换）时转换。
+function isSuggestibleInput(input) {
+  if (isSearchInput(input)) return true;
+  return isStandaloneSearchInput(input);
 }
 
 function isSuggestionQuery(value) {
@@ -177,7 +198,9 @@ function positionSuggestionBox(input) {
   const aboveSpace = Math.max(0, rect.top - gap - margin);
   const openBelow = belowSpace >= 120 || belowSpace >= aboveSpace;
   const available = openBelow ? belowSpace : aboveSpace;
-  const maxHeight = Math.max(80, Math.min(320, available));
+  // 可视 8 行（行高 40px + 容器纵向 padding 8）：数据全量在列表内，超出部分滚轮翻看。
+  const rowsHeight = SUGGEST_VISIBLE_ROWS * SUGGEST_ROW_HEIGHT + 8;
+  const maxHeight = Math.max(80, Math.min(rowsHeight, available));
   let top = openBelow
     ? rect.bottom + gap
     : Math.max(margin, rect.top - gap - maxHeight);
@@ -190,6 +213,31 @@ function positionSuggestionBox(input) {
   _suggestBox.style.top = top + 'px';
   _suggestBox.style.width = width + 'px';
   _suggestBox.style.maxHeight = maxHeight + 'px';
+}
+
+// 滚动/缩放时保持候选框（1.4.2 后续修复）：输入框仍在视口内 → 跟随重定位（保持打开）；
+// 已滚出视口 → 关闭。滚动本身不再直接关闭候选框（无滚动条的候选框、滚到列表边界后
+// 继续滚动会链式带动页面滚动——这些场景都不应让候选框消失）。
+function syncSuggestionsOnScroll() {
+  if (!_suggestBox || _suggestBox.hidden) return;
+  const input = _suggestInput;
+  if (!input || input.isConnected === false) {
+    hideSuggestions(true);
+    return;
+  }
+  const rect = input.getBoundingClientRect?.();
+  if (!rect) {
+    hideSuggestions(true);
+    return;
+  }
+  const viewportWidth = Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
+  const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
+  const onScreen = rect.bottom > 0 && rect.top < viewportHeight && rect.right > 0 && rect.left < viewportWidth;
+  if (!onScreen) {
+    hideSuggestions(true);
+    return;
+  }
+  positionSuggestionBox(input);
 }
 
 function hideSuggestions(clearInputState = false) {
@@ -230,6 +278,9 @@ function selectSuggestion(index) {
   } catch {
     /* 输入类型变化时忽略光标定位失败 */
   }
+  // 独立搜索框（React 站点，b 方案）：选中候选后做「转换式搜索」——
+  // 用原生名触发站内检索，随后输入框显示恢复为中文。
+  if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input);
 }
 
 function updateSuggestionActive(index) {
@@ -251,7 +302,7 @@ function updateSuggestionActive(index) {
 }
 
 function showSuggestions(input) {
-  if (!isSearchInput(input) || !input.isConnected) {
+  if (!isSuggestibleInput(input) || !input.isConnected) {
     hideSuggestions(true);
     return;
   }
@@ -267,7 +318,7 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = suggestByZh(query, SUGGEST_LIMIT);
+  const rows = suggestByZh(query);   // 全量候选（显示所有含输入字的装备）；可视区域由列表高度控制
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -325,24 +376,32 @@ function showSuggestions(input) {
 
 function handleSearchInput(event) {
   const input = event.target;
-  if (!isSearchInput(input)) {
-    if (_suggestInput === input) hideSuggestions(true);
+  if (isSearchInput(input)) {
+    if (_composingInputs.has(input)) return;
+    scheduleSuggestions(input);
     return;
   }
-  if (_composingInputs.has(input)) return;
-  scheduleSuggestions(input);
+  // 独立搜索框（无 form）：由 handleStandaloneSearchInput 调度（候选 + 自动转换），此处不清候选。
+  if (isStandaloneSearchInput(input)) return;
+  if (_suggestInput === input) hideSuggestions(true);
 }
 
 function handleSearchFocus(event) {
   const input = event.target;
-  if (!isSearchInput(input) || _composingInputs.has(input)) return;
+  if (!isSuggestibleInput(input) || _composingInputs.has(input)) return;
   scheduleSuggestions(input);
 }
 
 function handleSearchBlur(event) {
   if (_suggestInput !== event.target) return;
   if (_suggestHideTimer) clearTimeout(_suggestHideTimer);
-  _suggestHideTimer = setTimeout(() => hideSuggestions(true), SUGGEST_HIDE_DELAY_MS);
+  const blurred = event.target;
+  _suggestHideTimer = setTimeout(() => {
+    _suggestHideTimer = null;
+    // 1.4.2 后续修复：延迟内焦点可能已移到另一个搜索框（表单框 ↔ 独立框切换），
+    // 仅当 _suggestInput 仍是被失焦的框时才隐藏，避免误藏新框的候选面板。
+    if (_suggestInput === blurred) hideSuggestions(true);
+  }, SUGGEST_HIDE_DELAY_MS);
 }
 
 function handleSearchKeydown(event) {
@@ -385,16 +444,123 @@ function handleCompositionEnd(event) {
   scheduleSuggestions(input);
 }
 
+// ── 独立搜索框（1.4.2 后续修复；b 方案）──
+// ronka 等站点的搜索框不属于任何 form（React 客户端过滤、无提交事件可拦）；
+// b 方案：打字期间不做任何自动转换；候选面板点选后做「转换式搜索」
+//（用原生名触发站内检索，随后输入框显示恢复为中文，见 convertStandaloneForSearch）。
+const STANDALONE_SEARCH_HINT_RE = /검색어|키워드|キーワード|搜索|搜尋|検索|search|关键词|關鍵詞|keyword/i;
+const STANDALONE_EXCLUDE_TYPES = new Set(['hidden', 'password', 'email', 'tel', 'url', 'number', 'date', 'datetime-local', 'month', 'week', 'time', 'color', 'range', 'file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image']);
+
+function isStandaloneSearchInput(input) {
+  if (!input) return false;
+  if (String(input.tagName || '').toUpperCase() !== 'INPUT') return false;
+  const type = String(input.getAttribute?.('type') || '').toLowerCase();
+  if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
+  if (input.disabled || input.readOnly) return false;
+  // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
+  // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
+  // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
+  if (/vs__search/.test(String(input.className || ''))) return true;
+  if (input.form) return false;
+  const meta = [
+    input.getAttribute?.('placeholder'),
+    input.getAttribute?.('aria-label'),
+    input.getAttribute?.('name'),
+    input.getAttribute?.('id'),
+    input.getAttribute?.('title'),
+  ].filter(Boolean).join(' ');
+  return STANDALONE_SEARCH_HINT_RE.test(meta);
+}
+
+function rewriteInputNatively(input, native) {
+  let applied = false;
+  try {
+    const descriptor = typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype
+      ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      : null;
+    if (descriptor?.set) {
+      descriptor.set.call(input, native);
+      applied = input.value === native;
+    }
+  } catch { /* 回退：直接赋值 */ }
+  if (!applied) {
+    try {
+      input.value = native;
+      applied = input.value === native;
+    } catch { /* 忽略 */ }
+  }
+  if (!applied) return false;
+  try {
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  } catch { /* 事件派发失败不影响替换结果 */ }
+  return true;
+}
+
+// b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
+// 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
+function convertStandaloneForSearch(input) {
+  try {
+    if (!input || input.isConnected === false) return;
+    const shown = input.value;
+    const query = normalizeSearchQuery(shown);
+    if (query.length < 2 || !isChineseSearchQuery(query)) return;
+    const native = resolveByZh(query);
+    if (!native || native === query) return;
+    if (!rewriteInputNatively(input, native)) return;
+    setTimeout(() => {
+      try {
+        if (input.isConnected === false) return;
+        if (input.value === native) setInputValueSilently(input, shown);
+      } catch { /* 静默：恢复失败不影响搜索 */ }
+    }, 0);
+  } catch { /* 静默：转换失败不影响用户输入 */ }
+}
+
+// 静默设值：更新输入框显示，但不派发 input 事件（避免二次触发站点检索）。
+function setInputValueSilently(input, value) {
+  try {
+    const descriptor = typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype
+      ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      : null;
+    if (descriptor?.set) {
+      descriptor.set.call(input, value);
+      if (input.value === value) return true;
+    }
+  } catch { /* 回退：直接赋值 */ }
+  try {
+    input.value = value;
+    return input.value === value;
+  } catch {
+    return false;
+  }
+}
+
+function handleStandaloneSearchInput(event) {
+  const input = event.target;
+  if (isSearchInput(input)) return;
+  if (isStandaloneSearchInput(input)) {
+    // b 方案（2026-10-08）：输入停顿不自动转换（禁止输入即搜索）；仅候选面板点选时转换。
+    // 1.4.2 后续修复：独立搜索框也显示智能候选面板（ronka / collection / EC vue-select）。
+    if (isSuggestibleInput(input)) scheduleSuggestions(input);
+  }
+}
+
 function bindChineseSearchUi() {
   document.addEventListener('input', handleSearchInput, true);
+  document.addEventListener('input', handleStandaloneSearchInput, true);
   document.addEventListener('focusin', handleSearchFocus, true);
   document.addEventListener('focusout', handleSearchBlur, true);
   document.addEventListener('keydown', handleSearchKeydown, true);
   document.addEventListener('compositionstart', handleCompositionStart, true);
   document.addEventListener('compositionend', handleCompositionEnd, true);
   document.addEventListener('pointerdown', handleSuggestionPointerDown, true);
-  document.addEventListener('scroll', () => hideSuggestions(), true);
-  globalThis.addEventListener?.('resize', () => hideSuggestions());
+  document.addEventListener('scroll', (event) => {
+    // 列表自身滚动（滚轮翻看全部装备）无需处理；页面滚动只做同步——
+    // 输入框仍在视口内则保持打开并跟随重定位，已滚出视口才关闭。
+    if (_suggestBox && event.target && _suggestBox.contains(event.target)) return;
+    syncSuggestionsOnScroll();
+  }, true);
+  globalThis.addEventListener?.('resize', () => syncSuggestionsOnScroll());
 }
 
 function handleChineseSearchSubmit(event, siteId) {
@@ -407,7 +573,8 @@ function handleChineseSearchSubmit(event, siteId) {
   const query = normalizeSearchQuery(input.value);
   if (!isChineseSearchQuery(query)) return;
 
-  const native = resolveByZh(query);
+  let native = resolveByZh(query);
+  if (!native) native = resolvePartialByZh(query);   // v1.4.2 后续：部分词（如「女仆」）→ 公共子串兜底
   if (!native || native === query) return;
 
   const method = String(form.getAttribute?.('method') || 'get').toLowerCase();

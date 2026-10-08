@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
-import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
+import { DAY_MS, META_KEY, _lcs90, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';
@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -308,12 +308,26 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return m;
   }
 
+  // names 文本 → {原生名: glam('1'/'0'/'')}——行级、首见记录（与生成器首行胜一致）。
+  // 仅用于中文搜索过滤：'0' 的行不进倒排（候选与转换一致排除非可幻化物品）。
+  function _v3Glam(txt) {
+    const m = Object.create(null);
+    for (const ln of String(txt || '').split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (!p[0] || p[2] === undefined) continue;
+      if (m[p[0]] === undefined) m[p[0]] = p[2];
+    }
+    return m;
+  }
+
   // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
   function _applyV3(files) {
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
       const names = take('names');
+      _irGlamMap = _v3Glam(files['names']);
       const hash = take('hash');
       const ecid = take('ecid');
       const ko = take('ko');
@@ -518,6 +532,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
        src/core/item-resolver.js。 */
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
+  let _irGlamMap = null;    // names 行级 glam: 原生名 → '1'/'0'（'0' 不进中文搜索；v1.4.2 后续） // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
@@ -550,10 +565,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return null;
   }
 
-  function _irBuildSearchFromNames(names, ali) {
+  function _irBuildSearchFromNames(names, ali, glam) {
     const out = Object.create(null);
     const kind = Object.create(null);
-    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native, 0, kind);
+    for (const [native, zh] of Object.entries(names || {})) {
+      if (glam?.[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      _irSearchPut(out, zh, native, 0, kind);
+    }
     for (const [alias, zhs] of Object.entries(ali || {})) {
       const key = _irNormZhSearch(alias);
       if (!key || out[key] !== undefined) continue;
@@ -617,6 +635,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
+      if (p[8] === '0') continue;           // 非可幻化 → 不进中文搜索（v1.4.2 后续）
       const native = p[localeIndex];
       _irSearchPut(out, p[1], native, 0, kind);
       _irBuildSearchAliases(out, p[7], native, kind);
@@ -630,7 +649,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (_v3Applied) {
       // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
       if (_irSearchByZh === null) {
-        const built = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        const built = _irBuildSearchFromNames(nameMap, _irAliasMap, _irGlamMap);
         _irSearchByZh = built.map;
         _irSearchKind = built.kind;
         _irSearchCanonicalKeys = null;
@@ -698,12 +717,77 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return z;
   }
 
-  function suggestByZh(zh, limit = 8) {
+  // 部分词解析的外层收集：kind 0/1（主名 + 别名）两类键各收集一轮，
+  // 合计超过 1000 条即停（防病态输入把收集循环拖长）。
+  function _zhPartialCollect(key, map) {
+    const natives = [];
+    for (const kind of [0, 1]) {
+      _zhPartialCollectKind(natives, key, map, kind);
+      if (natives.length > 1000) break;
+    }
+    return natives;
+  }
+
+  // 单类收集：键含部分词且非键本身时，取对应原生名入列。
+  function _zhPartialCollectKind(natives, key, map, kind) {
+    for (const k of _getIrSearchKeysByKind(kind)) {
+      if (k === key || !k.includes(key)) continue;
+      const native = map[k];
+      if (native) natives.push(native);
+      if (natives.length > 1000) return;
+    }
+  }
+
+  // v1.4.2 后续：部分词解析（完整名失败时兜底）——子串收集 + 公共子串提取（复用系列名推导 _lcs90 经验）。
+  // 场景：「女仆」→ 收集所有含「女仆」的中文名 → 提取原生名（按站裁剪）的公共子串「メイド」→ 交给站内部分匹配搜索。
+  // 提取不到公共子串（各族原生名互异）时返回 null，保持「不转换」原行为。
+  function resolvePartialByZh(zh) {
+    const key = _irNormZhSearch(zh);
+    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return null;
+    const map = _irSearchByZh;
+    if (!map) return null;
+    const natives = _zhPartialCollect(key, map);
+    let z = null;
+    if (natives.length === 1) z = natives[0];
+    else if (natives.length > 1) z = _lcs90(natives);
+    // 英文（非 CJK）片段质量门：如 "ai"、"Loyal Housem" 这类词中片段判为不合格，
+    // 保持不转换——避免把无意义的片段当搜索词（英文站数据混杂时 _lcs90 会产出此类结果）。
+    if (z && /[A-Za-z]/.test(z) && !_zhPartialEdgeOk(z, natives)) z = null;
+    _irStats[z ? 'hit' : 'miss']++;
+    return z;
+  }
+
+  // 部分词提取的英文片段边界校验：含 ASCII 字母的片段必须在某个样本中存在「合格窗口」
+  // ——左端为串首或前邻非字母数字；右端为串尾、后邻非字母数字、或末字符本身即分隔符
+  // （如「Housemaid 」尾随空格）；否则视为词中片段（如 "ai"、"Loyal Housem"）判不合格。
+  function _zhPartialEdgeOk(seg, list) {
+    for (const s of list) {
+      let i = s.indexOf(seg);
+      while (i !== -1) {
+        const left = i === 0 || !/[0-9A-Za-z]/.test(s[i - 1]);
+        const end = i + seg.length;
+        const right = end >= s.length
+          || !/[0-9A-Za-z]/.test(s[end])
+          || !/[0-9A-Za-z]/.test(s[end - 1]);
+        if (left && right) return true;
+        i = s.indexOf(seg, i + 1);
+      }
+    }
+    return false;
+  }
+
+  // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
+  // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
+  const SUGGEST_ABS_MAX = 3000;
+  // 智能输入候选：默认（未传 / <= 0）返回全部匹配——「显示所有含输入字的装备」；
+  // 显式传正数 limit 时按上限截断（保留给调用方按需限流的语义）。
+  function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _irSearchByZh;
     if (!map) return [];
-    const max = Math.max(1, Math.min(8, Number(limit) || 8));
+    const raw = Number(limit);
+    const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const out = [];
     const exact = map[key];
     if (exact) out.push({ zh: key, native: exact });

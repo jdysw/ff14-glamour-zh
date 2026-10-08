@@ -4,6 +4,7 @@
 //       采用最小 DOM harness 驱动 canonical source，验证事件绑定、候选渲染、
 //       键盘 / pointer / IME、视口定位、未命中提示和搜索框缓存。
 //       数据层排序与解析契约由 test-item-resolver.mjs 独立验证。
+//       1.4.2 后续修复（b 方案）：E 段——独立搜索框输入停顿不自动转换；点选候选做转换式搜索。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,6 +50,7 @@ class FakeElement {
     this.focused = false;
     this.selection = null;
     this.scrolled = false;
+    this.dispatched = [];
   }
 
   setAttribute(name, value) {
@@ -129,6 +131,11 @@ class FakeElement {
   scrollIntoView() {
     this.scrolled = true;
   }
+
+  dispatchEvent(event) {
+    this.dispatched.push(event?.type || 'unknown');
+    return true;
+  }
 }
 
 class FakeDocument {
@@ -162,9 +169,9 @@ function sleep(ms = 90) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildSearchHarness() {
+function buildSearchHarness(suggestionsOverride) {
   const ready = [];
-  const suggestions = Object.freeze([
+  const suggestions = Object.freeze(suggestionsOverride || [
     { zh: '炎灵', native: 'カ' },
     { zh: '炎灵长袍', native: 'エ' },
     { zh: '炎灵长裤', native: 'オ' },
@@ -174,7 +181,8 @@ function buildSearchHarness() {
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
     'const onTablesReady = (cb) => { __ready.push(cb); };',
-    'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ"})[v] || null;',
+    'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
+    'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
     'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',
@@ -367,6 +375,183 @@ try {
     eq('未命中提示文本', status?.textContent, '未找到对应装备');
     eq('未命中提示使用 status 语义', status?.getAttribute('role'), 'status');
     eq('未命中提示容器切换为 status', box.getAttribute('role'), 'status');
+  }
+
+  console.log('\n── E：独立搜索框（无 form）— b 方案：输入停顿不转换 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ronka');
+
+    const standalone = new FakeElement('input');
+    standalone.setAttribute('type', 'search');
+    standalone.setAttribute('placeholder', '검색어를 입력해주세요');
+    standalone.value = '炎灵';
+    document.dispatch('input', { target: standalone });
+    await sleep(750);
+    eq('输入停顿后完整中文名保持原样（不自动转换）', standalone.value, '炎灵');
+    eq('不派发 input 事件（不触发站点检索）', (standalone.dispatched || []).length, 0);
+
+    const unknown = new FakeElement('input');
+    unknown.setAttribute('type', 'search');
+    unknown.setAttribute('placeholder', '검색어를 입력해주세요');
+    unknown.value = '不存在装备';
+    document.dispatch('input', { target: unknown });
+    await sleep(750);
+    eq('未命中中文名保持原样', unknown.value, '不存在装备');
+
+    // b 方案：部分词也不转换（此前为公共子串自动替换；部分词兜底仍保留在提交路径）
+    const partial = new FakeElement('input');
+    partial.setAttribute('type', 'search');
+    partial.setAttribute('placeholder', '검색어를 입력해주세요');
+    partial.value = '丙丁';
+    document.dispatch('input', { target: partial });
+    await sleep(750);
+    eq('部分词输入停顿保持原样（不自动转换）', partial.value, '丙丁');
+
+    const partialNone = new FakeElement('input');
+    partialNone.setAttribute('type', 'search');
+    partialNone.setAttribute('placeholder', '검색어를 입력해주세요');
+    partialNone.value = '甲乙丙丁戊';
+    document.dispatch('input', { target: partialNone });
+    await sleep(750);
+    eq('部分词也无解时保持原样', partialNone.value, '甲乙丙丁戊');
+
+    const plain = new FakeElement('input');
+    plain.setAttribute('type', 'text');
+    plain.setAttribute('placeholder', '备注');
+    plain.value = '炎灵';
+    document.dispatch('input', { target: plain });
+    await sleep(750);
+    eq('非搜索语义输入框不转换', plain.value, '炎灵');
+
+    const form = new FakeElement('form');
+    const inForm = new FakeElement('input');
+    inForm.form = form;
+    inForm.setAttribute('type', 'search');
+    inForm.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(inForm);
+    inForm.value = '炎灵';
+    document.dispatch('input', { target: inForm });
+    await sleep(750);
+    eq('表单内搜索框不走独立转换（由提交路径处理）', inForm.value, '炎灵');
+  }
+
+  console.log('\n── F：vue-select 搜索框（EC 部位筛选器）— b 方案：不转换 + 候选面板 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ec');
+
+    const form = new FakeElement('form');
+    const vs = new FakeElement('input');
+    vs.form = form;
+    vs.className = 'vs__search';
+    vs.setAttribute('type', 'search');
+    vs.setAttribute('placeholder', 'Any head');
+    form.appendChild(vs);
+    vs.value = '炎灵';
+    document.dispatch('focusin', { target: vs });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
+    document.dispatch('input', { target: vs });
+    await sleep(750);
+    eq('vue-select 输入停顿保持原样（不自动转换）', vs.value, '炎灵');
+    eq('不派发 input 事件（不触发站点检索）', (vs.dispatched || []).length, 0);
+
+    // b 方案新增：vue-select 也挂候选面板（点选候选时做转换式搜索）
+    const vsBox = findSuggestBox(document);
+    ok('vue-select 出现智能候选面板', !!vsBox && vsBox.hidden === false && vsBox.querySelectorAll('button[data-zhx-index]').length > 0);
+
+    const plain = new FakeElement('input');
+    plain.form = form;
+    plain.setAttribute('type', 'text');
+    plain.setAttribute('placeholder', '備考欄');
+    form.appendChild(plain);
+    plain.value = '炎灵';
+    document.dispatch('input', { target: plain });
+    await sleep(750);
+    eq('非 vue-select 的表单内框不转换（回归保护）', plain.value, '炎灵');
+  }
+
+  console.log('\n── G：候选列表体验（全量数据 / 可视 8 行 / 滚动不关闭）──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const many = [{ zh: '炎灵', native: 'カ' }];
+    for (let i = 1; i <= 12; i++) many.push({ zh: '炎灵装' + i, native: '装' });
+    const harness = buildSearchHarness(many);
+    const api = harness.api;
+    api.startChineseSearch('mirapri');
+
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
+    input.value = '炎灵';
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
+
+    const box = findSuggestBox(document);
+    eq('G1 数据全量渲染（13 条 > 可视 8 行）', box.querySelectorAll('button[data-zhx-index]').length, 13);
+    eq('G2 列表高度 = 可视 8 行（8×40+8=328px）', box.style.maxHeight, '328px');
+
+    document.dispatch('scroll', { target: box });
+    eq('G3a 列表自身滚动不关闭候选框', box.hidden, false);
+    document.dispatch('scroll', { target: box.children[0] });
+    eq('G3b 列表内元素滚动不关闭候选框', box.hidden, false);
+
+    // 页面滚动（无滚动条的候选框链式滚动 / 滑到列表边界后继续滑）：
+    // 输入框仍在视口 → 保持打开（跟随重定位）；滚出视口 → 关闭。
+    document.dispatch('scroll', { target: document.body });
+    eq('G4a 页面滚动但输入框仍在视口 → 保持打开', box.hidden, false);
+    input._rect = { left: 20, top: 700, right: 240, bottom: 730, width: 220, height: 30 };
+    document.dispatch('scroll', { target: document.body });
+    eq('G4b 输入框滚出视口 → 关闭', box.hidden, true);
+  }
+
+  console.log('\n── H：独立搜索框智能输入（点选转换式搜索，保留中文）──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ronka');
+
+    // ronka 风格：无 form 的独立搜索框（React 站点）
+    const input = new FakeElement('input');
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '검색어를 입력하세요');
+    input.value = '炎灵';
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
+
+    const box = findSuggestBox(document);
+    eq('H1 独立框输入中文出现智能候选', box?.hidden, false);
+    eq('H2 候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
+
+    // b 方案：点选候选 → 转换式搜索（用原生名触发站点检索），显示随后恢复为中文
+    const pointer = { target: box.children[0], prevented: false, preventDefault() { this.prevented = true; } };
+    document.dispatch('pointerdown', pointer);
+    eq('H3 点击候选后同步设为原生名（触发转换式搜索）', input.value, 'カ');
+    eq('H3b 派发 input 事件（站内搜索用原生名）', (input.dispatched || []).includes('input'), true);
+    eq('H3c 选择后关闭候选框', box.hidden, true);
+    await sleep();
+    eq('H4 显示恢复为中文（搜索后输入框保留中文）', input.value, '炎灵');
+    await sleep(700);
+    eq('H5 恢复后保持中文（无额外事件）', input.value, '炎灵');
   }
 } finally {
   globalThis.document = previousDocument;

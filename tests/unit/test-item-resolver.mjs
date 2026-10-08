@@ -49,6 +49,24 @@ function sliceAll(s, tag) {
 const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver')
   .map((seg) => seg.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
 
+// _lcs90 系列辅助（dist 未标记区，cache 模块头部）：满足 resolvePartialByZh 的依赖。
+// 段提取不含未标记区，故从 dist 源码单独抽取三个无副作用纯函数注入装配。
+const extractFn = (src, name) => {
+  const sig = `function ${name}(`;
+  const i = src.indexOf(sig);
+  if (i < 0) throw new Error(`辅助函数缺失：${name}`);
+  let depth = 0;
+  let j = i;
+  for (; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { j++; break; } }
+  }
+  return src.slice(i, j);
+};
+const SERIES_HELPERS = ['_shortestStr', '_countIncludes', '_lcs90']
+  .map((name) => extractFn(DIST_TEXT, name)).join('\n');
+
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
   'key\tzh\ten\tja\tko\thash\tecid\talias',
@@ -101,11 +119,11 @@ function buildResolver(env = {}) {
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, resolvePartialByZh, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
-  const body = [...stubs, ...RESOLVER_SEG, ret].join('\n');
+  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, ret].join('\n');
   try {
     const fn = new Function('__env', '__rec', body);
     return fn(env, rec);
@@ -213,15 +231,20 @@ const mkEnv = (over = {}) => ({
   eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
   eq('智能输入：精确名称优先、正式名称次之、别名最后', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
     { zh: '炎灵', native: 'カ' },
+    ...[
     { zh: '炎灵长袍', native: 'エ' },
     { zh: '炎灵长裤', native: 'オ' },
+    ].sort((a, b) => new Intl.Collator().compare(a.zh, b.zh)),
+    ...[
     { zh: '炎灵袍', native: 'エ' },
     { zh: '炎灵裤', native: 'オ' },
+    ].sort((a, b) => new Intl.Collator().compare(a.zh, b.zh)),
   ]));
   eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
     { zh: '炎灵袍', native: 'エ' },
   ]));
-  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
+  eq('智能输入：显式 limit 截断仍生效', api.suggestByZh('炎灵', 2).length, 2);
+  eq('智能输入：limit 无 8 条封顶（全量返回，防御上限 3000）', api.suggestByZh('炎灵', 99999).length, 5);
 }
 
 // B2. 中文搜索按站点语言倒排
@@ -344,6 +367,68 @@ const mkEnv = (over = {}) => ({
   eq('v3 直装：_irBuildAux → true', api2._irBuildAux(SAMPLE_TSV), true);
   const m2 = api2.__maps();
   ok('v3 直装：不新建注册表', m2.dup === null && m2.ali === null);
+}
+
+// ─────────────────────────────────────────────────────────────
+// D. glam 过滤（v1.4.2 后续：候选过滤）——'0' 行不进中文搜索倒排
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv());
+
+  // v3 名字路径：names 行级 glam 经 glam 映射传入（对应 names.tsv 第 3 列）
+  const built = api._irBuildSearchFromNames(
+    { A1: '甲乙', B1: '乙丙', C1: '丙丁' },
+    null,
+    { A1: '1', B1: '0' },
+  );
+  eq('D1 v3 路径：glam=1 保留', built.map['甲乙'], 'A1');
+  eq('D2 v3 路径：glam=0 剔除', built.map['乙丙'], undefined);
+  eq('D3 v3 路径：无标记（旧数据）保留', built.map['丙丁'], 'C1');
+  const builtNoGlam = api._irBuildSearchFromNames({ A1: '甲乙' }, null, null);
+  eq('D4 v3 路径：无 glam 映射不过滤', builtNoGlam.map['甲乙'], 'A1');
+
+  // v2 文本路径：第 9 列 '0' 的行不进倒排
+  const text = '1\t甲装备\tAAA\tアア\t아아\t\t\t\t1\n2\t乙家具\tBBB\tイイ\t이이\t\t\t\t0\n3\t丙旧物\tCCC\tウウ\t우우\n';
+  const built2 = api._irBuildSearchFromText(text);
+  eq('D5 v2 路径：glam=1 保留', built2.map['甲装备'], 'アア');
+  eq('D6 v2 路径：glam=0 剔除', built2.map['乙家具'], undefined);
+  eq('D7 v2 路径：无 glam 列不过滤', built2.map['丙旧物'], 'ウウ');
+}
+
+// E. resolvePartialByZh 部分词（v1.4.2 后续：完整名未命中 → 公共子串提取 + 英文质量门）
+// ─────────────────────────────────────────────────────────────
+{
+  // E1-E2 / E5-E6：CJK 站（mirapri → ja 列）
+  const api = buildResolver(mkEnv({ site: { id: 'mirapri' } }));
+  const jaText = [
+    '1\t女仆发带\tHousemaid brim\tメイドホワイトブリム\t메이드 머리띠\t\t\t\t1',
+    '2\t女仆围裙装\tHousemaid apron\tメイドエプロンドレス\t메이드 앞치마\t\t\t\t1',
+    '3\t女仆腕带\tHousemaid wrist\tメイドリストドレス\t메이드 소매장식\t\t\t\t1',
+    '4\t女仆裙甲\tHousemaid skirt\tメイドスカート\t메이드 치마\t\t\t\t1',
+  ].join('\n');
+  api._irBuildAux(jaText);
+  eq('E1 ja 纯组：部分词「女仆」→ 公共子串「メイド」', api.resolvePartialByZh('女仆'), 'メイド');
+  eq('E2 无匹配词保持不转换（null）', api.resolvePartialByZh('紫电'), null);
+  eq('E5 单条命中：「裙甲」→ 完整原生名', api.resolvePartialByZh('裙甲'), 'メイドスカート');
+  eq('E6 完整名（键与查询相同）不产生部分词结果', api.resolvePartialByZh('女仆发带'), null);
+
+  // E3：英文站（ec → en 列）——词中片段被质量门拒绝
+  const api2 = buildResolver(mkEnv({ site: { id: 'ec' } }));
+  api2._irBuildAux([
+    '1\t测试头盔\tKAID A\tア\t가\t\t\t\t1',
+    '2\t测试胸甲\tMAID A\tイ\t나\t\t\t\t1',
+    '3\t测试护腕\tMAID B\tウ\t다\t\t\t\t1',
+  ].join('\n'));
+  eq('E3 en 词中片段（AID ）被质量门拒绝 → null', api2.resolvePartialByZh('测试'), null);
+
+  // E4：英文站——纯组（词首起、右端有边界）通过
+  const api3 = buildResolver(mkEnv({ site: { id: 'ec' } }));
+  api3._irBuildAux([
+    '1\t试验头盔\tHousemaid Helm\tア\t가\t\t\t\t1',
+    '2\t试验胸甲\tHousemaid Mail\tイ\t나\t\t\t\t1',
+    '3\t试验护腕\tHousemaid Vambrace\tウ\t다\t\t\t\t1',
+  ].join('\n'));
+  eq('E4 en 纯组：「试验」→ 公共子串「Housemaid 」', api3.resolvePartialByZh('试验'), 'Housemaid ');
 }
 
 // ─────────────────────────────────────────────────────────────
