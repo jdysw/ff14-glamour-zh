@@ -162,6 +162,18 @@ const EXEMPT_PATTERNS = [
   /^FF14 ERIONES – エリオネス$/,        // 友链站名（ERIONES 保留 + 日文副标题）
 ];
 
+// Known Japanese UI text can consist entirely of Han ideographs (e.g. 検索 or 検索).
+// Source dictionaries disambiguate them without misclassifying arbitrary Chinese words.
+const KNOWN_KANJI_UI = new Set();
+for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl']) {
+  try {
+    const dict = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'dict', name + '.json'), 'utf8'));
+    for (const [foreign, zh] of Object.entries(dict.entries || {})) {
+      if (/^[\\u3400-\\u9fff]{2,30}$/.test(foreign) && foreign !== zh && /^[\\u3400-\\u9fff]/.test(zh)) KNOWN_KANJI_UI.add(foreign);
+    }
+  } catch (e) { throw new Error('无法读取汉化权威词典 ' + name + ': ' + e.message); }
+}
+
 // ---------- 残留检测 ----------
 // 日文假名（平/片）
 const JA_RE = /[\u3040-\u30ff]/;
@@ -179,6 +191,7 @@ export function isResidual(text, ctx = {}) {
   const t = String(text || '').trim();
   if (!t) return false;
   if (JA_RE.test(t) || KO_RE.test(t)) return true;
+  if (ctx.ui && KNOWN_KANJI_UI.has(t) && (!ctx.site || ['mirapri', 'fc', 'collection'].includes(ctx.site))) return true;
   if (!/[A-Za-z]{2}/.test(t) || !ctx.ui || t.length > 100) return false;
   if (ctx.kind === 'document:title' || ctx.kind === 'attr:alt') return false;
   // Latin letters used in Chinese UI are generally identifiers/abbreviations,
