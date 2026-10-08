@@ -308,12 +308,26 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return m;
   }
 
+  // names 文本 → {原生名: glam('1'/'0'/'')}——行级、首见记录（与生成器首行胜一致）。
+  // 仅用于中文搜索过滤：'0' 的行不进倒排（候选与转换一致排除非可幻化物品）。
+  function _v3Glam(txt) {
+    const m = Object.create(null);
+    for (const ln of String(txt || '').split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (!p[0] || p[2] === undefined) continue;
+      if (m[p[0]] === undefined) m[p[0]] = p[2];
+    }
+    return m;
+  }
+
   // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
   function _applyV3(files) {
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
       const names = take('names');
+      _irGlamMap = _v3Glam(files['names']);
       const hash = take('hash');
       const ecid = take('ecid');
       const ko = take('ko');
@@ -518,6 +532,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
        src/core/item-resolver.js。 */
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
+  let _irGlamMap = null;    // names 行级 glam: 原生名 → '1'/'0'（'0' 不进中文搜索；v1.4.2 后续） // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
@@ -550,10 +565,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return null;
   }
 
-  function _irBuildSearchFromNames(names, ali) {
+  function _irBuildSearchFromNames(names, ali, glam) {
     const out = Object.create(null);
     const kind = Object.create(null);
-    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native, 0, kind);
+    for (const [native, zh] of Object.entries(names || {})) {
+      if (glam && glam[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      _irSearchPut(out, zh, native, 0, kind);
+    }
     for (const [alias, zhs] of Object.entries(ali || {})) {
       const key = _irNormZhSearch(alias);
       if (!key || out[key] !== undefined) continue;
@@ -617,6 +635,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
+      if (p[8] === '0') continue;           // 非可幻化 → 不进中文搜索（v1.4.2 后续）
       const native = p[localeIndex];
       _irSearchPut(out, p[1], native, 0, kind);
       _irBuildSearchAliases(out, p[7], native, kind);
@@ -630,7 +649,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (_v3Applied) {
       // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
       if (_irSearchByZh === null) {
-        const built = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        const built = _irBuildSearchFromNames(nameMap, _irAliasMap, _irGlamMap);
         _irSearchByZh = built.map;
         _irSearchKind = built.kind;
         _irSearchCanonicalKeys = null;

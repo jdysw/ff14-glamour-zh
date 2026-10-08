@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """rebuild-db.py —— FF14 物品数据表重建/更新（跟随游戏版本）
 
-数据模型（8 列，一物品一行）:
-    key | zh | en | ja | ko | hash | ecid | alias
+数据模型（9 列，一物品一行）:
+    key | zh | en | ja | ko | hash | ecid | alias | glam（可幻化 1/0；含鸟甲）
 
 规则:
   · 权威为主: 中/英/日/韩名以四语 datamining Item.csv 为准（新物品自动纳入，
@@ -176,9 +176,28 @@ def _load_four(csv_paths):
     return cn, en, ja, ko
 
 
+def _load_glam(csv_path):
+    """en-Item.csv → {key: '1'/'0'}：IsGlamorous=True 或 Barding（鸟甲）。
+    鸟甲在游戏内不走投影系统（IsGlamorous=False），但幻化站收录，故一并纳入。"""
+    glam = {}
+    with open(csv_path, encoding='utf-8-sig', newline='') as f:
+        r = csv.reader(f)
+        try:
+            header = next(r)
+            g_idx = header.index('IsGlamorous')
+            n_idx = header.index('Name')
+        except (StopIteration, ValueError):
+            return glam
+        for row in r:
+            if row and row[0].isdigit() and len(row) > max(g_idx, n_idx):
+                g = row[g_idx] == 'True' or 'Barding' in row[n_idx]
+                glam[int(row[0])] = '1' if g else '0'
+    return glam
+
+
 def _inherit(o, idx):
-    """旧行第 idx 列的值（o 为空 → 空串）。"""
-    return o[idx] if o else ''
+    """旧行第 idx 列的值（o 为空或越界 → 空串）。"""
+    return o[idx] if o and idx < len(o) else ''
 
 
 def _is_removed(k, cn, en, ja, ko):
@@ -191,7 +210,7 @@ def _name_updated(o, k, cn):
     return bool(o and o[1] and cn.get(k) and o[1] != cn[k])
 
 
-def _merge_rows(cn, en, ja, ko, old):
+def _merge_rows(cn, en, ja, ko, old, glam):
     """③ 并集构建 → (rows, 新增, 保留, 译名更新)。"""
     print('══ 3. 重建 ══')
     all_keys = set(cn) | set(en) | set(ja) | set(ko) | set(old)
@@ -209,7 +228,8 @@ def _merge_rows(cn, en, ja, ko, old):
         if _name_updated(o, k, cn):
             n_upd_name += 1               # 权威更新了译名
         rows.append((k, z, en.get(k) or _inherit(o, 2), ja.get(k) or _inherit(o, 3),
-                     ko.get(k) or _inherit(o, 4), _inherit(o, 5), _inherit(o, 6), _inherit(o, 7)))
+                     ko.get(k) or _inherit(o, 4), _inherit(o, 5), _inherit(o, 6), _inherit(o, 7),
+                     glam.get(k, _inherit(o, 8) or '0')))
     return rows, n_new, n_kept, n_upd_name
 
 
@@ -217,11 +237,12 @@ def _write_tsv(out_p, rows, extra):
     """④ 写出（先写 .tmp 再原子替换）→ 大小 MB。"""
     out_tmp = out_p + '.tmp'
     with open(out_tmp, 'w', encoding='utf-8') as f:
-        f.write('key\tzh\ten\tja\tko\thash\tecid\talias\n')
+        f.write('key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n')
         for row in rows:
             f.write('\t'.join(str(x) for x in row) + '\n')
-        for p in extra:                   # 特殊行原样继承（如历史神典石）
-            f.write('\t'.join(p) + '\n')
+        for p in extra:                   # 特殊行原样继承（如历史神典石）；glam 缺省补 0
+            p = list(p) + ['0'] * max(0, 9 - len(p))
+            f.write('\t'.join(p[:9]) + '\n')
     os.replace(out_tmp, out_p)
     return os.path.getsize(out_p) / 1048576
 
@@ -240,8 +261,13 @@ def main():
     old, extra = load_items_tsv(src_p)
     print(f'  现有 {len(old):,} 个物品 | 特殊行 {len(extra)} 条')
 
+    # 2.5) 可幻化标记（IsGlamorous；鸟甲含 Barding 一并纳入）
+    glam = _load_glam(csv_paths['en'])
+    n_glam = sum(1 for v in glam.values() if v == '1')
+    print(f'  可幻化标记 {n_glam:,} / {len(glam):,}（含鸟甲）')
+
     # 3) 并集构建
-    rows, n_new, n_kept, n_upd_name = _merge_rows(cn, en, ja, ko, old)
+    rows, n_new, n_kept, n_upd_name = _merge_rows(cn, en, ja, ko, old, glam)
 
     # 4) 写出
     size_mb = _write_tsv(out_p, rows, extra)

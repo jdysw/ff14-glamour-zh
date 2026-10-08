@@ -101,7 +101,7 @@ function buildResolver(env = {}) {
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
@@ -345,6 +345,32 @@ const mkEnv = (over = {}) => ({
   eq('v3 直装：_irBuildAux → true', api2._irBuildAux(SAMPLE_TSV), true);
   const m2 = api2.__maps();
   ok('v3 直装：不新建注册表', m2.dup === null && m2.ali === null);
+}
+
+// ─────────────────────────────────────────────────────────────
+// D. glam 过滤（v1.4.2 后续：候选过滤）——'0' 行不进中文搜索倒排
+// ─────────────────────────────────────────────────────────────
+{
+  const api = buildResolver(mkEnv());
+
+  // v3 名字路径：names 行级 glam 经 glam 映射传入（对应 names.tsv 第 3 列）
+  const built = api._irBuildSearchFromNames(
+    { A1: '甲乙', B1: '乙丙', C1: '丙丁' },
+    null,
+    { A1: '1', B1: '0' },
+  );
+  eq('D1 v3 路径：glam=1 保留', built.map['甲乙'], 'A1');
+  eq('D2 v3 路径：glam=0 剔除', built.map['乙丙'], undefined);
+  eq('D3 v3 路径：无标记（旧数据）保留', built.map['丙丁'], 'C1');
+  const builtNoGlam = api._irBuildSearchFromNames({ A1: '甲乙' }, null, null);
+  eq('D4 v3 路径：无 glam 映射不过滤', builtNoGlam.map['甲乙'], 'A1');
+
+  // v2 文本路径：第 9 列 '0' 的行不进倒排
+  const text = '1\t甲装备\tAAA\tアア\t아아\t\t\t\t1\n2\t乙家具\tBBB\tイイ\t이이\t\t\t\t0\n3\t丙旧物\tCCC\tウウ\t우우\n';
+  const built2 = api._irBuildSearchFromText(text);
+  eq('D5 v2 路径：glam=1 保留', built2.map['甲装备'], 'アア');
+  eq('D6 v2 路径：glam=0 剔除', built2.map['乙家具'], undefined);
+  eq('D7 v2 路径：无 glam 列不过滤', built2.map['丙旧物'], 'ウウ');
 }
 
 // ─────────────────────────────────────────────────────────────
