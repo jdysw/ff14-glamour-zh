@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -81,7 +82,7 @@ console.log('╔══ 页2: equipment/phantom_vision_of_casting ══╗');
   console.log('  数据就绪 ✓，等补扫 ...');
   await sleep(8000);
   const r = await c.eval(`(() => {
-    const T = document.body ? document.body.innerText : '';
+    const T = ${CLEAN_BODY_TEXT};
     // 截断残留检测（U+30FB 或 U+00B7 后接「ャー」「ジ」等残片）
     const trunc = (T.match(/远程ャー|远程ャ|レジャ/g) || []).length;
     // 「幻境意象」出现次数（全文）

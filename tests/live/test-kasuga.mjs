@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -48,7 +49,7 @@ async function probe(url) {
   await sleep(8000);
   const r = await c.eval(`(() => {
     const out = {};
-    const T = document.body ? document.body.innerText : '';
+    const T = ${CLEAN_BODY_TEXT};
     const wiki = [...document.querySelectorAll('a[href*="huijiwiki.com"]')];
     out.wikiCount = wiki.length;
     out.wikiHrefs = wiki.map((a) => decodeURIComponent(a.getAttribute('href') || '')).slice(0, 8);

@@ -3,6 +3,7 @@
 // 断言：数据键 / 界面词 3 项 / 无残留 2 项 / 请求数 / 无注入错误（全程 dump 保留供诊断）
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -59,7 +60,7 @@ if (!done) console.log('⚠️ 数据等待超时');
 await sleep(6000); // 留时间补扫
 
 const r = await c.eval(`(() => {
-  const T = document.body ? document.body.innerText : '';
+  const T = ${CLEAN_BODY_TEXT};
   const has = (s) => T.indexOf(s) >= 0;
   let ja = 0; for (const ch of T) { const cc = ch.codePointAt(0); if (cc >= 0x3040 && cc <= 0x30ff) ja++; }
   const ui = {

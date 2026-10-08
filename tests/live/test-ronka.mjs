@@ -3,6 +3,7 @@
 //       ③ 动态内容观察器翻译（SPA 型追加节点）
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -23,7 +24,7 @@ const gmStub = `(() => {
 
 const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
 
-const koCount = `(() => { let n = 0; const T = document.body ? document.body.innerText : ''; for (const ch of T) { const c = ch.codePointAt(0); if (c >= 0xAC00 && c <= 0xD7AF) n++; } return n; })()`;
+const koCount = `(() => { let n = 0; const T = ${CLEAN_BODY_TEXT}; for (const ch of T) { const c = ch.codePointAt(0); if (c >= 0xAC00 && c <= 0xD7AF) n++; } return n; })()`;
 
 const checks = [];
 const push = (name, okf, extra = '') => {

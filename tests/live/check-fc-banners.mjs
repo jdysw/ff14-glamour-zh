@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -58,7 +59,7 @@ await sleep(8000);
 const r = await c.eval(`(() => {
   const links = [...document.querySelectorAll('a')].map((a) => (a.textContent || '').replace(/\\s+/g, ' ').trim());
   const bannerish = [...new Set(links.filter((t) => t.includes('一览') || t.includes('一覧')))];
-  const all = document.body.innerText;
+  const all = ${CLEAN_BODY_TEXT};
   const badSamples = (all.match(/[^\\n]{0,25}の前往[^\\n]{0,25}/g) || []).slice(0, 5);
   const badJp = (all.match(/[^\\n]{0,25}一覧[^\\n]{0,25}/g) || []).slice(0, 8);
   return { bannerish, hasNoChien: all.includes('の前往'), badSamples, badJp };

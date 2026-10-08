@@ -3,6 +3,7 @@
 // 断言：数据键 / 界面词 / 残留反例 / 请求数 / 无注入错误（dump 保留供诊断）
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
+import { CLEAN_BODY_TEXT } from '../helpers/clean-text.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const GF = readDist();
@@ -49,7 +50,9 @@ if (!done) console.log('⚠️ 数据等待超时');
 await sleep(6000);
 
 const r = await c.eval(`(() => {
-  const T = document.body ? document.body.innerText : '';
+  // 与脚本扫描范围对齐（ACL_SKIP_SEL，经 clean-text helper）：广告/脚本等容器不参与残留检查——
+  // AdSense 广告内容随时段随机变化，纳入会产生假阳性（实测 2026-10-08 命中「ゲーム内アイテム」）。
+  const T = ${CLEAN_BODY_TEXT};
   const has = (s) => T.indexOf(s) >= 0;
   let ja = 0; for (const ch of T) { const cc = ch.codePointAt(0); if (cc >= 0x3040 && cc <= 0x30ff) ja++; }
   const ui = {
@@ -59,8 +62,10 @@ const r = await c.eval(`(() => {
   };
   const samples = [];
   const els = document.querySelectorAll('h1,h2,h3,h4,a,p,span,li,button,label');
+  const adSel = 'ins, .adsbygoogle, [class*="ads-"], [id*="aswift"]';
   for (const el of els) {
     if (samples.length >= 12) break;
+    if (el.closest && el.closest(adSel)) continue;   // 广告内容不进样本（随机变化、混淆诊断）
     const s = (el.textContent || '').trim();
     if (s && s.length >= 2 && s.length <= 40 && /[\u3040-\u30ff]/.test(s)) samples.push(s);
   }
