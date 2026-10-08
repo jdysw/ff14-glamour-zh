@@ -11,6 +11,7 @@ import {
   latestResults, coverageStats, classifyChangedText, unmatchedHosts,
 } from '../../tools/coverage-audit/coverage-core.mjs';
 import { LINKS_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
+import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), 'utf8');
@@ -88,6 +89,17 @@ assert.match(report, /失败：1/);
 assert.match(report, /HTTP 403/);
 assert.match(report, /Show Results/);
 assert.doesNotMatch(report, /Search \|/); // stale snapshot excluded
+
+const xml = '<sitemapindex><sitemap><loc>https://example.com/detail.xml</loc></sitemap></sitemapindex>';
+assert.deepEqual(parseSitemapLocs(xml), { index: true, urls: ['https://example.com/detail.xml'] });
+const mockPages = {
+  'https://example.com/sitemap.xml': '<sitemapindex><sitemap><loc>https://example.com/detail.xml</loc></sitemap></sitemapindex>',
+  'https://example.com/detail.xml': '<urlset><url><loc>https://example.com/equip/1/</loc></url><url><loc>https://external.test/login/</loc></url><url><loc>https://example.com/equip/2/</loc></url></urlset>',
+};
+const sitemapUrls = await discoverSitemapUrls({
+  hosts: ['example.com'], fetcher: async (url) => ({ ok: !!mockPages[url], text: async () => mockPages[url] || '' }),
+});
+assert.deepEqual(sitemapUrls, ['https://example.com/equip/1/', 'https://example.com/equip/2/']);
 
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
