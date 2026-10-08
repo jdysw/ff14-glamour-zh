@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
-import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
+import { DAY_MS, META_KEY, _lcs90, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';
@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -224,6 +224,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   }
 
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
+  // 返回 true 表示「全部表已成功对齐到最新版本」（调用方可据此决定是否热替换索引）。
   async function _ensureFetchAll(need, local) {
     let ver = null;
     try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; _zhxErr('version', e); }
@@ -234,7 +235,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     __zhxMark('applied');   // Phase 19：表格拉取/应用完成
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
+      return true;
     }
+    return false;
   }
 
   // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
@@ -262,6 +265,47 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 500 }); // v1.3.1：兜底 2000→500，消除静止页面等满 2s 的最坏情况
       else setTimeout(go, 50);
     });
+  }
+
+  // 后台版本探测完成后的热替换：用已更新的表文本重建索引，一次性原子赋值。
+  // 与首次构建不同：不重放就绪广播（onTablesReady 只触发一次），避免站点适配器
+  // 重复补扫；查询在替换前走旧索引、替换后走新索引，中间无空窗。
+  // 仅在探测成功（_ensureFetchAll 返回 true）时调用；失败保持旧数据，静默降级。
+  function _hotSwapIndexes() {
+    if (_v3Applied) return;              // v3 路径索引已直接来自最新文件，无需热替换
+    return new Promise((resolve) => {
+      const finish = () => {
+        __zhxMark('hotSwap');
+        try {
+          console.info('幻化数据热替换完成 → 数据版本 ' + (DATA_VER || '未记录'));
+        } catch (e) { /* 忽略：日志输出失败不影响 */ }
+        resolve();
+      };
+      try { buildTables(_buildScope, finish); } catch (e) { _zhxErr('hotSwap', e); resolve(); }
+    });
+  }
+
+  // 首开「先建后探」：本地有可用缓存（哪怕已过期）时，先用缓存立即构建并广播
+  // 就绪，让页面尽早可用；随后后台探测版本，发现新数据再热替换索引。返回 true
+  // 表示已走「先建后探」路径（调用方无需再等待网络）。
+  // 注意：不在此处调用 _ensureFinalize——首次构建 + 就绪广播由 ensureTables 外层
+  // 的 .then(_ensureFinalize) 统一完成（否则会双重广播）。
+  async function _ensureBuildLocal(need, local) {
+    if (!need || !local) return false;
+    const hasLocal = need.some((t) => !!local[t]);
+    if (!hasLocal) return false;          // 无任何缓存：交还原等待链（全新安装场景）
+    // 应用本地缓存文本（与快路径一致的语义；DATA_VER 用 meta 中的旧版本）
+    let meta = null;
+    try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略 */ }
+    for (const t of need) {
+      if (local[t]) { applyTable(t, local[t].tx); _dlStats.cache++; }
+    }
+    DATA_VER = (meta?.v ? String(meta.v) : '');
+    __zhxMark('applied');
+    // 后台探测 + 热替换（不阻塞就绪；失败保持当前数据）
+    _ensureFetchAll(need, local).then((ok) => { if (ok) return _hotSwapIndexes(); })
+      .catch((e) => { _zhxErr('hotSwap', e); });
+    return true;
   }
 
   // 首屏优先：网络下载推迟到页面 load 之后（弱网/移动端避免与页面自身资源抢带宽，
@@ -308,12 +352,26 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return m;
   }
 
+  // names 文本 → {原生名: glam('1'/'0'/'')}——行级、首见记录（与生成器首行胜一致）。
+  // 仅用于中文搜索过滤：'0' 的行不进倒排（候选与转换一致排除非可幻化物品）。
+  function _v3Glam(txt) {
+    const m = Object.create(null);
+    for (const ln of String(txt || '').split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (!p[0] || p[2] === undefined) continue;
+      if (m[p[0]] === undefined) m[p[0]] = p[2];
+    }
+    return m;
+  }
+
   // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
   function _applyV3(files) {
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
       const names = take('names');
+      _irGlamMap = _v3Glam(files['names']);
       const hash = take('hash');
       const ecid = take('ecid');
       const ko = take('ko');
@@ -453,7 +511,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const v3 = await _ensureTryV3();
     if (v3) return;
     const fast = await _ensureTryFast(need);
-    if (!fast) return;
+    if (!fast) return;                     // 快路径（24h 内缓存）已应用，零网络
+    // 「先建后探」：有本地缓存（哪怕过期）→ 立即构建就绪 + 后台探测热替换；
+    // 无缓存（全新安装）→ 保持原等待链（该等就等，保证正确性）。
+    if (await _ensureBuildLocal(need, fast.local)) return;
     await _waitPageLoad();
     await _ensureFetchAll(need, fast.local);
   }
@@ -518,6 +579,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
        src/core/item-resolver.js。 */
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
+  let _irGlamMap = null;    // names 行级 glam: 原生名 → '1'/'0'（'0' 不进中文搜索；v1.4.2 后续） // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
@@ -550,10 +612,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return null;
   }
 
-  function _irBuildSearchFromNames(names, ali) {
+  function _irBuildSearchFromNames(names, ali, glam) {
     const out = Object.create(null);
     const kind = Object.create(null);
-    for (const [native, zh] of Object.entries(names || {})) _irSearchPut(out, zh, native, 0, kind);
+    for (const [native, zh] of Object.entries(names || {})) {
+      if (glam && glam[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      _irSearchPut(out, zh, native, 0, kind);
+    }
     for (const [alias, zhs] of Object.entries(ali || {})) {
       const key = _irNormZhSearch(alias);
       if (!key || out[key] !== undefined) continue;
@@ -617,6 +682,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
+      if (p[8] === '0') continue;           // 非可幻化 → 不进中文搜索（v1.4.2 后续）
       const native = p[localeIndex];
       _irSearchPut(out, p[1], native, 0, kind);
       _irBuildSearchAliases(out, p[7], native, kind);
@@ -630,7 +696,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (_v3Applied) {
       // v3 已直接拿到按站裁剪后的 names/alias；首次调用时倒排为中文搜索索引。
       if (_irSearchByZh === null) {
-        const built = _irBuildSearchFromNames(nameMap, _irAliasMap);
+        const built = _irBuildSearchFromNames(nameMap, _irAliasMap, _irGlamMap);
         _irSearchByZh = built.map;
         _irSearchKind = built.kind;
         _irSearchCanonicalKeys = null;
@@ -698,12 +764,43 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return z;
   }
 
-  function suggestByZh(zh, limit = 8) {
+  // v1.4.2 后续：部分词解析（完整名失败时兜底）——子串收集 + 公共子串提取（复用系列名推导 _lcs90 经验）。
+  // 场景：「女仆」→ 收集所有含「女仆」的中文名 → 提取原生名（按站裁剪）的公共子串「メイド」→ 交给站内部分匹配搜索。
+  // 提取不到公共子串（各族原生名互异）时返回 null，保持「不转换」原行为。
+  function resolvePartialByZh(zh) {
+    const key = _irNormZhSearch(zh);
+    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return null;
+    const map = _irSearchByZh;
+    if (!map) return null;
+    const natives = [];
+    for (const kind of [0, 1]) {
+      for (const k of _getIrSearchKeysByKind(kind)) {
+        if (k === key || !k.includes(key)) continue;
+        const native = map[k];
+        if (native) natives.push(native);
+        if (natives.length > 1000) break;
+      }
+      if (natives.length > 1000) break;
+    }
+    let z = null;
+    if (natives.length === 1) z = natives[0];
+    else if (natives.length > 1) z = _lcs90(natives);
+    _irStats[z ? 'hit' : 'miss']++;
+    return z;
+  }
+
+  // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
+  // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
+  const SUGGEST_ABS_MAX = 3000;
+  // 智能输入候选：默认（未传 / <= 0）返回全部匹配——「显示所有含输入字的装备」；
+  // 显式传正数 limit 时按上限截断（保留给调用方按需限流的语义）。
+  function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _irSearchByZh;
     if (!map) return [];
-    const max = Math.max(1, Math.min(8, Number(limit) || 8));
+    const raw = Number(limit);
+    const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const out = [];
     const exact = map[key];
     if (exact) out.push({ zh: key, native: exact });
