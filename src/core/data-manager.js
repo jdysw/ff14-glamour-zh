@@ -569,7 +569,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const out = Object.create(null);
     const kind = Object.create(null);
     for (const [native, zh] of Object.entries(names || {})) {
-      if (glam && glam[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      if (glam?.[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
       _irSearchPut(out, zh, native, 0, kind);
     }
     for (const [alias, zhs] of Object.entries(ali || {})) {
@@ -717,6 +717,27 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return z;
   }
 
+  // 部分词解析的外层收集：kind 0/1（主名 + 别名）两类键各收集一轮，
+  // 合计超过 1000 条即停（防病态输入把收集循环拖长）。
+  function _zhPartialCollect(key, map) {
+    const natives = [];
+    for (const kind of [0, 1]) {
+      _zhPartialCollectKind(natives, key, map, kind);
+      if (natives.length > 1000) break;
+    }
+    return natives;
+  }
+
+  // 单类收集：键含部分词且非键本身时，取对应原生名入列。
+  function _zhPartialCollectKind(natives, key, map, kind) {
+    for (const k of _getIrSearchKeysByKind(kind)) {
+      if (k === key || !k.includes(key)) continue;
+      const native = map[k];
+      if (native) natives.push(native);
+      if (natives.length > 1000) return;
+    }
+  }
+
   // v1.4.2 后续：部分词解析（完整名失败时兜底）——子串收集 + 公共子串提取（复用系列名推导 _lcs90 经验）。
   // 场景：「女仆」→ 收集所有含「女仆」的中文名 → 提取原生名（按站裁剪）的公共子串「メイド」→ 交给站内部分匹配搜索。
   // 提取不到公共子串（各族原生名互异）时返回 null，保持「不转换」原行为。
@@ -725,16 +746,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return null;
     const map = _irSearchByZh;
     if (!map) return null;
-    const natives = [];
-    for (const kind of [0, 1]) {
-      for (const k of _getIrSearchKeysByKind(kind)) {
-        if (k === key || !k.includes(key)) continue;
-        const native = map[k];
-        if (native) natives.push(native);
-        if (natives.length > 1000) break;
-      }
-      if (natives.length > 1000) break;
-    }
+    const natives = _zhPartialCollect(key, map);
     let z = null;
     if (natives.length === 1) z = natives[0];
     else if (natives.length > 1) z = _lcs90(natives);
