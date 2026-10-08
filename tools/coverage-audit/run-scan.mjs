@@ -98,10 +98,12 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     await c.eval(presetDataJs(itemsTsv));
     await c.eval(GM_STUB);
     const dist = fs.readFileSync(DIST_FILE, 'utf8');
-    await c.eval(WRAP(dist));
+    await c.eval(WRAP(dist + '\nwindow.__zhxAuditInjected = true;'));
     // Data managers may not expose a public ready flag; bound the completion
     // delay and preserve the before snapshot instead of assuming no misses.
     await sleep(waitMs);
+    const injected = await c.eval('window.__zhxAuditInjected === true');
+    if (!injected) throw new Error('userscript 执行失败，不能判定汉化覆盖');
     const raw = await c.eval(COLLECTOR_JS);
     if (!Array.isArray(raw)) throw new Error('collector 未返回数组');
     return { site, pageId, url, beforeCount: before.length, items: pairSnapshots(before, raw), links, error: null, status: 'ok' };
