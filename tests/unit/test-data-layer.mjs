@@ -399,7 +399,7 @@ async function main() {
       if (i <= 0) continue;
       aLines++;
       const ja = l.slice(0, i);
-      const zh = l.slice(i + 1);
+      const zh = l.slice(i + 1).replace(/\r$/, '');
       const got = full.lookupAclCfc(ja);
       if (got !== zh) { am++; if (amShow.length < 8) amShow.push(`${ja}: got=${got} want=${zh}`); }
     }
