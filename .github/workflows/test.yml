@@ -43,6 +43,9 @@ jobs:
       - name: 产物语法检查
         run: npm run check:dist
 
+      - name: 覆盖审计 Python 云端执行器语法检查
+        run: python3 -c "import ast, pathlib; ast.parse(pathlib.Path('tools/coverage-audit/cloud-audit.py').read_text(encoding='utf-8'))"
+
       # 生成物入库纪律：src 模块 / 词典块 / 版本号均为构建生成物，
       # 构建后工作区应无差异（有差异 = 提交内容与构建链输出不同步）。
       - name: 构建后工作区一致性
