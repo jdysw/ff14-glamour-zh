@@ -426,6 +426,44 @@ try {
     await sleep(750);
     eq('表单内搜索框不走独立转换（由提交路径处理）', inForm.value, '炎灵');
   }
+
+  console.log('\n── F：vue-select 搜索框（EC 部位筛选器）自动转换 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ec');
+
+    const form = new FakeElement('form');
+    const vs = new FakeElement('input');
+    vs.form = form;
+    vs.className = 'vs__search';
+    vs.setAttribute('type', 'search');
+    vs.setAttribute('placeholder', 'Any head');
+    form.appendChild(vs);
+    vs.value = '炎灵';
+    document.dispatch('input', { target: vs });
+    await sleep(750);
+    eq('vue-select 搜索框（form 内）：完整中文名自动转换为原生名', vs.value, 'カ');
+    eq('转换后派发 input 事件（通知页面刷新建议）', (vs.dispatched || []).includes('input'), true);
+
+    vs.dispatched = [];
+    document.dispatch('input', { target: vs });
+    await sleep(750);
+    eq('原生值不再重复转换', vs.value, 'カ');
+    eq('原生值不产生额外 input 事件', (vs.dispatched || []).length, 0);
+
+    const plain = new FakeElement('input');
+    plain.form = form;
+    plain.setAttribute('type', 'text');
+    plain.setAttribute('placeholder', '備考欄');
+    form.appendChild(plain);
+    plain.value = '炎灵';
+    document.dispatch('input', { target: plain });
+    await sleep(750);
+    eq('非 vue-select 的表单内框不转换（回归保护）', plain.value, '炎灵');
+  }
 } finally {
   globalThis.document = previousDocument;
   if (previousAddEventListener === undefined) delete globalThis.addEventListener;

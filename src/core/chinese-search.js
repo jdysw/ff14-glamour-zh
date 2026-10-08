@@ -7,6 +7,10 @@ const SEARCH_SITES = Object.freeze({
   fc: true,
   ronka: true,
   collection: true,
+  // 1.4.2 后续修复：Eorzea Collection（英文站）——中文装备名 → 英文名。
+  // 覆盖场景：部位筛选器（vue-select，输入触发 POST /gear/<slot>/search）
+  // 与装备库页搜索框（/gearsets、/accessories 的 "Search..." 框）。
+  ec: true,
 });
 
 const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|password|作者|标题|标签|用户/i;
@@ -26,6 +30,9 @@ function searchInputScore(input) {
   if (!input) return -Infinity;
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
   if (!SEARCH_INPUT_TYPES.has(type) || input.disabled || input.readOnly) return -Infinity;
+  // 1.4.2 后续修复：vue-select 搜索框（EC 部位筛选器）不是表单搜索框——
+  // 其值不参与表单序列化，输入即触发站点检索；完全排除，交给独立搜索框自动转换路径。
+  if (/vs__search/.test(String(input.className || ''))) return -Infinity;
   const meta = [
     input.getAttribute?.('name'),
     input.getAttribute?.('id'),
@@ -399,11 +406,16 @@ let _standaloneTimer = null;
 let _standaloneInput = null;
 
 function isStandaloneSearchInput(input) {
-  if (!input || input.form) return false;
+  if (!input) return false;
   if (String(input.tagName || '').toUpperCase() !== 'INPUT') return false;
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
   if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
   if (input.disabled || input.readOnly) return false;
+  // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
+  // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search），
+  // 与独立搜索框相同地做「中文全名 → 原生名」自动转换。
+  if (/vs__search/.test(String(input.className || ''))) return true;
+  if (input.form) return false;
   const meta = [
     input.getAttribute?.('placeholder'),
     input.getAttribute?.('aria-label'),

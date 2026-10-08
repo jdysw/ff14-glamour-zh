@@ -73,6 +73,13 @@ console.log('\n── B：搜索框识别 ──');
     const fcForm = { querySelectorAll: () => [fcGenericSearch, fcPartSearch] };
     eq('FF14-FC ' + part + ' 页面优先识别部位搜索框', api.findSearchInput(fcForm), fcPartSearch);
   }
+
+  // 1.4.2 后续修复：vue-select 搜索框（EC 部位筛选器）不参与表单搜索框识别
+  const vsSearch = fakeInput({ placeholder: 'Any head' });
+  vsSearch.className = 'vs__search';
+  eq('vue-select 搜索框被排除（EC）', api.searchInputScore(vsSearch), -Infinity);
+  const vsForm = { querySelectorAll: () => [vsSearch, keyword] };
+  eq('含 vue-select 时仍优先识别关键词框', api.findSearchInput(vsForm), keyword);
 }
 
 console.log('\n── C：GET 搜索 URL 重写 ──');
