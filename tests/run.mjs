@@ -65,6 +65,7 @@ const SUITES = {
 };
 
 SUITES.unit.push('unit/test-endcloset.mjs');
+SUITES.integration.push('integration/test-standalone-search-trigger.mjs');
 
 const args = process.argv.slice(2);
 const opts = { suites: [], names: [], list: false };
