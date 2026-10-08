@@ -323,7 +323,7 @@ export function buildReport(results, { output } = {}) {
       lines.push('| 原文 | 位置 | 上下文 |');
       lines.push('|---|---|---|');
       for (const it of reals) {
-        lines.push(`| ${escapeMd(it.text)} | \`${it.path || ''}\` | ${escapeMd((it.ctx.parentText || '').slice(0, 80))} |`);
+        lines.push(`| ${escapeMd(it.text)} | \`${it.path || ''}\` | ${escapeMd((it.ctx?.parentText || '').slice(0, 80))} |`);
       }
       lines.push('');
     }
@@ -339,7 +339,7 @@ export function buildReport(results, { output } = {}) {
       lines.push('| 原文 | 位置 | 上下文 |');
       lines.push('|---|---|---|');
       for (const it of wrongs) {
-        lines.push(`| ${escapeMd(it.text)} | \`${it.path || ''}\` | ${escapeMd((it.ctx.parentText || '').slice(0, 80))} |`);
+        lines.push(`| ${escapeMd(it.text)} | \`${it.path || ''}\` | ${escapeMd((it.ctx?.parentText || '').slice(0, 80))} |`);
       }
       lines.push('');
     }
