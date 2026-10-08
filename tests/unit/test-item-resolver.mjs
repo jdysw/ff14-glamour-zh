@@ -231,10 +231,14 @@ const mkEnv = (over = {}) => ({
   eq('智能输入：少于 2 个中文字符不提示', JSON.stringify(api.suggestByZh('炎')), JSON.stringify([]));
   eq('智能输入：精确名称优先、正式名称次之、别名最后', JSON.stringify(api.suggestByZh('炎灵')), JSON.stringify([
     { zh: '炎灵', native: 'カ' },
+    ...[
     { zh: '炎灵长袍', native: 'エ' },
     { zh: '炎灵长裤', native: 'オ' },
+    ].sort((a, b) => new Intl.Collator().compare(a.zh, b.zh)),
+    ...[
     { zh: '炎灵袍', native: 'エ' },
     { zh: '炎灵裤', native: 'オ' },
+    ].sort((a, b) => new Intl.Collator().compare(a.zh, b.zh)),
   ]));
   eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
     { zh: '炎灵袍', native: 'エ' },
