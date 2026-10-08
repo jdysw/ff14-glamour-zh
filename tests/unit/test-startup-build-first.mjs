@@ -233,6 +233,41 @@ console.log('\n── D：无缓存全新安装 → 行为与现状一致（走�
   ok('D4 就绪广播触发', w.rec.fires.length >= 1);
 }
 
+console.log('\n── E：快速后台响应不得与首次分片构建并发 ──');
+{
+  let releaseVersion;
+  let finishFirstBuild;
+  const version = new Promise((resolve) => { releaseVersion = resolve; });
+  const w = makeWorld({
+    need: ['items'],
+    store: {
+      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000 }),
+      'zhx.dt.items': 'oldfp\n' + '旧数据'.repeat(60),
+    },
+    http: (url) => url.endsWith('version.json') ? version
+      : Promise.resolve('1\t新数据\n' + '新数据'.repeat(80)),
+  });
+  w.args.buildTables = (scope, done) => {
+    w.rec.builds++;
+    if (w.rec.builds === 1) finishFirstBuild = done;
+    else done();
+  };
+  const dm = buildDM(w);
+  const firstReady = dm.ensureTables();
+  await new Promise((resolve) => setImmediate(resolve));
+  w.flushTimers();
+  eq('E1 首次构建已启动但未完成', w.rec.builds, 1);
+  releaseVersion(JSON.stringify({ v: 'new', files: { items: 'newfp' } }));
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  eq('E2 后台下载完成仍不并发启动热替换', w.rec.builds, 1);
+  finishFirstBuild();
+  await settle(w, firstReady);
+  await new Promise((resolve) => setImmediate(resolve));
+  eq('E3 首次就绪后才启动热替换', w.rec.builds, 2);
+  eq('E4 就绪广播仍只触发一次', w.rec.fires.length, 1);
+}
+
 console.log(`\n════════ 汇总 ════════`);
 console.log(`通过 ${pass} / 失败 ${fail}`);
 if (fail > 0) process.exit(1);

@@ -319,7 +319,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     DATA_VER = (meta?.v ? String(meta.v) : '');
     __zhxMark('applied');
     // 后台探测 + 热替换（不阻塞就绪；失败保持当前数据）
-    _ensureFetchAll(need, local).then((ok) => { if (ok) return _hotSwapIndexes(); })
+    _ensureFetchAll(need, local).then(async (ok) => {
+      if (!ok) return;
+      // 首次构建会分片让出；先等它完成，防止旧索引晚于热替换收尾而覆盖新索引。
+      await _ensurePromise;
+      return _hotSwapIndexes();
+    })
       .catch((e) => { _zhxErr('hotSwap', e); });
     return true;
   }
