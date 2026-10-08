@@ -89,6 +89,13 @@ assert.match(report, /失败：1/);
 assert.match(report, /HTTP 403/);
 assert.match(report, /Show Results/);
 assert.doesNotMatch(report, /Search \|/); // stale snapshot excluded
+const cloudRaw = { site: 'ec', url: 'https://example.com/cloud/', pageId: 'cloud',
+  scannedAt: '2026-10-09T01:00:00Z',
+  items: [{ kind: 'text', text: 'Show Results', path: 'main>button', ctx: { ui: true, tag: 'button' }, before: 'Show Results' }] };
+const cloudReport = buildReport([cloudRaw]);
+assert.match(cloudReport, /真漏译候选：1/);
+assert.match(cloudReport, /Show Results/);
+
 
 const xml = '<sitemapindex><sitemap><loc>https://example.com/detail.xml</loc></sitemap></sitemapindex>';
 assert.deepEqual(parseSitemapLocs(xml), { index: true, urls: ['https://example.com/detail.xml'] });
