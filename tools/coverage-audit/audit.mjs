@@ -17,6 +17,9 @@
  *   JSON 明细（tests/.cache/coverage-audit/）+ Markdown 报告
  */
 import fs from 'node:fs';
+import { COLLECTOR_JS } from './coverage-collector.mjs';
+import { classifyChangedText, coverageStats, latestResults } from './coverage-core.mjs';
+export { COLLECTOR_JS };
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -76,9 +79,19 @@ export const SITES = {
     label: 'collection（FFXIV ARMOURY COLLECTION）',
     host: 'www.ffxivcollection.com',
     channel: 'local', // 本机可达
+    hosts: ['www.ffxivcollection.com', 'weapon.ffxivcollection.com'],
     pages: [
       { id: 'home', url: 'https://www.ffxivcollection.com/', type: 'home' },
       { id: 'weapon', url: 'https://weapon.ffxivcollection.com/', type: 'list' },
+    ],
+  },
+  endcloset: {
+    name: 'endcloset',
+    label: 'EndCloset（韩服幻化站）',
+    host: 'end-closet.com',
+    channel: 'local',
+    pages: [
+      { id: 'home', url: 'https://end-closet.com/', type: 'home' },
     ],
   },
   wiki: {
@@ -158,107 +171,61 @@ const KO_RE = /[\uac00-\ud7af\u1100-\u11ff]/;
 const JA_KANA_ONLY_RE = /[\u3040-\u30ff]/;
 
 /**
- * 判断一段文本是否为「残留外文」（需进一步分类）。
- * 英文不算残留（脚本不翻译英文站 UI 词以外的内容？——EC 是英文站，但界面词已汉化；
- * 英文残留需结合词典判断。这里只标记日/韩文残留 + 特定英文 UI 残留候选）。
+ * Non-Latin script residuals are always candidates. English must also be
+ * classified at the UI target level (otherwise posts, player names and gear
+ * names flood the report). This is intentionally recall-first for UI controls.
  */
-export function isResidual(text) {
-  const t = text.trim();
+export function isResidual(text, ctx = {}) {
+  const t = String(text || '').trim();
   if (!t) return false;
-  // 纯数字/标点/符号不算
-  if (!/[A-Za-z\u3040-\u30ff\uac00-\ud7af]/.test(t)) return false;
-  // 日文假名残留
-  if (JA_KANA_ONLY_RE.test(t)) return true;
-  // 韩文残留
-  if (KO_RE.test(t)) return true;
-  return false;
+  if (JA_RE.test(t) || KO_RE.test(t)) return true;
+  if (!/[A-Za-z]{2}/.test(t) || !ctx.ui || t.length > 100) return false;
+  if (ctx.kind === 'document:title' || ctx.kind === 'attr:alt') return false;
+  // Latin letters used in Chinese UI are generally identifiers/abbreviations,
+  // but an untranslated English phrase beside Chinese remains a candidate.
+  const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
+  const latinCount = (t.match(/[A-Za-z]/g) || []).length;
+  return !hanCount || latinCount >= 6;
 }
 
-/**
- * 分类一条残留文本。
- * @param {string} text 原文（trim 后）
- * @param {object} ctx { tag, cls, id, name, placeholder, ariaLabel, href, parentText }
- * @returns {string} CATEGORY 之一
- */
 export function classify(text, ctx = {}) {
-  const t = text.trim();
-  if (!t) return CATEGORY.OK;
-
-  // 已汉化（含中文，无外文残留）→ OK（不算残留）
-  if (!isResidual(t)) return CATEGORY.OK;
-
-  // 用户内容：投稿标题/用户名/留言/日期
-  // 启发式：文本较长、含自由文本特征；或上下文是用户内容容器
-  if (isUserContent(t, ctx)) return CATEGORY.USER;
-
-  // 广告位
+  const t = String(text || '').trim();
+  if (!t || !isResidual(t, ctx)) return CATEGORY.OK;
   if (isAdContext(ctx)) return CATEGORY.AD;
-
-  // 豁免：服务器名/品牌/站点名/未收录装备名
+  if (isUserContent(t, ctx)) return CATEGORY.USER;
   if (isExempt(t, ctx)) return CATEGORY.EXEMPT;
-
-  // 已知引擎限制 / 内容文案（fc 长句混合态、alt 博主文案等）
   if (isKnownLimit(t, ctx)) return CATEGORY.KNOWN;
-
-  // 错译候选：文本已部分中文化但仍残留假名（半译态，且非已知限制）
-  if (hasChinese(t) && isResidual(t)) return CATEGORY.WRONG;
-
-  // 其余 = 真漏译
+  // Only label partially translated text when we have source and output
+  // evidence; Japanese kanji must never be interpreted as Chinese by itself.
+  if (classifyChangedText(t, ctx.before) === 'partial' ||
+      classifystatechange(t, ctx.before)) return CATEGORY.WRONG;
   return CATEGORY.REAL;
 }
-
-function hasChinese(t) {
-  return /[\u4e00-\u9fff]/.test(t);
+function classifystatechange(t, before) {
+  return before != null && before !== t && /[A-Za-z]{2}/.test(t) && /[\u4e00-\u9fff]/.test(t);
 }
-
 function isUserContent(t, ctx) {
-  // 投稿标题/用户名/留言：通常较长、含自由文本；容器类名含 post/comment/user/author/date 等
-  const cls = (ctx.cls || '') + ' ' + (ctx.id || '') + ' ' + (ctx.name || '');
-  if (/(post|comment|user|author|message|date|time|created|submitted|nick|name)/i.test(cls)) return true;
-  // 日期格式（如 2026-10-08、10/08）
-  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(t) || /^\d{1,2}\/\d{1,2}/.test(t)) return true;
-  // 长度 > 60 的自由文本（非 UI 词）
-  if (t.length > 60) return true;
-  return false;
+  if (ctx.user) return true;
+  const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
+  if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(t)) return true;
+  return !ctx.ui && t.length > 160;
 }
-
 function isAdContext(ctx) {
-  // 收集器已标记广告容器祖先
   if (ctx.ad) return true;
-  const cls = (ctx.cls || '') + ' ' + (ctx.id || '') + ' ' + (ctx.name || '') + ' ' + (ctx.parentText || '');
-  // AdSense / 广告网络特征（ins.adsbygoogle、google-anno、aswift 等）
-  if (/(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container)/i.test(cls)) return true;
-  return /(ad-|ads|advert|sponsor|banner-|pr-|affiliate|amazon|rakuten)/i.test(cls);
+  const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
+  return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|sponsor)/i.test(cls);
 }
-
 function isExempt(t, ctx) {
   if (SERVER_NAMES.has(t)) return true;
   if (/^[A-Z][A-Za-z ]{1,40}$/.test(t) && /(server|world)/i.test(ctx.cls || '')) return true;
   for (const re of EXEMPT_PATTERNS) if (re.test(t)) return true;
   return false;
 }
-
 function isKnownLimit(t, ctx) {
-  // alt 属性中的长文案（博主撰写的图片说明/文章摘要）→ 内容，非 UI 漏译
-  if (ctx.kind === 'attr:alt') {
-    // 含中文 + 假名混合的长句，或纯日文长句（>15 字）→ 内容文案
-    if (t.length > 15) return true;
-  }
-  // fc 长句混合态：含假名 + 中文 + 长于 20 → 引擎限制/内容文案
-  // （fc 的 trFC ③ 部分命中即 return，导致长句半译，属已知限制）
-  if (ctx.site === 'fc' && hasChinese(t) && JA_RE.test(t) && t.length > 20) {
-    return true;
-  }
-  // fc 纯日文长句（>20）→ 博主文案/内容
-  if (ctx.site === 'fc' && JA_RE.test(t) && !hasChinese(t) && t.length > 20) {
-    return true;
-  }
-  // fc 半译态短名（含中文 + 假名，≤20）→ 系列名/短名部分命中，已知限制
-  // 例如「クリプトラーカー·成神之御敌」：职能词已译、系列名未推导出
-  if (ctx.site === 'fc' && hasChinese(t) && JA_RE.test(t) && t.length <= 20) {
-    return true;
-  }
-  return false;
+  // Long descriptive image captions are not authored UI strings. Do NOT
+  // silently waive FC partial strings; those are exactly what we want to fix.
+  return ctx.kind === 'attr:alt' && t.length > 100;
 }
 
 // ---------- 收集器：可见文本 + 属性 ----------
@@ -266,127 +233,37 @@ function isKnownLimit(t, ctx) {
  * 生成在页面上下文执行的收集器 JS（返回残留候选数组）。
  * 会被注入到真实页面（本地 CDP / 云浏览器 / 用户浏览器）。
  */
-export const COLLECTOR_JS = `(() => {
-  const out = [];
-  const seen = new Set();
-  const isVisible = (el) => {
-    if (!el || !el.isConnected) return false;
-    if (el.nodeType !== 1) return false;
-    const cs = window.getComputedStyle(el);
-    if (!cs) return false;
-    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
-    // offsetParent 为 null 通常不可见，但 position:fixed 特例
-    if (el.offsetParent === null && cs.position !== 'fixed') return false;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return false;
-    return true;
-  };
-  const skipTag = (el) => {
-    const tag = el.tagName;
-    return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'IFRAME' || tag === 'TEMPLATE';
-  };
-  const skipZhx = (el) => {
-    const cls = String(el.className || '');
-    const id = String(el.id || '');
-    return cls.includes('zhx-') || id.includes('zhx-') || el.hasAttribute('data-zhx-item') || el.hasAttribute('data-zhx-card') || el.hasAttribute('data-zhx-done') || el.hasAttribute('data-zhxWikiDone');
-  };
-  const ctxOf = (el) => {
-    let p = el.parentElement;
-    let cls = '', id = '', name = '', href = '', parentText = '', ad = false;
-    if (p) { cls = String(p.className || ''); id = String(p.id || ''); }
-    const inp = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
-    if (inp) {
-      name = String(el.getAttribute('name') || '');
-      const f = el.form;
-      if (f) { cls = String(f.className || '') + ' ' + cls; id = String(f.id || '') + ' ' + id; }
-    }
-    if (el.tagName === 'A') href = String(el.getAttribute('href') || '');
-    if (p) parentText = (p.textContent || '').trim().slice(0, 120);
-    // 广告容器检测：沿祖先链找 AdSense / 广告网络特征
-    let anc = el;
-    for (let i = 0; anc && i < 8; i++) {
-      const acls = String(anc.className || '') + ' ' + String(anc.id || '');
-      if (anc.tagName === 'INS' && /adsbygoogle/i.test(acls)) { ad = true; break; }
-      if (/(adsbygoogle|google-anno|aswift|ad-slot|adunit|ad-container|advert|sponsor)/i.test(acls)) { ad = true; break; }
-      anc = anc.parentElement;
-    }
-    return { tag: el.tagName.toLowerCase(), cls, id, name, href, parentText, ad };
-  };
-  const push = (el, text, kind) => {
-    const t = (text || '').trim();
-    if (!t) return;
-    if (seen.has(el + '|' + t + '|' + kind)) return;
-    seen.add(el + '|' + t + '|' + kind);
-    out.push({ kind, text: t, ctx: ctxOf(el), path: zhxPath(el) });
-  };
-  const zhxPath = (el) => {
-    const parts = [];
-    let cur = el;
-    while (cur && cur !== document.body && cur !== document.documentElement && parts.length < 12) {
-      let sel = cur.tagName.toLowerCase();
-      if (cur.id) sel += '#' + cur.id;
-      else if (cur.className && typeof cur.className === 'string') sel += '.' + cur.className.trim().split(/\\s+/).slice(0, 2).join('.');
-      const parent = cur.parentElement;
-      if (parent) {
-        const sib = Array.from(parent.children).filter((c) => c.tagName === cur.tagName && !(c.id) && String(c.className || '') === String(cur.className || ''));
-        const idx = Array.from(parent.children).indexOf(cur) + 1;
-        if (sib.length > 1) sel += ':nth-child(' + idx + ')';
-      }
-      parts.unshift(sel);
-      cur = cur.parentElement;
-    }
-    return parts.join(' > ');
-  };
-  // 1) 文本节点
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) => {
-      const p = node.parentElement;
-      if (!p || skipTag(p) || skipZhx(p)) return NodeFilter.FILTER_REJECT;
-      if (!isVisible(p)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  let n;
-  while ((n = walker.nextNode())) {
-    const t = (n.nodeValue || '').trim();
-    if (!t) continue;
-    push(n.parentElement, t, 'text');
-  }
-  // 2) 属性：placeholder / title / aria-label / alt / value(option)
-  const attrSel = 'input[placeholder],textarea[placeholder],input[title],a[title],button[title],[aria-label],[alt]';
-  for (const el of document.querySelectorAll(attrSel)) {
-    if (!isVisible(el) || skipZhx(el)) continue;
-    for (const attr of ['placeholder','title','aria-label','alt']) {
-      const v = el.getAttribute(attr);
-      if (v && v.trim()) push(el, v, 'attr:' + attr);
-    }
-  }
-  // 3) option 文本
-  for (const opt of document.querySelectorAll('option')) {
-    if (!isVisible(opt) || skipZhx(opt)) continue;
-    push(opt, opt.textContent || '', 'option');
-  }
-  // 4) 可见文本节点中的「已汉化但仍有外文」候选（半译态）也收集
-  return out;
-})()`;
-
 // ---------- 报告 ----------
 export function classifyResiduals(items) {
   return items.map((it) => {
     const text = it.text;
-    const cat = classify(text, { ...it.ctx, site: it.site, kind: it.kind });
+    const cat = classify(text, { ...it.ctx, site: it.site, kind: it.kind, before: it.before });
     return { ...it, category: cat, categoryLabel: CATEGORY_LABEL[cat] };
   });
 }
 
 export function buildReport(results, { output } = {}) {
-  // results: { site, pages: [{ id, url, items: [...] }] } 或 { site, pageId, url, items: [...] }
+  // Reduce cached history to the newest result per page; never double count.
+  results = latestResults(results);
+  const stats = coverageStats(results);
   const lines = [];
   lines.push('# 汉化覆盖审计报告');
   lines.push('');
   lines.push(`- 生成时间：${new Date().toISOString()}`);
   lines.push(`- 覆盖站点：${[...new Set(results.map((r) => r.site))].join(', ')}`);
   lines.push('');
+  lines.push('## 扫描质量与覆盖');
+  lines.push('');
+  lines.push('- 已扫描页面：' + stats.pages + '；成功：' + stats.completed + '；失败：' + stats.failed);
+  lines.push('- 已涉及页面模板：' + stats.templateCount + '；外文 UI 真漏译候选：' + stats.untranslated + '（其中纯英文：' + stats.english + '）；部分翻译候选：' + stats.wrong);
+  lines.push('- 注意：这是已扫描样本覆盖，不代表整站覆盖率；失败页不计作零漏译。');
+  lines.push('');
+  if (stats.failed) {
+    lines.push('### 扫描失败页面');
+    lines.push('');
+    for (const r of results.filter((r) => r.error || r.status === 'failed')) lines.push('- ' + r.site + ' / ' + (r.pageId || 'page') + ': ' + (r.error || '扫描失败'));
+    lines.push('');
+  }
   const bySite = {};
   const sitePages = {};   // site -> [{id, url, items}]
   for (const r of results) {
@@ -488,6 +365,7 @@ async function main() {
 // @match        https://lookbook.ronkacloset.com/*
 // @match        https://www.ffxivcollection.com/*
 // @match        https://weapon.ffxivcollection.com/*
+// @match        https://end-closet.com/*
 // @match        https://ff14.huijiwiki.com/wiki/*
 // @grant        none
 // ==/UserScript==
