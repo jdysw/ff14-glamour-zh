@@ -505,6 +505,37 @@ try {
     document.dispatch('scroll', { target: document.body });
     eq('G4b 输入框滚出视口 → 关闭', box.hidden, true);
   }
+
+  console.log('\n── H：独立搜索框智能输入（ronka / collection，无 form）──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    const api = harness.api;
+    api.startChineseSearch('ronka');
+
+    // ronka 风格：无 form 的独立搜索框（React 站点）
+    const input = new FakeElement('input');
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '검색어를 입력하세요');
+    input.value = '炎灵';
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
+
+    const box = findSuggestBox(document);
+    eq('H1 独立框输入中文出现智能候选', box?.hidden, false);
+    eq('H2 候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
+
+    // 点击候选 → 值=中文名 → 650ms 后自动转换为站点原生名（韩文）
+    const pointer = { target: box.children[0], prevented: false, preventDefault() { this.prevented = true; } };
+    document.dispatch('pointerdown', pointer);
+    eq('H3 点击候选后值为中文名', input.value, '炎灵');
+    eq('H3b 选择后关闭候选框', box.hidden, true);
+    await sleep(800);
+    eq('H4 独立框选中后自动转换为站点原生名', input.value, 'カ');
+  }
 } finally {
   globalThis.document = previousDocument;
   if (previousAddEventListener === undefined) delete globalThis.addEventListener;

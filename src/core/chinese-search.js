@@ -154,6 +154,14 @@ function isSearchInput(input) {
   return findSearchInput(form) === input;
 }
 
+// 1.4.2 后续修复：可挂候选面板的输入框 = 表单搜索框 + 纯独立搜索框（ronka / collection 等无 form 站）。
+// EC 的 vue-select（vs__search）维持纯自动转换，不挂候选面板（保持既有行为）。
+function isSuggestibleInput(input) {
+  if (isSearchInput(input)) return true;
+  if (/vs__search/.test(String(input?.className || ''))) return false;
+  return isStandaloneSearchInput(input);
+}
+
 function isSuggestionQuery(value) {
   const query = normalizeSearchQuery(value);
   return query.length >= SUGGEST_MIN_CHARS && /[\u3400-\u9fff]/u.test(query);
@@ -270,6 +278,8 @@ function selectSuggestion(index) {
   } catch {
     /* 输入类型变化时忽略光标定位失败 */
   }
+  // 独立搜索框（React 站点）：选中候选后自动转换为站点原生名，让站内搜索生效。
+  if (isStandaloneSearchInput(input)) scheduleStandaloneConversion(input);
 }
 
 function updateSuggestionActive(index) {
@@ -291,7 +301,7 @@ function updateSuggestionActive(index) {
 }
 
 function showSuggestions(input) {
-  if (!isSearchInput(input) || !input.isConnected) {
+  if (!isSuggestibleInput(input) || !input.isConnected) {
     hideSuggestions(true);
     return;
   }
@@ -365,24 +375,32 @@ function showSuggestions(input) {
 
 function handleSearchInput(event) {
   const input = event.target;
-  if (!isSearchInput(input)) {
-    if (_suggestInput === input) hideSuggestions(true);
+  if (isSearchInput(input)) {
+    if (_composingInputs.has(input)) return;
+    scheduleSuggestions(input);
     return;
   }
-  if (_composingInputs.has(input)) return;
-  scheduleSuggestions(input);
+  // 独立搜索框（无 form）：由 handleStandaloneSearchInput 调度（候选 + 自动转换），此处不清候选。
+  if (isStandaloneSearchInput(input)) return;
+  if (_suggestInput === input) hideSuggestions(true);
 }
 
 function handleSearchFocus(event) {
   const input = event.target;
-  if (!isSearchInput(input) || _composingInputs.has(input)) return;
+  if (!isSuggestibleInput(input) || _composingInputs.has(input)) return;
   scheduleSuggestions(input);
 }
 
 function handleSearchBlur(event) {
   if (_suggestInput !== event.target) return;
   if (_suggestHideTimer) clearTimeout(_suggestHideTimer);
-  _suggestHideTimer = setTimeout(() => hideSuggestions(true), SUGGEST_HIDE_DELAY_MS);
+  const blurred = event.target;
+  _suggestHideTimer = setTimeout(() => {
+    _suggestHideTimer = null;
+    // 1.4.2 后续修复：延迟内焦点可能已移到另一个搜索框（表单框 ↔ 独立框切换），
+    // 仅当 _suggestInput 仍是被失焦的框时才隐藏，避免误藏新框的候选面板。
+    if (_suggestInput === blurred) hideSuggestions(true);
+  }, SUGGEST_HIDE_DELAY_MS);
 }
 
 function handleSearchKeydown(event) {
@@ -501,7 +519,11 @@ function scheduleStandaloneConversion(input) {
 function handleStandaloneSearchInput(event) {
   const input = event.target;
   if (isSearchInput(input)) return;
-  if (isStandaloneSearchInput(input)) scheduleStandaloneConversion(input);
+  if (isStandaloneSearchInput(input)) {
+    scheduleStandaloneConversion(input);
+    // 1.4.2 后续修复：独立搜索框也显示智能候选面板（ronka / collection 等站）。
+    if (isSuggestibleInput(input)) scheduleSuggestions(input);
+  }
 }
 
 function bindChineseSearchUi() {

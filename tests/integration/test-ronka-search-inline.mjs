@@ -107,8 +107,28 @@ await sleep(1300);
 const v5 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑤ 表单内搜索框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));
 
+// ── ⑥⑦ 智能输入：独立搜索框候选面板 + 点击候选自动转换（1.4.2 后续修复）──
+await setInline('伴娘');
+await sleep(600);
+const boxInfo = await c.eval(`(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  return b ? { hidden: b.hidden, n: b.querySelectorAll('button[data-zhx-index]').length } : null;
+})()`);
+ok('⑥ 独立搜索框出现智能候选面板', !!boxInfo && boxInfo.hidden === false && boxInfo.n > 0, JSON.stringify(boxInfo));
+const clicked = await c.eval(`(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  if (!b || b.hidden) return null;
+  const btn = b.querySelector('button[data-zhx-index]');
+  if (!btn) return null;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  return btn.textContent;
+})()`);
+await sleep(1400);
+const v8 = await readInline();
+ok('⑦ 点击候选后自动转换为韩文原生名', clicked !== null && /[가-힣]/.test(v8 || ''), JSON.stringify({ clicked, v8 }));
+
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑥ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);
