@@ -496,8 +496,14 @@ try {
     eq('G3a 列表自身滚动不关闭候选框', box.hidden, false);
     document.dispatch('scroll', { target: box.children[0] });
     eq('G3b 列表内元素滚动不关闭候选框', box.hidden, false);
+
+    // 页面滚动（无滚动条的候选框链式滚动 / 滑到列表边界后继续滑）：
+    // 输入框仍在视口 → 保持打开（跟随重定位）；滚出视口 → 关闭。
     document.dispatch('scroll', { target: document.body });
-    eq('G4 页面滚动（列表外）仍关闭候选框', box.hidden, true);
+    eq('G4a 页面滚动但输入框仍在视口 → 保持打开', box.hidden, false);
+    input._rect = { left: 20, top: 700, right: 240, bottom: 730, width: 220, height: 30 };
+    document.dispatch('scroll', { target: document.body });
+    eq('G4b 输入框滚出视口 → 关闭', box.hidden, true);
   }
 } finally {
   globalThis.document = previousDocument;

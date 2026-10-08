@@ -207,6 +207,31 @@ function positionSuggestionBox(input) {
   _suggestBox.style.maxHeight = maxHeight + 'px';
 }
 
+// 滚动/缩放时保持候选框（1.4.2 后续修复）：输入框仍在视口内 → 跟随重定位（保持打开）；
+// 已滚出视口 → 关闭。滚动本身不再直接关闭候选框（无滚动条的候选框、滚到列表边界后
+// 继续滚动会链式带动页面滚动——这些场景都不应让候选框消失）。
+function syncSuggestionsOnScroll() {
+  if (!_suggestBox || _suggestBox.hidden) return;
+  const input = _suggestInput;
+  if (!input || input.isConnected === false) {
+    hideSuggestions(true);
+    return;
+  }
+  const rect = input.getBoundingClientRect?.();
+  if (!rect) {
+    hideSuggestions(true);
+    return;
+  }
+  const viewportWidth = Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
+  const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
+  const onScreen = rect.bottom > 0 && rect.top < viewportHeight && rect.right > 0 && rect.left < viewportWidth;
+  if (!onScreen) {
+    hideSuggestions(true);
+    return;
+  }
+  positionSuggestionBox(input);
+}
+
 function hideSuggestions(clearInputState = false) {
   if (_suggestTimer) {
     clearTimeout(_suggestTimer);
@@ -489,11 +514,12 @@ function bindChineseSearchUi() {
   document.addEventListener('compositionend', handleCompositionEnd, true);
   document.addEventListener('pointerdown', handleSuggestionPointerDown, true);
   document.addEventListener('scroll', (event) => {
-    // 候选列表自身的滚动（滚轮翻看全部装备）不关闭候选框；仅页面滚动才关闭。
+    // 列表自身滚动（滚轮翻看全部装备）无需处理；页面滚动只做同步——
+    // 输入框仍在视口内则保持打开并跟随重定位，已滚出视口才关闭。
     if (_suggestBox && event.target && _suggestBox.contains(event.target)) return;
-    hideSuggestions();
+    syncSuggestionsOnScroll();
   }, true);
-  globalThis.addEventListener?.('resize', () => hideSuggestions());
+  globalThis.addEventListener?.('resize', () => syncSuggestionsOnScroll());
 }
 
 function handleChineseSearchSubmit(event, siteId) {
