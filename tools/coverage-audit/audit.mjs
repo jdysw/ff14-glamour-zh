@@ -61,7 +61,12 @@ export const SITES = {
     channel: 'local', // 本机可达（需屏蔽外链）
     pages: [
       { id: 'home', url: 'https://ff14-fc.com/', type: 'home' },
-      { id: 'equip', url: 'https://ff14-fc.com/equip', type: 'list' },
+      { id: 'head', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_head/', type: 'search' },
+      { id: 'body', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_body/', type: 'search' },
+      { id: 'hand', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_hand/', type: 'search' },
+      { id: 'leg', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_leg/', type: 'search' },
+      { id: 'foot', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_foot/', type: 'search' },
+      { id: 'foot-filter', url: 'https://ff14-fc.com/equipment_search_parts/equipment_search_foot/?_sft_item_search_taxonomy_form_foot=boots', type: 'filtered' },
     ],
   },
   ronka: {
