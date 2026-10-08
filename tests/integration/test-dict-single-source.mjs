@@ -107,6 +107,14 @@ try {
 }
 
 console.log('── E：构建链含两步（不缺环）──');
+{
+  const tampered = JSON.parse(fs.readFileSync(djPath, 'utf8'));
+  tampered.endcloset['검색'] = '【篡改】';
+  const tamperedPath = path.join(dir, 'tampered-endcloset.json');
+  fs.writeFileSync(tamperedPath, JSON.stringify(tampered), 'utf8');
+  const result = run('node', ['build/verify_dicts.js', SRC_REL, '--dict-json', tamperedPath]);
+  ok('D4 End Closet 远程词条篡改必须被校验拒绝', result.code !== 0 && result.out.includes('DICT_ENDCLOSET'));
+}
 const bs = fs.readFileSync(path.join(repoRoot, 'build.sh'), 'utf8');
 ok('E1 build.sh 含 make_dict_json 生成步骤', bs.includes('make_dict_json.py'));
 ok('E2 build.sh 含 --dict-json 校验步骤', bs.includes('--dict-json'));

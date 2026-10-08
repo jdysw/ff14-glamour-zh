@@ -145,6 +145,13 @@ function buildDict(mock = {}) {
 
   // 七层引用齐备
   eq('DICT_LAYERS 七层', Object.keys(api.DICT_LAYERS).sort().join(','), 'acl,common,ec,endcloset,fc,main,ronka');
+  const endClosetRef = api.DICT_LAYERS.endcloset;
+  api.dictUpdate('{"common":{"shared":"公共"},"endcloset":{"search":"搜索","shared":"本站"}}');
+  eq('End Closet 远程词条进入运行时词典', api.dictGet('search', 'endcloset'), '搜索');
+  eq('End Closet 站点词优先于公共词', api.dictGet('shared', 'endcloset'), '本站');
+  api.dictUpdate('{"common":{"newShared":"新公共"},"endcloset":{"search":"搜索装备"}}');
+  eq('End Closet 接收新增公共词', api.dictGet('newShared', 'endcloset'), '新公共');
+  eq('End Closet 词条修订原地生效', endClosetRef.search, '搜索装备');
 }
 
 // ─────────────────────────────────────────────────────────────

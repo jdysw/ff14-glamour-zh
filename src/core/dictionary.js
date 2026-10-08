@@ -2274,7 +2274,7 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
     if (!d || typeof d !== 'object') return;
     const common = (d.common && typeof d.common === 'object') ? d.common : null;
     // 五站层顺序固定；六层词表引用见 DICT_LAYERS（词典接口区）
-    const layers = ['main', 'ec', 'fc', 'ronka', 'acl'];
+    const layers = ['main', 'ec', 'fc', 'ronka', 'acl', 'endcloset'];
     _dictFixesBuf = [];
     try {
       if (common) Object.assign(DICT_COMMON, common);
