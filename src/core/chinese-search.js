@@ -509,7 +509,8 @@ function scheduleStandaloneConversion(input) {
       if (!element || element.isConnected === false) return;
       const query = normalizeSearchQuery(element.value);
       if (query.length < 2 || !isChineseSearchQuery(query)) return;
-      const native = resolveByZh(query);
+      let native = resolveByZh(query);
+      if (!native) native = resolvePartialByZh(query);   // v1.4.2 后续：部分词（如「女仆」）→ 公共子串兜底
       if (!native || native === query) return;
       rewriteInputNatively(element, native);
     } catch { /* 静默：转换失败不影响用户输入 */ }

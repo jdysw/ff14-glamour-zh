@@ -127,8 +127,15 @@ await sleep(1400);
 const v8 = await readInline();
 ok('⑦ 点击候选后自动转换为韩文原生名', clicked !== null && /[가-힣]/.test(v8 || ''), JSON.stringify({ clicked, v8 }));
 
+// ── ⑧ 部分词：「女仆」（完整名未命中）→ 韩文名公共子串自动替换（v1.4.2 后续）──
+// 期望值 = 「메이드 」——14 条含「女仆」装备的韩文名公共子串（含尾随空格），用于站内搜索メイド系列。
+await setInline('女仆');
+await sleep(1600);
+const v9 = await readInline();
+ok('⑧ 部分词「女仆」→ 韩文公共子串「메이드 」自动替换', v9 === '메이드 ', JSON.stringify(v9));
+
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑨ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);

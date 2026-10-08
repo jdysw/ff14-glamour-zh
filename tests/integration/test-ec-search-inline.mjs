@@ -114,8 +114,16 @@ await sleep(1300);
 const v6 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑥ 传统表单搜索框不触发独立转换（中文保留）', v6 === EXPECT_ZH, JSON.stringify(v6));
 
+// ── ⑦ 部分词质量门：英文提取片段不合格（如 "ai"）时保持不转换（v1.4.2 后续）──
+// 含「女仆」装备的英文名集合混杂（PvP 鸟甲等），公共子串会是无意义的词中片段；
+// 质量门要求片段两端接词边界，否则判不合格 → 输入保持原样，避免产出垃圾搜索词。
+await setVs('vs-head', '女仆');
+await sleep(1600);
+const v7 = await readVs('vs-head');
+ok('⑦ 部分词提取片段不合格 → 保持不转换（质量门）', v7 === '女仆', JSON.stringify(v7));
+
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑦ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);

@@ -126,8 +126,15 @@ await sleep(1400);
 const v6 = await readInline();
 ok('⑥ 点击候选后自动转换为日文原生名', clicked !== null && /[\u30a0-\u30ff]/.test(v6 || ''), JSON.stringify({ clicked, v6 }));
 
+// ── ⑦ 部分词：「女仆」（完整名未命中）→ 日文名公共子串自动替换（v1.4.2 后续）──
+// 期望值 = 「メイド」——含「女仆」装备的日文名公共子串，用于站内搜索メイド系列。
+await setInline('女仆');
+await sleep(1600);
+const v7 = await readInline();
+ok('⑦ 部分词「女仆」→ 日文公共子串「メイド」自动替换', v7 === 'メイド', JSON.stringify(v7));
+
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑦ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);

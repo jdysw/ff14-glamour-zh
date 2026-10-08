@@ -49,6 +49,24 @@ function sliceAll(s, tag) {
 const RESOLVER_SEG = sliceAll(DIST_TEXT, 'core-item-resolver')
   .map((seg) => seg.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
 
+// _lcs90 系列辅助（dist 未标记区，cache 模块头部）：满足 resolvePartialByZh 的依赖。
+// 段提取不含未标记区，故从 dist 源码单独抽取三个无副作用纯函数注入装配。
+const extractFn = (src, name) => {
+  const sig = `function ${name}(`;
+  const i = src.indexOf(sig);
+  if (i < 0) throw new Error(`辅助函数缺失：${name}`);
+  let depth = 0;
+  let j = i;
+  for (; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { j++; break; } }
+  }
+  return src.slice(i, j);
+};
+const SERIES_HELPERS = ['_shortestStr', '_countIncludes', '_lcs90']
+  .map((name) => extractFn(DIST_TEXT, name)).join('\n');
+
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
   'key\tzh\ten\tja\tko\thash\tecid\talias',
@@ -101,11 +119,11 @@ function buildResolver(env = {}) {
     'const _zhxErr = (where, e) => __rec.errs.push([String(where), String((e && e.message) || e)]);',
   ];
   const ret = [
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, __stats: () => ({ ..._irStats }),',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, resolvePartialByZh, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
     '  __setV3: (v) => { _v3Applied = v; } };',
   ].join('\n');
-  const body = [...stubs, ...RESOLVER_SEG, ret].join('\n');
+  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, ret].join('\n');
   try {
     const fn = new Function('__env', '__rec', body);
     return fn(env, rec);
@@ -371,6 +389,42 @@ const mkEnv = (over = {}) => ({
   eq('D5 v2 路径：glam=1 保留', built2.map['甲装备'], 'アア');
   eq('D6 v2 路径：glam=0 剔除', built2.map['乙家具'], undefined);
   eq('D7 v2 路径：无 glam 列不过滤', built2.map['丙旧物'], 'ウウ');
+}
+
+// E. resolvePartialByZh 部分词（v1.4.2 后续：完整名未命中 → 公共子串提取 + 英文质量门）
+// ─────────────────────────────────────────────────────────────
+{
+  // E1-E2 / E5-E6：CJK 站（mirapri → ja 列）
+  const api = buildResolver(mkEnv({ site: { id: 'mirapri' } }));
+  const jaText = [
+    '1\t女仆发带\tHousemaid brim\tメイドホワイトブリム\t메이드 머리띠\t\t\t\t1',
+    '2\t女仆围裙装\tHousemaid apron\tメイドエプロンドレス\t메이드 앞치마\t\t\t\t1',
+    '3\t女仆腕带\tHousemaid wrist\tメイドリストドレス\t메이드 소매장식\t\t\t\t1',
+    '4\t女仆裙甲\tHousemaid skirt\tメイドスカート\t메이드 치마\t\t\t\t1',
+  ].join('\n');
+  api._irBuildAux(jaText);
+  eq('E1 ja 纯组：部分词「女仆」→ 公共子串「メイド」', api.resolvePartialByZh('女仆'), 'メイド');
+  eq('E2 无匹配词保持不转换（null）', api.resolvePartialByZh('紫电'), null);
+  eq('E5 单条命中：「裙甲」→ 完整原生名', api.resolvePartialByZh('裙甲'), 'メイドスカート');
+  eq('E6 完整名（键与查询相同）不产生部分词结果', api.resolvePartialByZh('女仆发带'), null);
+
+  // E3：英文站（ec → en 列）——词中片段被质量门拒绝
+  const api2 = buildResolver(mkEnv({ site: { id: 'ec' } }));
+  api2._irBuildAux([
+    '1\t测试头盔\tKAID A\tア\t가\t\t\t\t1',
+    '2\t测试胸甲\tMAID A\tイ\t나\t\t\t\t1',
+    '3\t测试护腕\tMAID B\tウ\t다\t\t\t\t1',
+  ].join('\n'));
+  eq('E3 en 词中片段（AID ）被质量门拒绝 → null', api2.resolvePartialByZh('测试'), null);
+
+  // E4：英文站——纯组（词首起、右端有边界）通过
+  const api3 = buildResolver(mkEnv({ site: { id: 'ec' } }));
+  api3._irBuildAux([
+    '1\t试验头盔\tHousemaid Helm\tア\t가\t\t\t\t1',
+    '2\t试验胸甲\tHousemaid Mail\tイ\t나\t\t\t\t1',
+    '3\t试验护腕\tHousemaid Vambrace\tウ\t다\t\t\t\t1',
+  ].join('\n'));
+  eq('E4 en 纯组：「试验」→ 公共子串「Housemaid 」', api3.resolvePartialByZh('试验'), 'Housemaid ');
 }
 
 // ─────────────────────────────────────────────────────────────

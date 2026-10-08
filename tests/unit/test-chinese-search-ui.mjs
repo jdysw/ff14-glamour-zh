@@ -182,7 +182,7 @@ function buildSearchHarness(suggestionsOverride) {
   const body = [
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
-    'const resolvePartialByZh = (v) => ({丙: "ウ"})[v] || null;',
+    'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
     'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',
@@ -407,6 +407,23 @@ try {
     document.dispatch('input', { target: unknown });
     await sleep(750);
     eq('未命中中文名保持原样', unknown.value, '不存在装备');
+
+    // 1.4.2 后续：部分词兜底（完整名未命中 → 公共子串提取；与提交路径同逻辑）
+    const partial = new FakeElement('input');
+    partial.setAttribute('type', 'search');
+    partial.setAttribute('placeholder', '검색어를 입력해주세요');
+    partial.value = '丙丁';
+    document.dispatch('input', { target: partial });
+    await sleep(750);
+    eq('独立搜索框：部分词自动转换（公共子串兜底）', partial.value, 'ウエ');
+
+    const partialNone = new FakeElement('input');
+    partialNone.setAttribute('type', 'search');
+    partialNone.setAttribute('placeholder', '검색어를 입력해주세요');
+    partialNone.value = '甲乙丙丁戊';
+    document.dispatch('input', { target: partialNone });
+    await sleep(750);
+    eq('部分词也无解时保持原样', partialNone.value, '甲乙丙丁戊');
 
     const plain = new FakeElement('input');
     plain.setAttribute('type', 'text');

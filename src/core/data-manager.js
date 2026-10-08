@@ -738,8 +738,30 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     let z = null;
     if (natives.length === 1) z = natives[0];
     else if (natives.length > 1) z = _lcs90(natives);
+    // 英文（非 CJK）片段质量门：如 "ai"、"Loyal Housem" 这类词中片段判为不合格，
+    // 保持不转换——避免把无意义的片段当搜索词（英文站数据混杂时 _lcs90 会产出此类结果）。
+    if (z && /[A-Za-z]/.test(z) && !_zhPartialEdgeOk(z, natives)) z = null;
     _irStats[z ? 'hit' : 'miss']++;
     return z;
+  }
+
+  // 部分词提取的英文片段边界校验：含 ASCII 字母的片段必须在某个样本中存在「合格窗口」
+  // ——左端为串首或前邻非字母数字；右端为串尾、后邻非字母数字、或末字符本身即分隔符
+  // （如「Housemaid 」尾随空格）；否则视为词中片段（如 "ai"、"Loyal Housem"）判不合格。
+  function _zhPartialEdgeOk(seg, list) {
+    for (const s of list) {
+      let i = s.indexOf(seg);
+      while (i !== -1) {
+        const left = i === 0 || !/[0-9A-Za-z]/.test(s[i - 1]);
+        const end = i + seg.length;
+        const right = end >= s.length
+          || !/[0-9A-Za-z]/.test(s[end])
+          || !/[0-9A-Za-z]/.test(s[end - 1]);
+        if (left && right) return true;
+        i = s.indexOf(seg, i + 1);
+      }
+    }
+    return false;
   }
 
   // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
