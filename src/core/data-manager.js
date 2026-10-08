@@ -276,6 +276,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return new Promise((resolve) => {
       const finish = () => {
         __zhxMark('hotSwap');
+        // 中文搜索倒排索引与派生注册表基于旧 nameMap 构建，必须失效重建，
+        // 否则 suggestByZh / resolveByZh / resolveAllByName 会继续命中旧数据。
+        _irSearchByZh = null;
+        _irSearchKind = null;
+        _irSearchCanonicalKeys = null;
+        _irSearchAliasKeys = null;
+        _irDupMap = null;
+        _irAliasMap = null;
+        // 派生缓存（系列前缀 / 物品前缀 / 子串键）同样基于旧数据，一并失效。
+        try { cacheReset('derived'); } catch (e) { /* 忽略：缓存清理失败不影响索引替换 */ }
+        try { cacheReset('lookup'); } catch (e) { /* 忽略 */ }
+        try { cacheReset('translate'); } catch (e) { /* 忽略 */ }
+        try {
+          __zhxMark('hotSwapAux');
+          _irBuildAux(DATA_TEXT.items);   // 用最新表文本重建中文搜索索引 + 重名/别名注册表
+        } catch (e) { _zhxErr('hotSwapAux', e); }
         try {
           console.info('幻化数据热替换完成 → 数据版本 ' + (DATA_VER || '未记录'));
         } catch (e) { /* 忽略：日志输出失败不影响 */ }

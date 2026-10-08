@@ -188,6 +188,8 @@ console.log('\n── B：热替换原子切换（探测到新版本 → 索引�
   eq('B3 新版本回填 DATA_VER', dm._state().ver, 'new');
   // 查询无空窗：热替换后索引可用（buildTables 桩直接 cb()；就绪广播不重复）
   eq('B4 就绪广播仍为首次（不重放）', w.rec.fires.length, 1);
+  // 热替换后中文搜索索引已重置并重建（_irBuildAux 被调用）
+  ok('B5 热替换后中文搜索索引已重建（hotSwapAux 标记）', w.rec.marks.includes('hotSwapAux'), `marks=${JSON.stringify(w.rec.marks)}`);
 }
 
 console.log('\n── C：后台探测失败 → 数据仍可用（静默降级）──');
