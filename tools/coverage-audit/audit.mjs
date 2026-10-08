@@ -258,6 +258,13 @@ export function classifyResiduals(items) {
 export function buildReport(results, { output } = {}) {
   // Reduce cached history to the newest result per page; never double count.
   results = latestResults(results);
+  // Cloud scanner stores raw snapshots; report-time classification must handle
+  // both cloud flat results and legacy local pre-classified files.
+  for (const r of results) {
+    if (Array.isArray(r.items) && r.items.some((it) => it.category === undefined)) {
+      r.items = classifyResiduals(r.items.map((it) => ({ ...it, site: r.site })));
+    }
+  }
   const stats = coverageStats(results);
   const lines = [];
   lines.push('# 汉化覆盖审计报告');
