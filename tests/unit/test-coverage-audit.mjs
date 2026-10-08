@@ -19,6 +19,8 @@ const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), '
 assert.equal(Object.keys(SITES).length, 7, 'all seven active adapters must be audited');
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
 assert.ok(SITES.collection.hosts.includes('weapon.ffxivcollection.com'));
+assert.deepEqual(SITES.fc.pages.filter((p) => ['head','body','hand','leg','foot'].includes(p.id)).map((p) => p.id), ['head','body','hand','leg','foot']);
+assert.ok(SITES.fc.pages.some((p) => p.type === 'filtered'));
 assert.deepEqual(unmatchedHosts(['weapon.ffxivcollection.com', 'www.ffxivcollection.com'], header), []);
 assert.ok(header.includes('@match        https://end-closet.com/*'));
 assert.equal(unmatchedHosts(['unknown.example.net'], header).length, 1);
