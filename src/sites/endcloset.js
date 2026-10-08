@@ -38,7 +38,7 @@ export {
  *   4. 中文搜索：搜索框输入中文 → 自动转韩文/英文（startChineseSearch）
  * ===================================================================== */
 
-const EC_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip';
+const EC_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip, #zhx-chinese-suggest-list';
 const EC_KR = /[\uac00-\ud7a3]/;
 const EC_EN_WORD = /[A-Za-z]{2,}/;
 const EC_JA = /[\u3040-\u30ff]/;
@@ -127,7 +127,8 @@ function _ecProcNode(n) {
     const next = trEndCloset(raw);
     if (next !== raw) {
       n.nodeValue = next;
-      markEndClosetItem(n, next);
+      const itemZh = _trEndClosetItem(raw.trim());
+      if (itemZh) markEndClosetItem(n, itemZh);
     }
     return;
   }
@@ -138,17 +139,15 @@ function _ecProcNode(n) {
 
 function translateEndClosetPage(rootArg) {
   if (rootArg?.nodeType === 3) {
-    const raw = rootArg.nodeValue;
-    if (!raw?.trim()) return;
-    const next = trEndCloset(raw);
-    if (next !== raw) {
-      rootArg.nodeValue = next;
-      markEndClosetItem(rootArg, next);
-    }
+    _ecProcNode(rootArg);
     return;
   }
   const root = rootArg || document.body || document.documentElement;
   if (!root) return;
+  if (root.nodeType === 1) {
+    if (_ecAcceptNode(root) === NodeFilter.FILTER_REJECT) return;
+    _ecProcNode(root);
+  }
   _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
   const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
     acceptNode: _ecAcceptNode,
@@ -176,8 +175,8 @@ function startEndCloset() {
     characterData: true,
     filter: (m) => !!(m.target?.nodeValue && (EC_KR.test(m.target.nodeValue) || EC_EN_WORD.test(m.target.nodeValue) || EC_JA.test(m.target.nodeValue))),
     debounce: 120,
-    handler: (nodes) => {
-      for (const n of nodes) safe(translateEndClosetPage, 'EndCloset 局部')(n);
+    handler: (nodes, cds = []) => {
+      for (const n of [...nodes, ...cds]) safe(translateEndClosetPage, 'EndCloset 局部')(n);
       safe(translateEndClosetTitle, 'EndCloset 标题')();
     },
   });

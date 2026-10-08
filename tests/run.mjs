@@ -64,6 +64,8 @@ const SUITES = {
   ],
 };
 
+SUITES.unit.push('unit/test-endcloset.mjs');
+
 const args = process.argv.slice(2);
 const opts = { suites: [], names: [], list: false };
 for (const a of args) {

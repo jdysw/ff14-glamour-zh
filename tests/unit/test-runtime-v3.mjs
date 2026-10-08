@@ -117,6 +117,17 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
     `found=${ecFound} checked=${ecChecked} bad=${ecBad}`);
 }
 
+// End Closet can display equipment names in Korean, English, or Japanese.
+{
+  const names = new Map(readFileSync(new URL('endcloset/names.tsv', V3_DIR), 'utf8')
+    .split('\n').filter(Boolean).map((line) => line.split('\t').slice(0, 2)));
+  const items = readFileSync(new URL('data/ff14-items.tsv', ROOT), 'utf8');
+  const item = items.split('\n').map((line) => line.split('\t'))
+    .find((row) => row[1] === '女仆围裙装');
+  ok('End Closet 真实装备含韩英日三个名称映射', !!item
+    && [item[4], item[2], item[3]].every((name) => names.get(name) === item[1]));
+}
+
 // wiki 两文件
 {
   const ecid = readFileSync(new URL('wiki/ecid.tsv', V3_DIR), 'utf8').trim().split('\n');

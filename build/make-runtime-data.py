@@ -65,7 +65,7 @@ SITE_LANGS = {
     'fc': ['ja'],
     'ronka': ['ko'],
     'collection': ['ja'],
-    'endcloset': ['ko'],
+    'endcloset': ['ko', 'en', 'ja'],
     'wiki': [],
 }
 
