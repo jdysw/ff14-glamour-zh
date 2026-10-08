@@ -78,7 +78,7 @@ export const COLLECTOR_JS = String.raw`(() => {
     for (const a of ['placeholder','title','aria-label','alt']) if (el.hasAttribute(a)) push(el, el.getAttribute(a), 'attr:' + a);
     if (/^(INPUT|BUTTON)$/.test(el.tagName) && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) push(el, el.value, 'attr:value');
   }
-  push(document.querySelector('title') || document.body, document.title, 'document:title');
+  if (document.title) out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: false, user: false, ad: false } });
   return out;
 })()`;
 
