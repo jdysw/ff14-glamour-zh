@@ -4,7 +4,7 @@
 //       采用最小 DOM harness 驱动 canonical source，验证事件绑定、候选渲染、
 //       键盘 / pointer / IME、视口定位、未命中提示和搜索框缓存。
 //       数据层排序与解析契约由 test-item-resolver.mjs 独立验证。
-//       1.4.2 后续修复：新增 E 段——独立搜索框（无 form，如 ronka）自动转换。
+//       1.4.2 后续修复（b 方案）：E 段——独立搜索框输入停顿不自动转换；点选候选做转换式搜索。
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -377,7 +377,7 @@ try {
     eq('未命中提示容器切换为 status', box.getAttribute('role'), 'status');
   }
 
-  console.log('\n── E：独立搜索框（无 form）自动转换 ──');
+  console.log('\n── E：独立搜索框（无 form）— b 方案：输入停顿不转换 ──');
   {
     installDocument();
     delete globalThis.__zhxChineseSearchBound;
@@ -391,14 +391,8 @@ try {
     standalone.value = '炎灵';
     document.dispatch('input', { target: standalone });
     await sleep(750);
-    eq('独立搜索框：完整中文名自动转换为原生名', standalone.value, 'カ');
-    eq('转换后派发 input 事件（通知页面刷新建议）', (standalone.dispatched || []).includes('input'), true);
-
-    standalone.dispatched = [];
-    document.dispatch('input', { target: standalone });
-    await sleep(750);
-    eq('原生值不再重复转换', standalone.value, 'カ');
-    eq('原生值不产生额外 input 事件', (standalone.dispatched || []).length, 0);
+    eq('输入停顿后完整中文名保持原样（不自动转换）', standalone.value, '炎灵');
+    eq('不派发 input 事件（不触发站点检索）', (standalone.dispatched || []).length, 0);
 
     const unknown = new FakeElement('input');
     unknown.setAttribute('type', 'search');
@@ -408,14 +402,14 @@ try {
     await sleep(750);
     eq('未命中中文名保持原样', unknown.value, '不存在装备');
 
-    // 1.4.2 后续：部分词兜底（完整名未命中 → 公共子串提取；与提交路径同逻辑）
+    // b 方案：部分词也不转换（此前为公共子串自动替换；部分词兜底仍保留在提交路径）
     const partial = new FakeElement('input');
     partial.setAttribute('type', 'search');
     partial.setAttribute('placeholder', '검색어를 입력해주세요');
     partial.value = '丙丁';
     document.dispatch('input', { target: partial });
     await sleep(750);
-    eq('独立搜索框：部分词自动转换（公共子串兜底）', partial.value, 'ウエ');
+    eq('部分词输入停顿保持原样（不自动转换）', partial.value, '丙丁');
 
     const partialNone = new FakeElement('input');
     partialNone.setAttribute('type', 'search');
@@ -445,7 +439,7 @@ try {
     eq('表单内搜索框不走独立转换（由提交路径处理）', inForm.value, '炎灵');
   }
 
-  console.log('\n── F：vue-select 搜索框（EC 部位筛选器）自动转换 ──');
+  console.log('\n── F：vue-select 搜索框（EC 部位筛选器）— b 方案：不转换 + 候选面板 ──');
   {
     installDocument();
     delete globalThis.__zhxChineseSearchBound;
@@ -461,16 +455,18 @@ try {
     vs.setAttribute('placeholder', 'Any head');
     form.appendChild(vs);
     vs.value = '炎灵';
+    document.dispatch('focusin', { target: vs });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
     document.dispatch('input', { target: vs });
     await sleep(750);
-    eq('vue-select 搜索框（form 内）：完整中文名自动转换为原生名', vs.value, 'カ');
-    eq('转换后派发 input 事件（通知页面刷新建议）', (vs.dispatched || []).includes('input'), true);
+    eq('vue-select 输入停顿保持原样（不自动转换）', vs.value, '炎灵');
+    eq('不派发 input 事件（不触发站点检索）', (vs.dispatched || []).length, 0);
 
-    vs.dispatched = [];
-    document.dispatch('input', { target: vs });
-    await sleep(750);
-    eq('原生值不再重复转换', vs.value, 'カ');
-    eq('原生值不产生额外 input 事件', (vs.dispatched || []).length, 0);
+    // b 方案新增：vue-select 也挂候选面板（点选候选时做转换式搜索）
+    const vsBox = findSuggestBox(document);
+    ok('vue-select 出现智能候选面板', !!vsBox && vsBox.hidden === false && vsBox.querySelectorAll('button[data-zhx-index]').length > 0);
 
     const plain = new FakeElement('input');
     plain.form = form;
@@ -524,7 +520,7 @@ try {
     eq('G4b 输入框滚出视口 → 关闭', box.hidden, true);
   }
 
-  console.log('\n── H：独立搜索框智能输入（ronka / collection，无 form）──');
+  console.log('\n── H：独立搜索框智能输入（点选转换式搜索，保留中文）──');
   {
     installDocument();
     delete globalThis.__zhxChineseSearchBound;
@@ -546,13 +542,16 @@ try {
     eq('H1 独立框输入中文出现智能候选', box?.hidden, false);
     eq('H2 候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
 
-    // 点击候选 → 值=中文名 → 650ms 后自动转换为站点原生名（韩文）
+    // b 方案：点选候选 → 转换式搜索（用原生名触发站点检索），显示随后恢复为中文
     const pointer = { target: box.children[0], prevented: false, preventDefault() { this.prevented = true; } };
     document.dispatch('pointerdown', pointer);
-    eq('H3 点击候选后值为中文名', input.value, '炎灵');
-    eq('H3b 选择后关闭候选框', box.hidden, true);
-    await sleep(800);
-    eq('H4 独立框选中后自动转换为站点原生名', input.value, 'カ');
+    eq('H3 点击候选后同步设为原生名（触发转换式搜索）', input.value, 'カ');
+    eq('H3b 派发 input 事件（站内搜索用原生名）', (input.dispatched || []).includes('input'), true);
+    eq('H3c 选择后关闭候选框', box.hidden, true);
+    await sleep();
+    eq('H4 显示恢复为中文（搜索后输入框保留中文）', input.value, '炎灵');
+    await sleep(700);
+    eq('H5 恢复后保持中文（无额外事件）', input.value, '炎灵');
   }
 } finally {
   globalThis.document = previousDocument;

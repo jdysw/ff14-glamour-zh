@@ -1,11 +1,12 @@
-// tests/integration/test-ronka-search-inline.mjs — 1.4.2 后续修复：ronka 独立搜索框（无 form）中文自动转换（离线夹具）
+// tests/integration/test-ronka-search-inline.mjs — 1.4.2 后续修复（b 方案）：ronka 独立搜索框（无 form）（离线夹具）
 //
 // 背景：lookbook.ronkacloset.com（React SPA）的搜索框不属于任何 form，站点搜索是「输入即出建议面板」
 //       的本地过滤，无提交事件可拦截；中文输入 →「검색 결과가 없어요」（真站实测 2026-10-07）。
-//       修复 = 输入停止后把完整中文装备名自动替换为韩文原生名（native setter + input 事件）。
-// 本测试：用同构夹具（无 form 独立搜索框 + 普通表单搜索框作对照）冻结两个契约：
-//   ① 独立搜索框：完整中文名 → 韩文名自动替换（并派发 input 事件通知页面）；
-//   ② 表单内搜索框不触发独立转换（仍由提交路径处理）。
+//       b 方案（2026-10-08）：输入停顿不再自动转换（禁止输入即搜索）；点选候选面板才做
+//       「转换式搜索」（原生名触发站内检索），随后输入框显示恢复为中文。
+// 本测试：用同构夹具（无 form 独立搜索框 + 普通表单搜索框作对照）冻结契约：
+//   ① 独立搜索框出现智能候选面板（数据就绪门）；② 输入中文不自动转换；
+//   ③ 点选候选：转换式搜索（派发原生名）且输入框保留中文；④ 表单内搜索框不触发独立转换。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
@@ -59,11 +60,11 @@ await c.eval("window.__zhxTestSite = 'ronka';");
 await c.eval("window.__zhxTestTables = ['items'];");
 await c.eval('window.__zhxDiagOn = true;');
 await c.eval(gmStub);
-// 观察装置：记录「因自动转换而产生的 input 事件」（值为韩文名的那一刻）
+// 观察装置：记录「转换式搜索派发的 input 事件」（值为候选韩文原生名的那一刻）
 await c.eval(`(() => {
   window.__convEvt = false;
   document.addEventListener('input', function (e) {
-    try { if (e && e.target && e.target.value === ${JSON.stringify(expectKo)}) window.__convEvt = true; } catch (x) {}
+    try { if (e && e.target && /[가-힣]/.test(String(e.target.value || ''))) window.__convEvt = true; } catch (x) {}
   }, true);
   return 1;
 })()`);
@@ -73,27 +74,44 @@ await sleep(1500);
 const setInline = (val) => c.eval(`(() => { const i = document.getElementById('search-input'); i.focus(); i.value = ${JSON.stringify(val)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
 const readInline = () => c.eval(`(() => { const i = document.getElementById('search-input'); return i ? i.value : null; })()`);
 
-// ── 就绪门：输入中文全名 → 等自动转换（数据就绪 + 功能装配），最多重试 30 次 ──
-let converted = false;
-let lastVal = null;
+// ── 就绪门：输入「伴娘」→ 候选面板出现（数据就绪 + 功能装配），最多重试 30 次 ──
+const suggestState = `(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  return b ? { hidden: b.hidden, n: b.querySelectorAll('button[data-zhx-index]').length } : null;
+})()`;
+let ready = null;
 for (let i = 0; i < 30; i++) {
-  await setInline(EXPECT_ZH);
+  await setInline('伴娘');
   await sleep(1000);
-  lastVal = await readInline();
-  if (lastVal === expectKo) { converted = true; break; }
+  ready = await c.eval(suggestState);
+  if (ready && ready.hidden === false && ready.n > 0) break;
 }
-ok('① 独立搜索框：完整中文名 → 韩文原生名自动替换', converted, `实际=${JSON.stringify(lastVal)}`);
-const convEvt = await c.eval('window.__convEvt === true').catch(() => false);
-ok('② 转换后派发 input 事件（页面可刷新建议）', convEvt === true, String(convEvt));
+ok('① 独立搜索框出现智能候选面板（数据就绪门）', !!ready && ready.hidden === false && ready.n > 0, JSON.stringify(ready));
 
-// ── ③ 防抖：连续输入（先前缀后全名）→ 只按最终全名转换 ──
-await sleep(300);
-await setInline('伴娘');
-await sleep(150);
+// ── ② 输入中文全名：不自动转换（b 方案：禁止输入即搜索）──
 await setInline(EXPECT_ZH);
 await sleep(1200);
+const v2 = await readInline();
+ok('② 输入中文全名后值保持原样（不自动转换）', v2 === EXPECT_ZH, JSON.stringify(v2));
+
+// ── ③ 点选候选：转换式搜索（派发原生名）+ 输入框保留中文（b 方案）──
+await setInline(EXPECT_ZH);
+await sleep(700);
+const picked = await c.eval(`(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  if (!b || b.hidden) return null;
+  const btn = b.querySelector('button[data-zhx-index]');
+  if (!btn) return null;
+  const zhEl = btn.querySelector('.zhx-suggest-zh');
+  const zhText = zhEl ? zhEl.textContent : btn.textContent;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  return zhText;
+})()`);
+await sleep(800);
 const v3 = await readInline();
-ok('③ 连续输入防抖后按最终全名转换', v3 === expectKo, JSON.stringify(v3));
+ok('③ 点选候选后输入框保留中文（显示恢复）', picked !== null && v3 === picked, JSON.stringify({ picked, v3 }));
+const convEvt = await c.eval('window.__convEvt === true').catch(() => false);
+ok('③b 转换式搜索派发原生名 input（站内搜索生效）', convEvt === true, String(convEvt));
 
 // ── ④ 未知中文名不转换 ──
 await setInline('不存在的装备名称xyz');
@@ -107,35 +125,14 @@ await sleep(1300);
 const v5 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑤ 表单内搜索框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));
 
-// ── ⑥⑦ 智能输入：独立搜索框候选面板 + 点击候选自动转换（1.4.2 后续修复）──
-await setInline('伴娘');
-await sleep(600);
-const boxInfo = await c.eval(`(() => {
-  const b = document.querySelector('#zhx-chinese-suggest-list');
-  return b ? { hidden: b.hidden, n: b.querySelectorAll('button[data-zhx-index]').length } : null;
-})()`);
-ok('⑥ 独立搜索框出现智能候选面板', !!boxInfo && boxInfo.hidden === false && boxInfo.n > 0, JSON.stringify(boxInfo));
-const clicked = await c.eval(`(() => {
-  const b = document.querySelector('#zhx-chinese-suggest-list');
-  if (!b || b.hidden) return null;
-  const btn = b.querySelector('button[data-zhx-index]');
-  if (!btn) return null;
-  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-  return btn.textContent;
-})()`);
-await sleep(1400);
-const v8 = await readInline();
-ok('⑦ 点击候选后自动转换为韩文原生名', clicked !== null && /[가-힣]/.test(v8 || ''), JSON.stringify({ clicked, v8 }));
-
-// ── ⑧ 部分词：「女仆」（完整名未命中）→ 韩文名公共子串自动替换（v1.4.2 后续）──
-// 期望值 = 「메이드 」——14 条含「女仆」装备的韩文名公共子串（含尾随空格），用于站内搜索メイド系列。
+// ── ⑥ 部分词「女仆」：同样不自动转换（b 方案；部分词兜底仅保留在提交路径）──
 await setInline('女仆');
 await sleep(1600);
-const v9 = await readInline();
-ok('⑧ 部分词「女仆」→ 韩文公共子串「메이드 」自动替换', v9 === '메이드 ', JSON.stringify(v9));
+const v6 = await readInline();
+ok('⑥ 部分词「女仆」输入停顿保持原样', v6 === '女仆', JSON.stringify(v6));
 
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑨ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑦ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);

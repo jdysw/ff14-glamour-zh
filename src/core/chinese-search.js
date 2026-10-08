@@ -31,7 +31,7 @@ function searchInputScore(input) {
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
   if (!SEARCH_INPUT_TYPES.has(type) || input.disabled || input.readOnly) return -Infinity;
   // 1.4.2 后续修复：vue-select 搜索框（EC 部位筛选器）不是表单搜索框——
-  // 其值不参与表单序列化，输入即触发站点检索；完全排除，交给独立搜索框自动转换路径。
+  // 其值不参与表单序列化，输入即触发站点检索；完全排除，交给独立搜索框路径处理。
   if (/vs__search/.test(String(input.className || ''))) return -Infinity;
   const meta = [
     input.getAttribute?.('name'),
@@ -154,11 +154,11 @@ function isSearchInput(input) {
   return findSearchInput(form) === input;
 }
 
-// 1.4.2 后续修复：可挂候选面板的输入框 = 表单搜索框 + 纯独立搜索框（ronka / collection 等无 form 站）。
-// EC 的 vue-select（vs__search）维持纯自动转换，不挂候选面板（保持既有行为）。
+// 1.4.2 后续修复（b 方案）：可挂候选面板的输入框 = 表单搜索框 + 独立搜索框
+// （ronka / collection 无 form 站，以及 EC vue-select 部位筛选器）。
+// 输入停顿一律不自动转换；仅候选面板点选（转换式搜索）与表单提交（临时替换）时转换。
 function isSuggestibleInput(input) {
   if (isSearchInput(input)) return true;
-  if (/vs__search/.test(String(input?.className || ''))) return false;
   return isStandaloneSearchInput(input);
 }
 
@@ -278,8 +278,9 @@ function selectSuggestion(index) {
   } catch {
     /* 输入类型变化时忽略光标定位失败 */
   }
-  // 独立搜索框（React 站点）：选中候选后自动转换为站点原生名，让站内搜索生效。
-  if (isStandaloneSearchInput(input)) scheduleStandaloneConversion(input);
+  // 独立搜索框（React 站点，b 方案）：选中候选后做「转换式搜索」——
+  // 用原生名触发站内检索，随后输入框显示恢复为中文。
+  if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input);
 }
 
 function updateSuggestionActive(index) {
@@ -443,15 +444,12 @@ function handleCompositionEnd(event) {
   scheduleSuggestions(input);
 }
 
-// ── 独立搜索框自动转换（1.4.2 后续修复）──
+// ── 独立搜索框（1.4.2 后续修复；b 方案）──
 // ronka 等站点的搜索框不属于任何 form（React 客户端过滤、无提交事件可拦）；
-// 输入停止后把完整中文装备名自动替换为站点原生名（React 兼容方式），让站内搜索照常工作。
+// b 方案：打字期间不做任何自动转换；候选面板点选后做「转换式搜索」
+//（用原生名触发站内检索，随后输入框显示恢复为中文，见 convertStandaloneForSearch）。
 const STANDALONE_SEARCH_HINT_RE = /검색어|키워드|キーワード|搜索|搜尋|検索|search|关键词|關鍵詞|keyword/i;
-const STANDALONE_CONVERT_DELAY_MS = 650;
 const STANDALONE_EXCLUDE_TYPES = new Set(['hidden', 'password', 'email', 'tel', 'url', 'number', 'date', 'datetime-local', 'month', 'week', 'time', 'color', 'range', 'file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image']);
-
-let _standaloneTimer = null;
-let _standaloneInput = null;
 
 function isStandaloneSearchInput(input) {
   if (!input) return false;
@@ -460,8 +458,8 @@ function isStandaloneSearchInput(input) {
   if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
   if (input.disabled || input.readOnly) return false;
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
-  // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search），
-  // 与独立搜索框相同地做「中文全名 → 原生名」自动转换。
+  // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
+  // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
   if (/vs__search/.test(String(input.className || ''))) return true;
   if (input.form) return false;
   const meta = [
@@ -498,31 +496,51 @@ function rewriteInputNatively(input, native) {
   return true;
 }
 
-function scheduleStandaloneConversion(input) {
-  if (_standaloneTimer) clearTimeout(_standaloneTimer);
-  _standaloneInput = input;
-  _standaloneTimer = setTimeout(() => {
-    _standaloneTimer = null;
-    const element = _standaloneInput;
-    _standaloneInput = null;
-    try {
-      if (!element || element.isConnected === false) return;
-      const query = normalizeSearchQuery(element.value);
-      if (query.length < 2 || !isChineseSearchQuery(query)) return;
-      let native = resolveByZh(query);
-      if (!native) native = resolvePartialByZh(query);   // v1.4.2 后续：部分词（如「女仆」）→ 公共子串兜底
-      if (!native || native === query) return;
-      rewriteInputNatively(element, native);
-    } catch { /* 静默：转换失败不影响用户输入 */ }
-  }, STANDALONE_CONVERT_DELAY_MS);
+// b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
+// 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
+function convertStandaloneForSearch(input) {
+  try {
+    if (!input || input.isConnected === false) return;
+    const shown = input.value;
+    const query = normalizeSearchQuery(shown);
+    if (query.length < 2 || !isChineseSearchQuery(query)) return;
+    const native = resolveByZh(query);
+    if (!native || native === query) return;
+    if (!rewriteInputNatively(input, native)) return;
+    setTimeout(() => {
+      try {
+        if (input.isConnected === false) return;
+        if (input.value === native) setInputValueSilently(input, shown);
+      } catch { /* 静默：恢复失败不影响搜索 */ }
+    }, 0);
+  } catch { /* 静默：转换失败不影响用户输入 */ }
+}
+
+// 静默设值：更新输入框显示，但不派发 input 事件（避免二次触发站点检索）。
+function setInputValueSilently(input, value) {
+  try {
+    const descriptor = typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype
+      ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      : null;
+    if (descriptor?.set) {
+      descriptor.set.call(input, value);
+      if (input.value === value) return true;
+    }
+  } catch { /* 回退：直接赋值 */ }
+  try {
+    input.value = value;
+    return input.value === value;
+  } catch {
+    return false;
+  }
 }
 
 function handleStandaloneSearchInput(event) {
   const input = event.target;
   if (isSearchInput(input)) return;
   if (isStandaloneSearchInput(input)) {
-    scheduleStandaloneConversion(input);
-    // 1.4.2 后续修复：独立搜索框也显示智能候选面板（ronka / collection 等站）。
+    // b 方案（2026-10-08）：输入停顿不自动转换（禁止输入即搜索）；仅候选面板点选时转换。
+    // 1.4.2 后续修复：独立搜索框也显示智能候选面板（ronka / collection / EC vue-select）。
     if (isSuggestibleInput(input)) scheduleSuggestions(input);
   }
 }

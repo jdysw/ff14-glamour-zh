@@ -1,12 +1,13 @@
-// tests/integration/test-ec-search-inline.mjs — 1.4.2 后续修复：EC 部位筛选器（vue-select）中文自动转换（离线夹具）
+// tests/integration/test-ec-search-inline.mjs — 1.4.2 后续修复（b 方案）：EC 部位筛选器（vue-select）（离线夹具）
 //
 // 背景：ffxiv.eorzeacollection.com（英文站）的部位筛选器是 vue-select 组件（class="vs__search"），
 //       输入即触发站点装备检索（云真站实测 2026-10-08：POST /gear/<slot>/search，body {"search":"输入值"}）。
-//       中文输入原样发送 → 无匹配；修复 = 完整中文装备名自动替换为英文名（native setter + input 事件）。
-// 本测试：用同构夹具（form 内 vue-select 框 + 有 name 的对照框）冻结三个契约：
-//   ① vue-select 框：完整中文名 → 英文名自动替换（并派发 input 事件通知页面）；
-//   ② 未知中文名保持原样；
-//   ③ form 内有 name 的搜索框（"Search by title" / 传统 keyword）不触发独立转换（回归保护）。
+//       b 方案（2026-10-08）：输入停顿不再自动转换（禁止输入即搜索）；vue-select 与独立搜索框统一——
+//       挂候选面板，点选候选才做「转换式搜索」（英文名触发站内检索），随后输入框显示恢复为中文。
+// 本测试：用同构夹具（form 内 vue-select 框 + 有 name 的对照框）冻结契约：
+//   ① 独立搜索框出现智能候选面板（数据就绪门）；② 输入中文不自动转换；
+//   ③ 点选候选：转换式搜索（派发原生名）且输入框保留中文；
+//   ④ 未知中文名保持原样；⑤ form 内有 name 的搜索框不触发独立转换（回归保护）。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
@@ -60,11 +61,11 @@ await c.eval("window.__zhxTestSite = 'ec';");
 await c.eval("window.__zhxTestTables = ['items'];");
 await c.eval('window.__zhxDiagOn = true;');
 await c.eval(gmStub);
-// 观察装置：记录「因自动转换而产生的 input 事件」（值为英文名的那一刻）
+// 观察装置：记录所有 input 事件的值（供「转换式搜索派发原生名」精确核验）
 await c.eval(`(() => {
-  window.__convEvt = false;
+  window.__inputVals = [];
   document.addEventListener('input', function (e) {
-    try { if (e && e.target && e.target.value === ${JSON.stringify(expectEn)}) window.__convEvt = true; } catch (x) {}
+    try { window.__inputVals.push(String(e.target.value || '')); } catch (x) {}
   }, true);
   return 1;
 })()`);
@@ -74,27 +75,48 @@ await sleep(1500);
 const setVs = (id, val) => c.eval(`(() => { const i = document.getElementById(${JSON.stringify(id)}); i.focus(); i.value = ${JSON.stringify(val)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
 const readVs = (id) => c.eval(`(() => { const i = document.getElementById(${JSON.stringify(id)}); return i ? i.value : null; })()`);
 
-// ── 就绪门：vue-select 框输入中文全名 → 等自动转换（数据就绪 + 功能装配），最多重试 30 次 ──
-let converted = false;
-let lastVal = null;
+// ── 就绪门：vue-select 框输入「女仆」→ 候选面板出现（数据就绪 + 功能装配），最多重试 30 次 ──
+const suggestState = `(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  return b ? { hidden: b.hidden, n: b.querySelectorAll('button[data-zhx-index]').length } : null;
+})()`;
+let ready = null;
 for (let i = 0; i < 30; i++) {
-  await setVs('vs-head', EXPECT_ZH);
+  await setVs('vs-head', '女仆');
   await sleep(1000);
-  lastVal = await readVs('vs-head');
-  if (lastVal === expectEn) { converted = true; break; }
+  ready = await c.eval(suggestState);
+  if (ready && ready.hidden === false && ready.n > 0) break;
 }
-ok('① vue-select 部位筛选器：完整中文名 → 英文名自动替换', converted, `实际=${JSON.stringify(lastVal)}`);
-const convEvt = await c.eval('window.__convEvt === true').catch(() => false);
-ok('② 转换后派发 input 事件（页面可刷新建议）', convEvt === true, String(convEvt));
+ok('① vue-select 出现智能候选面板（数据就绪门）', !!ready && ready.hidden === false && ready.n > 0, JSON.stringify(ready));
 
-// ── ③ 防抖：连续输入（先前缀后全名）→ 只按最终全名转换 ──
-await sleep(300);
-await setVs('vs-hands', '女仆');
-await sleep(150);
-await setVs('vs-hands', EXPECT_ZH);
+// ── ② 输入中文全名：不自动转换（b 方案：禁止输入即搜索）──
+await setVs('vs-head', EXPECT_ZH);
 await sleep(1200);
-const v3 = await readVs('vs-hands');
-ok('③ 连续输入防抖后按最终全名转换（第二个筛选器）', v3 === expectEn, JSON.stringify(v3));
+const v2 = await readVs('vs-head');
+ok('② 输入中文全名后值保持原样（不自动转换）', v2 === EXPECT_ZH, JSON.stringify(v2));
+
+// ── ③ 点选候选：转换式搜索（派发原生名）+ 输入框保留中文（b 方案）──
+await setVs('vs-head', EXPECT_ZH);
+await sleep(700);
+const picked = await c.eval(`(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  if (!b || b.hidden) return null;
+  const btn = b.querySelector('button[data-zhx-index]');
+  if (!btn) return null;
+  const zhEl = btn.querySelector('.zhx-suggest-zh');
+  const nativeEl = btn.querySelector('.zhx-suggest-native');
+  const zhText = zhEl ? zhEl.textContent : btn.textContent;
+  const nativeText = nativeEl ? nativeEl.textContent : null;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  return { zhText, nativeText };
+})()`);
+await sleep(800);
+const v3 = await readVs('vs-head');
+ok('③ 点选候选后输入框保留中文（显示恢复）', picked !== null && v3 === picked.zhText, JSON.stringify({ picked, v3 }));
+const seenVals = await c.eval('window.__inputVals').catch(() => null);
+const convHit = Array.isArray(seenVals) && picked && picked.nativeText
+  && seenVals.some((v) => v && v.length >= 2 && (v === picked.nativeText || v.includes(picked.nativeText) || picked.nativeText.includes(v)));
+ok('③b 转换式搜索派发原生名 input（站内搜索生效）', convHit === true, JSON.stringify({ picked, seenVals: (seenVals || []).slice(-4) }));
 
 // ── ④ 未知中文名不转换 ──
 await setVs('vs-head', '不存在的装备名称xyz');
@@ -114,13 +136,11 @@ await sleep(1300);
 const v6 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑥ 传统表单搜索框不触发独立转换（中文保留）', v6 === EXPECT_ZH, JSON.stringify(v6));
 
-// ── ⑦ 部分词质量门：英文提取片段不合格（如 "ai"）时保持不转换（v1.4.2 后续）──
-// 含「女仆」装备的英文名集合混杂（PvP 鸟甲等），公共子串会是无意义的词中片段；
-// 质量门要求片段两端接词边界，否则判不合格 → 输入保持原样，避免产出垃圾搜索词。
+// ── ⑦ 部分词「女仆」：同样不自动转换（b 方案；部分词兜底仅保留在提交路径）──
 await setVs('vs-head', '女仆');
 await sleep(1600);
 const v7 = await readVs('vs-head');
-ok('⑦ 部分词提取片段不合格 → 保持不转换（质量门）', v7 === '女仆', JSON.stringify(v7));
+ok('⑦ 部分词「女仆」输入停顿保持原样', v7 === '女仆', JSON.stringify(v7));
 
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
 ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
