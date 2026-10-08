@@ -14,6 +14,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
 import { LINKS_JS } from './coverage-collector.mjs';
+import { discoverSitemapUrls } from './sitemap.mjs';
 import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
@@ -233,6 +234,18 @@ async function main() {
     if (ch === 'local') {
       const hosts = cfg.hosts || [cfg.host];
       const queue = pages.filter((p) => !p.url.startsWith('fixture:')).map((p) => ({ ...p, depth: 0 }));
+      if (discover && !hasFlag('--no-sitemap')) {
+        const sitemapUrls = await discoverSitemapUrls({ hosts, maxUrls: Math.min(250, maxPages * 8) });
+        const sampledTemplates = new Set();
+        for (const url of sitemapUrls) {
+          const key = templateKey(url);
+          if (sampledTemplates.has(key)) continue;
+          sampledTemplates.add(key);
+          queue.push({ url, type: 'sitemap', depth: 1 });
+          if (sampledTemplates.size >= Math.min(20, Math.floor(maxPages / 3))) break;
+        }
+        console.log('  Sitemap 补充页面模板：' + sampledTemplates.size);
+      }
       const visited = new Set();
       const templateCounts = new Map();
       for (let n = 0; n < queue.length && visited.size < (discover ? maxPages : pages.length); n++) {
