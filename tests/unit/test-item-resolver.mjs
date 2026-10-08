@@ -221,7 +221,8 @@ const mkEnv = (over = {}) => ({
   eq('智能输入：别名也可作为候选', JSON.stringify(api.suggestByZh('炎灵袍')), JSON.stringify([
     { zh: '炎灵袍', native: 'エ' },
   ]));
-  eq('智能输入：候选上限 8 条', api.suggestByZh('炎灵', 99).length <= 8, true);
+  eq('智能输入：显式 limit 截断仍生效', api.suggestByZh('炎灵', 2).length, 2);
+  eq('智能输入：limit 无 8 条封顶（全量返回，防御上限 3000）', api.suggestByZh('炎灵', 99999).length, 5);
 }
 
 // B2. 中文搜索按站点语言倒排

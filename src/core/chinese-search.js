@@ -129,7 +129,10 @@ function rewriteInputTemporarily(input, native) {
 
 
 const SUGGEST_MIN_CHARS = 2;
-const SUGGEST_LIMIT = 8;
+// 候选列表可视行数：数据全量渲染（显示所有含输入字的装备），
+// 列表高度限 8 行，超出的通过滚轮在列表内滑动翻看。
+const SUGGEST_VISIBLE_ROWS = 8;
+const SUGGEST_ROW_HEIGHT = 40;   // 与 CSS 中 button min-height:40px 对齐
 const SUGGEST_DEBOUNCE_MS = 70;
 const SUGGEST_HIDE_DELAY_MS = 120;
 
@@ -187,7 +190,9 @@ function positionSuggestionBox(input) {
   const aboveSpace = Math.max(0, rect.top - gap - margin);
   const openBelow = belowSpace >= 120 || belowSpace >= aboveSpace;
   const available = openBelow ? belowSpace : aboveSpace;
-  const maxHeight = Math.max(80, Math.min(320, available));
+  // 可视 8 行（行高 40px + 容器纵向 padding 8）：数据全量在列表内，超出部分滚轮翻看。
+  const rowsHeight = SUGGEST_VISIBLE_ROWS * SUGGEST_ROW_HEIGHT + 8;
+  const maxHeight = Math.max(80, Math.min(rowsHeight, available));
   let top = openBelow
     ? rect.bottom + gap
     : Math.max(margin, rect.top - gap - maxHeight);
@@ -277,7 +282,7 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = suggestByZh(query, SUGGEST_LIMIT);
+  const rows = suggestByZh(query);   // 全量候选（显示所有含输入字的装备）；可视区域由列表高度控制
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -483,7 +488,11 @@ function bindChineseSearchUi() {
   document.addEventListener('compositionstart', handleCompositionStart, true);
   document.addEventListener('compositionend', handleCompositionEnd, true);
   document.addEventListener('pointerdown', handleSuggestionPointerDown, true);
-  document.addEventListener('scroll', () => hideSuggestions(), true);
+  document.addEventListener('scroll', (event) => {
+    // 候选列表自身的滚动（滚轮翻看全部装备）不关闭候选框；仅页面滚动才关闭。
+    if (_suggestBox && event.target && _suggestBox.contains(event.target)) return;
+    hideSuggestions();
+  }, true);
   globalThis.addEventListener?.('resize', () => hideSuggestions());
 }
 

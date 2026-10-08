@@ -698,12 +698,18 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return z;
   }
 
-  function suggestByZh(zh, limit = 8) {
+  // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
+  // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
+  const SUGGEST_ABS_MAX = 3000;
+  // 智能输入候选：默认（未传 / <= 0）返回全部匹配——「显示所有含输入字的装备」；
+  // 显式传正数 limit 时按上限截断（保留给调用方按需限流的语义）。
+  function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _irSearchByZh;
     if (!map) return [];
-    const max = Math.max(1, Math.min(8, Number(limit) || 8));
+    const raw = Number(limit);
+    const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const out = [];
     const exact = map[key];
     if (exact) out.push({ zh: key, native: exact });

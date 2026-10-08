@@ -169,9 +169,9 @@ function sleep(ms = 90) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildSearchHarness() {
+function buildSearchHarness(suggestionsOverride) {
   const ready = [];
-  const suggestions = Object.freeze([
+  const suggestions = Object.freeze(suggestionsOverride || [
     { zh: '炎灵', native: 'カ' },
     { zh: '炎灵长袍', native: 'エ' },
     { zh: '炎灵长裤', native: 'オ' },
@@ -463,6 +463,41 @@ try {
     document.dispatch('input', { target: plain });
     await sleep(750);
     eq('非 vue-select 的表单内框不转换（回归保护）', plain.value, '炎灵');
+  }
+
+  console.log('\n── G：候选列表体验（全量数据 / 可视 8 行 / 滚动不关闭）──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const many = [{ zh: '炎灵', native: 'カ' }];
+    for (let i = 1; i <= 12; i++) many.push({ zh: '炎灵装' + i, native: '装' });
+    const harness = buildSearchHarness(many);
+    const api = harness.api;
+    api.startChineseSearch('mirapri');
+
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
+    input.value = '炎灵';
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    harness.ready[0]();
+    await sleep();
+
+    const box = findSuggestBox(document);
+    eq('G1 数据全量渲染（13 条 > 可视 8 行）', box.querySelectorAll('button[data-zhx-index]').length, 13);
+    eq('G2 列表高度 = 可视 8 行（8×40+8=328px）', box.style.maxHeight, '328px');
+
+    document.dispatch('scroll', { target: box });
+    eq('G3a 列表自身滚动不关闭候选框', box.hidden, false);
+    document.dispatch('scroll', { target: box.children[0] });
+    eq('G3b 列表内元素滚动不关闭候选框', box.hidden, false);
+    document.dispatch('scroll', { target: document.body });
+    eq('G4 页面滚动（列表外）仍关闭候选框', box.hidden, true);
   }
 } finally {
   globalThis.document = previousDocument;
