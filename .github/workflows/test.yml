@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Build & Test
+  build:
+    name: Build & Verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -48,5 +48,50 @@ jobs:
       - name: 构建后工作区一致性
         run: git diff --exit-code
 
-      - name: 单元 + 集成测试（离线夹具）
-        run: npm test
+  unit:
+    name: Unit Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖（锁文件）
+        run: npm ci
+
+      - name: 构建（build.sh 全链）
+        run: npm run build
+
+      - name: 单元测试（纯 Node，秒级）
+        run: npm run test:unit
+
+  integration:
+    name: Integration Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖（锁文件）
+        run: npm ci
+
+      - name: 构建（build.sh 全链）
+        run: npm run build
+
+      - name: 集成测试（离线夹具 + headless Chrome）
+        run: npm run test:integration
