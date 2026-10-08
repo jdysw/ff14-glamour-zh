@@ -39,15 +39,17 @@ export { _obsStats, createObserver, observeLocal };
       if (o.filter && !o.filter(mutation)) return;
       if (mutation.target) pending.push(mutation.target);
     };
+    const _collectCharacterData = (mutation) => {
+      if (!o.characterData || (o.filter && !o.filter(mutation))) return false;
+      _queueCD(mutation.target);
+      return true;
+    };
     // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
     const collectMuts = (muts) => {
       let hitCD = false;
       for (const m of muts) {
         if (m.type === 'characterData') {
-          if (!o.characterData) continue;                 // 未开启：完全忽略
-          if (o.filter && !o.filter(m)) continue;         // 站点过滤（如 RONKA_KR）
-          hitCD = true;
-          _queueCD(m.target);                             // v1.4.1：变更目标经第二参数传出（供局部处理）
+          hitCD = _collectCharacterData(m) || hitCD;
           continue;
         }
         if (m.type === 'attributes') {
