@@ -224,6 +224,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   }
 
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
+  // 返回 true 表示「全部表已成功对齐到最新版本」（调用方可据此决定是否热替换索引）。
   async function _ensureFetchAll(need, local) {
     let ver = null;
     try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; _zhxErr('version', e); }
@@ -234,7 +235,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     __zhxMark('applied');   // Phase 19：表格拉取/应用完成
     if (ver && okCount === need.length) {
       storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
+      return true;
     }
+    return false;
   }
 
   // ⑤ 建表 + 广播（无论成败：页面按可用数据尽力工作，界面词不受影响）
@@ -262,6 +265,68 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 500 }); // v1.3.1：兜底 2000→500，消除静止页面等满 2s 的最坏情况
       else setTimeout(go, 50);
     });
+  }
+
+  // 后台版本探测完成后的热替换：用已更新的表文本重建索引，一次性原子赋值。
+  // 与首次构建不同：不重放就绪广播（onTablesReady 只触发一次），避免站点适配器
+  // 重复补扫；查询在替换前走旧索引、替换后走新索引，中间无空窗。
+  // 仅在探测成功（_ensureFetchAll 返回 true）时调用；失败保持旧数据，静默降级。
+  function _hotSwapIndexes() {
+    if (_v3Applied) return;              // v3 路径索引已直接来自最新文件，无需热替换
+    return new Promise((resolve) => {
+      const finish = () => {
+        __zhxMark('hotSwap');
+        // 中文搜索倒排索引与派生注册表基于旧 nameMap 构建，必须失效重建，
+        // 否则 suggestByZh / resolveByZh / resolveAllByName 会继续命中旧数据。
+        _irSearchByZh = null;
+        _irSearchKind = null;
+        _irSearchCanonicalKeys = null;
+        _irSearchAliasKeys = null;
+        _irDupMap = null;
+        _irAliasMap = null;
+        // 派生缓存（系列前缀 / 物品前缀 / 子串键）同样基于旧数据，一并失效。
+        try { cacheReset('derived'); } catch (e) { /* 忽略：缓存清理失败不影响索引替换 */ }
+        try { cacheReset('lookup'); } catch (e) { /* 忽略 */ }
+        try { cacheReset('translate'); } catch (e) { /* 忽略 */ }
+        try {
+          __zhxMark('hotSwapAux');
+          _irBuildAux(DATA_TEXT.items);   // 用最新表文本重建中文搜索索引 + 重名/别名注册表
+        } catch (e) { _zhxErr('hotSwapAux', e); }
+        try {
+          console.info('幻化数据热替换完成 → 数据版本 ' + (DATA_VER || '未记录'));
+        } catch (e) { /* 忽略：日志输出失败不影响 */ }
+        resolve();
+      };
+      try { buildTables(_buildScope, finish); } catch (e) { _zhxErr('hotSwap', e); resolve(); }
+    });
+  }
+
+  // 首开「先建后探」：本地有可用缓存（哪怕已过期）时，先用缓存立即构建并广播
+  // 就绪，让页面尽早可用；随后后台探测版本，发现新数据再热替换索引。返回 true
+  // 表示已走「先建后探」路径（调用方无需再等待网络）。
+  // 注意：不在此处调用 _ensureFinalize——首次构建 + 就绪广播由 ensureTables 外层
+  // 的 .then(_ensureFinalize) 统一完成（否则会双重广播）。
+  async function _ensureBuildLocal(need, local) {
+    if (!need || !local) return false;
+    const hasLocal = need.some((t) => !!local[t]);
+    if (!hasLocal) return false;          // 无任何缓存：交还原等待链（全新安装场景）
+    // 应用本地缓存文本（与快路径一致的语义；DATA_VER 用 meta 中的旧版本）
+    let meta = null;
+    try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略 */ }
+    for (const t of need) {
+      if (local[t]) { applyTable(t, local[t].tx); _dlStats.cache++; }
+    }
+    DATA_VER = (meta?.v ? String(meta.v) : '');
+    __zhxMark('applied');
+    // 后台探测 + 热替换（不阻塞就绪；失败保持当前数据）
+    _ensureFetchAll(need, local).then(async (ok) => {
+      if (!ok) return;
+      // 首次构建会分片让出；先等它完成，防止旧索引晚于热替换收尾而覆盖新索引。
+      await _ensurePromise;
+      return _hotSwapIndexes();
+    })
+      .catch((e) => { _zhxErr('hotSwap', e); });
+    return true;
   }
 
   // 首屏优先：网络下载推迟到页面 load 之后（弱网/移动端避免与页面自身资源抢带宽，
@@ -467,7 +532,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const v3 = await _ensureTryV3();
     if (v3) return;
     const fast = await _ensureTryFast(need);
-    if (!fast) return;
+    if (!fast) return;                     // 快路径（24h 内缓存）已应用，零网络
+    // 「先建后探」：有本地缓存（哪怕过期）→ 立即构建就绪 + 后台探测热替换；
+    // 无缓存（全新安装）→ 保持原等待链（该等就等，保证正确性）。
+    if (await _ensureBuildLocal(need, fast.local)) return;
     await _waitPageLoad();
     await _ensureFetchAll(need, fast.local);
   }
