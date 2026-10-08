@@ -32,6 +32,8 @@
 | user | 用户浏览器临时收集器，适用于授权的真实页面 |
 | fixture | 灰机 wiki 反查模块的离线集成测试 |
 
+FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足部筛选结果，默认扫描即可覆盖这些页面状态。开启 --discover 时，本地通道还会尝试读取站点 Sitemap（--no-sitemap 可关闭）。
+
 本地/云端使用同一份 coverage-collector.mjs；不再维护两套采集正则。采集内容包括可见文本、输入框 placeholder、title、aria-label、alt、option 和按钮 value 等。翻译前后依据元素路径和属性类型匹配，保留未命中的原文证据。
 
 --discover 启用同站链接的有限深度发现。--max-pages 控制最多浏览多少页面，--max-depth 控制发现层级，--per-template 限制同一页面模板的样本数。浏览器通道访问的是公开站内路径，不执行删除、登录或提交表单操作。
