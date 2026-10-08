@@ -27,104 +27,64 @@ DIST = REPO_ROOT / "dist" / "ff14-glamour-zh.greasyfork.user.js"
 CACHE = REPO_ROOT / "tests" / ".cache" / "coverage-audit"
 DEFAULT_COUNTRIES = ["jp", "us", "sg"]
 
-# 与 audit.mjs COLLECTOR_JS 同款（保持同步；云脚本独立实现，避免跨语言传递）
-COLLECTOR_JS = r"""(() => {
-  const out = [];
-  const seen = new Set();
-  const isVisible = (el) => {
-    if (!el || !el.isConnected) return false;
-    if (el.nodeType !== 1) return false;
-    const cs = window.getComputedStyle(el);
-    if (!cs) return false;
-    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
-    if (el.offsetParent === null && cs.position !== 'fixed') return false;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return false;
-    return true;
-  };
-  const skipTag = (el) => {
-    const tag = el.tagName;
-    return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'IFRAME' || tag === 'TEMPLATE';
-  };
-  const skipZhx = (el) => {
-    const cls = String(el.className || '');
-    const id = String(el.id || '');
-    return cls.includes('zhx-') || id.includes('zhx-') || el.hasAttribute('data-zhx-item') || el.hasAttribute('data-zhx-card') || el.hasAttribute('data-zhx-done') || el.hasAttribute('data-zhxWikiDone');
-  };
-  const ctxOf = (el) => {
-    let p = el.parentElement;
-    let cls = '', id = '', name = '', href = '', parentText = '', ad = false;
-    if (p) { cls = String(p.className || ''); id = String(p.id || ''); }
-    const inp = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
-    if (inp) {
-      name = String(el.getAttribute('name') || '');
-      const f = el.form;
-      if (f) { cls = String(f.className || '') + ' ' + cls; id = String(f.id || '') + ' ' + id; }
-    }
-    if (el.tagName === 'A') href = String(el.getAttribute('href') || '');
-    if (p) parentText = (p.textContent || '').trim().slice(0, 120);
-    let anc = el;
-    for (let i = 0; anc && i < 8; i++) {
-      const acls = String(anc.className || '') + ' ' + String(anc.id || '');
-      if (anc.tagName === 'INS' && /adsbygoogle/i.test(acls)) { ad = true; break; }
-      if (/(adsbygoogle|google-anno|aswift|ad-slot|adunit|ad-container|advert|sponsor)/i.test(acls)) { ad = true; break; }
-      anc = anc.parentElement;
-    }
-    return { tag: el.tagName.toLowerCase(), cls, id, name, href, parentText, ad };
-  };
-  const push = (el, text, kind) => {
-    const t = (text || '').trim();
-    if (!t) return;
-    if (seen.has(el + '|' + t + '|' + kind)) return;
-    seen.add(el + '|' + t + '|' + kind);
-    out.push({ kind, text: t, ctx: ctxOf(el), path: zhxPath(el) });
-  };
-  const zhxPath = (el) => {
-    const parts = [];
-    let cur = el;
-    while (cur && cur !== document.body && cur !== document.documentElement && parts.length < 12) {
-      let sel = cur.tagName.toLowerCase();
-      if (cur.id) sel += '#' + cur.id;
-      else if (cur.className && typeof cur.className === 'string') sel += '.' + cur.className.trim().split(/\s+/).slice(0, 2).join('.');
-      const parent = cur.parentElement;
-      if (parent) {
-        const sib = Array.from(parent.children).filter((c) => c.tagName === cur.tagName && !(c.id) && String(c.className || '') === String(cur.className || ''));
-        const idx = Array.from(parent.children).indexOf(cur) + 1;
-        if (sib.length > 1) sel += ':nth-child(' + idx + ')';
-      }
-      parts.unshift(sel);
-      cur = cur.parentElement;
-    }
-    return parts.join(' > ');
-  };
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) => {
-      const p = node.parentElement;
-      if (!p || skipTag(p) || skipZhx(p)) return NodeFilter.FILTER_REJECT;
-      if (!isVisible(p)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-  let n;
-  while ((n = walker.nextNode())) {
-    const t = (n.nodeValue || '').trim();
-    if (!t) continue;
-    push(n.parentElement, t, 'text');
-  }
-  const attrSel = 'input[placeholder],textarea[placeholder],input[title],a[title],button[title],[aria-label],[alt]';
-  for (const el of document.querySelectorAll(attrSel)) {
-    if (!isVisible(el) || skipZhx(el)) continue;
-    for (const attr of ['placeholder','title','aria-label','alt']) {
-      const v = el.getAttribute(attr);
-      if (v && v.trim()) push(el, v, 'attr:' + attr);
-    }
-  }
-  for (const opt of document.querySelectorAll('option')) {
-    if (!isVisible(opt) || skipZhx(opt)) continue;
-    push(opt, opt.textContent || '', 'option');
-  }
-  return out;
-})()"""
+# The identical JS collector is used in local CDP and cloud Playwright.
+# Node is already a project requirement (>=22). Avoid maintaining two
+# inconsistent language detectors/DOM walkers.
+import subprocess
+import re
+from urllib.parse import urlsplit, urlunsplit, urljoin, parse_qsl, urlencode
+
+def browser_scripts():
+    code = (
+        "import { COLLECTOR_JS, LINKS_JS } from './tools/coverage-audit/coverage-collector.mjs';"
+        "process.stdout.write(JSON.stringify({collector:COLLECTOR_JS,links:LINKS_JS}));"
+    )
+    process = subprocess.run(
+        ["node", "--input-type=module", "-e", code], cwd=REPO_ROOT,
+        capture_output=True, text=True, check=True, timeout=15,
+    )
+    scripts = json.loads(process.stdout)
+    return scripts["collector"], scripts["links"]
+
+COLLECTOR_JS, LINKS_JS = browser_scripts()
+
+def pair_snapshots(before, after):
+    source = {}
+    for item in before:
+        source.setdefault((item.get("kind"), item.get("path")), []).append(item.get("text"))
+    result = []
+    for item in after:
+        values = source.get((item.get("kind"), item.get("path")), [])
+        result.append({**item, "before": values.pop(0) if values else None})
+    return result
+
+def normalize_url(candidate, base, hosts):
+    try:
+        u = urlsplit(urljoin(base, candidate))
+        if u.scheme not in ("https", "http") or not u.hostname:
+            return None
+        if not any(u.hostname == host or u.hostname.endswith("." + host) for host in hosts):
+            return None
+        if re.search(r"/(login|logout|signout|register|delete|remove|checkout|account|settings|admin|api)(/|$)", u.path, re.I):
+            return None
+        if re.search(r"\.(png|jpg|jpeg|svg|css|js|json|xml|pdf|zip)$", u.path, re.I):
+            return None
+        query = urlencode(sorted((k, v) for k, v in parse_qsl(u.query) if not re.match(r"(utm_|fbclid$|gclid$|token|session)", k, re.I)))
+        path = u.path.rstrip("/") + "/" if u.path and u.path != "/" else "/"
+        return urlunsplit((u.scheme, u.netloc, path, query, ""))
+    except (ValueError, TypeError):
+        return None
+
+def template_key(url):
+    u = urlsplit(url)
+    segments = []
+    for part in u.path.split("/"):
+        if not part:
+            continue
+        if part.isdigit() or re.fullmatch(r"[0-9a-f]{20,}", part, re.I):
+            part = ":id"
+        segments.append(part)
+    return u.netloc + "/" + "/".join(segments[:3])
 
 GM_STUB = r"""(() => {
   if (window.__gmStub) return;
@@ -179,6 +139,8 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
             entry["error"] = "CF challenge / page not ready"
             return entry
         await asyncio.sleep(2)
+        before = await page.evaluate(COLLECTOR_JS)
+        links = await page.evaluate(LINKS_JS)
         # 清 gm + 预置数据（云环境无本地数据，依赖脚本从数据站拉取）
         await page.evaluate(GM_STUB)
         try:
@@ -196,7 +158,12 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
         # 运行收集器
         try:
             items = await page.evaluate(COLLECTOR_JS)
-            entry["items"] = items
+            if not isinstance(items, list):
+                raise ValueError("collector did not return a list")
+            entry["items"] = pair_snapshots(before, items)
+            entry["links"] = links
+            entry["beforeCount"] = len(before)
+            entry["status"] = "ok"
             print("[%s] 收集到 %d 条候选" % (page_id, len(items)), flush=True)
         except Exception as e:
             entry["error"] = "collector failed: " + str(e)[:200]
@@ -214,18 +181,48 @@ async def run_session(browser, plan, dist, out_dir):
         b = await p.chromium.connect_over_cdp(browser.cdp_url, timeout=45000)
         ctx = await b.new_context(viewport={"width": 1366, "height": 900}, locale="ja-JP", bypass_csp=True)
         console_msgs = []
-        for page_cfg in plan["pages"]:
+        discover = bool(plan.get("discover", False))
+        max_pages = min(500, max(1, int(plan.get("maxPages", 60)))) if discover else len(plan["pages"])
+        max_depth = min(5, max(0, int(plan.get("maxDepth", 2))))
+        per_template = min(15, max(1, int(plan.get("perTemplate", 3))))
+        hosts = plan.get("hosts") or [urlsplit(p["url"]).hostname for p in plan["pages"]]
+        queue = [{**item, "depth": 0} for item in plan["pages"]]
+        visited = set()
+        counts = {}
+        index = 0
+        while index < len(queue) and len(visited) < max_pages:
+            page_cfg = queue[index]
+            index += 1
+            normalized = normalize_url(page_cfg["url"], page_cfg["url"], hosts)
+            if not normalized or normalized in visited:
+                continue
+            template = template_key(normalized)
+            if discover and counts.get(template, 0) >= per_template:
+                continue
+            counts[template] = counts.get(template, 0) + 1
+            visited.add(normalized)
             page = await ctx.new_page()
             page.on("console", lambda m, _c=console_msgs: _c.append((m.type, (m.text or "")[:200])))
-            r = await scan_page(page, page_cfg["url"], dist, out_dir, plan["site"], page_cfg["id"], console_msgs)
-            results.append(r)
-            # 增量保存
-            out = Path(out_dir) / ("%s-%s-cloud.json" % (plan["site"], page_cfg["id"]))
-            out.write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")
             try:
-                await page.close()
-            except Exception:
-                pass
+                ident = page_cfg.get("id", "discovered-%d" % index)
+                r = await scan_page(page, normalized, dist, out_dir, plan["site"], ident, console_msgs)
+                r["template"] = template
+                r["scannedAt"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+                links = r.pop("links", [])
+                results.append(r)
+                # Keep a single JSON per URL/scan (no collisions with seed ids).
+                out = Path(out_dir) / ("%s-%s-cloud-%d.json" % (plan["site"], ident, index))
+                out.write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")
+                if discover and not r.get("error") and page_cfg["depth"] < max_depth:
+                    for link in links:
+                        next_url = normalize_url(link, normalized, hosts)
+                        if next_url and next_url not in visited:
+                            queue.append({"url": next_url, "depth": page_cfg["depth"] + 1})
+            finally:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
         try:
             await b.close()
         except Exception:
@@ -272,7 +269,7 @@ async def main():
                 continue
             try:
                 results = await asyncio.wait_for(run_session(browser, plan, dist, out_dir), timeout=900)
-                ok_pages = sum(1 for r in results if r.get("items"))
+                ok_pages = sum(1 for r in results if not r.get("error"))
                 print("=== 结果 === country=%s 有效页=%d/%d" % (country, ok_pages, len(plan["pages"])), flush=True)
                 if ok_pages >= max(1, len(plan["pages"]) // 2):
                     print("CLOUD AUDIT SUCCESS", flush=True)
