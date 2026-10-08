@@ -51,8 +51,8 @@ ok('A3 version 为 12 位 hex', /^[0-9a-f]{12}$/.test(man.version || ''), `versi
 ok('A4 generated 为 ISO 时间', /^\d{4}-\d{2}-\d{2}T/.test(man.generated || ''));
 ok('A5 shared.dict 存在', !!(man.shared && man.shared.dict && man.shared.dict.url === 'dict.json'));
 
-const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki'];
-eq('A6 六站齐备', Object.keys(man.sites || {}).sort().join(','), [...SITE_NAMES].sort().join(','));
+const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+eq('A6 七站齐备', Object.keys(man.sites || {}).sort().join(','), [...SITE_NAMES].sort().join(','));
 
 // 逐文件 sha256/bytes 全量校验
 let fileCount = 0; let badSha = 0; let badBytes = 0;
@@ -115,6 +115,17 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
   }
   ok('A13 染剂回退展开正确（ec/en 表）', ecFound > 0 && ecChecked > 0 && ecBad === 0,
     `found=${ecFound} checked=${ecChecked} bad=${ecBad}`);
+}
+
+// End Closet can display equipment names in Korean, English, or Japanese.
+{
+  const names = new Map(readFileSync(new URL('endcloset/names.tsv', V3_DIR), 'utf8')
+    .split('\n').filter(Boolean).map((line) => line.split('\t').slice(0, 2)));
+  const items = readFileSync(new URL('data/ff14-items.tsv', ROOT), 'utf8');
+  const item = items.split('\n').map((line) => line.split('\t'))
+    .find((row) => row[1] === '女仆围裙装');
+  ok('End Closet 真实装备含韩英日三个名称映射', !!item
+    && [item[4], item[2], item[3]].every((name) => names.get(name) === item[1]));
 }
 
 // wiki 两文件

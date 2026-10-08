@@ -628,7 +628,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function _irSearchLocaleIndex() {
     const id = findSite()?.id;
     if (id === 'ec') return 2; // en
-    if (id === 'ronka') return 4; // ko
+    if (id === 'ronka' || id === 'endcloset') return 4; // ko
     if (id === 'mirapri' || id === 'fc' || id === 'collection') return 3; // ja
     return null;
   }

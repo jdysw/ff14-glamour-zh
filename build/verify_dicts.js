@@ -170,6 +170,7 @@ if (dictJsonIdx >= 0) {
     ['DICT_FC',     'fc'],
     ['DICT_RONKA',  'ronka'],
     ['DICT_ACL',    'acl'],
+    ['DICT_ENDCLOSET', 'endcloset'],
   ];
   for (const [n, key] of MAP) {
     const d = extractDict(a, n);
@@ -184,7 +185,7 @@ if (dictJsonIdx >= 0) {
 } else if (process.argv[3]) {
   // ── 模式3：双文件对比（6 组注入词典；PATTERNS* 为手写块，不参与）──
   const b = fs.readFileSync(safeResolve(process.argv[3], '文件B'), 'utf8');
-  const NAMES = ['DICT_COMMON', 'DICT', 'DICT_EC', 'DICT_FC', 'DICT_RONKA', 'DICT_ACL'];
+  const NAMES = ['DICT_COMMON', 'DICT', 'DICT_EC', 'DICT_FC', 'DICT_RONKA', 'DICT_ACL', 'DICT_ENDCLOSET'];
   for (const n of NAMES) {
     const da = extractDict(a, n), db = extractDict(b, n);
     if (da.value === undefined || db.value === undefined) {
@@ -195,7 +196,7 @@ if (dictJsonIdx >= 0) {
   }
   console.log(allEq ? '\n=== 全部等价 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
 } else {
-  // ── 模式1：src vs dict/*.json（6 组注入词典）──
+  // ── 模式1：src vs dict/*.json（7 组注入词典）──
   const dictDir = path.join(REPO_ROOT, 'dict');
   const MAP = [
     ['DICT_COMMON', 'dict-common.json'],
@@ -204,6 +205,7 @@ if (dictJsonIdx >= 0) {
     ['DICT_FC',     'dict-fc.json'],
     ['DICT_RONKA',  'dict-ronka.json'],
     ['DICT_ACL',    'dict-acl.json'],
+    ['DICT_ENDCLOSET', 'dict-endcloset.json'],
   ];
   const commonData = JSON.parse(fs.readFileSync(path.join(dictDir, 'dict-common.json'), 'utf8'));
   for (const [n, fn] of MAP) {

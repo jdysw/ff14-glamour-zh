@@ -28,6 +28,7 @@ FILES = [
     ('DICT_FC',     'dict-fc.json',     'kv', True),
     ('DICT_RONKA',  'dict-ronka.json',  'kv', True),
     ('DICT_ACL',    'dict-acl.json',    'kv', True),
+    ('DICT_ENDCLOSET', 'dict-endcloset.json', 'kv', True),
 ]
 
 def js_str(x):

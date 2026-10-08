@@ -26,6 +26,7 @@ FILES = [
     ('fc', 'dict-fc.json'),
     ('ronka', 'dict-ronka.json'),
     ('acl', 'dict-acl.json'),
+    ('endcloset', 'dict-endcloset.json'),
 ]
 
 

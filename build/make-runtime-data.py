@@ -54,6 +54,7 @@ SITE_FILES = {
     'fc':         ['names', 'hash', 'alias', 'dup', 'series'],
     'ronka':      ['names', 'alias', 'dup'],
     'collection': ['names', 'alias', 'dup', 'series', 'acl'],
+    'endcloset':  ['names', 'alias', 'dup'],
     'wiki':       ['ecid', 'ko'],
 }
 
@@ -64,6 +65,7 @@ SITE_LANGS = {
     'fc': ['ja'],
     'ronka': ['ko'],
     'collection': ['ja'],
+    'endcloset': ['ko', 'en', 'ja'],
     'wiki': [],
 }
 

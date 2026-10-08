@@ -11,6 +11,8 @@ const SEARCH_SITES = Object.freeze({
   // 覆盖场景：部位筛选器（vue-select，输入触发 POST /gear/<slot>/search）
   // 与装备库页搜索框（/gearsets、/accessories 的 "Search..." 框）。
   ec: true,
+  // End Closet（韩服幻化站）：中文装备名 → 韩文名（站内搜索用韩文）。
+  endcloset: true,
 });
 
 const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|password|作者|标题|标签|用户/i;

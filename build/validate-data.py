@@ -87,8 +87,8 @@ def check_pairs(rel: str, min_lines: int) -> int:
 def check_dicts() -> int:
     """校验 dict/dict-*.json；返回总条目数"""
     files = sorted((ROOT / "dict").glob("dict-*.json"))
-    if len(files) != 6:
-        errors.append(f"dict/dict-*.json 应为 6 个，实际 {len(files)}：{[f.name for f in files]}")
+    if len(files) != 7:
+        errors.append(f"dict/dict-*.json 应为 7 个，实际 {len(files)}：{[f.name for f in files]}")
     total = 0
     for f in files:
         rel = f.relative_to(ROOT).as_posix()
