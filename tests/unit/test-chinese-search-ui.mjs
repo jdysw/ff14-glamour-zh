@@ -182,6 +182,7 @@ function buildSearchHarness(suggestionsOverride) {
   const body = [
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
+    'const resolvePartialByZh = (v) => ({丙: "ウ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
     'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',

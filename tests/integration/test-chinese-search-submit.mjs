@@ -148,8 +148,19 @@ const r3prevented = await c.eval(`(() => {
 await sleep(1200);
 ok('⑧ 未知中文名不拦截（不产生 mirapri 导航）', r3prevented === false && !captured, `prevented=${r3prevented} captured=${captured || ''}`);
 
+// ── Round 4：部分词（v1.4.2 后续：resolvePartialByZh 公共子串兜底）──
+await sleep(400);
+const url4 = await submitOnce('女仆');
+console.log('Round4 捕获:', url4 || '(未捕获)');
+let u4 = null;
+try { u4 = new URL(url4); } catch (e) { /* 捕获失败走断言 */ }
+ok('⑨ 部分词提交被拦截并导航', !!u4, url4);
+if (u4) {
+  ok('⑩ keyword 为公共子串「メイド」', u4.searchParams.get('keyword') === 'メイド', String(u4.searchParams.get('keyword')));
+}
+
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑨ 无 [TEST-INJECT] 错误', !testErr);
+ok('⑪ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);

@@ -28,6 +28,7 @@ function buildSearch() {
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
     'const resolveByZh = (v) => ({\'甲\': \'ア\', \'乙\': \'ガ\'}[v] || null);',
+    'const resolvePartialByZh = (v) => ({\'丙\': \'ウ\'}[v] || null);',
     seg,
     'return { buildSearchUrl, findSearchInput, handleChineseSearchSubmit, isChineseSearchQuery, normalizeSearchQuery, searchInputScore };',
   ].join('\n');
@@ -160,6 +161,38 @@ console.log('\n── D：提交时转换中文查询 ──');
   eq('中文查询提交时阻止原表单默认提交', event.prevented, true);
   eq('中文查询提交时停止继续传播', event.stopped, true);
   eq('最终搜索 URL 使用日文名称', calls[0], 'https://mirapri.com/?page=3&keyword=%E3%82%A2');
+}
+
+console.log('\n── E：部分词提交（子串收集 → 公共子串）──');
+{
+  const api = buildSearch();
+  const makeInput = (v) => ({ value: v, name: 'keyword', disabled: false, readOnly: false,
+    getAttribute(name) { return name === 'name' ? 'keyword' : name === 'placeholder' ? '装備品名等を入力' : null; },
+    isConnected: true });
+  const makeForm = (i) => ({ getAttribute(name) { return name === 'method' ? 'get' : name === 'action' ? '/' : null; }, querySelectorAll() { return [i]; } });
+  const previousFormData = globalThis.FormData;
+  const previousLocation = globalThis.location;
+  try {
+    const input1 = makeInput('丙');
+    const calls1 = [];
+    globalThis.FormData = class { entries() { return [['keyword', input1.value]][Symbol.iterator](); } };
+    globalThis.location = { href: 'https://mirapri.com/', assign(url) { calls1.push(url); } };
+    const event1 = { target: makeForm(input1), prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    api.handleChineseSearchSubmit(event1, 'mirapri');
+    eq('部分词命中时用提取片段转换', calls1[0], 'https://mirapri.com/?keyword=%E3%82%A6');
+
+    const input2 = makeInput('戊');
+    globalThis.FormData = class { entries() { return [['keyword', input2.value]][Symbol.iterator](); } };
+    globalThis.location = { href: 'https://mirapri.com/', assign() {} };
+    const event2 = { target: makeForm(input2), prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    api.handleChineseSearchSubmit(event2, 'mirapri');
+    eq('部分词也无解时不拦截原提交', event2.prevented, false);
+  } finally {
+    globalThis.FormData = previousFormData;
+    globalThis.location = previousLocation;
+  }
 }
 console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);

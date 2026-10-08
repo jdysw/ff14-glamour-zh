@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
-import { DAY_MS, META_KEY, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
+import { DAY_MS, META_KEY, _lcs90, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';
@@ -9,7 +9,7 @@ import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
 import { storeGetAsync, storeSet } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -694,6 +694,31 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function resolveByZh(zh) {
     const key = _irNormZhSearch(zh);
     const z = (key && _irSearchByZh?.[key]) ? _irSearchByZh[key] : null;
+    _irStats[z ? 'hit' : 'miss']++;
+    return z;
+  }
+
+  // v1.4.2 后续：部分词解析（完整名失败时兜底）——子串收集 + 公共子串提取（复用系列名推导 _lcs90 经验）。
+  // 场景：「女仆」→ 收集所有含「女仆」的中文名 → 提取原生名（按站裁剪）的公共子串「メイド」→ 交给站内部分匹配搜索。
+  // 提取不到公共子串（各族原生名互异）时返回 null，保持「不转换」原行为。
+  function resolvePartialByZh(zh) {
+    const key = _irNormZhSearch(zh);
+    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return null;
+    const map = _irSearchByZh;
+    if (!map) return null;
+    const natives = [];
+    for (const kind of [0, 1]) {
+      for (const k of _getIrSearchKeysByKind(kind)) {
+        if (k === key || !k.includes(key)) continue;
+        const native = map[k];
+        if (native) natives.push(native);
+        if (natives.length > 1000) break;
+      }
+      if (natives.length > 1000) break;
+    }
+    let z = null;
+    if (natives.length === 1) z = natives[0];
+    else if (natives.length > 1) z = _lcs90(natives);
     _irStats[z ? 'hit' : 'miss']++;
     return z;
   }

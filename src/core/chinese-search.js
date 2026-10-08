@@ -1,6 +1,6 @@
 /* @phase23-module-order:core/chinese-search */
 /* @phase23-order-link:core/chinese-search<-core/data-manager */
-import { onTablesReady, resolveByZh, suggestByZh } from './data-manager.js';
+import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh } from './data-manager.js';
 
 const SEARCH_SITES = Object.freeze({
   mirapri: true,
@@ -554,7 +554,8 @@ function handleChineseSearchSubmit(event, siteId) {
   const query = normalizeSearchQuery(input.value);
   if (!isChineseSearchQuery(query)) return;
 
-  const native = resolveByZh(query);
+  let native = resolveByZh(query);
+  if (!native) native = resolvePartialByZh(query);   // v1.4.2 后续：部分词（如「女仆」）→ 公共子串兜底
   if (!native || native === query) return;
 
   const method = String(form.getAttribute?.('method') || 'get').toLowerCase();
