@@ -451,7 +451,10 @@ export function buildReport(results, { output } = {}) {
 }
 
 function escapeMd(s) {
-  return String(s || '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, ' ');
 }
 
 // ---------- CLI ----------
