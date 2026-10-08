@@ -28,6 +28,9 @@ export function templateKey(url) {
   const parts = u.pathname.split('/').filter(Boolean).map((s) => {
     if (/^\d+$|^[0-9a-f]{8}-[0-9a-f-]{16,}$/i.test(s)) return ':id';
     if (/^[0-9a-f]{20,}$/i.test(s)) return ':hash';
+    // User-authored slug/detail URLs must not consume the entire scan budget.
+    // Keep equipment_search_* pages distinct: they are separate functional templates.
+    if (!s.startsWith('equipment_search_') && (s.length > 32 || /%[0-9a-f]{2}/i.test(s))) return ':slug';
     return s;
   });
   // The first two levels distinguish e.g. equipment_search_parts/equipment_search_foot
