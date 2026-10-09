@@ -36,7 +36,7 @@
 3. 安装脚本：
    - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
    - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
-4. 打开任意支持站点，脚本会自动生效。若已安装早期 v1.4.2 或预发行版，请从上方安装链接覆盖安装最新版。新版首次运行会清理旧数据缓存并获取新版数据，请保持联网。
+4. 打开任意支持站点，脚本会自动生效。
 
 ## 💡 使用说明
 
