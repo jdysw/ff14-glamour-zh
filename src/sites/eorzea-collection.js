@@ -85,13 +85,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // 的装备卡片链（否则找不到译名，还可能将套装链接改写到灰机物品页）。
   // 系列译名取自 dict-ec.json，只有经确认的系列参与转换，未知名称保留英文。
   const EC_GEARSET_ROLES = ['Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting', 'Healing'];
-  const EC_GEARSET_ROLE_SERIES = ['Phantom Vision', "Vana'dielian", 'Praemagitek'];
-  const EC_GEARSET_SINGLE_SERIES = [
+  const EC_GEARSET_ROLE_SERIES = new Set(['Phantom Vision', "Vana'dielian", 'Praemagitek']);
+  const EC_GEARSET_SINGLE_SERIES = new Set([
     "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
     'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
     'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
     'Graffiti Neotunic',
-  ];
+  ]);
   // 此站新增系列尚无物品总表对应名称；使用明确的套装展示译名，不混入装备词典。
   const EC_GEARSET_NAME_EXTRAS = { 'Graffiti Neotunic': '涂鸦新式上衣套装' };
   const EC_GEARSET_SOURCES = [
@@ -119,8 +119,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         break;
       }
     }
-    if (!zh && EC_GEARSET_SINGLE_SERIES.includes(bare)) zh = ecGearsetSeriesZh(bare);
-    return zh ? zh + (source ? ' ' + (DICT_EC[source] || source) : '') : null;
+    if (!zh && EC_GEARSET_SINGLE_SERIES.has(bare)) zh = ecGearsetSeriesZh(bare);
+    if (!zh) return null;
+    const translatedSource = source ? ' ' + (DICT_EC[source] || source) : '';
+    return zh + translatedSource;
   }
 
   // 将套装的中文展示名解析为站内英文搜索词；仅在 /gearsets 使用。
@@ -142,7 +144,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     });
     if (hits.length !== 1) return null; // 多个不同系列不能随意选一个英文名
     const en = hits[0];
-    if (role && !EC_GEARSET_ROLE_SERIES.includes(en)) return null;
+    if (role && !EC_GEARSET_ROLE_SERIES.has(en)) return null;
     return en + (role ? ' ' + role : '');
   }
 
