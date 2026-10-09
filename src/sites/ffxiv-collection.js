@@ -221,7 +221,12 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (!match) return null;
     const setName = trACL(match[1]);
     if (setName === match[1] || /[ぁ-んァ-ヶー]/.test(setName)) return null;
-    return setName + '的装备展示图' + (match[2] ? '（' + (match[2].toLowerCase() === 'female' ? '女性' : '男性') + '角色）' : '');
+    let model = '';
+    if (match[2]) {
+      const gender = match[2].toLowerCase() === 'female' ? '女性' : '男性';
+      model = '（' + gender + '角色）';
+    }
+    return setName + '的装备展示图' + model;
   }
   function _trACLLabel(n, key) {
     const value = n.getAttribute(key);

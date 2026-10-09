@@ -95,6 +95,20 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     const kana = /[ぁ-んァ-ヶー]/;
     return !kana.test(out[at - 1] || '') && !kana.test(out[at + key.length] || '');
   }
+  function _fcReplaceSubstr(out, key, value) {
+    let at = out.indexOf(key);
+    let changed = false;
+    while (at !== -1) {
+      if (_fcCanReplaceAt(out, at, key)) {
+        out = out.slice(0, at) + value + out.slice(at + key.length);
+        changed = true;
+        at = out.indexOf(key, at + value.length);
+      } else {
+        at = out.indexOf(key, at + key.length);
+      }
+    }
+    return { out, changed };
+  }
   function _trFCSubstr(text, t0, core) {
     if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
     // Avoid corrupting arbitrary Japanese prose with dictionary word fragments.
@@ -106,13 +120,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       if (!out.includes(k)) continue;
       const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
       if (v == null) continue;
-      let from = 0;
-      while ((from = out.indexOf(k, from)) !== -1) {
-        if (!_fcCanReplaceAt(out, from, k)) { from += k.length; continue; }
-        out = out.slice(0, from) + v + out.slice(from + k.length);
-        changed = true;
-        from += v.length;
-      }
+      const replaced = _fcReplaceSubstr(out, k, v);
+      out = replaced.out;
+      changed ||= replaced.changed;
     }
     return changed ? out : null;
   }
