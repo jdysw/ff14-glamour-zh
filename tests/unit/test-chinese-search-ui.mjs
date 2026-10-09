@@ -505,7 +505,7 @@ try {
 
     const box = findSuggestBox(document);
     eq('G1 数据全量渲染（13 条 > 可视 8 行）', box.querySelectorAll('button[data-zhx-index]').length, 13);
-    eq('G2 列表高度 = 可视 8 行（8×40+8=328px）', box.style.maxHeight, '328px');
+    eq('G2 列表高度 = 可视 8 行（8×44+8=360px）', box.style.maxHeight, '360px');
 
     document.dispatch('scroll', { target: box });
     eq('G3a 列表自身滚动不关闭候选框', box.hidden, false);
@@ -651,6 +651,48 @@ try {
       globalThis.FormData = previousFormData;
       if (previousLocation === undefined) delete globalThis.location;
       else globalThis.location = previousLocation;
+    }
+  }
+  console.log('\n── K：渐进加载与手机软键盘可视视口 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const rows = [];
+    for (let i = 0; i < 170; i++) rows.push({ zh: '炎灵装备' + i, native: 'ネイティブ' + i });
+    const harness = buildSearchHarness(rows);
+    harness.api.startChineseSearch('fc');
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備名の一部を入力して検索');
+    form.appendChild(input);
+    input.value = '炎灵';
+    const previousView = globalThis.visualViewport;
+    globalThis.visualViewport = { width: 320, height: 260, offsetLeft: 0, offsetTop: 100, addEventListener() {} };
+    input._rect = { left: 12, top: 310, right: 250, bottom: 340, width: 238, height: 30 };
+    try {
+      harness.ready[0]();
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      eq('170 条只初始渲染 80 个 DOM 节点', box.querySelectorAll('button[data-zhx-index]').length, 80);
+      eq('弹窗顶部不超出 visualViewport', Number.parseFloat(box.style.top) >= 100, true);
+      eq('弹窗宽度受 visualViewport 限制', Number.parseFloat(box.style.width) <= 304, true);
+      box.scrollTop = 980;
+      box.clientHeight = 150;
+      box.scrollHeight = 1000;
+      document.dispatch('scroll', { target: box });
+      eq('接近底部追加第二批 80 条', box.querySelectorAll('button[data-zhx-index]').length, 160);
+      for (let i = 0; i <= 160; i++) {
+        document.dispatch('keydown', { target: input, key: 'ArrowDown', preventDefault() {} });
+      }
+      eq('键盘导航跨过已渲染批次后继续追加', box.querySelectorAll('button[data-zhx-index]').length, 170);
+      eq('键盘导航可激活第 161 条', box.querySelectorAll('button[data-zhx-index]')[160].dataset.active, '1');
+    } finally {
+      if (previousView === undefined) delete globalThis.visualViewport;
+      else globalThis.visualViewport = previousView;
     }
   }
 } finally {
