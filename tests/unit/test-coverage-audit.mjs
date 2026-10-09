@@ -178,7 +178,8 @@ function anchorContext(cls, label) {
   el.getClientRects = () => [{ width: 10 }];
   el.hasAttribute = () => false;
   el.parentElement = fakeDocument.body;
-  el.closest = () => null;
+  // A real <a href> matches its own closest('a[href]') selector.
+  el.closest = (selector) => selector === 'a[href]' ? el : null;
   fakeDocument.body.tagName = 'BODY';
   fakeDocument.body.className = '';
   fakeDocument.body.parentElement = null;
