@@ -226,13 +226,17 @@ function isUserContent(t, ctx) {
   if (ctx.user) return true;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
   if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;
+  // Creation / publication timestamps belong to post metadata, not authored UI.
+  // Match class/id tokens, not arbitrary substrings (e.g. "date-picker").
+  if (ctx.tag === 'time' || /(?:^|[\s_-])(?:post[-_]?(?:date|time|meta)|posted[-_]?(?:at|date|time)|created[-_]?(?:at|date|time)|updated[-_]?(?:at|date|time)|published[-_]?(?:at|date|time)|(?:relative[-_])?timestamp|relative[-_]time|date|time)(?=$|[\s_-])/i.test(cls) &&
+      !/^(?:button|input|select|label|option)$/.test(ctx.tag || '')) return true;
   if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(t)) return true;
   return !ctx.ui && t.length > 160;
 }
 function isAdContext(ctx) {
   if (ctx.ad) return true;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
-  return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|sponsor)/i.test(cls);
+  return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|amazon|rakuten|sponsor)/i.test(cls);
 }
 function isExempt(t, ctx) {
   if (SERVER_NAMES.has(t)) return true;

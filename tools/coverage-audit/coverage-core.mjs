@@ -8,7 +8,7 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
   try {
     const u = new URL(candidate, base);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-    if (!allowedHosts.some((host) => u.hostname === host || u.hostname.endsWith('.' + host))) return null;
+    if (!allowedHosts.includes(u.hostname)) return null;
     if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname)) return null;
     u.hash = '';
     u.username = '';
@@ -25,14 +25,21 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
 // Route *templates*, not individual user-generated posts, are the primary coverage unit.
 export function templateKey(url) {
   const u = new URL(url);
-  const parts = u.pathname.split('/').filter(Boolean).map((s) => {
-    if (/^\d+$|^[0-9a-f]{8}-[0-9a-f-]{16,}$/i.test(s)) return ':id';
-    if (/^[0-9a-f]{20,}$/i.test(s)) return ':hash';
-    // User-authored slug/detail URLs must not consume the entire scan budget.
-    // Keep equipment_search_* pages distinct: they are separate functional templates.
-    if (!s.startsWith('equipment_search_') && (s.length > 32 || /%[0-9a-f]{2}/i.test(s))) return ':slug';
-    return s;
-  });
+  const parts = [];
+  for (const part of u.pathname.split('/').filter(Boolean)) {
+    if (/^\d+$|^[0-9a-f]{8}-[0-9a-f-]{16,}$/i.test(part)) { parts.push(':id'); continue; }
+    if (/^[0-9a-f]{20,}$/i.test(part)) { parts.push(':hash'); continue; }
+    // Detail slugs (even short slugs after numeric IDs), unicode-encoded
+    // slugs, and long user titles are not distinct page templates.
+    // Preserve FF14-FC equipment_search_* category routes as UI templates.
+    if (!part.startsWith('equipment_search_') &&
+        (parts.at(-1) === ':id' || parts.at(-1) === ':hash' ||
+         part.length > 32 || /%[0-9a-f]{2}/i.test(part))) {
+      parts.push(':slug');
+      continue;
+    }
+    parts.push(part);
+  }
   // The first two levels distinguish e.g. equipment_search_parts/equipment_search_foot
   // while bounding unbounded detail-page crawls.
   return u.hostname + '/' + parts.slice(0, 3).join('/') + (parts.length > 3 ? '/…' : '');

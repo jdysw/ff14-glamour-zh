@@ -22,7 +22,7 @@ export const COLLECTOR_JS = String.raw`(() => {
     let p = el;
     while (p && p.nodeType === 1) {
       const c = getComputedStyle(p);
-      if (c.display === 'none' || c.visibility === 'hidden') return false;
+      if (c.display === 'none' || c.visibility === 'hidden' || Number(c.opacity) === 0) return false;
       p = p.parentElement;
     }
     return el.getClientRects().length > 0 || el.tagName === 'OPTION';
@@ -40,8 +40,8 @@ export const COLLECTOR_JS = String.raw`(() => {
     for (let p = el.parentElement, n = 0; p && n < 4; p = p.parentElement, n++)
       ancestors += ' ' + String(p.className || '') + ' ' + String(p.id || '');
     const full = cls + ' ' + id + ' ' + ancestors;
-    const ad = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift)/i.test(full);
-    const user = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(full);
+    const ad = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift|amazon|rakuten|affiliate)/i.test(full);
+    const user = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content|(?:^|[\s_-])(?:created[-_]at|posted[-_]at|relative[-_]time|timestamp)(?=$|[\s_-]))/i.test(full);
     const linkAction = el.tagName === 'A' && (
       /(?:^|[\s_-])(?:button|btn|load-more|show-more|read-more|page-numbers|next|prev)(?:$|[\s_-])/i.test(cls)
       || !!el.closest('.pagination,.pager,[class*="pagination"],[class*="pager"]')

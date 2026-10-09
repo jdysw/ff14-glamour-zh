@@ -63,9 +63,9 @@ def normalize_url(candidate, base, hosts):
         u = urlsplit(urljoin(base, candidate))
         if u.scheme not in ("https", "http") or not u.hostname:
             return None
-        if not any(u.hostname == host or u.hostname.endswith("." + host) for host in hosts):
+        if u.hostname not in hosts:
             return None
-        if re.search(r"/(login|logout|signout|register|delete|remove|checkout|account|settings|admin|api)(/|$)", u.path, re.I):
+        if re.search(r"/(login|logout|sign-?out|register|signup|delete|remove|checkout|account|settings|admin|api)(/|$)", u.path, re.I):
             return None
         if re.search(r"\.(png|jpe?g|gif|svg|webp|css|js|xml|json|zip|pdf|woff2?|ico)$", u.path, re.I):
             return None
@@ -76,15 +76,36 @@ def normalize_url(candidate, base, hosts):
         return None
 
 def template_key(url):
+    """Use the same template grouping as coverage-core.mjs (JS local scanner)."""
     u = urlsplit(url)
     segments = []
-    for part in u.path.split("/"):
-        if not part:
-            continue
-        if part.isdigit() or re.fullmatch(r"[0-9a-f]{20,}", part, re.I):
-            part = ":id"
-        segments.append(part)
-    return u.netloc + "/" + "/".join(segments[:3])
+    for part in filter(None, u.path.split("/")):
+        if part.isdigit() or re.fullmatch(r"[0-9a-f]{8}-[0-9a-f-]{16,}", part, re.I):
+            segments.append(":id")
+        elif re.fullmatch(r"[0-9a-f]{20,}", part, re.I):
+            segments.append(":hash")
+        elif not part.startswith("equipment_search_") and (
+                (segments and segments[-1] in (":id", ":hash"))
+                or len(part) > 32 or re.search(r"%[0-9a-f]{2}", part, re.I)):
+            segments.append(":slug")
+        else:
+            segments.append(part)
+    return u.hostname + "/" + "/".join(segments[:3]) + ("/…" if len(segments) > 3 else "")
+
+
+def seed_success_count(results, plan):
+    """Only configured seed pages count toward the proxy retry threshold.
+
+    Discovered children can be numerous and must never hide a failed seed.
+    The URL is normalized to avoid duplicate seed IDs counting twice.
+    """
+    hosts = plan.get("hosts") or [urlsplit(p["url"]).hostname for p in plan["pages"]]
+    seeds = {(p["id"], normalize_url(p["url"], p["url"], hosts)) for p in plan["pages"]}
+    successes = {
+        (r.get("pageId"), normalize_url(r.get("url", ""), r.get("url", ""), hosts))
+        for r in results if not r.get("error") and r.get("status") == "ok"
+    }
+    return len(seeds & successes)
 
 GM_STUB = r"""(() => {
   if (window.__gmStub) return;
@@ -281,9 +302,10 @@ async def main():
                 continue
             try:
                 results = await asyncio.wait_for(run_session(browser, plan, dist, out_dir), timeout=900)
-                ok_pages = sum(1 for r in results if not r.get("error"))
-                print("=== 结果 === country=%s 有效页=%d/%d" % (country, ok_pages, len(plan["pages"])), flush=True)
-                if ok_pages >= max(1, len(plan["pages"]) // 2):
+                ok_seeds = seed_success_count(results, plan)
+                print("=== 结果 === country=%s 成功种子页=%d/%d；发现页不计入代理成功门槛" %
+                      (country, ok_seeds, len(plan["pages"])), flush=True)
+                if ok_seeds >= max(1, len(plan["pages"]) // 2):
                     print("CLOUD AUDIT SUCCESS", flush=True)
                     return
             except asyncio.TimeoutError:

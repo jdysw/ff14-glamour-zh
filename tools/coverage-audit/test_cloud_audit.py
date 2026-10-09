@@ -44,6 +44,44 @@ class CloudAuditTests(unittest.TestCase):
                          "https://example.com/equip/")
         self.assertIsNone(cloud.normalize_url("https://evil-example.com/", "https://example.com/",
                                               ["example.com"]))
+        self.assertIsNone(cloud.normalize_url("https://www.example.com/", "https://example.com/",
+                                              ["example.com"]))
+        self.assertEqual(cloud.normalize_url("https://www.example.com/", "https://example.com/",
+                                             ["www.example.com"]), "https://www.example.com/")
+        for path in ("/signout/", "/sign-out/", "/signup/", "/logout/"):
+            self.assertIsNone(cloud.normalize_url(path, "https://example.com/", ["example.com"]))
+
+    def test_template_keys_collapse_detail_slugs_but_preserve_fcxiv_categories(self):
+        detail = cloud.template_key("https://example.com/glamour/123/" + "long-title-" * 8 + "/")
+        self.assertEqual(detail, cloud.template_key("https://example.com/glamour/456/short/"))
+        self.assertEqual(detail, cloud.template_key("https://example.com/glamour/789/%E3%83%86%E3%82%B9%E3%83%88/"))
+        self.assertNotEqual(
+            cloud.template_key("https://ff14-fc.com/equipment_search_parts/equipment_search_head/"),
+            cloud.template_key("https://ff14-fc.com/equipment_search_parts/equipment_search_foot/"),
+        )
+
+    def test_proxy_retry_checks_required_seeds_only(self):
+        plan = {"hosts": ["example.com"], "pages": [
+            {"id": "home", "url": "https://example.com/"},
+            {"id": "search", "url": "https://example.com/search/"},
+            {"id": "about", "url": "https://example.com/about/"},
+            {"id": "list", "url": "https://example.com/list/"},
+        ]}
+        discovered = [
+            {"pageId": "discovered-" + str(i), "url": "https://example.com/posts/" + str(i) + "/",
+             "status": "ok", "error": None}
+            for i in range(20)
+        ]
+        self.assertEqual(cloud.seed_success_count(discovered, plan), 0)
+        partial = discovered + [{"pageId": "home", "url": "https://example.com/",
+                                 "status": "ok", "error": None}]
+        self.assertEqual(cloud.seed_success_count(partial, plan), 1)
+        enough = partial + [{"pageId": "search", "url": "https://example.com/search/",
+                             "status": "ok", "error": None}]
+        self.assertEqual(cloud.seed_success_count(enough, plan), 2)
+        failed = enough + [{"pageId": "list", "url": "https://example.com/list/",
+                            "status": "failed", "error": "CF"}]
+        self.assertEqual(cloud.seed_success_count(failed, plan), 2)
 
     def test_insertion_without_execution_is_failure(self):
         page = DummyPage(executed=False)

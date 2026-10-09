@@ -28,10 +28,23 @@ assert.equal(unmatchedHosts(['unknown.example.net'], header).length, 1);
 assert.equal(normalizeSiteUrl('https://example.com/item/?utm_source=x&a=2#part', 'https://example.com/', ['example.com']),
   'https://example.com/item/?a=2');
 assert.equal(normalizeSiteUrl('https://badexample.com/', 'https://example.com/', ['example.com']), null);
+assert.equal(normalizeSiteUrl('https://www.example.com/', 'https://example.com/', ['example.com']), null,
+  'unmatched subdomain cannot be audited as deployed coverage');
+assert.equal(normalizeSiteUrl('https://www.example.com/', 'https://example.com/', ['www.example.com']),
+  'https://www.example.com/', 'explicitly deployed subdomain is permitted');
+assert.equal(normalizeSiteUrl('/sign-out/', 'https://example.com/', ['example.com']), null);
+assert.equal(normalizeSiteUrl('/signup', 'https://example.com/', ['example.com']), null);
 assert.equal(normalizeSiteUrl('javascript:alert(1)', 'https://example.com/', ['example.com']), null);
 assert.equal(normalizeSiteUrl('https://example.com/logout/', 'https://example.com/', ['example.com']), null);
 assert.equal(normalizeSiteUrl('https://example.com/image.png', 'https://example.com/', ['example.com']), null);
 assert.ok(templateKey('https://example.com/item/12345').endsWith('item/:id'));
+const slugOne = 'https://example.com/glamour/123/' + 'long-user-created-look-'.repeat(3) + '/';
+const slugTwo = 'https://example.com/glamour/456/short/';
+assert.equal(templateKey(slugOne), templateKey(slugTwo), 'detail slugs are one template');
+assert.equal(templateKey('https://example.com/glamour/123/%E3%83%86%E3%82%B9%E3%83%88/'),
+  templateKey(slugTwo), 'encoded slugs are one template');
+assert.notEqual(templateKey('https://ff14-fc.com/equipment_search_parts/equipment_search_foot/'),
+  templateKey('https://ff14-fc.com/equipment_search_parts/equipment_search_head/'));
 const seed = [{ id: 'home', url: 'https://example.com/', type: 'home' }];
 const paths = {
   'https://example.com/': ['https://example.com/equip/1/', 'https://example.com/equip/2/', 'https://other.com/'],
@@ -62,6 +75,14 @@ assert.equal(classify('Some random English username', { ui: false, kind: 'text' 
 assert.equal(classify('検索', { cls: 'post-card', ui: true }), 'real', 'post-card must not blanket-ignore UI');
 assert.equal(classify('검색', { cls: 'username', ui: true }), 'user');
 assert.equal(classify('검색', { ad: true }), 'ad');
+assert.equal(classify('3분 전', { cls: 'comment-created-at', tag: 'span' }), 'user');
+assert.equal(classify('昨日', { cls: 'post-date', tag: 'span' }), 'user');
+assert.equal(classify('검색', { cls: 'timestamp', tag: 'time', ui: false }), 'user');
+assert.equal(classify('日付設定', { cls: 'date-picker', tag: 'button', ui: true }), 'real',
+  'date-picker buttons are UI controls, not user dates');
+assert.equal(classify('广告 广告', { cls: 'amazon-banner', ui: true }), 'ok');
+assert.equal(classify('広告情報', { cls: 'amazon-affiliate', ui: true }), 'ad');
+assert.equal(classify('楽天特典', { cls: 'rakuten-widget', ui: true }), 'ad');
 assert.equal(classify('Eorzea Collection', { ui: true }), 'exempt');
 assert.equal(isResidual('Search', { ui: true }), true);
 assert.equal(isResidual('Search', { ui: false }), false);
@@ -163,6 +184,45 @@ function anchorContext(cls, label) {
 }
 assert.equal(anchorContext('button-link', 'Show Results')[0]?.ctx.ui, true);
 assert.equal(anchorContext('content-entry', 'Player nickname')[0]?.ctx.ui, false);
+const { runInNewContext: runScript } = await import('node:vm');
+function hiddenText(parentOpacity = '1', childOpacity = '1') {
+  const parent = {
+    nodeType: 1, tagName: 'SECTION', id: '', className: '',
+    parentElement: null, hasAttribute: () => false, getAttribute: () => null,
+    closest: () => null, textContent: '',
+  };
+  const child = {
+    nodeType: 1, tagName: 'BUTTON', id: '', className: '',
+    parentElement: parent, isConnected: true, hasAttribute: () => false,
+    getAttribute: () => null, closest: () => null, textContent: '검색',
+    getClientRects: () => [{}], previousElementSibling: null,
+  };
+  parent.isConnected = true;
+  parent.getClientRects = () => [{}];
+  const node = { nodeValue: '검색', parentElement: child };
+  const body = {
+    nodeType: 1, tagName: 'BODY', parentElement: null, id: '', className: '',
+    hasAttribute: () => false, getAttribute: () => null,
+  };
+  parent.parentElement = body;
+  let read = false;
+  const doc = {
+    title: '', body, documentElement: {},
+    createTreeWalker() { return { nextNode() { if (read) return null; read = true; return node; } }; },
+    querySelectorAll: () => [],
+  };
+  const results = runScript(COLLECTOR_JS, {
+    document: doc, NodeFilter: { SHOW_TEXT: 4, FILTER_REJECT: 2, FILTER_ACCEPT: 1 },
+    getComputedStyle: (el) => ({
+      display: 'block', visibility: 'visible',
+      opacity: el === parent ? parentOpacity : el === child ? childOpacity : '1',
+    }),
+  });
+  return results.filter((it) => it.kind === 'text');
+}
+assert.equal(hiddenText('0').length, 0, 'opaque child under zero-opacity ancestor is hidden');
+assert.equal(hiddenText('1', '0').length, 0, 'zero-opacity node is hidden');
+assert.equal(hiddenText('1', '1').length, 1, 'visible text remains included');
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');

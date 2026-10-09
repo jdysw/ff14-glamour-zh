@@ -33,7 +33,7 @@ export async function discoverSitemapUrls({ hosts, fetcher = fetch, maxUrls = 12
           try {
             const u = new URL(href, site);
             if (u.protocol === 'https:' && u.pathname.endsWith('.xml') &&
-                hosts.some((host) => u.hostname === host || u.hostname.endsWith('.' + host)) &&
+                hosts.includes(u.hostname) &&
                 !visitedIndexes.has(u.href)) queue.push(u.href);
           } catch { /* invalid sitemap child URL */ }
         }
