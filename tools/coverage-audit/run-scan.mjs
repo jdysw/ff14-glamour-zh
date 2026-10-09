@@ -12,7 +12,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { SITES, CATEGORY, CATEGORY_LABEL, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
+import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
+import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
+import { discoverSitemapUrls } from './sitemap.mjs';
+import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
 
@@ -57,17 +60,23 @@ function presetDataJs(itemsTsv) {
  * 扫描单个 URL（本地 CDP）。
  * @returns {Promise<object>} { site, pageId, url, items, error? }
  */
-export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, waitMs = 15000 }) {
+export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, waitMs = 1500 }) {
   const t = await newPage(port, 'about:blank');
   const c = t.cdp;
   try {
     await c.send('Network.enable');
+    const documentResponses = [];
+    c.on('Network.responseReceived', (e) => {
+      if (e.type === 'Document' && e.response) {
+        documentResponses.push({ url: e.response.url, httpStatus: e.response.status });
+      }
+    });
     await c.send('Network.setBlockedURLs', { urls: BLOCKED_URLS });
     // 先导航到目标站（about:blank 的 localStorage 不可用）
     await c.send('Page.navigate', { url });
     // 等待页面完全加载 + 确认在目标域上（避免重定向过渡态/错误页）
     const cfg = SITES[site];
-    const expectHost = cfg.host;
+    const expectedHosts = cfg.hosts || [cfg.host];
     let pageOk = false;
     for (let i = 0; i < 40; i++) {
       await sleep(1000);
@@ -82,22 +91,42 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
           lsOk,
         };
       })()`).catch(() => ({}));
-      if (st && st.lsOk && st.ready === 'complete' && st.len > 50 && st.host === expectHost) {
+      if (st && st.lsOk && st.ready === 'complete' && st.len > 50 && expectedHosts.includes(st.host)) {
         pageOk = true;
         break;
       }
     }
-    if (!pageOk) console.log(`⚠️ [${site}/${pageId}] 页面未就绪（可能在重定向/被拦）`);
+    if (!pageOk) throw new Error('页面未就绪，可能被重定向、反爬拦截或加载失败：' + url);
+    const pageIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
+    const response = documentResponses.findLast((e) => e.url === pageIdentity.finalUrl);
+    pageIdentity.httpStatus = response?.httpStatus || 0;
+    const rejection = pageIdentityFailure(pageIdentity, expectedHosts);
+    if (rejection) throw new Error('非业务页面，扫描无效：' + rejection);
+    // Before snapshot includes *English* UI, enabling differential auditing.
+    const before = await c.eval(COLLECTOR_JS);
+    const links = await c.eval(LINKS_JS).catch(() => []);
     // 现在清 localStorage + 预置数据 + 注入脚本（页面已就绪）
     await c.eval(presetDataJs(itemsTsv));
     await c.eval(GM_STUB);
+    // Enable the existing lightweight diagnostic lifecycle marker before the
+    // userscript loads; this does not display the probe panel.
+    await c.eval('window.__zhxDiagOn = true');
     const dist = fs.readFileSync(DIST_FILE, 'utf8');
-    await c.eval(WRAP(dist));
-    // 等待数据流程 + 补扫
-    await sleep(waitMs);
-    // 运行收集器
-    const raw = await c.eval(COLLECTOR_JS).catch((e) => ({ error: String(e) }));
-    return { site, pageId, url, items: raw || [], error: raw && raw.error ? raw.error : null };
+    await c.eval(WRAP(dist + '\nwindow.__zhxAuditInjected = true;'));
+    const injected = await c.eval('window.__zhxAuditInjected === true');
+    if (!injected) throw new Error('userscript 执行失败，不能判定汉化覆盖');
+    // __zhxMarks.ready is emitted after asynchronous table construction and
+    // onTablesReady translation callbacks. Timeout is a failed scan, never a
+    // page with apparently missing translations.
+    await waitForAuditReady(() => c.eval(AUDIT_READY_JS), sleep);
+    await sleep(waitMs); // allow MutationObserver / DOM work to settle
+    const afterIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
+    afterIdentity.httpStatus = documentResponses.findLast((e) => e.url === afterIdentity.finalUrl)?.httpStatus || 0;
+    const afterRejection = pageIdentityFailure(afterIdentity, expectedHosts);
+    if (afterRejection) throw new Error('扫描中被站点阻断：' + afterRejection);
+    const raw = await c.eval(COLLECTOR_JS);
+    if (!Array.isArray(raw)) throw new Error('collector 未返回数组');
+    return { site, pageId, url: afterIdentity.finalUrl, httpStatus: afterIdentity.httpStatus, beforeCount: before.length, items: pairSnapshots(before, raw), links, error: null, status: 'ok' };
   } finally {
     await closePage(port, t.target.id);
   }
@@ -109,23 +138,28 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
 //   1. 生成一个独立的云扫描脚本（python）到缓存目录
 //   2. 通过 child_process 调用，收集 JSON 产物
 // 简化版：先输出「需云扫描」清单，由外部脚本处理。
-export function cloudScanPlan(site) {
+export function cloudScanPlan(site, opts = {}) {
   const cfg = SITES[site];
   if (!cfg) throw new Error('未知站点: ' + site);
   return {
     site,
     channel: 'cloud',
+    hosts: cfg.hosts || [cfg.host],
+    discover: !!opts.discover,
+    maxPages: opts.maxPages || 60,
+    maxDepth: opts.maxDepth ?? 2,
+    perTemplate: opts.perTemplate || 3,
     pages: cfg.pages.map((p) => ({ id: p.id, url: p.url, type: p.type })),
   };
 }
 
 // ---------- 报告合并 ----------
 export function loadResults(dir = CACHE_DIR) {
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !f.startsWith('report'));
+  if (!fs.existsSync(dir)) return [];
+  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
   const results = [];
   for (const f of files) {
-    const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-    results.push(d);
+    try { const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (d.site && (d.items || d.pages)) results.push(d); } catch (e) { console.error('[audit] 跳过损坏缓存:', f, e.message); }
   }
   return results;
 }
@@ -140,7 +174,7 @@ export function saveResult(result, dir = CACHE_DIR) {
 // ---------- 主流程 ----------
 function usage() {
   console.log(`用法:
-  node tools/coverage-audit/run-scan.mjs --site <site> [--pages p1,p2] [--port 9223]
+  node tools/coverage-audit/run-scan.mjs --site <site> [--pages p1,p2] [--port 9223] [--discover --max-pages 60 --max-depth 2 --per-template 3 --wait 1500]
   node tools/coverage-audit/run-scan.mjs --all [--channel local|cloud|auto]
   node tools/coverage-audit/run-scan.mjs --report [--out <file.md>]`);
 }
@@ -181,11 +215,25 @@ async function main() {
   const pagesArg = getArg('--pages');
   const port = Number(getArg('--port') || 9223);
   const channel = getArg('--channel') || 'auto';
+  const discover = hasFlag('--discover');
+  const maxPages = Math.max(1, Math.min(500, Number(getArg('--max-pages') || 60)));
+  const maxDepth = Math.max(0, Math.min(5, Number(getArg('--max-depth') || 2)));
+  const perTemplate = Math.max(1, Math.min(15, Number(getArg('--per-template') || 3)));
+  const waitMs = Math.max(0, Math.min(60000, Number(getArg('--wait') ?? 1500)));
 
   if (!siteArg) { usage(); process.exit(2); }
 
   const sites = siteArg === 'all' ? Object.keys(SITES) : [siteArg];
   const itemsTsv = fs.readFileSync(path.join(REPO_ROOT, 'data', 'ff14-items.tsv'), 'utf8');
+  const header = fs.readFileSync(path.join(REPO_ROOT, 'build/userscript-header.txt'), 'utf8');
+  // Never claim host coverage on a host where the released userscript cannot run.
+  for (const site of sites) {
+    const cfg = SITES[site];
+    if (!cfg) throw new Error('未知站点：' + site);
+    if (cfg.channel === 'fixture') continue;
+    const missing = unmatchedHosts(cfg.hosts || [cfg.host], header);
+    if (missing.length) console.warn('[audit] 缺失 @match: ' + site + ' ' + missing.join(', '));
+  }
 
   // 确保 Chrome 可用（本地通道）
   const needLocal = sites.some((s) => {
@@ -202,42 +250,77 @@ async function main() {
   for (const site of sites) {
     const cfg = SITES[site];
     const ch = channel === 'auto' ? cfg.channel : channel;
-    const pages = pagesArg ? cfg.pages.filter((p) => pagesArg.split(',').includes(p.id)) : cfg.pages;
+    let pages = pagesArg ? cfg.pages.filter((p) => pagesArg.split(',').includes(p.id)) : cfg.pages;
+    // Live auditing on Wiki needs a real, public item URL: the normal audit
+    // fixture seed intentionally cannot be navigated by Chrome.
+    if (site === 'wiki' && ch === 'local' && process.env.ZHX_AUDIT_WIKI_URL) {
+      pages = [{ id: 'item-live', type: 'item', url: process.env.ZHX_AUDIT_WIKI_URL }];
+    }
 
     console.log(`\n===== 扫描 ${site}（通道: ${ch}）=====`);
     if (ch === 'local') {
-      for (const p of pages) {
-        if (p.url.startsWith('fixture:')) {
-          // 夹具页：本工具暂不处理（wiki 用 fixture 测试已有覆盖）
-          console.log(`  [${p.id}] 夹具页跳过（wiki 由 tests/integration/test-wiki.mjs 覆盖）`);
-          continue;
+      const hosts = cfg.hosts || [cfg.host];
+      const queue = pages.filter((p) => !p.url.startsWith('fixture:')).map((p) => ({ ...p, depth: 0 }));
+      if (discover && !hasFlag('--no-sitemap')) {
+        const sitemapUrls = await discoverSitemapUrls({ hosts, maxUrls: Math.min(250, maxPages * 8) });
+        const sampledTemplates = new Set();
+        for (const url of sitemapUrls) {
+          const key = templateKey(url);
+          if (sampledTemplates.has(key)) continue;
+          sampledTemplates.add(key);
+          queue.push({ url, type: 'sitemap', depth: 1 });
+          if (sampledTemplates.size >= Math.min(20, Math.floor(maxPages / 3))) break;
         }
-        console.log(`  扫描 ${p.id}: ${p.url}`);
+        console.log('  Sitemap 补充页面模板：' + sampledTemplates.size);
+      }
+      const visited = new Set();
+      const templateCounts = new Map();
+      for (let n = 0; n < queue.length && visited.size < (discover ? maxPages : pages.length); n++) {
+        const p = queue[n];
+        const norm = normalizeSiteUrl(p.url, p.url, hosts);
+        if (!norm || visited.has(norm)) continue;
+        const template = templateKey(norm);
+        if (discover && (templateCounts.get(template) || 0) >= perTemplate) continue;
+        visited.add(norm);
+        templateCounts.set(template, (templateCounts.get(template) || 0) + 1);
+        console.log('  扫描 ' + (p.id || template) + ': ' + norm);
         try {
-          const r = await scanUrlLocal({ site, pageId: p.id, url: p.url, port });
-          const classified = classifyResiduals((r.items || []).map((it) => ({ ...it, site })));
-          r.items = classified;
+          const r = await scanUrlLocal({ site, pageId: p.id || 'discovered-' + n, url: norm, itemsTsv, port, waitMs });
+          const classified = classifyResiduals(r.items.map((it) => ({ ...it, site })));
+          const result = { site, pageId: r.pageId, url: norm, template, depth: p.depth,
+            items: classified, status: 'ok', beforeCount: r.beforeCount, scannedAt: new Date().toISOString() };
           const real = classified.filter((it) => it.category === 'real').length;
           const wrong = classified.filter((it) => it.category === 'wrong').length;
-          console.log(`    残留候选 ${classified.length} 条（真漏译 ${real}、错译候选 ${wrong}）`);
-          const f = saveResult({ site, pageId: p.id, url: p.url, items: classified, scannedAt: new Date().toISOString() });
-          console.log(`    已保存: ${f}`);
-          results.push(r);
+          console.log('    候选 ' + classified.length + '（真漏译 ' + real + '、部分翻译 ' + wrong + '）');
+          saveResult(result);
+          results.push(result);
+          if (discover && p.depth < maxDepth) {
+            for (const href of r.links || []) {
+              const next = normalizeSiteUrl(href, norm, hosts);
+              if (next && !visited.has(next)) queue.push({ url: next, depth: p.depth + 1 });
+            }
+          }
         } catch (e) {
-          console.error(`  扫描失败 [${site}/${p.id}]:`, e.message);
-          const f = saveResult({ site, pageId: p.id, url: p.url, items: [], error: String(e.message || e), scannedAt: new Date().toISOString() });
-          results.push({ site, pageId: p.id, url: p.url, items: [], error: String(e.message || e) });
+          console.error('  扫描失败 [' + site + '/' + (p.id || norm) + ']:', e.message);
+          const failed = { site, pageId: p.id || 'discovered-' + n, url: norm, template, items: [],
+            status: 'failed', error: String(e.message || e), scannedAt: new Date().toISOString() };
+          saveResult(failed);
+          results.push(failed);
         }
       }
+      console.log('  有效扫描样本 ' + results.filter((r) => r.site === site && !r.error).length +
+        '，独立 URL ' + visited.size + (discover ? '；动态发现已开启' : '；仅扫描种子页'));
     } else if (ch === 'cloud') {
       console.log('  云浏览器通道：生成云扫描计划（由 bu-*.py 执行，需 BROWSER_USE_API_KEY）');
-      const plan = cloudScanPlan(site);
+      const plan = cloudScanPlan(site, { discover, maxPages, maxDepth, perTemplate });
       console.log('  计划: ' + JSON.stringify(plan.pages.map((p) => p.id)));
       // 保存计划供云脚本读取
       fs.mkdirSync(CACHE_DIR, { recursive: true });
       fs.writeFileSync(path.join(CACHE_DIR, `cloud-plan-${site}.json`), JSON.stringify(plan, null, 2), 'utf8');
       console.log(`  计划已存: ${path.join(CACHE_DIR, `cloud-plan-${site}.json`)}`);
       console.log('  ⚠️ 云扫描尚未自动执行——请运行配套 Python 脚本（后续提供）或手动用云浏览器打开页面运行收集器。');
+    } else if (ch === 'fixture') {
+      console.log('  Wiki: 站点中文、反查功能由离线 integration 测试覆盖，真实站点扫描需浏览器授权');
     } else {
       console.error('未知通道: ' + ch);
       process.exit(2);

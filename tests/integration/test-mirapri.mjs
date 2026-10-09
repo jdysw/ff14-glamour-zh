@@ -81,7 +81,7 @@ console.log('\n--- 断言 ---');
 const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
 const checks = [
   ['① PATTERNS 文本 → 裁切全身', r.navText === '裁切全身', String(r.navText)],
-  ['② title=原文 keep（hover 提示）', r.navTitle === '全身を切り取る', String(r.navTitle)],
+  ['② 翻译后不再生成日文原文悬停提示', !r.navTitle || r.navTitle === '裁切全身', String(r.navTitle)],
   ['③ Loading... → 加载中…', !!r.hint && r.hint.indexOf('加载中') === 0, String(r.hint)],
   ['④ 占位符 → 输入装备名等', r.ph === '输入装备名等', String(r.ph)],
   ['⑤ 物品链接 → 中文名', r.link && r.link.text === ZH, r.link ? r.link.text : 'null'],

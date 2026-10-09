@@ -11,6 +11,7 @@
 // @match        https://ff14-fc.com/*
 // @match        https://lookbook.ronkacloset.com/*
 // @match        https://www.ffxivcollection.com/*
+// @match        https://weapon.ffxivcollection.com/*
 // @match        https://end-closet.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
