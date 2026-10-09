@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {summarizeLive,toManualV11,writeLiveReports} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
+import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 const at='2026-10-09T13:00:00Z';
 const good=site=>({site,pageId:'home',url:SITES[site].pages[0].url,status:'ok',
   scannedAt:at,beforeCount:1,items:[{kind:'text',text:'搜索',before:'Search',
@@ -34,4 +35,16 @@ try{
   assert.equal(JSON.parse(fs.readFileSync(path.join(temp,'coverage-audit-live-v1.1.json'))).format,'zhx-manual-audit-v2');
   assert.match(fs.readFileSync(path.join(temp,'coverage-audit-live.md'),'utf8'),/WAF/);
 }finally{fs.rmSync(temp,{recursive:true,force:true});}
+const redactedItems=redactItems([{kind:'text',text:'玩家标题',
+  path:'div#gallery > article > h2.title',ctx:{user:false,ui:true,tag:'h2',cls:'title',ancestors:'gallery article-info'}}],'mirapri');
+assert.equal(redactedItems[0].ctx.scope,'user');
+assert.equal(redactedItems[0].text,'[内容已隐藏]');
+const rawDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-raw-'));
+const pubDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-pub-'));
+try{
+  fs.writeFileSync(path.join(rawDir,'fc-test.json'),JSON.stringify({...good('fc'),items:[{kind:'text',text:'玩家创作',
+    path:'div.post-title',ctx:{user:true,ui:false}}]}));
+  assert.equal(sanitizeEvidence(rawDir,pubDir),1);
+  assert.doesNotMatch(fs.readFileSync(path.join(pubDir,'fc-test.json'),'utf8'),/玩家创作/);
+}finally{fs.rmSync(rawDir,{recursive:true,force:true});fs.rmSync(pubDir,{recursive:true,force:true});}
 console.log('✅ live-report: strict completeness, V1.1 compatibility, privacy redaction');

@@ -55,12 +55,17 @@ function toV11Item(it){
   ctx.scope=ctx.ad?'ad':ctx.user?'user':ctx.scope||
     (it.kind==='document:title'?'metadata':it.kind==='attr:alt'?'unknown':ctx.ui?'ui':'unknown');
   ctx.ui=ctx.scope==='ui';ctx.user=ctx.scope==='user';
-  return manual.sanitizeItem({...it,ctx,stablePath:it.stablePath||it.path},false);
+  const safe=manual.sanitizeItem({...it,ctx,stablePath:it.stablePath||it.path},false);
+  if(['unknown','metadata','ad'].includes(safe.ctx.scope)){
+    safe.text='[未确认内容已隐藏]';
+    if(safe.before!=null)safe.before='[未确认内容已隐藏]';
+  }
+  return safe;
 }
 export function toManualV11(report){
   const pages={};
   for(const p of report.pages){
-    const items=(p.items||[]).map(toV11Item);
+    const items=manual.upgradeLegacyItems(p.items||[],p.site).map(toV11Item);
     const paired=items.some(it=>it.before!=null);
     const url=manual.urlKey(p.url);
     const key=manual.snapshotKey(url,'default',p.pageId||'');

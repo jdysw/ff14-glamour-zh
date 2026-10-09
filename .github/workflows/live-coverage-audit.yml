@@ -34,12 +34,15 @@ jobs:
           node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages 24 --max-depth 2 --per-template 2 --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
           exit ${PIPESTATUS[0]}
         continue-on-error: true
-      - name: Always upload raw evidence and error logs
+      - name: Sanitize evidence before artifact upload
+        if: always()
+        run: node tools/coverage-audit/sanitize-evidence.mjs tests/.cache/coverage-audit tests/.cache/coverage-public
+      - name: Always upload sanitized evidence and error logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-raw-${{ matrix.site }}
-          path: tests/.cache/coverage-audit/
+          path: tests/.cache/coverage-public/
           retention-days: 14
           if-no-files-found: warn
   report:
