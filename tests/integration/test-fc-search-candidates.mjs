@@ -81,7 +81,7 @@ console.log('候选行数:', rows);
 ok('① 中文候选出现（数据就绪 + UI 装配）', rows > 0, String(rows));
 
 // ── ② 对照：翻译器活跃性——普通 div 的日文装备名应被汉化翻译 ──
-await c.eval(`(() => { const d = document.createElement('div'); d.id = '__probe_ja'; d.textContent = ${JSON.stringify(expectJa)}; document.body.appendChild(d); return 1; })()`);
+await c.callFn('function (value) { const d = document.createElement("div"); d.id = "__probe_ja"; d.textContent = value; document.body.appendChild(d); return 1; }', [expectJa]);
 let translated = null;
 for (let i = 0; i < 12; i++) {
   await sleep(800);
