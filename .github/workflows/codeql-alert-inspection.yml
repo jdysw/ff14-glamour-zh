@@ -1,0 +1,40 @@
+name: Inspect current CodeQL alerts (temporary)
+on:
+  push:
+    branches: [codex/fix-candidate-filter-policy]
+    paths:
+      - .github/workflows/codeql-alert-inspection.yml
+permissions:
+  contents: read
+  security-events: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: List current repository CodeQL findings safely
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess
+          p=subprocess.run(['gh','api','--paginate', 'repos/'+os.environ['GITHUB_REPOSITORY']+'/code-scanning/alerts?state=open&per_page=100'],capture_output=True,text=True)
+          if p.returncode:
+              print('CODE_SCAN_FETCH_ERROR:',p.stderr[:600])
+              raise SystemExit(1)
+          raw=p.stdout.strip()
+          try:
+              alerts=json.loads(raw)
+          except json.JSONDecodeError:
+              d=json.JSONDecoder()
+              alerts=[]
+              while raw:
+                  obj,index=d.raw_decode(raw)
+                  alerts.extend(obj if isinstance(obj,list) else [obj])
+                  raw=raw[index:].lstrip()
+          print('CODE_SCAN_COUNT:',len(alerts))
+          for a in alerts:
+              loc=a.get('most_recent_instance') or {}
+              obj={'number':a.get('number'),'rule':a.get('rule',{}).get('id'),'description':a.get('rule',{}).get('description'),'path':loc.get('location',{}).get('path'),'line':loc.get('location',{}).get('start_line'),'state':a.get('state'),'tool':a.get('tool',{}).get('name')}
+              print('CODE_SCAN_ALERT:',json.dumps(obj,ensure_ascii=False))
+          PY
