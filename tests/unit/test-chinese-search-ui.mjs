@@ -186,7 +186,7 @@ function buildSearchHarness(suggestionsOverride) {
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',
+    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput };',
   ].join('\n');
   try {
     const fn = new Function('__ready', '__suggestions', body);
@@ -694,6 +694,40 @@ try {
       if (previousView === undefined) delete globalThis.visualViewport;
       else globalThis.visualViewport = previousView;
     }
+  }
+  console.log('\n── L：六站输入框隔离 / 搜索能力矩阵 ──');
+  for (const site of ['mirapri', 'fc', 'ronka', 'collection', 'ec', 'endcloset']) {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const { api } = buildSearchHarness();
+    api.startChineseSearch(site);
+    const equipment = new FakeElement('input');
+    equipment.setAttribute('type', 'search');
+    equipment.setAttribute('placeholder', '搜索装备名');
+    eq(site + ' 装备独立搜索框可识别', api.isStandaloneSearchInput(equipment), true);
+
+    const author = new FakeElement('input');
+    author.setAttribute('type', 'text');
+    author.setAttribute('name', 'search_by_player');
+    author.setAttribute('placeholder', 'Search by player');
+    eq(site + ' 玩家字段不得误接管', api.isStandaloneSearchInput(author), false);
+
+    const title = new FakeElement('input');
+    title.setAttribute('type', 'text');
+    title.setAttribute('placeholder', 'Search by title');
+    eq(site + ' 标题字段不得误接管', api.isStandaloneSearchInput(title), false);
+
+    const masked = new FakeElement('input');
+    masked.setAttribute('type', 'password');
+    masked.setAttribute('placeholder', 'Search');
+    eq(site + ' 密码字段不得误接管', api.isStandaloneSearchInput(masked), false);
+
+    const vueSelect = new FakeElement('input');
+    vueSelect.setAttribute('type', 'search');
+    vueSelect.setAttribute('placeholder', 'Any head');
+    vueSelect.className = 'vs__search';
+    vueSelect.form = new FakeElement('form');
+    eq(site + ' vue-select 只有 EC 允许接管', api.isStandaloneSearchInput(vueSelect), site === 'ec');
   }
 } finally {
   globalThis.document = previousDocument;
