@@ -245,6 +245,23 @@ const mkEnv = (over = {}) => ({
   eq('智能输入：limit 无 8 条封顶（全量返回，防御上限 3000）', api.suggestByZh('炎灵', 99999).length, 5);
 }
 
+// B1b. 搜索词落在中文名中间时也必须有候选（不局限于前缀）
+{
+  const api = buildResolver(mkEnv({ site: { id: 'mirapri' } }));
+  api._irBuildAux([
+    '1\t女仆发带\tMaid Headdress\tメイドヘッド\t메이드\t\t\t\t1',
+    '2\t星光女仆长袍\tStarlight Maid Robe\t星メイド\t메이드로브\t\t\t\t1',
+    '3\t女仆上衣\tMaid Top\tメイドトップ\t메이드상의\t\t\t星光女仆别名\t1',
+    '4\t时尚饰品\tFashion Accessory\tおしゃれ\t패션\t\t\t女仆饰品\t1',
+  ].join('\n'));
+  const rows = api.suggestByZh('女仆');
+  eq('词中匹配保留在正式名前缀之后', rows.map((r) => r.zh).join('|'),
+    '女仆上衣|女仆发带|星光女仆长袍|女仆饰品|星光女仆别名');
+  eq('中文别名仍能解析为原站装备名', rows.at(-1)?.native, 'メイドトップ');
+  eq('limit 包含精确 / 前缀 / 包含全部类别的统一上限', api.suggestByZh('女仆', 3).length, 3);
+  eq('不含查询词的物品不混入候选', rows.some((r) => r.zh === '时尚饰品'), false);
+}
+
 // B2. 中文搜索按站点语言倒排
 // ─────────────────────────────────────────────────────────────
 {
