@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import fs from 'node:fs';
+const req=createRequire(import.meta.url);
+const C=req('../../tools/manual-coverage-audit/audit-core.js');
+assert.equal(C.urlKey('https://mirapri.com/posts?token=x&sort=recent#i'),'https://mirapri.com/posts/?sort=recent');
+assert.equal(C.allowedRoute('https://mirapri.com/login'),false);
+assert.equal(C.siteFor('https://end-closet.com/detail/abc'),'endcloset');
+const node=(tag,classes,sel)=>({tagName:tag,id:'',className:classes,
+  parentElement:null,closest:s=>sel&&s.includes(sel)?{}:null,getAttribute:()=>null});
+assert.equal(C.classifyContext(node('H2','title','#gallery article h2.title'),'text','mirapri','https://mirapri.com/').scope,'user');
+assert.equal(C.classifyContext(node('BUTTON','',''),'text','mirapri','https://mirapri.com/').scope,'ui');
+assert.equal(C.classifyContext(node('IMG','glamour-card',''),'attr:alt','ec','https://ffxiv.eorzeacollection.com/').scope,'user');
+const it=(text,path,scope='ui')=>({kind:'text',text,path,ctx:{scope,name:''}});
+const pair=C.pair([it('検索','button#search')],[it('搜索','button#search')]);
+assert.equal(pair.matched,1);assert.equal(pair.items[0].before,'検索');
+assert.equal(C.category(pair.items[0]),'translated');
+assert.equal(C.category(it('検索する','somewhere')),'suspected-no-baseline');
+assert.equal(C.sanitizeItem(it('private player','x','user')).text,'[内容已隐藏]');
+const old=[{status:'ok',site:'fc',url:'https://ff14-fc.com/',state:'a',items:[it('検索する','x')]}];
+const now=[{status:'ok',site:'fc',url:'https://ff14-fc.com/',state:'a',items:[it('搜索','x')]}];
+assert.equal(C.compareRuns(old,now).resolved.length,1);
+assert.equal(C.compareRuns(old,[{...now[0],url:'https://ff14-fc.com/other/'}]).resolved.length,0);
+const raw=fs.readFileSync(new URL('../../tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js',import.meta.url),'utf8');
+assert.ok(raw.includes('@run-at       document-start'));
+assert.ok(raw.includes('inferred-old-value'));
+assert.ok(raw.includes('原文基线'));
+console.log('✅ manual coverage audit V1.1: cross-site scope, pairing, privacy, diff and install script');
