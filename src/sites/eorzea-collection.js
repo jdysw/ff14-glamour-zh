@@ -130,7 +130,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // Translate only recognized UI title segments. Preserve creator names and site branding.
   function translateECTitle() {
     const old = document.title;
-    if (!old || !old.includes(' | Eorzea Collection')) return;
+    if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
     const translated = parts.map((part) => DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
