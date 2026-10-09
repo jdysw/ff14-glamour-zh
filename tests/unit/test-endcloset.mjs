@@ -100,5 +100,62 @@ check('动态结果数量翻译', () => {
   assert.equal(ctx.trEndCloset('총 739개의 투영 세트 중 20개 표시'), '共 739 套幻化，显示 20 项');
   assert.equal(ctx.trEndCloset('3개 선택됨'), '3 项已选择');
 });
+
+check('Manual audit: 28 Korean style taxonomy tags have consistent Chinese translations', () => {
+  for (const [raw, zh] of [['중동풍','中东风'], ['다크 판타지','暗黑奇幻'],
+    ['페어컨셉','双人主题'], ['고딕 마법사','哥特魔法师'],
+    ['아카데믹','学院风'], ['반갑주','半身甲']]) {
+    assert.equal(ctx.trEndCloset(raw), zh);
+  }
+});
+check('Manual audit: English filter taxonomy tags are translated as exact UI terms', () => {
+  for (const [raw, zh] of [['JobSet','职业套装'], ['Wrist gloves','护腕手套'],
+    ['front slit','前开衩'], ["'Blue Mage's Arm",'青魔法师武器'],
+    ['Healing Tome','治疗魔导书'], ['Tricorn Hat','三角帽']]) {
+    assert.equal(ctx.trEndCloset(raw), zh);
+  }
+});
+check('Donation content translates, proper bank identities are preserved', () => {
+  for (const [raw, zh] of [['후원금 사용 내역','赞助款用途明细'],
+    ['국내 계좌 이체','韩国境内银行转账'],
+    ['Ko-fi에서 후원하기','前往 Ko-fi 赞助'],
+    ['은행','银行'], ['예금주','账户名']]) {
+    assert.equal(ctx.trEndCloset(raw), zh);
+  }
+  assert.equal(ctx.trEndCloset('카카오뱅크'), '카카오뱅크');
+});
+check('Dynamic item list totals and image identifiers are translated without altering numbers', () => {
+  assert.equal(ctx.trEndCloset('Showing 20 of 1880 items'), '显示 20 / 共 1880 件装备');
+  assert.equal(ctx.trEndCloset('Showing 1 of 2 items'), '显示 1 / 共 2 件装备');
+  assert.equal(ctx.trEndCloset('Glamour Set e34aOLptvLMcOZC3wPut'), '幻化套装 e34aOLptvLMcOZC3wPut');
+  assert.equal(ctx.trEndCloset('Glamour Set'), '幻化套装');
+});
+check('Only primary navigation gets its English landmark translated', () => {
+  const attrs1 = { 'aria-label': 'primary' };
+  ctx._ecProcNode({ nodeType: 1, tagName: 'NAV', getAttribute: k=>attrs1[k], setAttribute:(k,v)=>{attrs1[k]=v;} });
+  assert.equal(attrs1['aria-label'],'主导航');
+  const attrs2 = { 'aria-label': 'primary' };
+  ctx._ecProcNode({ nodeType: 1, tagName: 'BUTTON', getAttribute: k=>attrs2[k], setAttribute:(k,v)=>{attrs2[k]=v;} });
+  assert.equal(attrs2['aria-label'],'primary');
+});
+check('Dynamic author title translates prefix without changing author identity', () => {
+  const attrs = { title:'작성자: B' };
+  ctx._ecProcNode({ nodeType:1, tagName:'BUTTON', getAttribute: k=>attrs[k], setAttribute:(k,v)=>{attrs[k]=v;} });
+  assert.equal(attrs.title, '作者：B');
+  assert.equal(ctx.trEndCloset('작성자: 바람'), '作者：바람');
+});
+check('Document title translates site suffix but does not invent unknown gear names', () => {
+  ctx.document.title='알라미고 채집가용 터번, 에투알 손등장갑... - FF14 글래머 투영';
+  ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title,'알라미고 채집가용 터번, 에투알 손등장갑... - FF14 幻化投影');
+  ctx.document.title='End Closet'; ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title,'End Closet');
+});
+check('No forced translation of user-submitted titles or official publisher names', () => {
+  assert.equal(ctx.trEndCloset('차원의 방랑자'), '차원의 방랑자');
+  assert.equal(ctx.trEndCloset('©2010-2026 SQUARE ENIX CO., LTD. All Rights Reserved. Published in Korea by Actoz Soft CO., LTD.'),
+    '©2010-2026 SQUARE ENIX CO., LTD. All Rights Reserved. Published in Korea by Actoz Soft CO., LTD.');
+});
+
 console.log(`${pass} passed / ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

@@ -9,7 +9,7 @@ import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：职能/类别词（・复合名逐段翻译用）
@@ -31,7 +31,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       return null;
     });
     if (hit < 1) return null;
-    // 有未命中的段：仅当未命中段可安全保留（短拉丁/数字）才输出
+    // Unknown Japanese equipment segments must not be rendered as half-translated names.
+    if (parts.some((p, i) => zh[i] == null && !/^[A-Za-z0-9 ]{1,15}$/.test(p))) return null;
     const out = parts.map((p, i) => (zh[i] != null ? zh[i] : p));
     return out.join('·');
   }
@@ -88,8 +89,30 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
 
   // ④ 子串兜底：含菜单词/装备名的片段（v1.14.5：门槛 6→2，覆盖被 <br> 等拆分的短节点如「で制作」）
   // v1.1.3：数据就绪前不跑——避免对「系列・职业」复合名做部分替换破坏原文（如 ファントムヴィジョン・御敌）；补扫时统一处理
+  function _fcCanReplaceAt(out, at, key) {
+    // Avoid translating ドレス inside メールアドレス or ノート inside ノートゥング.
+    if (!/[ぁ-んァ-ヶー]/.test(key)) return true;
+    const kana = /[ぁ-んァ-ヶー]/;
+    return !kana.test(out[at - 1] || '') && !kana.test(out[at + key.length] || '');
+  }
+  function _fcReplaceSubstr(out, key, value) {
+    let at = out.indexOf(key);
+    let changed = false;
+    while (at !== -1) {
+      if (_fcCanReplaceAt(out, at, key)) {
+        out = out.slice(0, at) + value + out.slice(at + key.length);
+        changed = true;
+        at = out.indexOf(key, at + value.length);
+      } else {
+        at = out.indexOf(key, at + key.length);
+      }
+    }
+    return { out, changed };
+  }
   function _trFCSubstr(text, t0, core) {
     if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
+    // Avoid corrupting arbitrary Japanese prose with dictionary word fragments.
+    if (/[。！？]/.test(t0) && /[ぁ-ん]/.test(t0)) return null;
     let out = text;
     let changed = false;
     // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
@@ -97,8 +120,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       if (!out.includes(k)) continue;
       const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
       if (v == null) continue;
-      out = out.split(k).join(v);
-      changed = true;
+      const replaced = _fcReplaceSubstr(out, k, v);
+      out = replaced.out;
+      changed ||= replaced.changed;
     }
     return changed ? out : null;
   }
@@ -153,11 +177,19 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     }
   }
 
+  function _trFCAttr(n, key) {
+    const value = n.getAttribute(key);
+    if (!value || value.length > 160) return;
+    const match = key === 'title' && value.match(/^View all posts in (.+)$/);
+    const group = match && DICT_FC[match[1]];
+    const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(value);
+    if (translated !== value) n.setAttribute(key, translated);
+  }
   function _procFCImg(n) {
     const alt = n.getAttribute('alt');
-    if (!alt || alt.length < 2 || alt.length > 90) return;
-    const nn = trFC(alt);
-    if (nn !== alt && !n.dataset.zhixiaFcAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaFcAlt = '1'; }
+    if (alt && alt.length >= 2 && alt.length <= 90) _trFCAttr(n, 'alt');
+    if (n.hasAttribute('title')) _trFCAttr(n, 'title');
+    if (n.hasAttribute('aria-label')) _trFCAttr(n, 'aria-label');
   }
 
   function _procFCNode(n) {
@@ -169,6 +201,10 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       return;
     }
     if (n.tagName === 'IMG' || n.hasAttribute('alt')) _procFCImg(n);
+    else {
+      if (n.hasAttribute('title')) _trFCAttr(n, 'title');
+      if (n.hasAttribute('aria-label')) _trFCAttr(n, 'aria-label');
+    }
   }
 
   function translateFCPage(rootArg) {
@@ -369,7 +405,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
         l1.textContent = rule.zh;
         l1.style.cssText = 'font-size:20px;font-weight:900;letter-spacing:1px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.65),0 0 14px rgba(0,0,0,.4);line-height:1.15;';
         const l2 = document.createElement('em');
-        l2.textContent = '一览・搜索';
+        l2.textContent = '一览与搜索';
         l2.style.cssText = 'font-style:normal;font-size:12px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,.95);text-shadow:0 1px 4px rgba(0,0,0,.6);';
         span.appendChild(l1); span.appendChild(l2);
       } else {
