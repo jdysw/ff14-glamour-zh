@@ -1,0 +1,75 @@
+name: Live localization coverage audit (7 sites)
+# Manual on-demand scan: blocked sites must never appear as zero missing translations.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    name: Scan ${{ matrix.site }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build production script and test audit helpers
+        run: |
+          npm ci
+          npm run build
+          node tests/run.mjs test-coverage-audit test-live-coverage-report
+          python3 -m unittest discover -s tools/coverage-audit -p 'test_cloud_audit.py'
+      - name: Scan public pages; retain failures as evidence
+        env:
+          CI: 'true'
+          ZHX_AUDIT_WIKI_URL: 'https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81%3A%E5%8A%A0%E7%89%B9%E5%8B%92'
+        run: |
+          mkdir -p tests/.cache/coverage-audit
+          node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages 24 --max-depth 2 --per-template 2 --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
+          exit ${PIPESTATUS[0]}
+        continue-on-error: true
+      - name: Always upload raw evidence and error logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-raw-${{ matrix.site }}
+          path: tests/.cache/coverage-audit/
+          retention-days: 14
+          if-no-files-found: warn
+  report:
+    name: Aggregate and enforce truthful audit status
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download all seven site outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-raw-*
+          path: tests/.cache/coverage-audit/
+          merge-multiple: true
+        continue-on-error: true
+      - name: Generate Markdown, summary and V1.1-compatible redacted JSON
+        run: |
+          node tools/coverage-audit/live-report.mjs --input tests/.cache/coverage-audit --out tests/.cache/coverage-report
+      - name: Always upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full-report
+          path: tests/.cache/coverage-report/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Fail if any required site is missing or blocked
+        run: |
+          node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('tests/.cache/coverage-report/coverage-audit-live.json'));if(x.status!=='scan-complete'){console.error('Incomplete seven-site audit: '+x.status);process.exit(1)}"
