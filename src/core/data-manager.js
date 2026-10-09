@@ -1060,10 +1060,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
     const canonical = _getIrSearchKeysByKind(0);
     const aliases = _getIrSearchKeysByKind(1);
-    _irSearchCollectPrefix(canonical, key, max - matches.length, matches, key);
+    _irSearchCollectPrefix(canonical, key, max, matches, key);
     _irSearchCollectContains(canonical, key, max, matches, key);
     if (matches.length < max) {
-      _irSearchCollectPrefix(aliases, key, max - matches.length, matches, key);
+      _irSearchCollectPrefix(aliases, key, max, matches, key);
       _irSearchCollectContains(aliases, key, max, matches, key);
     }
     return matches.slice(0, max).map((name) => ({ zh: name, native: map[name] }));
