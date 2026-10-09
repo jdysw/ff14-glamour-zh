@@ -89,4 +89,29 @@ try {
   globalThis.location = originalLocation;
 }
 
+
+// 验证中文搜索实际调用套装解析器，并保证离开 /gearsets 不污染其他站点。
+const searchSource = fs.readFileSync(path.join(root, 'src/core/chinese-search.js'), 'utf8');
+const searchStart = searchSource.indexOf('const SEARCH_SITES = Object.freeze({');
+const searchEnd = searchSource.indexOf('\nexport {', searchStart);
+assert.ok(searchStart >= 0 && searchEnd > searchStart);
+const searchApi = new Function('resolveECGearsetSearch', 'resolveByZh', 'resolvePartialByZh',
+  'suggestECGearsetsByZh', 'suggestByZh', searchSource.slice(searchStart, searchEnd) +
+    '\nreturn { isECGearsetsPage, resolveSearchNative };')(
+  search, q => q === '测试物品' ? 'Native Test Item' : null,
+  q => q === '女仆' ? 'Maid' : null, api.suggestECGearsetsByZh, () => []);
+try {
+  globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/gearsets' };
+  assert.equal(searchApi.isECGearsetsPage(), true);
+  assert.equal(searchApi.resolveSearchNative('御敌', true), 'Fending');
+  assert.equal(searchApi.resolveSearchNative('幻境', true), 'Phantom Vision');
+  assert.equal(searchApi.resolveSearchNative('女仆', true), 'Maid', '未知套装词才回退物品公共子串');
+  globalThis.location.pathname = '/glamours';
+  assert.equal(searchApi.isECGearsetsPage(), false);
+  assert.equal(searchApi.resolveSearchNative('测试物品', false), 'Native Test Item');
+  assert.equal(searchApi.resolveSearchNative('御敌', false), null, '非套装页不套用职能搜索映射');
+} finally {
+  globalThis.location = originalLocation;
+}
+
 console.log('✅ EC Gearsets 套装标题、部分词检索及 DOM 安全性回归通过');
