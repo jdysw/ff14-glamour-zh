@@ -62,6 +62,12 @@ function _trEndClosetItem(t0) {
 function trEndClosetCount(text) {
   const count = text.match(/^(\d[\d,]*)\s*(개 선택됨|개 아이템|개 투영세트|items|glamour sets)$/);
   if (count) return count[1] + ({ '개 선택됨': ' 项已选择', '개 아이템': ' 件装备', 'items': ' 件装备' }[count[2]] || ' 套幻化');
+  const english = text.match(/^Showing\s+([\d,]+)\s+of\s+([\d,]+)\s+items?$/i);
+  if (english) return '显示 ' + english[1] + ' / 共 ' + english[2] + ' 件装备';
+  const glamourId = text.match(/^Glamour Set\s+([a-zA-Z0-9_-]{8,40})$/);
+  if (glamourId) return '幻化套装 ' + glamourId[1];
+  const author = text.match(/^작성자\s*:\s*(.{1,80})$/);
+  if (author) return '作者：' + author[1];
   const total = text.match(/^총\s+([\d,]+)개의\s+(투영 세트|아이템)\s+중\s+([\d,]+)개\s+표시$/);
   if (total) return '共 ' + total[1] + (total[2] === '아이템' ? ' 件装备，显示 ' : ' 套幻化，显示 ') + total[3] + ' 项';
   return null;
@@ -124,7 +130,10 @@ function _ecImgAlt(n) {
 
 function _ecAria(n) {
   const al = n.getAttribute('aria-label');
-  if (al) { const nn = trEndCloset(al); if (nn !== al) n.setAttribute('aria-label', nn); }
+  if (!al) return;
+  // "primary" is a landmark name only on <nav>, not a generic UI label.
+  const nn = n.tagName === 'NAV' && al === 'primary' ? '主导航' : trEndCloset(al);
+  if (nn !== al) n.setAttribute('aria-label', nn);
 }
 
 function _ecProcNode(n) {
@@ -173,8 +182,13 @@ function translateEndClosetPage(rootArg) {
 function translateEndClosetTitle() {
   const t = document.title;
   if (!t) return;
-  const nt = trEndCloset(t);
-  if (nt && nt !== t && nt.length <= 120) document.title = nt;
+  // Detail-page titles contain gear names. Translate only verified terms and
+  // the fixed site suffix; keep unmapped item names rather than guessing.
+  let nt = trEndCloset(t);
+  if (nt === t && t.includes('FF14 글래머 투영')) {
+    nt = t.replace('FF14 글래머 투영', 'FF14 幻化投影');
+  }
+  if (nt && nt !== t && nt.length <= 160) document.title = nt;
 }
 
 function startEndCloset() {
