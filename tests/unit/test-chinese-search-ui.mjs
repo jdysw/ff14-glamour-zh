@@ -607,6 +607,52 @@ try {
     await sleep(1000);
     eq(site + ' 延迟恢复不会覆盖后续输入', input.value, '用户继续输入');
   }
+  console.log('\n── J：表单选择候选即提交，选中别名保持原生名称 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    harness.api.startChineseSearch('mirapri');
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
+    input.value = '炎灵';
+    const previousFormData = globalThis.FormData;
+    const previousLocation = globalThis.location;
+    const urls = [];
+    let submissions = 0;
+    globalThis.FormData = class {
+      entries() { return [['keyword', input.value]][Symbol.iterator](); }
+    };
+    globalThis.location = { href: 'https://mirapri.com/', assign(url) { urls.push(url); } };
+    form.requestSubmit = () => {
+      submissions++;
+      harness.api.handleChineseSearchSubmit({
+        target: form, preventDefault() {}, stopPropagation() {},
+      }, 'mirapri');
+    };
+    try {
+      harness.ready[0]();
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[3],
+        preventDefault() {},
+      });
+      eq('候选点击调用站点 requestSubmit 一次', submissions, 1);
+      eq('提交别名使用候选绑定的原生名称，不重新猜测', new URL(urls[0]).searchParams.get('keyword'), 'エ');
+      eq('候选中文显示不被提交时的原生名称覆盖', input.value, '炎灵袍');
+    } finally {
+      globalThis.FormData = previousFormData;
+      if (previousLocation === undefined) delete globalThis.location;
+      else globalThis.location = previousLocation;
+    }
+  }
 } finally {
   globalThis.document = previousDocument;
   if (previousAddEventListener === undefined) delete globalThis.addEventListener;
