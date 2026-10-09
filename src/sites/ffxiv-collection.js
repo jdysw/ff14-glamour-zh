@@ -9,7 +9,7 @@ import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, bindZhxItemClick, ensureZhxItemStyle, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
+export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, bindZhxItemClick, ensureZhxItemStyle, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 
   /* ===================================================================== */
@@ -199,7 +199,8 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (!raw?.trim()) return;
     const pe = node.parentElement;
     if (pe?.closest?.(ACL_SKIP_SEL)) return;
-    const next = trACL(raw);
+    const next = raw.trim() === 'of' && pe?.closest?.('#navigation')
+      ? raw.replace('of', '/') : trACL(raw);
     if (next !== raw) {
       node.nodeValue = next;
       markACLItem(node, next);
@@ -215,16 +216,35 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     return NodeFilter.FILTER_ACCEPT;
   }
 
+  function _trACLGearsetAlt(value) {
+    const match = value.match(/^(.+?)'s gearset image(?: (female|male) model)?\.$/i);
+    if (!match) return null;
+    const setName = trACL(match[1]);
+    if (setName === match[1] || /[ぁ-んァ-ヶー]/.test(setName)) return null;
+    return setName + '的装备展示图' + (match[2] ? '（' + (match[2].toLowerCase() === 'female' ? '女性' : '男性') + '角色）' : '');
+  }
+  function _trACLLabel(n, key) {
+    const value = n.getAttribute(key);
+    if (!value || value.length > 160) return;
+    let translated = null;
+    if (key === 'alt') translated = _trACLGearsetAlt(value);
+    // Search-menu yes/no/male/female titles are UI controls, not general prose.
+    if (key === 'title' && n.closest?.('#search-menu')) {
+      const filterValues = { yes: '是', no: '否', male: '男性', female: '女性' };
+      translated = filterValues[value.toLowerCase()] || null;
+    }
+    if (!translated) translated = trACL(value);
+    if (translated !== value) n.setAttribute(key, translated);
+  }
   function _procACLNode(n) {
     if (n.nodeType === 3) { trimACLNode(n); return; }
+    if (!n.hasAttribute) return;
     if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
       const ph = n.getAttribute('placeholder');
       if (ph) { const nn = trACL(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-      return;
     }
-    if (n.hasAttribute?.('title')) {
-      const ti = n.getAttribute('title');
-      if (ti && /[\u3040-\u30ff]/.test(ti)) { const nn = trACL(ti); if (nn !== ti) n.setAttribute('title', nn); }
+    for (const key of ['title', 'aria-label', 'alt']) {
+      if (n.hasAttribute(key)) _trACLLabel(n, key);
     }
   }
 
