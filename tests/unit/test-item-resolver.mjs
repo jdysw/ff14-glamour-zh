@@ -83,6 +83,21 @@ console.log('\n── B：中文名称与别名搜索契约 ──');
  eq('韩文站名映射', ko.resolveByZh('甲'), '가');
 }
 
+console.log('\n── B1：中文中间词匹配与候选排序 ──');
+{
+ const names={ 'メイドヘッド':'女仆发带', '星メイド':'星光女仆长袍', 'メイドトップ':'女仆上衣', 'おしゃれ':'时尚饰品' };
+ const glam=Object.fromEntries(Object.keys(names).map(k=>[k,'1']));
+ const aliases={ '星光女仆别名':['女仆上衣'], '女仆饰品':['时尚饰品'] };
+ const api=buildResolver(mkEnv({ nameMap:names, glamMap:glam, aliasMap:aliases }));
+ const rows=api.suggestByZh('女仆');
+ const prefixes=['女仆上衣','女仆发带'].sort((a,b)=>a.localeCompare(b));
+ eq('前缀优先，中间包含其次，再依次匹配别名',rows.map(r=>r.zh).join('|'),
+   [...prefixes,'星光女仆长袍','女仆饰品','星光女仆别名'].join('|'));
+ eq('词中中文别名仍对应原站语言名',rows.at(-1)?.native,'メイドトップ');
+ eq('跨匹配分组时仍受 limit 约束',api.suggestByZh('女仆',3).length,3);
+ eq('不含输入词的物品不混入候选',rows.some(r=>r.zh==='时尚饰品'),false);
+}
+
 console.log('\n── C：候选安全策略 ──');
 {
  const api=buildResolver(mkEnv());
