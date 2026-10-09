@@ -90,9 +90,9 @@ def non_content_page_reason(identity):
             or "performing security verification" in first) and re.search(
             r"cloudflare|security service|verify you are not a bot|you have been blocked", first):
         return "Cloudflare / WAF challenge"
-    if (re.fullmatch(r"(?:404\\s*(?:not found)?\\s*[-—|:]?\\s*)?(?:this page could not be found\\.?|page not found\\.?|the page you are looking for (?:does not exist|could not be found))", first)
+    if (re.fullmatch(r"(?:404\s*(?:not found)?\s*[-—|:]?\s*)?(?:this page could not be found\.?|page not found\.?|the page you are looking for (?:does not exist|could not be found))", first)
             or re.fullmatch(r"404|page not found|404 not found", title)
-            or re.match(r"^404\\s*[-—|:]?\\s*(?:this page could not be found|page not found)", first)):
+            or re.match(r"^404\s*[-—|:]?\s*(?:this page could not be found|page not found)", first)):
         return "404 / nonexistent site route"
     if ("sitemap" in title or "xml sitemap index" in first) and re.search(
             r"xml sitemap|sub-sitemap|sitemap generator", first):

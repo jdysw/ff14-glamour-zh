@@ -30,7 +30,7 @@ export function summarizeLive(rows,now=new Date().toISOString()){
   const expected=Object.keys(SITES);
   const selected=latestResults(rows);
   for(const site of expected){
-    if(!selected.some(r=>r.site===site))selected.push({site,pageId:'runner',url:SITES[site].pages[0].url,
+    if(!selected.some(r=>r.site===site))selected.push({site,pageId:'runner',url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/':SITES[site].pages[0].url,
       status:'failed',error:'No evidence saved for this site',scannedAt:now,items:[]});
   }
   const pages=selected.map(p=>{
