@@ -138,7 +138,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       const zh = ecGearsetSeriesZh(en);
       if (!zh) return false;
       const base = zh.replace(/套装$/u, '');
-      return base.includes(rest) || rest.includes(base);
+      return base.includes(rest);
     });
     if (hits.length !== 1) return null; // 多个不同系列不能随意选一个英文名
     const en = hits[0];
