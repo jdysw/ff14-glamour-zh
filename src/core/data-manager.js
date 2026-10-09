@@ -192,6 +192,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {}))).then(() => local);
   }
 
+  function _itemCandidateLineKind(line, first) {
+    const parts = line.split('\t');
+    if (first && parts[0] === 'key') return parts.length > 8 && parts[8].trim() === 'glam' ? 0 : -1;
+    if (!/^\d+$/.test(parts[0]) && parts[0] !== '-') return 0;
+    return parts.length > 8 && ['0', '1'].includes(parts[8].trim()) ? 1 : -1;
+  }
+
   function _itemsHaveCandidateFlags(text) {
     if (typeof text !== 'string' || !text) return false;
     let pos = 0, sawData = false, first = true;
@@ -202,16 +209,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (line.endsWith('\r')) line = line.slice(0, -1);
       pos = end + 1;
       if (!line.trim()) continue;
-      const p = line.split('\t');
-      if (first && p[0] === 'key') {
-        first = false;
-        if (p.length <= 8 || p[8].trim() !== 'glam') return false;
-        continue;
-      }
+      const kind = _itemCandidateLineKind(line, first);
       first = false;
-      if (!/^\d+$/.test(p[0]) && p[0] !== '-') continue;
-      if (p.length <= 8 || !['0', '1'].includes(p[8].trim())) return false;
-      sawData = true;
+      if (kind < 0) return false;
+      sawData = sawData || kind === 1;
     }
     return sawData;
   }
@@ -221,32 +222,46 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return !fp || cached.fp === fp;
   }
 
+  function _reuseCandidateTable(t, fp, cached, policyKnown, policyAllowed) {
+    applyTable(t, cached.tx);
+    if (t === 'items' && policyKnown) {
+      _irCandidatePolicy = policyAllowed && fp && _itemsHaveCandidateFlags(cached.tx) ? 1 : 0;
+    }
+    _dlStats.cache++;
+    return 1;
+  }
+
+  function _tableTextIsValid(t, text) {
+    if (!text || text.length <= 100) return false;
+    if (t === 'dict') return text.charAt(0) === '{';
+    return text.includes('\t') || text.includes('|');
+  }
+
+  async function _persistFetchedTable(t, fp, text, force) {
+    if (force) {
+      if (!await _writeCachedTableAsync(t, fp, text)) _forceDataCacheWritesOk = false;
+    } else _writeCachedTable(t, fp, text);
+  }
+
+  async function _applyFetchedCandidateTable(t, fp, text, policyAllowed, force) {
+    applyTable(t, text);
+    if (t === 'items') _irCandidatePolicy = policyAllowed && _itemsHaveCandidateFlags(text) ? 1 : 0;
+    await _persistFetchedTable(t, fp, text, force);
+    _dlStats.net++;
+    return 1;
+  }
+
   async function _ensureFetchTable(t, vfps, local, candidatePolicy, force = false) {
     const fp = vfps?.[t] ? String(vfps[t]) : null;
     const cached = local[t] || null;
-    const policyKnown = Number.isInteger(candidatePolicy);
     const policyAllowed = candidatePolicy === 1;
     if (!force && _canReuseCachedTable(t, fp, cached)) {
-      applyTable(t, cached.tx);
-      if (t === 'items' && policyKnown) {
-        _irCandidatePolicy = policyAllowed && fp && _itemsHaveCandidateFlags(cached.tx) ? 1 : 0;
-      }
-      _dlStats.cache++;
-      return 1;
+      return _reuseCandidateTable(t, fp, cached, Number.isInteger(candidatePolicy), policyAllowed);
     }
-    let txt = null;
-    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000, force ? { fresh: true } : undefined); }
-    catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
-    const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
-    if (txt && txt.length > 100 && fmtOk) {
-      applyTable(t, txt);
-      if (t === 'items') _irCandidatePolicy = policyAllowed && _itemsHaveCandidateFlags(txt) ? 1 : 0;
-      if (force) {
-        if (!await _writeCachedTableAsync(t, fp, txt)) _forceDataCacheWritesOk = false;
-      } else _writeCachedTable(t, fp, txt);
-      _dlStats.net++;
-      return 1;
-    }
+    let text = null;
+    try { text = await httpGet(DATA_BASE + DATA_FILES[t], 25000, force ? { fresh: true } : undefined); }
+    catch (e) { text = null; _zhxErr('fetch:' + t, e); }
+    if (_tableTextIsValid(t, text)) return _applyFetchedCandidateTable(t, fp, text, policyAllowed, force);
     if (cached && !force) { applyTable(t, cached.tx); _dlStats.fallback++; return 1; }
     return 0;
   }
@@ -271,6 +286,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return null;
   }
 
+  async function _saveFetchedTableMeta(ver, force) {
+    const meta = JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now(), candidatePolicy: _irCandidatePolicy });
+    if (force) {
+      if (!await storeSetAsync(META_KEY, meta)) { _forceDataCacheWritesOk = false; return false; }
+    } else storeSet(META_KEY, meta);
+    return true;
+  }
+
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
   // 返回 true 表示「全部表已成功对齐到最新版本」（调用方可据此决定是否热替换索引）。
   async function _ensureFetchAll(need, local, force = false) {
@@ -283,13 +306,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local, ver?.candidatePolicy, force).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
     __zhxMark('applied');   // Phase 19：表格拉取/应用完成
-    if (ver && okCount === need.length) {
-      const meta = JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now(), candidatePolicy: _irCandidatePolicy });
-      if (force) {
-        if (!await storeSetAsync(META_KEY, meta)) { _forceDataCacheWritesOk = false; return false; }
-      } else storeSet(META_KEY, meta);
-      return true;
-    }
+    if (ver && okCount === need.length) return _saveFetchedTableMeta(ver, force);
     return false;
   }
 
@@ -517,7 +534,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
     let text = null;
     try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); }
-    catch (e) { text = null; }
+    catch (e) { text = null; /* 请求失败返回 null，由更新流程选择重试或其他数据通道 */ }
     if (typeof text !== 'string' || !text) return null;
     if (!await _v3VerifyFile(text, meta.sha256)) return null;
     await _v3WriteFileCache(key, meta.sha256 + '\n' + text, force);
@@ -540,7 +557,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
   async function fetchManifest(force = false) {
     let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, force ? { fresh: true } : undefined); } catch (e) { txt = null; }
+    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, force ? { fresh: true } : undefined); } catch (e) { txt = null; /* 清单不可用时保持待更新状态 */ }
     if (typeof txt !== 'string' || !txt) return null;
     try {
       const m2 = JSON.parse(txt);
@@ -588,6 +605,17 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return !(sharedDict && files.dict == null);
   }
 
+  function _requiredV3Files(site) {
+    const required = [];
+    if (site.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
+    if (site.indexes?.includes('itemHash')) required.push('hash');
+    if (site.indexes?.includes('ecidMap')) required.push('ecid');
+    if (site.indexes?.includes('koByZh')) required.push('ko');
+    if (site.tables?.includes('series')) required.push('series');
+    if (site.tables?.includes('acl')) required.push('acl');
+    return required;
+  }
+
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败/缺文件 → false（调用方回退 v2，不改变现有行为）。
   async function _ensureTryV3(force = false) {
@@ -599,13 +627,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       const sm = man.sites[site.id].files || {};
       const names = Object.keys(sm);
       const need = neededTables();
-      const required = [];
-      if (site.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
-      if (site.indexes?.includes('itemHash')) required.push('hash');
-      if (site.indexes?.includes('ecidMap')) required.push('ecid');
-      if (site.indexes?.includes('koByZh')) required.push('ko');
-      if (site.tables?.includes('series')) required.push('series');
-      if (site.tables?.includes('acl')) required.push('acl');
+      const required = _requiredV3Files(site);
       if (!names.length || required.some((name) => !sm[name])) return false;
       // 共享词库（manifest.shared.dict；neededTables 含 dict 的站点拉取）
       const sharedDict = (need.includes('dict') && man.shared?.dict) || null;
@@ -861,7 +883,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
-      if (!p[8] || p[8].trim() !== '1') continue; // 仅明确允许项进入候选；旧/未知标记默认排除
+      if (p[8]?.trim() !== '1') continue; // 仅明确允许项进入候选；旧/未知标记默认排除
       const native = p[localeIndex];
       _irSearchPut(out, p[1], native, 0, kind);
       _irBuildSearchAliases(out, p[7], native, kind);

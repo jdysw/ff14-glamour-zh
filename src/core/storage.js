@@ -46,7 +46,7 @@ export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, 
     });
   }
   function storeSet(k, v) {
-    storeSetAsync(k, v);
+    void storeSetAsync(k, v);
   }
   function storeListAsync() {
     return new Promise((resolve) => {
@@ -58,7 +58,7 @@ export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, 
         Promise.resolve(result).then((keys) => {
           resolve(Array.isArray(keys) && keys.every((k) => typeof k === 'string') ? keys : null);
         }, () => resolve(null));
-      } catch (e) { resolve(null); }
+      } catch (e) { resolve(null); /* 枚举失败后按已知数据键清除，强制模式继续禁止读旧缓存 */ }
     });
   }
   async function storeDeleteAsync(k) {

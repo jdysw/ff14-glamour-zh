@@ -39,6 +39,17 @@ def read_text(rel: str):
         return None
 
 
+def check_item_row(cols, line, bad_cols, bad_key, bad_glam):
+    """逐行结构校验独立于总表汇总，短行不继续读取列值。"""
+    if len(cols) != len(ITEMS_COLS):
+        bad_cols.append(f"L{line}（{len(cols)} 列）")
+        return
+    if not cols[0]:
+        bad_key.append(f"L{line}")
+    if cols[8] not in ('0', '1'):
+        bad_glam.append(f"L{line}={cols[8]!r}")
+
+
 def check_items() -> int:
     """校验物品总表；返回数据行数（失败路径记入 errors）"""
     text = read_text("data/ff14-items.tsv")
@@ -55,13 +66,7 @@ def check_items() -> int:
     bad_cols, bad_key, bad_glam = [], [], []
     for i, line in enumerate(lines[1:], start=2):
         cols = line.split("\t")
-        if len(cols) != len(ITEMS_COLS):
-            bad_cols.append(f"L{i}（{len(cols)} 列）")
-        else:
-            if not cols[0]:
-                bad_key.append(f"L{i}")
-            if cols[8] not in ('0', '1'):
-                bad_glam.append(f"L{i}={cols[8]!r}")
+        check_item_row(cols, i, bad_cols, bad_key, bad_glam)
     if bad_cols:
         errors.append(f"items 列数异常 {len(bad_cols)} 处：{detail(bad_cols)}")
     if bad_key:

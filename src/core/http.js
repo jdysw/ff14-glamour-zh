@@ -10,12 +10,13 @@ export { httpGet };
        构建时，本区段将原样抽出为 src/core/http.js。 */
 
   /* ── 网络：优先 GM_xmlhttpRequest（不受页面 CSP/CORS 限制），无则 fetch ── */
+  let _httpFreshSequence = 0;
   function _httpFreshUrl(url) {
     const hashAt = url.indexOf('#');
     const base = hashAt < 0 ? url : url.slice(0, hashAt);
     const hash = hashAt < 0 ? '' : url.slice(hashAt);
     const sep = base.includes('?') ? '&' : '?';
-    const token = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const token = Date.now().toString(36) + '-' + (++_httpFreshSequence).toString(36);
     return base + sep + '_zhx_refresh=' + token + hash;
   }
 
