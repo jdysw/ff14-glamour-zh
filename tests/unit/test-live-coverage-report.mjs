@@ -7,7 +7,8 @@ import {summarizeLive,toManualV11,writeLiveReports} from '../../tools/coverage-a
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
 import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 const at='2026-10-09T13:00:00Z';
-const good=site=>({site,pageId:'home',url:SITES[site].pages[0].url,status:'ok',
+const good=site=>({site,pageId:'home',
+  url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/物品:加特勒':SITES[site].pages[0].url,status:'ok',
   scannedAt:at,beforeCount:1,items:[{kind:'text',text:'搜索',before:'Search',
     path:'nav > button',ctx:{ui:true,user:false,ad:false}}]});
 const bad=site=>({site,pageId:'home',url:SITES[site].pages[0].url,status:'failed',
