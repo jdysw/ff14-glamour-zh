@@ -3,10 +3,10 @@
 import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
-import { storeGetAsync, storeSet } from './storage.js';
+import { storeGetAsync, storeSet, storeSetAsync } from './storage.js';
 import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
 import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _readCachedTable, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, _writeCachedTable, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _readCachedTable, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, _writeCachedTable, _writeCachedTableAsync, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
 
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
@@ -187,6 +187,11 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
     const put = () => { try { storeSet(key, val); } catch (e) { /* 忽略：缓存写入失败仅影响下次重新下载（见上注释） */ } };
     if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
     else setTimeout(put, 50);
+  }
+
+  function _writeCachedTableAsync(t, fp, tx) {
+    if (!fp || !tx) return Promise.resolve(false);
+    return storeSetAsync(DT_PREFIX + t, fp + '\n' + tx);
   }
 
   /* @zhixia:core-cache-end */

@@ -1,14 +1,14 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE, DATA_BASE_V3, DATA_FILES } from './constants.js';
-import { DAY_MS, META_KEY, _lcs90, _readCachedTable, _writeCachedTable, cacheReset } from './cache.js';
+import { DAY_MS, DT_PREFIX, META_KEY, _lcs90, _readCachedTable, _writeCachedTable, _writeCachedTableAsync, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { tryEnToZh } from './item-resolver.js';
 import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { _siteIndexes, findSite, neededTables } from './site-registry.js';
-import { storeGetAsync, storeSet } from './storage.js';
+import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, storeSetAsync } from './storage.js';
 export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut, _btNameRow, _btNext, _btRow, _btStep, _btTargets, _dlStats, _ensureFetchAll, _ensureFetchTable, _ensureFinalize, _ensureMain, _ensurePromise, _ensureReadLocal, _ensureTryFast, _ensureTryV3, _fireTablesReady, _irBuildAux, _irRegAlias, _irRegDup, _irScanLine, _irStats, _readyCbs, _tablesReady, _v3Applied, _v3FetchFile, _v3Pairs, _waitPageLoad, allFilesReady, applyTable, buildTables, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
@@ -17,6 +17,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
      需要等数据就绪的补扫 / 刷新，通过 onTablesReady(fn) 登记。 */
   // 数据版本（外置版由加载器在版本清单到达后赋值；内嵌版保持空 = 随脚本版本）
   let DATA_VER = ''; // NOSONAR — 数据版本由远程 manifest 生命周期更新
+  const DATA_REFRESH_EPOCH_KEY = 'zhx.data.refresh.epoch';
+  const DATA_REFRESH_EPOCH = 'candidate-policy-1-force-refresh';
+  let _forceDataRefresh = false;
+  let _forceDataClearSucceeded = false;
+  let _forceDataCacheWritesOk = true;
 
   const _readyCbs = [];
   let _tablesReady = false; // NOSONAR — ready 状态由数据完成生命周期更新
@@ -189,10 +194,26 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   function _itemsHaveCandidateFlags(text) {
     if (typeof text !== 'string' || !text) return false;
-    const first = text.trimStart().match(/^[^\r\n]+/)?.[0] || '';
-    const p = first.split('\t');
-    if (p[0] === 'key') return p.length > 8 && p[8].trim() === 'glam';
-    return /^\d+$/.test(p[0]) && p.length > 8 && (p[8].trim() === '0' || p[8].trim() === '1');
+    let pos = 0, sawData = false, first = true;
+    while (pos < text.length) {
+      let end = text.indexOf('\n', pos);
+      if (end < 0) end = text.length;
+      let line = text.slice(pos, end);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      pos = end + 1;
+      if (!line.trim()) continue;
+      const p = line.split('\t');
+      if (first && p[0] === 'key') {
+        first = false;
+        if (p.length <= 8 || p[8].trim() !== 'glam') return false;
+        continue;
+      }
+      first = false;
+      if (!/^\d+$/.test(p[0]) && p[0] !== '-') continue;
+      if (p.length <= 8 || !['0', '1'].includes(p[8].trim())) return false;
+      sawData = true;
+    }
+    return sawData;
   }
 
   function _canReuseCachedTable(t, fp, cached) {
@@ -200,27 +221,40 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return !fp || cached.fp === fp;
   }
 
-  async function _ensureFetchTable(t, vfps, local) {
+  async function _ensureFetchTable(t, vfps, local, candidatePolicy, force = false) {
     const fp = vfps?.[t] ? String(vfps[t]) : null;
     const cached = local[t] || null;
-    if (_canReuseCachedTable(t, fp, cached)) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }
+    const policyKnown = Number.isInteger(candidatePolicy);
+    const policyAllowed = candidatePolicy === 1;
+    if (!force && _canReuseCachedTable(t, fp, cached)) {
+      applyTable(t, cached.tx);
+      if (t === 'items' && policyKnown) {
+        _irCandidatePolicy = policyAllowed && fp && _itemsHaveCandidateFlags(cached.tx) ? 1 : 0;
+      }
+      _dlStats.cache++;
+      return 1;
+    }
     let txt = null;
-    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
+    try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000, force ? { fresh: true } : undefined); }
     catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
     const fmtOk = (t === 'dict') ? (txt?.charAt(0) === '{') : (txt && (txt.includes('\t') || txt.includes('|')));
     if (txt && txt.length > 100 && fmtOk) {
       applyTable(t, txt);
-      _writeCachedTable(t, fp, txt);
+      if (t === 'items') _irCandidatePolicy = policyAllowed && _itemsHaveCandidateFlags(txt) ? 1 : 0;
+      if (force) {
+        if (!await _writeCachedTableAsync(t, fp, txt)) _forceDataCacheWritesOk = false;
+      } else _writeCachedTable(t, fp, txt);
       _dlStats.net++;
       return 1;
     }
-    if (cached) { applyTable(t, cached.tx); _dlStats.fallback++; return 1; }   // 下载失败 → 兜底旧缓存
+    if (cached && !force) { applyTable(t, cached.tx); _dlStats.fallback++; return 1; }
     return 0;
   }
 
   // v1.2.x：主体抽为具名函数（匿名 IIFE 会把复杂度并入 ensureTables 度量）
   // ① 读本地缓存；「缓存齐全 + 24 小时内已对齐版本」则零网络直接用
   async function _ensureTryFast(need) {
+    if (_forceDataRefresh) return { local: {} };
     const local = await _ensureReadLocal(need);
     __zhxMark('readEnd');   // Phase 19：本地读取结束
     let meta = null;
@@ -228,7 +262,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
     const allCached = need.every((t) => !!local[t]);
     const itemsCurrent = !need.includes('items') || _itemsHaveCandidateFlags(local.items?.tx);
-    if (!allCached || !fresh || !itemsCurrent) return { local };
+    if (_forceDataRefresh || !allCached || !fresh || !itemsCurrent) return { local };
+    _irCandidatePolicy = meta?.candidatePolicy === 1 && itemsCurrent ? 1 : 0;
     for (const t of need) applyTable(t, local[t].tx);
     DATA_VER = (meta.v ? String(meta.v) : '');
     _dlStats.cache += need.length;
@@ -238,16 +273,21 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   // ②③④ 版本清单 + 逐表拉取（指纹一致→缓存；不一致/缺失→下载，失败回退旧缓存）+ 记录检查时间
   // 返回 true 表示「全部表已成功对齐到最新版本」（调用方可据此决定是否热替换索引）。
-  async function _ensureFetchAll(need, local) {
+  async function _ensureFetchAll(need, local, force = false) {
+    force = force || _forceDataRefresh;
+    if (force) local = {};
     let ver = null;
-    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000)); } catch (e) { ver = null; _zhxErr('version', e); }
+    try { ver = JSON.parse(await httpGet(DATA_BASE + 'version.json', 10000, force ? { fresh: true } : undefined)); } catch (e) { ver = null; _zhxErr('version', e); }
     const vfps = (ver?.files && typeof ver.files === 'object') ? ver.files : null;
     let okCount = 0;
-    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
+    (await Promise.all(need.map((t) => _ensureFetchTable(t, vfps, local, ver?.candidatePolicy, force).catch((e) => { _zhxErr('table:' + t, e); return 0; })))).forEach((v) => { okCount += v; });
     if (ver?.v) DATA_VER = String(ver.v);
     __zhxMark('applied');   // Phase 19：表格拉取/应用完成
     if (ver && okCount === need.length) {
-      storeSet(META_KEY, JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now() }));
+      const meta = JSON.stringify({ v: (ver.v ? String(ver.v) : ''), t: Date.now(), candidatePolicy: _irCandidatePolicy });
+      if (force) {
+        if (!await storeSetAsync(META_KEY, meta)) { _forceDataCacheWritesOk = false; return false; }
+      } else storeSet(META_KEY, meta);
       return true;
     }
     return false;
@@ -320,12 +360,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   // 注意：不在此处调用 _ensureFinalize——首次构建 + 就绪广播由 ensureTables 外层
   // 的 .then(_ensureFinalize) 统一完成（否则会双重广播）。
   async function _ensureBuildLocal(need, local) {
-    if (!need || !local) return false;
+    if (_forceDataRefresh || !need || !local) return false;
     const hasLocal = need.some((t) => !!local[t]);
     if (!hasLocal) return false;          // 无任何缓存：交还原等待链（全新安装场景）
     // 应用本地缓存文本（与快路径一致的语义；DATA_VER 用 meta 中的旧版本）
     let meta = null;
     try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略 */ }
+    _irCandidatePolicy = meta?.candidatePolicy === 1 && _itemsHaveCandidateFlags(local.items?.tx) ? 1 : 0;
     for (const t of need) {
       if (local[t]) { applyTable(t, local[t].tx); _dlStats.cache++; }
     }
@@ -388,15 +429,19 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   // names 文本 → {原生名: 候选允许标记('1'/'0'/'')}——行级、首见记录。
   // 仅用于智能候选：只有明确允许的装备、时尚配饰、鸟甲进入倒排。
-  function _v3Glam(txt) {
+  function _v3Glam(txt, requireFlags = false) {
     const m = Object.create(null);
+    let sawRow = false;
     for (const ln of String(txt || '').split('\n')) {
       if (!ln) continue;
       const p = ln.split('\t');
-      if (!p[0] || p[2] === undefined) continue;
+      if (!p[0]) continue;
+      if (requireFlags && (p[2] === undefined || !['0', '1'].includes(p[2].trim()))) return null;
+      if (p[2] === undefined) continue;
+      sawRow = true;
       if (m[p[0]] === undefined) m[p[0]] = p[2].trim();
     }
-    return m;
+    return requireFlags && !sawRow ? null : m;
   }
 
   // v3 数据应用（一次性赋值——与 v2 构建收尾同语义；'_' 前缀变量跨段引用见 IIFE 说明）
@@ -405,7 +450,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
       const names = take('names');
-      _irGlamMap = _v3Glam(files['names']);
+      const requireCandidateFlags = files.candidatePolicy === 1 && typeof files.names === 'string';
+      const glam = _v3Glam(files.names, requireCandidateFlags);
+      if (requireCandidateFlags && !glam) return false;
+      _irGlamMap = glam || Object.create(null);
+      _irCandidatePolicy = files.candidatePolicy === 1 ? 1 : 0;
       const hash = take('hash');
       const ecid = take('ecid');
       const ko = take('ko');
@@ -433,10 +482,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   }
 
   // v3 单文件获取：缓存命中且 sha 一致直接用；否则下载 + sha 校验 + 写缓存
-  async function _v3FetchFile(siteId, name, meta) {
+  async function _v3FetchFile(siteId, name, meta, force = false) {
     if (!meta?.url) return null;
     const ck = 'zhx.v3.f.' + siteId + '.' + name;
-    try {
+    if (!force) try {
       const raw = await storeGetAsync(ck);
       if (raw) {
         const i = raw.indexOf('\n');
@@ -444,7 +493,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       }
     } catch (e) { /* 忽略：缓存读取失败走网络 */ }
     let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + meta.url, 25000); } catch (e) { txt = null; }
+    try { txt = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); } catch (e) { txt = null; }
     if (typeof txt !== 'string' || !txt) return null;
     try {
       if (meta.sha256 && typeof crypto !== 'undefined' && crypto?.subtle && typeof TextEncoder === 'function') {
@@ -453,7 +502,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
         if (hex !== meta.sha256) return null;
       }
     } catch (e) { /* 忽略：校验不可用/失败不阻塞（下载成功即可用） */ }
-    try { storeSet(ck, meta.sha256 + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+    if (force) {
+      if (!await storeSetAsync(ck, meta.sha256 + '\n' + txt)) _forceDataCacheWritesOk = false;
+    } else {
+      try { storeSet(ck, meta.sha256 + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+    }
     return txt;
   }
 
@@ -471,15 +524,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   }
 
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
-  async function fetchManifest() {
+  async function fetchManifest(force = false) {
     let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000); } catch (e) { txt = null; }
+    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, force ? { fresh: true } : undefined); } catch (e) { txt = null; }
     if (typeof txt !== 'string' || !txt) return null;
     try {
       const m2 = JSON.parse(txt);
       if (m2?.schema === 3 && m2.sites) {
         const manT = Date.now();
-        try { storeSet('zhx.v3.manifest', String(manT) + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+        const manifestText = String(manT) + '\n' + txt;
+        if (force) {
+          if (!await storeSetAsync('zhx.v3.manifest', manifestText)) _forceDataCacheWritesOk = false;
+        } else {
+          try { storeSet('zhx.v3.manifest', manifestText); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+        }
         return m2;
       }
     } catch (e) { /* 忽略：manifest 解析失败 → 回退 v2 */ }
@@ -487,20 +545,24 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   }
 
   // 缓存优先 → 必要时网络（站点是否在列由 _ensureTryV3 统一判断）
-  async function loadManifest() {
+  async function loadManifest(force = false) {
+    if (force) return await fetchManifest(true);
     const c = await readCachedManifest();
     const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
-    if (c.man && fresh && c.man.schema === 3 && c.man.sites) return c.man;
-    return await fetchManifest();
+    const valid = c.man?.schema === 3 && c.man?.sites;
+    if (valid && fresh && c.man.candidatePolicy === 1) return c.man;
+    const latest = await fetchManifest();
+    if (latest) return latest;
+    return valid ? c.man : null;
   }
 
   // 站点文件并行获取（含共享词库）
-  async function fetchStationFiles(siteId, names, sm, sharedDict) {
+  async function fetchStationFiles(siteId, names, sm, sharedDict, force = false) {
     const files = {};
-    const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n])
+    const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n], force)
       .then((t) => { files[n] = t; }, () => { files[n] = null; }));
     if (sharedDict) {
-      jobs.push(_v3FetchFile(siteId, 'dict', sharedDict)
+      jobs.push(_v3FetchFile(siteId, 'dict', sharedDict, force)
         .then((t) => { files.dict = t; }, () => { files.dict = null; }));
     }
     await Promise.all(jobs);
@@ -514,20 +576,29 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败/缺文件 → false（调用方回退 v2，不改变现有行为）。
-  async function _ensureTryV3() {
+  async function _ensureTryV3(force = false) {
     const site = findSite();
     if (!site?.id) return false;
     try {
-      const man = await loadManifest();
+      const man = await loadManifest(force);
       if (!man?.sites?.[site.id]) return false;
       const sm = man.sites[site.id].files || {};
       const names = Object.keys(sm);
-      if (!names.length) return false;
       const need = neededTables();
+      const required = [];
+      if (site.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
+      if (site.indexes?.includes('itemHash')) required.push('hash');
+      if (site.indexes?.includes('ecidMap')) required.push('ecid');
+      if (site.indexes?.includes('koByZh')) required.push('ko');
+      if (site.tables?.includes('series')) required.push('series');
+      if (site.tables?.includes('acl')) required.push('acl');
+      if (!names.length || required.some((name) => !sm[name])) return false;
       // 共享词库（manifest.shared.dict；neededTables 含 dict 的站点拉取）
       const sharedDict = (need.includes('dict') && man.shared?.dict) || null;
-      const files = await fetchStationFiles(site.id, names, sm, sharedDict);
+      if (need.includes('dict') && !sharedDict) return false;
+      const files = await fetchStationFiles(site.id, names, sm, sharedDict, force);
       if (!allFilesReady(names, files, sharedDict)) return false;
+      files.candidatePolicy = man.candidatePolicy === 1 ? 1 : 0;
       if (!_applyV3(files)) return false;
       try { if (man.version) DATA_VER = String(man.version); } catch (e) { /* 忽略 */ }
       return true;
@@ -537,37 +608,74 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
   }
 
-  async function _ensureCandidatePolicy() {
-    const key = 'zhx.candidate.policy';
-    let policy = null;
-    try { policy = await storeGetAsync(key); } catch (e) { /* 存储读取失败时仍尝试迁移 */ }
-    if (String(policy || '') === '1') return false;
-    // 只清旧版本的检查时间并废弃 v3 manifest；保留数据版本号及物品缓存兜底。
-    let oldMeta = null;
-    try {
-      const raw = await storeGetAsync(META_KEY);
-      oldMeta = raw ? JSON.parse(raw) : null;
-    } catch (e) { /* 忽略：坏元数据按空状态迁移 */ }
-    try { storeSet('zhx.v3.manifest', ''); } catch (e) { /* 忽略：后续版本校验仍会尝试刷新 */ }
-    try {
-      storeSet(META_KEY, oldMeta?.v ? JSON.stringify({ v: String(oldMeta.v), t: 0 }) : '');
-    } catch (e) { /* 忽略：后续版本校验仍会尝试刷新 */ }
-    try { storeSet(key, '1'); } catch (e) { /* 忽略：存储不可写时不阻断初始化 */ }
+
+
+  function _isDataCacheKey(key) {
+    return key === META_KEY || key === 'zhx.v3.manifest' || key === 'zhx.candidate.policy'
+      || key.startsWith(DT_PREFIX) || key.startsWith('zhx.v3.f.');
+  }
+
+  function _knownDataCacheKeys() {
+    const keys = new Set([META_KEY, 'zhx.v3.manifest', 'zhx.candidate.policy']);
+    for (const name of Object.keys(DATA_FILES)) keys.add(DT_PREFIX + name);
+    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+    const files = ['names', 'hash', 'alias', 'dup', 'ecid', 'ko', 'series', 'acl', 'dict'];
+    for (const site of sites) for (const file of files) keys.add('zhx.v3.f.' + site + '.' + file);
+    return keys;
+  }
+
+  async function _clearDataCaches() {
+    let listed = null;
+    try { listed = await storeListAsync(); } catch (e) { listed = null; }
+    const keys = _knownDataCacheKeys();
+    if (Array.isArray(listed)) for (const key of listed) if (_isDataCacheKey(key)) keys.add(key);
+    const results = await Promise.all([...keys].map((key) => storeDeleteAsync(key)));
+    return results.every(Boolean);
+  }
+
+  async function _prepareDataRefresh() {
+    let epoch = null;
+    try { epoch = await storeGetAsync(DATA_REFRESH_EPOCH_KEY); } catch (e) { epoch = null; }
+    if (epoch === DATA_REFRESH_EPOCH) {
+      _forceDataClearSucceeded = true;
+      _forceDataCacheWritesOk = true;
+      return false;
+    }
+    _forceDataRefresh = true;
+    _forceDataCacheWritesOk = true;
+    _forceDataClearSucceeded = await _clearDataCaches();
     return true;
   }
 
+  async function _completeDataRefresh() {
+    if (!_forceDataClearSucceeded || !_forceDataCacheWritesOk) return false;
+    const stored = await storeSetAsync(DATA_REFRESH_EPOCH_KEY, DATA_REFRESH_EPOCH);
+    if (stored) _forceDataRefresh = false;
+    return stored;
+  }
+
   async function _ensureMain() {
-    await _ensureCandidatePolicy();
+    _irCandidatePolicy = 0;
+    _forceDataRefresh = await _prepareDataRefresh();
     const need = neededTables();
     if (!need.length) return;
     _buildScope = _siteIndexes();
-    // v3 优先：成功即返回（_ensureFinalize 将跳过 v2 建表）；失败 → 现有 v2 链
+    if (_forceDataRefresh) {
+      const v3 = await _ensureTryV3(true);
+      if (v3 && _irCandidatePolicy === 1) {
+        await _completeDataRefresh();
+        return;
+      }
+      if (v3) { _v3Applied = false; _irCandidatePolicy = 0; }
+      await _waitPageLoad();
+      const loaded = await _ensureFetchAll(need, {}, true);
+      if (loaded && _irCandidatePolicy === 1) await _completeDataRefresh();
+      return;
+    }
     const v3 = await _ensureTryV3();
     if (v3) return;
     const fast = await _ensureTryFast(need);
-    if (!fast) return;                     // 快路径（24h 内缓存）已应用，零网络
-    // 「先建后探」：有本地缓存（哪怕过期）→ 立即构建就绪 + 后台探测热替换；
-    // 无缓存（全新安装）→ 保持原等待链（该等就等，保证正确性）。
+    if (!fast) return;
     if (await _ensureBuildLocal(need, fast.local)) return;
     await _waitPageLoad();
     await _ensureFetchAll(need, fast.local);
@@ -633,7 +741,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
        src/core/item-resolver.js。 */
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
-  let _irGlamMap = null;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
+  let _irGlamMap = null;
+  let _irCandidatePolicy = 0;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
@@ -669,6 +778,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function _irBuildSearchFromNames(names, ali, glam) {
     const out = Object.create(null);
     const kind = Object.create(null);
+    if (_irCandidatePolicy !== 1) return { map: out, kind };
     for (const [native, zh] of Object.entries(names || {})) {
       if (glam?.[native] !== '1') continue;   // 仅明确允许的装备、时尚配饰、鸟甲进入中文候选
       _irSearchPut(out, zh, native, 0, kind);
@@ -729,6 +839,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function _irBuildSearchFromText(text) {
     const out = Object.create(null);
     const kind = Object.create(null);
+    if (_irCandidatePolicy !== 1) return { map: out, kind };
     const localeIndex = _irSearchLocaleIndex();
     if (!localeIndex || typeof text !== 'string' || !text) return { map: out, kind };
     for (const ln of text.split('\n')) {

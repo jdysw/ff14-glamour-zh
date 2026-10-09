@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/storage */
 /* @phase15-order-link:core/storage<-core/data-manager */
 import './data-manager.js';
-export { _storeNorm, storeGetAsync, storeSet };
+export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, storeSetAsync };
 
 
   /* @zhixia:core-storage-start */
@@ -28,18 +28,54 @@ export { _storeNorm, storeGetAsync, storeSet };
       resolve(null);
     });
   }
+  function storeSetAsync(k, v) {
+    return new Promise((resolve) => {
+      try {
+        if (typeof GM_setValue === 'function') {
+          const result = GM_setValue(k, v);
+          if (result && typeof result.then === 'function') result.then(() => resolve(true), () => resolve(false));
+          else resolve(result !== false);
+          return;
+        }
+        if (typeof GM !== 'undefined' && GM && typeof GM.setValue === 'function') {
+          Promise.resolve(GM.setValue(k, v)).then(() => resolve(true), () => resolve(false));
+          return;
+        }
+      } catch (e) { /* persistence failure must be observable to callers */ }
+      resolve(false);
+    });
+  }
   function storeSet(k, v) {
+    storeSetAsync(k, v);
+  }
+  function storeListAsync() {
+    return new Promise((resolve) => {
+      try {
+        let result;
+        if (typeof GM_listValues === 'function') result = GM_listValues();
+        else if (typeof GM !== 'undefined' && GM && typeof GM.listValues === 'function') result = GM.listValues();
+        else { resolve(null); return; }
+        Promise.resolve(result).then((keys) => {
+          resolve(Array.isArray(keys) && keys.every((k) => typeof k === 'string') ? keys : null);
+        }, () => resolve(null));
+      } catch (e) { resolve(null); }
+    });
+  }
+  async function storeDeleteAsync(k) {
     try {
-      if (typeof GM_setValue === 'function') {
-        const r = GM_setValue(k, v);
-        if (r && typeof r.then === 'function') r.then(() => {}, () => {});
-        return;
+      if (typeof GM_deleteValue === 'function') {
+        const result = GM_deleteValue(k);
+        const ok = result && typeof result.then === 'function'
+          ? await result.then(() => true, () => false) : result !== false;
+        if (ok) return true;
+      } else if (typeof GM !== 'undefined' && GM && typeof GM.deleteValue === 'function') {
+        const ok = await Promise.resolve(GM.deleteValue(k)).then(() => true, () => false);
+        if (ok) return true;
+      } else {
+        return await storeSetAsync(k, '');
       }
-      if (typeof GM !== 'undefined' && GM && typeof GM.setValue === 'function') {
-        GM.setValue(k, v).then(() => {}, () => {});
-        return;
-      }
-    } catch (e) { /* 忽略：存储写入失败不阻断主流程 */ }
+    } catch (e) { /* fall through to empty-value invalidation */ }
+    return await storeSetAsync(k, '');
   }
 
   /* @zhixia:core-storage-end */

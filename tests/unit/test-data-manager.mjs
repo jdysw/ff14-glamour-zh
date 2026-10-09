@@ -50,12 +50,12 @@ const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 // 外部依赖注入清单（data-manager / cache 段内未定义、被引用的标识符）
 const NAMES = [
-  'storeGetAsync', 'storeSet', 'httpGet',
+  'storeGetAsync', 'storeSet', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
   'ITEM_DB_TEXT', 'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
-  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
+  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irCandidatePolicy', '_zhxErr',
   '_tablesReady', '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
@@ -63,10 +63,14 @@ const NAMES = [
 /** 构造桩世界：记录器 + 参数值 + flushTimers。 */
 function makeWorld(over = {}) {
   const rec = { apply: [], xhr: [], set: [], timers: [], marks: [], fires: [], builds: 0, need: 0, errs: [] };
-  const store = Object.assign({}, over.store || {});
+  const store = Object.assign({ 'zhx.data.refresh.epoch': 'candidate-policy-1-force-refresh' }, over.store || {});
+  if (over.refreshRequired) delete store['zhx.data.refresh.epoch'];
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
     storeSet: (k, v) => { store[k] = v; rec.set.push([k, v]); },
+    storeSetAsync: async (k, v) => { store[k] = String(v); rec.set.push([k, v]); return true; },
+    storeListAsync: async () => Object.keys(store),
+    storeDeleteAsync: async (k) => { delete store[k]; return true; },
     httpGet: (url) => { rec.xhr.push(url); return (over.http || (() => Promise.reject(new Error('net down'))))(url); },
     ITEM_DB_TEXT: '',
     SERIES_TEXT: '',
@@ -75,12 +79,14 @@ function makeWorld(over = {}) {
     _tablesReady: false,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     DATA_VER: '',
+    DATA_REFRESH_EPOCH_KEY: 'zhx.data.refresh.epoch', DATA_REFRESH_EPOCH: 'candidate-policy-1-force-refresh',
+    _forceDataRefresh: false, _forceDataClearSucceeded: false, _forceDataCacheWritesOk: true,
     DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
     // v3：不在此测试覆盖（由 test-runtime-v3.mjs 专测）；findSite 返回 null 使 v3 直接跳过
     findSite: () => null,
     applyRuntimeDict: () => {},
-    _irAliasMap: null, _irDupMap: null,
+    _irAliasMap: null, _irDupMap: null, _irCandidatePolicy: 0,
     _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
     applyTable: (n, t) => { rec.apply.push([n, t]); },
@@ -173,12 +179,14 @@ console.log('\n── C：invalidate（失效就绪状态）──');
   const p1 = api.dataManager.ensure();
   const p2 = api.dataManager.ensure();
   ok('两次 ensure 复用同一 Promise', p1 === p2);
+  await new Promise((r) => setImmediate(r));
   eq('neededTables 仅 1 次', w.rec.need, 1);
   await settle(w, p1);
 
   api.dataInvalidate();
   const p3 = api.dataManager.ensure();
   ok('invalidate 后新 Promise', p3 !== p1);
+  await new Promise((r) => setImmediate(r));
   eq('neededTables 第 2 次调用', w.rec.need, 2);
   await settle(w, p3);
 }
@@ -188,8 +196,8 @@ console.log('\n── D：快路径（24 小时内已对齐 + 缓存齐全 → �
   const w = makeWorld({
     need: ['items'],
     store: {
-      'zhx.meta': JSON.stringify({ v: 'v1', t: Date.now() }),
-      'zhx.dt.items': 'fp1\n' + 'z'.repeat(150),
+      'zhx.meta': JSON.stringify({ v: 'v1', t: Date.now(), candidatePolicy: 1 }),
+      'zhx.dt.items': 'fp1\n' + ('90001\t当前装备\tCurrent Gear\tテスト装備\t테스트 장비\th1\te1\t\t1\n').repeat(4),
     },
   });
   const api = buildDM(w);
@@ -198,7 +206,7 @@ console.log('\n── D：快路径（24 小时内已对齐 + 缓存齐全 → �
   eq('零网络请求', w.rec.xhr.length, 0);
   eq('缓存直接应用（一次）', w.rec.apply.length, 1);
   eq('缓存应用的是 items', w.rec.apply[0][0], 'items');
-  ok('缓存文本已应用', String(w.rec.apply[0][1]).startsWith('z'));
+  ok('缓存文本已应用', String(w.rec.apply[0][1]).includes('Current Gear'));
   eq('数据版本回填', api._state().ver, 'v1');
   eq('buildTables 执行', w.rec.builds, 1);
   eq('就绪广播触发', w.rec.fires.length, 1);
@@ -209,8 +217,8 @@ console.log('\n── E：版本变更 + 下载成功（完整链）──');
   const w = makeWorld({
     need: ['items'],
     http: (url) => {
-      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'v9', files: { items: 'fp9' } }));
-      if (url.endsWith('items.tsv')) return Promise.resolve('1\t甲\n' + 'y'.repeat(150));
+      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'v9', candidatePolicy: 1, files: { items: 'fp9' } }));
+      if (url.endsWith('items.tsv')) return Promise.resolve(('key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n' + '90002\t新装备\tNew Gear\tニュウギア\t새 장비\th2\te2\t\t1\n').repeat(4));
       return Promise.reject(new Error('unexpected: ' + url));
     },
   });
@@ -243,18 +251,19 @@ console.log('\n── F：服务器不可用（无缓存 → 降级仍完成）�
 console.log('\n── G：下载失败 → 旧缓存兜底 ──');
 {
   const w = makeWorld({
-    need: ['items'],
+    need: ['items'], refreshRequired: true,
     store: { 'zhx.dt.items': 'oldfp\n' + 'q'.repeat(150) },
     http: (url) => {
-      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'v10', files: { items: 'newfp' } }));
+      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'v10', candidatePolicy: 1, files: { items: 'newfp' } }));
       return Promise.reject(new Error('down'));
     },
   });
   const api = buildDM(w);
   const done = await settle(w, api.dataManager.ensure());
   ok('流程完成', done);
-  eq('旧缓存被兜底应用（items）', w.rec.apply.length >= 1 ? w.rec.apply[0][0] : null, 'items');
-  ok('应用的是旧缓存文本', String(w.rec.apply[0][1]).startsWith('q'));
+  eq('force失败时旧缓存不被读取', w.rec.apply.length, 0);
+  eq('旧items缓存已失效', w.store['zhx.dt.items'], undefined);
+  eq('force失败不写成功epoch', w.store['zhx.data.refresh.epoch'], undefined);
   eq('就绪广播触发', w.rec.fires.length, 1);
 }
 

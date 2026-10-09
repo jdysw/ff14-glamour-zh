@@ -313,6 +313,7 @@ def main() -> int:
 
     manifest = {
         'schema': SCHEMA,
+        'candidatePolicy': 1,
         'version': hashlib.sha256('|'.join(ver_parts).encode('utf-8')).hexdigest()[:12],
         'generated': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'shared': {

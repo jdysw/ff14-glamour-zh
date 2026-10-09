@@ -19,7 +19,7 @@ const gmStub = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);
@@ -79,9 +79,9 @@ const t2 = await newPage(PORT, FIXTURE);
 const c2 = t2.cdp;
 await sleep(800);
 const p1 = await c2.eval(preset('gm:zhx.dt.items', itemsTsv));
-const p3 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
+const p3 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
 // v3 探测节流（v1.4 Phase 12）：预置 v3 manifest 缓存（本站不在其中 → 静默跳过；24h 内不再探测）
-const p4 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))}); return 1; })()`);
+const p4 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, candidatePolicy: 1, sites: {} }))}); return 1; })()`);
 console.log('预置完成:', p1, p3, p4);
 await c2.eval("window.__zhxTestSite = 'wiki';");
 await c2.eval("window.__zhxTestTables = ['items'];" );
@@ -105,8 +105,8 @@ const t3 = await newPage(PORT, FIXTURE_NON);
 const c3 = t3.cdp;
 await sleep(800);
 await c3.eval(preset('gm:zhx.dt.items', itemsTsv));
-await c3.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
-await c3.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))}); return 1; })()`);
+await c3.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
+await c3.eval(`(() => { localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, candidatePolicy: 1, sites: {} }))}); return 1; })()`);
 await c3.eval("window.__zhxTestSite = 'wiki';");
 await c3.eval("window.__zhxTestTables = ['items'];");
 await c3.eval(gmStub);

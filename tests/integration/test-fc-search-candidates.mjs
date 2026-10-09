@@ -20,7 +20,7 @@ const gmStub = `(() => {
   if (window.__gmStub) return;
   window.__gmStub = true;
   const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
   window.GM_xmlhttpRequest = (opt) => {
     fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} }))
@@ -52,10 +52,10 @@ const ok = (name, cond, extra = '') => {
 const t = await newPage(PORT, FIXTURE);
 const c = t.cdp;
 await sleep(800);
-await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.indexOf('gm:') === 0) localStorage.removeItem(k); localStorage.setItem('gm:zhx.candidate.policy', '1'); return 1; })()`);
+await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.indexOf('gm:') === 0) localStorage.removeItem(k); localStorage.setItem('gm:zhx.data.refresh.epoch', 'candidate-policy-1-force-refresh'); return 1; })()`);
 await c.callFn('function (k, v) { localStorage.setItem(k, v); return 1; }', ['gm:zhx.dt.items', FP + '\n' + itemsTsv]);
-await c.callFn('function (v) { localStorage.setItem("gm:zhx.meta", v); return 1; }', [JSON.stringify({ v: 'test', t: Date.now() })]);
-await c.callFn('function (v) { localStorage.setItem("gm:zhx.v3.manifest", v); return 1; }', [String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} })]);
+await c.callFn('function (v) { localStorage.setItem("gm:zhx.meta", v); return 1; }', [JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })]);
+await c.callFn('function (v) { localStorage.setItem("gm:zhx.v3.manifest", v); return 1; }', [String(Date.now()) + '\n' + JSON.stringify({ schema: 3, candidatePolicy: 1, sites: {} })]);
 await c.eval("window.__zhxTestSite = 'fc';");
 await c.eval("window.__zhxTestTables = ['items'];");
 await c.eval('window.__zhxDiagOn = true;');

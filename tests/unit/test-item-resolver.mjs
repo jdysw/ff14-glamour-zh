@@ -119,9 +119,9 @@ function buildResolver(env = {}) {
   const ret = [
     'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, resolvePartialByZh, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
-    '  __setV3: (v) => { _v3Applied = v; } };',
+    '  __setV3: (v) => { _v3Applied = v; }, __setPolicy: (v) => { _irCandidatePolicy = v; } };',
   ].join('\n');
-  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, ret].join('\n');
+  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, '_irCandidatePolicy = __env.candidatePolicy ?? 1;', ret].join('\n');
   try {
     const fn = new Function('__env', '__rec', body);
     return fn(env, rec);
@@ -421,6 +421,18 @@ const mkEnv = (over = {}) => ({
   for (const zh of ['光之鸟甲', '航空兜帽', '猎蛋装甲', '防雨装甲', '女仆发带', '阳伞', '黑色蕾丝阳伞']) {
     ok(`真实 canonical 允许：${zh}`, !!api.resolveByZh(zh));
   }
+  const legacyZh = '阿马罗装备的修复素材';
+  const legacyEn = 'Amaro Barding Repair Materials';
+  const legacyText = '27242\t' + legacyZh + '\t' + legacyEn + '\tアマロ修理素材\t\t\t\t\t1\n';
+  const restricted = buildResolver(mkEnv({
+    candidatePolicy: 0,
+    nameMap: { [legacyEn]: legacyZh },
+    text: legacyText,
+  }));
+  restricted._irBuildAux(legacyText);
+  eq('未知策略下旧9列误标物不进候选', restricted.resolveByZh(legacyZh), null);
+  eq('未知策略不影响普通译名查表', restricted.resolveByName(legacyEn), legacyZh);
+
 }
 
 // E. resolvePartialByZh 部分词（v1.4.2 后续：完整名未命中 → 公共子串提取 + 英文质量门）
