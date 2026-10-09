@@ -71,7 +71,9 @@ await c.eval(`(() => {
 await c.eval(wrap(GF));
 await sleep(1500);
 
-const setInline = (val) => c.eval(`(() => { const i = document.getElementById('search-input'); i.focus(); i.value = ${JSON.stringify(val)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
+const setInline = (val) => c.callFn(
+  'function (value) { const i = document.getElementById("search-input"); if (!i) throw new Error("Ronka search input missing"); i.focus(); i.value = value; i.dispatchEvent(new Event("input", { bubbles: true })); return 1; }',
+  [val]);
 const readInline = () => c.eval(`(() => { const i = document.getElementById('search-input'); return i ? i.value : null; })()`);
 
 // ── 就绪门：输入「伴娘」→ 候选面板出现（数据就绪 + 功能装配），最多重试 30 次 ──
@@ -120,7 +122,7 @@ const v4 = await readInline();
 ok('④ 未知中文名保持原样', v4 === '不存在的装备名称xyz', JSON.stringify(v4));
 
 // ── ⑤ 表单内搜索框不走独立转换 ──
-await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); i.focus(); i.value = ${JSON.stringify(EXPECT_ZH)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
+await c.callFn('function (value) { const i = document.querySelector(\'#legacy-search input[name="keyword"]\'); if (!i) throw new Error("Legacy search missing"); i.focus(); i.value = value; i.dispatchEvent(new Event("input", { bubbles: true })); return 1; }', [EXPECT_ZH]);
 await sleep(1300);
 const v5 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑤ 表单内搜索框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));

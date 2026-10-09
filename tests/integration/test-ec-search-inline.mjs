@@ -72,8 +72,11 @@ await c.eval(`(() => {
 await c.eval(wrap(GF));
 await sleep(1500);
 
-const setVs = (id, val) => c.eval(`(() => { const i = document.getElementById(${JSON.stringify(id)}); i.focus(); i.value = ${JSON.stringify(val)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
-const readVs = (id) => c.eval(`(() => { const i = document.getElementById(${JSON.stringify(id)}); return i ? i.value : null; })()`);
+const setInput = (selector, value) => c.callFn(
+  'function (selector, value) { const i = document.querySelector(selector); if (!i) throw new Error("Input missing: " + selector); i.focus(); i.value = value; i.dispatchEvent(new Event("input", { bubbles: true })); return 1; }',
+  [selector, value]);
+const setVs = (id, val) => setInput('#' + id, val);
+const readVs = (id) => c.callFn('function (id) { const i = document.getElementById(id); return i ? i.value : null; }', [id]);
 
 // ── 就绪门：vue-select 框输入「女仆」→ 候选面板出现（数据就绪 + 功能装配），最多重试 30 次 ──
 const suggestState = `(() => {
@@ -125,13 +128,13 @@ const v4 = await readVs('vs-head');
 ok('④ 未知中文名保持原样', v4 === '不存在的装备名称xyz', JSON.stringify(v4));
 
 // ── ⑤ 对照一："Search by title"（form 内、有 name）不触发独立转换 ──
-await c.eval(`(() => { const i = document.querySelector('form[name="filter"] input[name="search"]'); i.focus(); i.value = ${JSON.stringify(EXPECT_ZH)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
+await setInput('form[name="filter"] input[name="search"]', EXPECT_ZH);
 await sleep(1300);
 const v5 = await c.eval(`(() => { const i = document.querySelector('form[name="filter"] input[name="search"]'); return i ? i.value : null; })()`);
 ok('⑤ "Search by title" 框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));
 
 // ── ⑥ 对照二：传统表单搜索框（#legacy-search keyword）不触发独立转换 ──
-await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); i.focus(); i.value = ${JSON.stringify(EXPECT_ZH)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
+await setInput('#legacy-search input[name="keyword"]', EXPECT_ZH);
 await sleep(1300);
 const v6 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
 ok('⑥ 传统表单搜索框不触发独立转换（中文保留）', v6 === EXPECT_ZH, JSON.stringify(v6));

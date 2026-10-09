@@ -58,7 +58,10 @@ export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, 
         Promise.resolve(result).then((keys) => {
           resolve(Array.isArray(keys) && keys.every((k) => typeof k === 'string') ? keys : null);
         }, () => resolve(null));
-      } catch (e) { resolve(null); /* 枚举失败后按已知数据键清除，强制模式继续禁止读旧缓存 */ }
+      } catch (e) {
+        console.warn('[zhixia] GM storage key enumeration unavailable; falling back to known data keys', e);
+        resolve(null); // A failure never grants access to stale candidate caches.
+      }
     });
   }
   async function storeDeleteAsync(k) {

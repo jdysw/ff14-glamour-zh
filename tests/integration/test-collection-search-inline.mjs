@@ -75,7 +75,9 @@ await sleep(1500);
 const phNow = await c.eval(`(() => { const i = document.querySelector('input[name="keyword"]'); i.setAttribute('placeholder', '输入想查询的关键词'); return i.getAttribute('placeholder'); })()`);
 console.log('模拟汉化后 placeholder:', JSON.stringify(phNow));
 
-const setInline = (val) => c.eval(`(() => { const i = document.querySelector('input[name="keyword"]'); i.focus(); i.value = ${JSON.stringify(val)}; i.dispatchEvent(new Event('input', { bubbles: true })); return 1; })()`);
+const setInline = (val) => c.callFn(
+  'function (value) { const i = document.querySelector(\'input[name="keyword"]\'); if (!i) throw new Error("Search input missing"); i.focus(); i.value = value; i.dispatchEvent(new Event("input", { bubbles: true })); return 1; }',
+  [val]);
 const readInline = () => c.eval(`(() => { const i = document.querySelector('input[name="keyword"]'); return i ? i.value : null; })()`);
 
 // ── 就绪门：汉化后 placeholder 场景，输入「女仆」→ 候选面板出现（数据就绪 + 功能装配），最多重试 30 次 ──

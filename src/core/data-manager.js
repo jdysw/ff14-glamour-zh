@@ -504,7 +504,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (!raw) return null;
       const split = raw.indexOf('\n');
       return split > 0 && raw.slice(0, split) === fingerprint ? raw.slice(split + 1) : null;
-    } catch (e) { return null; /* 缓存读取失败时改走网络 */ }
+    } catch (e) {
+      _zhxErr('v3cacheRead', e);
+      return null; // Broken cache must not block a fresh network download.
+    }
   }
 
   async function _v3VerifyFile(text, fingerprint) {
@@ -513,7 +516,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
       const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
       return actual === fingerprint;
-    } catch (e) { return true; /* 保持已有的校验能力不可用时降级语义 */ }
+    } catch (e) {
+      _zhxErr('v3verify', e);
+      return false; // A failed SHA-256 operation must never count as a verified download.
+    }
   }
 
   async function _v3WriteFileCache(key, value, force) {
