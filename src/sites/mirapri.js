@@ -61,20 +61,27 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
     }
   }
 
+  function _translateMirapriAttr(el, attr) {
+    const original = el.getAttribute(attr);
+    if (!original || original.length > 200) return;
+    if (attr === 'alt' && el.closest?.('#gallery article, #photoDetail article')) return;
+    const translated = tr(original);
+    if (translated !== original) el.setAttribute(attr, translated);
+  }
+
+  function _translateMirapriButtonValue(el) {
+    // Never mutate user-provided input values.
+    if (el.tagName !== 'INPUT' || !/^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) return;
+    const value = el.getAttribute('value');
+    if (!value) return;
+    const translated = tr(value);
+    if (translated !== value) el.setAttribute('value', translated);
+  }
+
   function trEl(el) {
     if (isMirapriAuthored(el)) return;
-    for (const attr of MIRAPRI_TRANSLATABLE_ATTRS) {
-      const original = el.getAttribute(attr);
-      if (!original || original.length > 200) continue;
-      if (attr === 'alt' && el.closest?.('#gallery article, #photoDetail article')) continue;
-      const translated = tr(original);
-      if (translated !== original) el.setAttribute(attr, translated);
-    }
-    // Only action buttons have UI value labels; don't rewrite user-entered fields.
-    if (el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) {
-      const value = el.getAttribute('value');
-      if (value) { const translated = tr(value); if (translated !== value) el.setAttribute('value', translated); }
-    }
+    for (const attr of MIRAPRI_TRANSLATABLE_ATTRS) _translateMirapriAttr(el, attr);
+    _translateMirapriButtonValue(el);
   }
 
   function translateMirapriTitle() {
