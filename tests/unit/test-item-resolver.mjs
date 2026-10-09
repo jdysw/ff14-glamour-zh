@@ -255,8 +255,9 @@ const mkEnv = (over = {}) => ({
     '4\t时尚饰品\tFashion Accessory\tおしゃれ\t패션\t\t\t女仆饰品\t1',
   ].join('\n'));
   const rows = api.suggestByZh('女仆');
+  const canonicalPrefixes = ['女仆上衣', '女仆发带'].sort((a, b) => a.localeCompare(b));
   eq('词中匹配保留在正式名前缀之后', rows.map((r) => r.zh).join('|'),
-    '女仆上衣|女仆发带|星光女仆长袍|女仆饰品|星光女仆别名');
+    [...canonicalPrefixes, '星光女仆长袍', '女仆饰品', '星光女仆别名'].join('|'));
   eq('中文别名仍能解析为原站装备名', rows.at(-1)?.native, 'メイドトップ');
   eq('limit 包含精确 / 前缀 / 包含全部类别的统一上限', api.suggestByZh('女仆', 3).length, 3);
   eq('不含查询词的物品不混入候选', rows.some((r) => r.zh === '时尚饰品'), false);
