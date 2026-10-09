@@ -481,33 +481,47 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
   }
 
-  // v3 单文件获取：缓存命中且 sha 一致直接用；否则下载 + sha 校验 + 写缓存
+  async function _v3ReadCachedFile(key, fingerprint) {
+    try {
+      const raw = await storeGetAsync(key);
+      if (!raw) return null;
+      const split = raw.indexOf('\n');
+      return split > 0 && raw.slice(0, split) === fingerprint ? raw.slice(split + 1) : null;
+    } catch (e) { return null; /* 缓存读取失败时改走网络 */ }
+  }
+
+  async function _v3VerifyFile(text, fingerprint) {
+    if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle || typeof TextEncoder !== 'function') return true;
+    try {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      return actual === fingerprint;
+    } catch (e) { return true; /* 保持已有的校验能力不可用时降级语义 */ }
+  }
+
+  async function _v3WriteFileCache(key, value, force) {
+    if (force) {
+      if (!await storeSetAsync(key, value)) _forceDataCacheWritesOk = false;
+    } else {
+      try { storeSet(key, value); } catch (e) { /* 缓存写入失败不影响本次使用 */ }
+    }
+  }
+
+  // v3 单文件获取：强制更新时绕过旧缓存，否则按指纹复用。
   async function _v3FetchFile(siteId, name, meta, force = false) {
     if (!meta?.url) return null;
-    const ck = 'zhx.v3.f.' + siteId + '.' + name;
-    if (!force) try {
-      const raw = await storeGetAsync(ck);
-      if (raw) {
-        const i = raw.indexOf('\n');
-        if (i > 0 && raw.slice(0, i) === meta.sha256) return raw.slice(i + 1);
-      }
-    } catch (e) { /* 忽略：缓存读取失败走网络 */ }
-    let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); } catch (e) { txt = null; }
-    if (typeof txt !== 'string' || !txt) return null;
-    try {
-      if (meta.sha256 && typeof crypto !== 'undefined' && crypto?.subtle && typeof TextEncoder === 'function') {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
-        const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-        if (hex !== meta.sha256) return null;
-      }
-    } catch (e) { /* 忽略：校验不可用/失败不阻塞（下载成功即可用） */ }
-    if (force) {
-      if (!await storeSetAsync(ck, meta.sha256 + '\n' + txt)) _forceDataCacheWritesOk = false;
-    } else {
-      try { storeSet(ck, meta.sha256 + '\n' + txt); } catch (e) { /* 忽略：缓存写入失败不影响本次使用 */ }
+    const key = 'zhx.v3.f.' + siteId + '.' + name;
+    if (!force) {
+      const cached = await _v3ReadCachedFile(key, meta.sha256);
+      if (cached !== null) return cached;
     }
-    return txt;
+    let text = null;
+    try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); }
+    catch (e) { text = null; }
+    if (typeof text !== 'string' || !text) return null;
+    if (!await _v3VerifyFile(text, meta.sha256)) return null;
+    await _v3WriteFileCache(key, meta.sha256 + '\n' + text, force);
+    return text;
   }
 
   // v3 manifest 读取链（PR#16 审查：自 _ensureTryV3 提升为模块级，纯 IO 无外部捕获）。
