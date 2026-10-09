@@ -26,6 +26,9 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
 const DIST_TEXT = readDist();
+const ITEM_HEADER = 'key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n';
+const OLD_ITEMS = ITEM_HEADER + '90001\t旧装备\tOld Gear\tオールドギア\t옛 장비\thold\teold\t\t1\n'.repeat(8);
+const NEW_ITEMS = ITEM_HEADER + '90002\t新装备\tNew Gear\tニュウギア\t새 장비\thnew\tenew\t\t1\n'.repeat(8);
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
@@ -48,12 +51,12 @@ const CACHE_SEGS = sliceAll(DIST_TEXT, 'core-cache');
 const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 const NAMES = [
-  'storeGetAsync', 'storeSet', 'httpGet',
+  'storeGetAsync', 'storeSet', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
   'ITEM_DB_TEXT', 'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
-  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES',
+  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk',
   'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_zhxErr',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
@@ -63,14 +66,19 @@ function makeWorld(over = {}) {
     apply: [], xhr: [], set: [], timers: [], marks: [], fires: [], builds: 0,
     tryFast: 0, waitLoad: 0, errs: [], buildErr: null, timerErr: null,
   };
-  const store = Object.assign({}, over.store || {});
+  const store = Object.assign({ 'zhx.data.refresh.epoch': 'candidate-policy-1-force-refresh' }, over.store || {});
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
     storeSet: (k, v) => { store[k] = v; rec.set.push([k, v]); },
+    storeSetAsync: async (k, v) => { store[k] = String(v); rec.set.push([k, v]); return true; },
+    storeListAsync: async () => Object.keys(store),
+    storeDeleteAsync: async (k) => { delete store[k]; return true; },
     httpGet: (url) => { rec.xhr.push(url); return (over.http || (() => Promise.reject(new Error('net down'))))(url); },
     ITEM_DB_TEXT: '', SERIES_TEXT: '', ACL_CFC_TEXT: '',
     itemHash: Object.create(null), nameMap: Object.create(null), ecidMap: Object.create(null), koByZh: Object.create(null),
     DATA_VER: '',
+    DATA_REFRESH_EPOCH_KEY: 'zhx.data.refresh.epoch', DATA_REFRESH_EPOCH: 'candidate-policy-1-force-refresh',
+    _forceDataRefresh: false, _forceDataClearSucceeded: false, _forceDataCacheWritesOk: true,
     DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
     DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
@@ -81,7 +89,7 @@ function makeWorld(over = {}) {
     _fireTablesReady: () => { rec.fires.push(1); },
     findSite: () => null,
     applyRuntimeDict: () => {},
-    _irAliasMap: null, _irDupMap: null,
+    _irAliasMap: null, _irDupMap: null, _irCandidatePolicy: 0,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     // 桩会被段内真实定义遮蔽（_ensureTryFast/_ensureFetchAll/_waitPageLoad 真实存在）——
@@ -138,10 +146,10 @@ console.log('\n── A：>24h 首开·有旧缓存 → 先建后探（就绪不
   const w = makeWorld({
     need: ['items'],
     store: {
-      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000 }),
-      'zhx.dt.items': 'oldfp\n' + '旧数据'.repeat(60),
+      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000, candidatePolicy: 1 }),
+      'zhx.dt.items': 'oldfp\n' + OLD_ITEMS,
     },
-    fast: { local: { items: { fp: 'oldfp', tx: '旧数据'.repeat(60) } } },
+    fast: { local: { items: { fp: 'oldfp', tx: OLD_ITEMS } } },
   });
   const dm = buildDM(w);
   // 走完整 ensureTables 链：_ensureMain（先建后探）→ 外层 _ensureFinalize（构建+广播）
@@ -164,14 +172,14 @@ console.log('\n── B：热替换原子切换（探测到新版本 → 索引�
   const w = makeWorld({
     need: ['items'],
     store: {
-      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000 }),
-      'zhx.dt.items': 'oldfp\n' + '旧数据'.repeat(60),
+      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000, candidatePolicy: 1 }),
+      'zhx.dt.items': 'oldfp\n' + OLD_ITEMS,
     },
-    fast: { local: { items: { fp: 'oldfp', tx: '旧数据'.repeat(60) } } },
+    fast: { local: { items: { fp: 'oldfp', tx: OLD_ITEMS } } },
     // 后台探测成功：version.json + items.tsv 都返回新版本数据
     http: (url) => {
-      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'new', files: { items: 'newfp' } }));
-      if (url.endsWith('items.tsv')) return Promise.resolve('1\t新数据\n' + '新数据'.repeat(80));
+      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'new', candidatePolicy: 1, files: { items: 'newfp' } }));
+      if (url.endsWith('items.tsv')) return Promise.resolve(NEW_ITEMS);
       return Promise.reject(new Error('unexpected: ' + url));
     },
   });
@@ -197,10 +205,10 @@ console.log('\n── C：后台探测失败 → 数据仍可用（静默降级�
   const w = makeWorld({
     need: ['items'],
     store: {
-      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000 }),
-      'zhx.dt.items': 'oldfp\n' + '旧数据'.repeat(60),
+      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000, candidatePolicy: 1 }),
+      'zhx.dt.items': 'oldfp\n' + OLD_ITEMS,
     },
-    fast: { local: { items: { fp: 'oldfp', tx: '旧数据'.repeat(60) } } },
+    fast: { local: { items: { fp: 'oldfp', tx: OLD_ITEMS } } },
     http: () => Promise.reject(new Error('down')),
   });
   const dm = buildDM(w);
@@ -241,11 +249,11 @@ console.log('\n── E：快速后台响应不得与首次分片构建并发 �
   const w = makeWorld({
     need: ['items'],
     store: {
-      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000 }),
-      'zhx.dt.items': 'oldfp\n' + '旧数据'.repeat(60),
+      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() - 25 * 3600 * 1000, candidatePolicy: 1 }),
+      'zhx.dt.items': 'oldfp\n' + OLD_ITEMS,
     },
     http: (url) => url.endsWith('version.json') ? version
-      : Promise.resolve('1\t新数据\n' + '新数据'.repeat(80)),
+      : Promise.resolve(NEW_ITEMS),
   });
   w.args.buildTables = (scope, done) => {
     w.rec.builds++;
@@ -257,7 +265,7 @@ console.log('\n── E：快速后台响应不得与首次分片构建并发 �
   await new Promise((resolve) => setImmediate(resolve));
   w.flushTimers();
   eq('E1 首次构建已启动但未完成', w.rec.builds, 1);
-  releaseVersion(JSON.stringify({ v: 'new', files: { items: 'newfp' } }));
+  releaseVersion(JSON.stringify({ v: 'new', candidatePolicy: 1, files: { items: 'newfp' } }));
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
   eq('E2 后台下载完成仍不并发启动热替换', w.rec.builds, 1);

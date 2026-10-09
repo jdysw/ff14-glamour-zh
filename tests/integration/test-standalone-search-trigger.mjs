@@ -13,7 +13,7 @@ for (const [site, column] of [['endcloset', 4], ['ronka', 4], ['collection', 3],
   const page = await newPage(port, fixtureUrl('standalone-search.html'));
   const c = page.cdp;
   try {
-    await c.callFn('function(site,items){window.__zhxTestSite=site;window.__zhxTestTables=["items"];const store={"zhx.meta":JSON.stringify({v:"test",t:Date.now()}),"zhx.dt.items":"testfp000001\\n"+items,"zhx.v3.manifest":Date.now()+"\\n"+JSON.stringify({schema:3,sites:{}})};window.GM_getValue=(k,d)=>store[k]??d;window.GM_setValue=(k,v)=>store[k]=v;window.GM_xmlhttpRequest=o=>o.onerror?.({});}', [site, items]);
+    await c.callFn('function(site,items){window.__zhxTestSite=site;window.__zhxTestTables=["items"];const store={"zhx.data.refresh.epoch":"candidate-policy-1-force-refresh","zhx.meta":JSON.stringify({v:"test",t:Date.now(),candidatePolicy:1}),"zhx.dt.items":"testfp000001\\n"+items,"zhx.v3.manifest":Date.now()+"\\n"+JSON.stringify({schema:3,candidatePolicy:1,sites:{}})};window.GM_getValue=(k,d)=>store[k]??d;window.GM_setValue=(k,v)=>store[k]=v;window.GM_xmlhttpRequest=o=>o.onerror?.({});}', [site, items]);
     await c.eval(source);
     await sleep(1500);
     const inputChinese = () => c.eval('(()=>{const input=document.getElementById("equipment-search");input.focus();input.value="女仆发带";input.dispatchEvent(new Event("input",{bubbles:true}));})()');

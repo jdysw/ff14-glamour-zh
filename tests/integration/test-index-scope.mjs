@@ -21,7 +21,7 @@ const gmStub = `(() => {
   if (window.__gmStub) return;
   window.__gmStub = true;
   const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
   window.GM_xmlhttpRequest = (opt) => {
     fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} }))
@@ -33,7 +33,7 @@ const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[T
 
 const FP = 'testfp000001';
 const preset = (k, txt) => `(() => { localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(FP + '\n' + txt)}); return 1; })()`;
-const clear = `(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`;
+const clear = `(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); localStorage.setItem('gm:zhx.data.refresh.epoch', 'candidate-policy-1-force-refresh'); return 1; })()`;
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log(`  ✅ ${name}`); } else { fail++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); } };
@@ -52,7 +52,7 @@ console.log('╔══ 场景 A：真表 + __zhxTestIndexes=[nameMap]（裁剪�
   await c.eval(clear);
   await c.eval("window.__zhxTestIndexes = ['nameMap'];");
   await c.eval(preset('gm:zhx.dt.items', itemsTsv));
-  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
+  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
   await c.eval("window.__zhxTestTables = ['items'];");
   await c.eval(gmStub);
   await c.eval(wrap(GF));
@@ -82,22 +82,22 @@ console.log('╔══ 场景 A：真表 + __zhxTestIndexes=[nameMap]（裁剪�
 console.log('╔══ 场景 B：小表 + 全建（含染剂补开断言）══╗');
 {
   const rows = [
-    '10001\t白色染料\tSnow White Dye\tスノウホワイト\t스노우 화이트\th111\ta111\tx',
-    '10002\t蓝色染料\tCeleste Dye\tセレスト\t셀레스트\th222\ta222\tx',
-    '10003\t试作缠头巾\tProto Turban\tプロトターバン\t프로토 터번\th333\ta333\tx',
-    '10004\t深红染料.B\tTrial Red Dye\tトライアルレッド\t트라이얼 레드\th444\ta444\tx',
-    '10005\t深红\tDeep Red\tディープレッド\t딥 레드\th555\ta555\tx',
-    '10006\t乌黑\tUnoccupied Black Dye\tウンオキュパイド\t언오큐파이드\th666\ta666\tx',
-    '10007\t深红染料.C\tDeep Red Dye\tディープレッドC\t딥 레드C\th777\ta777\tx',
+    '10001\t白色染料\tSnow White Dye\tスノウホワイト\t스노우 화이트\th111\ta111\tx\t1',
+    '10002\t蓝色染料\tCeleste Dye\tセレスト\t셀레스트\th222\ta222\tx\t1',
+    '10003\t试作缠头巾\tProto Turban\tプロトターバン\t프로토 터번\th333\ta333\tx\t1',
+    '10004\t深红染料.B\tTrial Red Dye\tトライアルレッド\t트라이얼 레드\th444\ta444\tx\t1',
+    '10005\t深红\tDeep Red\tディープレッド\t딥 레드\th555\ta555\tx\t1',
+    '10006\t乌黑\tUnoccupied Black Dye\tウンオキュパイド\t언오큐파이드\th666\ta666\tx\t1',
+    '10007\t深红染料.C\tDeep Red Dye\tディープレッドC\t딥 레드C\th777\ta777\tx\t1',
   ];
-  const mini = 'key\tzh\ten\tja\tko\thash\tecid\talias\n' + rows.join('\n') + '\n';
+  const mini = 'key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n' + rows.join('\n') + '\n';
 
   const t = await newPage(PORT, FIXTURE);
   const c = t.cdp;
   await sleep(800);
   await c.eval(clear);
   await c.eval(preset('gm:zhx.dt.items', mini));
-  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() })); return 1; })()`);
+  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
   await c.eval("window.__zhxTestTables = ['items'];");
   await c.eval(gmStub);
   await c.eval(wrap(GF));

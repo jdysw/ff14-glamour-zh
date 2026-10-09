@@ -5967,7 +5967,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 6029	陆行鸟黑魔装甲	Black Mage Barding	ブラックメイジ・バード	흑마도사 갑주	12f4526f572			1
 6030	斯莱普尼尔装甲	Sleipnir Barding	スレイプニル・バード	슬레이프니르 갑주	90a7cbba8d4			1
 6031	贝希摩斯装甲	Behemoth Barding	ベヒーモス・バード	베히모스 갑주	8e46c024a4c			1
-6032	航空兜帽	Flyer Shaffron	フライヤー・バード	비행대 갑주	2b8540da352			0
+6032	航空兜帽	Flyer Shaffron	フライヤー・バード	비행대 갑주	2b8540da352			1
 6033	怒火剑	Blazefire Saber	ブレイズエッジ	블레이즈 엣지	c9512f85124	6302		1
 6034	路希巨斧	l'Cie Bardiche	ルシバルディッシュ	르씨의 긴날도끼	3e11848807a	6303		1
 6035	织女星指虎	Vega Knuckles	ヴェガナックル	베가 너클	be9934fc797	6304		1
@@ -7477,7 +7477,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 7547	轻钢三角裤	Light Steel Subligar	ライトスチールサブリガ	가벼운 강철 서블리가	06752b24641	2828		1
 7548	平纹披肩	Taffeta Shawl	タフタショール	호박단 어깨망토	c0cddf873b7	1300		1
 7549	平纹腰布裙	Taffeta Loincloth	タフタロインクロス	호박단 허리망토	e2fe3706169	2829		1
-7550	猎蛋装甲	Egg Harness	エッガー・バード	달걀 갑주	ef152ad9e8d			0
+7550	猎蛋装甲	Egg Harness	エッガー・バード	달걀 갑주	ef152ad9e8d			1
 7551	光之鸟甲	Barding of Light	バード・オブ・ライト	빛의 갑주	4e21f49595d			1
 7552	利维亚桑装甲	Tidal Barding	リヴァイアサン・バード	리바이어선 갑주	946f8185db9			1
 7553	胖陆行鸟笛	Fat Chocobo Whistle	でぶチョコボホイッスル	뚱보초코보 호루라기	d2b5911259b			0
@@ -21391,7 +21391,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 21922	金鲶	The Gold Whisker	ナマキン	금마즈오	4803275437b			0
 21923	狛犬	Komainu	狛犬	해치	f7f9eee314d			0
 21924	白虎装甲	Byakko Barding	ビャッコ・バード	백호 갑주	4edb767b59b			1
-21925	防雨装甲	Chocobo Raincoat	レインコート・バード	초코보 우비	f37164732e4			0
+21925	防雨装甲	Chocobo Raincoat	レインコート・バード	초코보 우비	f37164732e4			1
 21926	红色郁金香腕带	Red Tulip Corsage	チューリップオーナメント:レッド	튤립 손목장식: 빨강	02a9dd55bb9	11652		1
 21927	蓝色郁金香腕带	Blue Tulip Corsage	チューリップオーナメント:ブルー	튤립 손목장식: 파랑	521614c0394	11653		1
 21928	黄色郁金香腕带	Yellow Tulip Corsage	チューリップオーナメント:イエロー	튤립 손목장식: 노랑	91b56e79335	11654		1
@@ -26417,7 +26417,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 27239	精巧的戒指	Enchanting Ring	精巧な指輪	정교한 반지	97742c6df31			0
 27240	油画布的修复素材	Canvas Repair Materials	キャンバス修復材	캔버스 복원 재료	91d35f10bbc			0
 27241	内衬的修复素材	Upholstery Repair Materials	内張りの修復材	내벽 복원 재료	afa33b39522			0
-27242	阿马罗装备的修复素材	Amaro Barding Repair Materials	アマロ装身具の修復材	아마로 장신구 복원 재료	615af1c827e			1
+27242	阿马罗装备的修复素材	Amaro Barding Repair Materials	アマロ装身具の修復材	아마로 장신구 복원 재료	615af1c827e			0
 27243	鲁特琴的修复素材	Lute Repair Materials	リュートの修復材	류트 복원 재료	dd27b4fd084			0
 27244	招牌的素材	Workshop Sign Materials	看板の素材	간판 재료	bec9bbb0925			0
 27245	工房的招牌	Workshop Sign	工房の看板	공방 간판	c80538cd3ac			0
@@ -29366,8 +29366,8 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 30266	管弦乐琴乐谱：命运之旅	On Our Fates Alight Orchestrion Roll	オーケストリオン譜:運命の旅	오케스트리온 악보: On Our Fates Alight	8db30cb782f			0
 30267	管弦乐琴乐谱：未解读法则	Order Yet Undeciphered Orchestrion Roll	オーケストリオン譜:未解読法則	오케스트리온 악보: Order Yet Undeciphered	971ec68a3dc			0
 30268	陈旧的乐谱：究极神兵（蛮荒神影）	Faded Copy of Ultima (The Primals)	古びた譜面:究極幻想（THE PRIMALS）	낡은 악보: Ultima (The Primals)	f8a5886ca2e			0
-30269	阳伞	Parasol	パラソル	우산	cae0b618564	20682		0
-30270	天蓝阳伞	Sky Blue Parasol	スカイパラソル	하늘색 우산	9d36b2578a0	20683		0
+30269	阳伞	Parasol	パラソル	우산	cae0b618564	20682		1
+30270	天蓝阳伞	Sky Blue Parasol	スカイパラソル	하늘색 우산	9d36b2578a0	20683		1
 30271	库啵装备箱	Coffer o' Kupos	クポクポチェスト	쿠뽀쿠뽀 궤짝	b4723627ec5			0
 30272	稀少法典神典石	Irregular Tomestone of Law	希少トームストーン:法典					0
 30273	萨维奈灵鳞粉	Thavnairian Scalepowder	サベネアの霊鱗粉	사베네어 비늘가루	b54fd199c84			0
@@ -30413,12 +30413,12 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 31318	第三期重建用的幻火矿	Grade 3 Skybuilders' Umbral Magma Shard	第三次復興用の幻火鉱	제3차 부흥용 환상불 광석				0
 31319	第三期重建用的幻雷矿	Grade 3 Skybuilders' Umbral Levinite	第三次復興用の幻雷鉱	제3차 부흥용 환상번개 광석				0
 31320	翠辰砂	Slithersand	翠辰砂	취진사				0
-31321	红漆油纸伞	Vermilion Paper Parasol	紅漆塗番傘	빨간색 종이우산	41cb3c6b931	20684		0
-31322	紫漆油纸伞	Plum Paper Parasol	紫漆塗番傘	보라색 종이우산	fca5daff7ff	20685		0
-31323	黄漆油纸伞	Gold Paper Parasol	黄漆塗番傘	노란색 종이우산	6fee825d1e0	20686		0
-31324	沉稳方格阳伞	Calming Checkered Parasol	カルムチェックパラソル	차분한 체크 우산	017e546e5b8	20687		0
-31325	活力方格阳伞	Cheerful Checkered Parasol	チアフルチェックパラソル	발랄한 체크 우산	bc0f21f5a0a	20688		0
-31326	典雅方格阳伞	Classy Checkered Parasol	クラッシーチェックパラソル	세련된 체크 우산	809237a8386	20689		0
+31321	红漆油纸伞	Vermilion Paper Parasol	紅漆塗番傘	빨간색 종이우산	41cb3c6b931	20684		1
+31322	紫漆油纸伞	Plum Paper Parasol	紫漆塗番傘	보라색 종이우산	fca5daff7ff	20685		1
+31323	黄漆油纸伞	Gold Paper Parasol	黄漆塗番傘	노란색 종이우산	6fee825d1e0	20686		1
+31324	沉稳方格阳伞	Calming Checkered Parasol	カルムチェックパラソル	차분한 체크 우산	017e546e5b8	20687		1
+31325	活力方格阳伞	Cheerful Checkered Parasol	チアフルチェックパラソル	발랄한 체크 우산	bc0f21f5a0a	20688		1
+31326	典雅方格阳伞	Classy Checkered Parasol	クラッシーチェックパラソル	세련된 체크 우산	809237a8386	20689		1
 31327	第2赛季福者之证	Season Two Writ of Commendation	福者の証S2	복자의 증서: 시즌 2	3f9b68d45fd			0
 31328	第2赛季圣者之证	Season Two Writ of Canonization	聖者の証S2	성자의 증서: 시즌 2	19752addd04			0
 31329	武器箱（18～21级）	Level 18 Weapon Coffer	ウェポンチェスト【Lv18～21】	무기 궤짝[레벨 18-21]	90fe59776de			0
@@ -32098,11 +32098,11 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 33034	白色康乃馨耳环	White Carnation Earring	カーネーションイヤリング:ホワイト	카네이션 귀걸이: 하양	8f811e26e0e	18341		1
 33035	黑色康乃馨耳环	Black Carnation Earring	カーネーションイヤリング:ブラック	카네이션 귀걸이: 검정	69f1781f568	18342		1
 33036	混色康乃馨耳环	Rainbow Carnation Earring	カーネーションイヤリング:ブレンド	카네이션 귀걸이: 혼합	3e28bdda79f	18343		1
-33037	趣味圆点阳伞	Pleasant Dot Parasol	プレザントドットパラソル	산뜻한 물방울무늬 우산	90e2d3b4a78	20694		0
-33038	端庄圆点阳伞	Prim Dot Parasol	プリムドットパラソル	새침한 물방울무늬 우산	2ffccae4d36	20690		0
-33039	田园圆点阳伞	Pastoral Dot Parasol	パストーラルドットパラソル	전원풍 물방울무늬 우산	306a974ed21	20693		0
-33040	金碟阳伞	Gold Parasaucer	ゴールドソーサーパラソル	골드 소서 우산	5a959767418	20692		0
-33041	天使之翼	Angel Wings	エンジェルウィング	천사 날개	b4588eed795	20691		0
+33037	趣味圆点阳伞	Pleasant Dot Parasol	プレザントドットパラソル	산뜻한 물방울무늬 우산	90e2d3b4a78	20694		1
+33038	端庄圆点阳伞	Prim Dot Parasol	プリムドットパラソル	새침한 물방울무늬 우산	2ffccae4d36	20690		1
+33039	田园圆点阳伞	Pastoral Dot Parasol	パストーラルドットパラソル	전원풍 물방울무늬 우산	306a974ed21	20693		1
+33040	金碟阳伞	Gold Parasaucer	ゴールドソーサーパラソル	골드 소서 우산	5a959767418	20692		1
+33041	天使之翼	Angel Wings	エンジェルウィング	천사 날개	b4588eed795	20691		1
 33042	新款阿尔菲诺服装套装	Brand-new Alphinaud's Attire	ニュー・アルフィノ・コスチュームセット	알피노 새옷 세트	956092fdb59	18157		1
 33043	异木时尚帽	Millfiend's Costume Cap	ミルフィーンド・コスチュームキャップ	제재광 분장 모자	3f5c57d5952	18441		1
 33044	异木时尚围裙	Millfiend's Costume Apron	ミルフィーンド・コスチュームエプロン	제재광 분장 앞치마	1073fa62912	18454		1
@@ -32757,9 +32757,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 33708	发型样式：9S	Modern Aesthetics - Scanning for Style	ヘアカタログ:９Ｓ	헤어카탈로그: 9S	5ca5c016c1c			0
 33709	魔法棱晶（鲶鱼精头）	Magicked Prism (Namazu)	マジックプリズム:ナマズオヘッド	마법의 프리즘: 나마즈오 머리	7fb1e9396e4			0
 33710	妮美雅百合香囊	Nymeia Potpourri	ニメーヤリリーのポプリ	니메이아 백합 포푸리	ac2de57de95			0
-33711	红月油纸伞	Red Moon Parasol	紅小月番傘	붉은 달 우산	11378c060e1	20697		0
-33712	猫小胖阳伞	Fat Cat Parasol	ファットキャットパラソル	뚱냥이 우산	e507899cc6e	20695		0
-33713	隆卡的水蛇伞？	Great Paraserpent	ロンカの水蛇傘？	롱카의 물뱀 우산?		20696		0
+33711	红月油纸伞	Red Moon Parasol	紅小月番傘	붉은 달 우산	11378c060e1	20697		1
+33712	猫小胖阳伞	Fat Cat Parasol	ファットキャットパラソル	뚱냥이 우산	e507899cc6e	20695		1
+33713	隆卡的水蛇伞？	Great Paraserpent	ロンカの水蛇傘？	롱카의 물뱀 우산?		20696		1
 33714	红莲节票据	Faire Voucher	紅蓮祭手形	불꽃축제 증서	aa2dc9cf64a			0
 33715	改良型裁决手半剑（复制品）	Replica Augmented Law's Order Bastard Sword	レプリカ・ジャッジオーダー・バスタードソードRE	모조 보강된 법령 바스타드소드	af2e01ba279	18967		1
 33716	改良型裁决鸢盾（复制品）	Replica Augmented Law's Order Kite Shield	レプリカ・ジャッジオーダー・カイトシールドRE	모조 보강된 법령 연모양 방패	894e5e1c2ba	19019		1
@@ -35275,11 +35275,11 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 36337	欧米茄F服装套装	Omega-F Attire	オメガF・コスチュームセット	오메가 F 의상 세트	93b59918a60	19604		1
 36338	欧米茄M耳夹	Omega-M Ear Cuffs	オメガM・イヤーカフ	오메가 M 귀찌	f201000a9e8	20032		1
 36339	欧米茄F耳环	Omega-F Earrings	オメガF・イヤリング	오메가 F 귀걸이	f31d37c1ca1	20033		1
-36340	堕天使之翼	Fallen Angel Wings	フォーリン・エンジェルウィング	타락천사 날개	076ae30dedd	20698		0
-36341	大天使之翼	Archangel Wings	アーク・エンジェルウィング	대천사 날개	6b27c76da76	20702		0
-36342	迪亚波罗斯之翼	Diabolos Wings	ディアボロスウィング	디아볼로스 날개	64f4ac75d05	20699		0
-36343	仙子族之翼	Pixie Wings	ピクシーウィング	픽시 날개	081c15c2f99	20700		0
-36345	幻象椭圆眼镜	False Oval Spectacles	ミラージュ・オーバルグラス	타원형 안경 환영	bcadb29778e			0
+36340	堕天使之翼	Fallen Angel Wings	フォーリン・エンジェルウィング	타락천사 날개	076ae30dedd	20698		1
+36341	大天使之翼	Archangel Wings	アーク・エンジェルウィング	대천사 날개	6b27c76da76	20702		1
+36342	迪亚波罗斯之翼	Diabolos Wings	ディアボロスウィング	디아볼로스 날개	64f4ac75d05	20699		1
+36343	仙子族之翼	Pixie Wings	ピクシーウィング	픽시 날개	081c15c2f99	20700		1
+36345	幻象椭圆眼镜	False Oval Spectacles	ミラージュ・オーバルグラス	타원형 안경 환영	bcadb29778e			1
 36346	漆黑的武器箱	Blackbosom Weapon Coffer	ブラックボゾム・ウェポンチェスト	에다 무기 궤짝	de7c1615da0			0
 36347	管弦乐琴乐谱：佐特塔	Tower of Zot Orchestrion Roll	オーケストリオン譜:ゾットの塔	오케스트리온 악보: Tower of Zot (Endwalker)	c1ecc2a39bb			0
 36348	管弦乐琴乐谱：加雷马快列	Garlemald Express Orchestrion Roll	オーケストリオン譜:ガレマルド急行	오케스트리온 악보: Garlemald Express	77c47ae08ff			0
@@ -36351,10 +36351,10 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 37481	魔戒斗师·刃之足·阴【众】	Common Makai Harrower's Longboots	魔戒闘師・刃の具足・陰:衆	음기의 수확 마계투사 장화: 군중	b4ce06e257c	21096		1
 37482	特制猎蛋装甲	Authentic Egg Barding	エッガー・バードEX	달걀 갑주(거래 불가)	8651bf160ca			1
 37483	特制情人装甲	Authentic Paramour Barding	パラムール・バードEX	연인의 갑주(거래 불가)	a366ed2fbdf			1
-37484	白色花边阳伞	White Lace Parasol	ホワイトフリルパラソル	흰색 주름장식 우산	0689eac6ba6	21148		0
-37485	蓝色印花阳伞	Blue Blossom Parasol	ブルーブロッサムパラソル	파란 꽃무늬 우산	a288dc75b51	21149		0
-37486	幻象金边墨镜	False Shaded Spectacles	ミラージュ・シェイデッドグラス	검은알 안경 환영	46a2341d2da	24678		0
-37487	幻象经典眼镜	False Classic Spectacles	ミラージュ・クラシックグラス	뿔테 안경 환영	595ca882a11			0
+37484	白色花边阳伞	White Lace Parasol	ホワイトフリルパラソル	흰색 주름장식 우산	0689eac6ba6	21148		1
+37485	蓝色印花阳伞	Blue Blossom Parasol	ブルーブロッサムパラソル	파란 꽃무늬 우산	a288dc75b51	21149		1
+37486	幻象金边墨镜	False Shaded Spectacles	ミラージュ・シェイデッドグラス	검은알 안경 환영	46a2341d2da	24678		1
+37487	幻象经典眼镜	False Classic Spectacles	ミラージュ・クラシックグラス	뿔테 안경 환영	595ca882a11			1
 37488	惊奇纤维	Exciting Fiber	エキサイトファイバー	익사이트 섬유				0
 37489	深海大理石	Deep-sea Marble	ディープシーマーブル	심해 대리석				0
 37490	漂流种子	Driftseeds	漂流種子	표류 씨앗	51d58534d97			0
@@ -37389,8 +37389,8 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 38534	希拉狄哈银币	Sil'dihn Silver	シラディハ銀貨	실디하 은화				0
 38535	希拉狄哈书籍	Sil'dihn Manuscript	シラディハの書物	실디하 서책	c13ca5520b2			0
 38536	海岛幻象棱晶	Island Prism	アイルプリズム	무인도 프리즘	b0162f922e8			0
-38537	仙人刺阳伞	Sabotender Parasol	サボテンダーパラソル	사보텐더 우산	2806461ddb9	21741		0
-38538	蓝色仙子族之翼	Bluepowder Pixie Wings	ブルーピクシーウィング	푸른 픽시 날개	4dd0ff13a19	21713		0
+38537	仙人刺阳伞	Sabotender Parasol	サボテンダーパラソル	사보텐더 우산	2806461ddb9	21741		1
+38538	蓝色仙子族之翼	Bluepowder Pixie Wings	ブルーピクシーウィング	푸른 픽시 날개	4dd0ff13a19	21713		1
 38539	仿制钻石	Deceiver's Diamonds	イミテーションダイヤ	모조 다이아몬드	51df48cbf18			0
 38540	蔬菜礼花筒	Fieldcracker	ベジークラッカー	채소 폭죽	e70eeeb50d4			0
 38541	梦羽妖灵王剑	The Fae's Crown Sword	フェアリーキングソード	요정왕 한손검	eff380cae89	21696		1
@@ -38333,8 +38333,8 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 39500	演技教材·吓唬人	Ballroom Etiquette - Unnerving Undulations	演技教本:驚かす	연기 교본: 놀래기	84362c1767a			0
 39501	魔法棱晶（沙狐头）	Magicked Prism (Faux Fox Face)	マジックプリズム:サンドフォックスヘッド	마법의 프리즘: 모래여우 머리	8986089b3fb			0
 39502	热带礼花筒	Tropicracker	トロピカルクラッカー	열대 폭죽	ed4a92b537e			0
-39503	猫耳小员伞	Felicitous Furball Umbrella	ねこみみさんの傘	야옹 선생 우산	f5be1abd824	22127		0
-39504	防雨系统	Raindrop Defense System	防滴システム	빗물 방어 시스템	9d3790366c7	22266		0
+39503	猫耳小员伞	Felicitous Furball Umbrella	ねこみみさんの傘	야옹 선생 우산	f5be1abd824	22127		1
+39504	防雨系统	Raindrop Defense System	防滴システム	빗물 방어 시스템	9d3790366c7	22266		1
 39505	高尚耳坠	Enaretos Earrings	エナレトス・イヤリング	에나레토스 귀걸이	590efb43688	22263		1
 39506	高尚项链	Enaretos Necklace	エナレトス・ネックレス	에나레토스 목걸이	ee674f6da3e	22262		1
 39507	高尚手环	Enaretos Bracelet	エナレトス・ブレスレット	에나레토스 팔찌	d85d81be7b1	22264		1
@@ -39193,9 +39193,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 40361	演技教材·蹦跳声援小绿	Ballroom Etiquette - Improper Praise (Cheer Jump: Green)	演技教本:声援ジャンプ:緑	연기 교본: 점프 응원(초록)	c7107cb5900			0
 40362	演技教材·守护天节的魔咒	Ballroom Etiquette - Wakeful Witchcraft	演技教本:守護天節のおまじない	연기 교본: 수호천절 주문	669c021a3c4			0
 40363	演技教材·比对文献	Ballroom Etiquette - Scrupulous Citations	演技教本:文献と見比べる	연기 교본: 문헌과 비교하기	182671c6174			0
-40364	幻象玫瑰色眼镜	Rose-colored Spectacles	ミラージュ・ローズカラースペクタクルズ	분홍알 안경 환영	b9118714fe5	24671		0
-40365	付丧神油纸伞	Tsukumogami Parasol	付喪番傘	츠쿠모 지우산	d6b492ebcf7	22905		0
-40366	监工小员伞	Tactful Taskmaster Umbrella	おやかたくんの傘	제작돌이 우산	4917d57c989	22813		0
+40364	幻象玫瑰色眼镜	Rose-colored Spectacles	ミラージュ・ローズカラースペクタクルズ	분홍알 안경 환영	b9118714fe5	24671		1
+40365	付丧神油纸伞	Tsukumogami Parasol	付喪番傘	츠쿠모 지우산	d6b492ebcf7	22905		1
+40366	监工小员伞	Tactful Taskmaster Umbrella	おやかたくんの傘	제작돌이 우산	4917d57c989	22813		1
 40367	高贝扎装甲	Voidcast Barding	ゴルベーザ・バード	골베자 갑주	c227b26ee7c			1
 40368	猫耳装甲	Felicitous Barding	ねこみみ・バード	야옹 선생 갑주	830555c56fe			1
 40369	海鹦	Puffin	パフィン	코뿔바다오리	a2a7e8d6781			0
@@ -40242,10 +40242,10 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 41463	演技教材·大获全胜	Ballroom Etiquette - Embracing Blunders	演技教本:ビーンズ・ビクトリー	연기 교본: 젤리빈 승리	8c09dda9bdd			0
 41464	演技教材·煎蛋	Ballroom Etiquette - The Eggcellent Host	演技教本:目玉焼きを作る	연기 교본: 달걀프라이 만들기	e4b63136970			0
 41465	发型样式：侧玉米垄	Modern Aesthetics - The Bold and the Braid	ヘアカタログ:サイドコーンロウ	헤어카탈로그: 사이드 콘로우	a69941275e3			0
-41466	斯塔缇丝之翼	Statice's Wings	スターチスウィング	스타티스 날개	94c5c58724c	23282		0
-41467	大叶伞	Giant Leaf Parasol	葉っぱの傘	잎사귀 우산	0635bf43757	23286		0
-41468	胡萝卜阳伞	Colorful Carrotsol	キャロットパラソル	당근 우산	a393d45096c	23186		0
-41469	拾穗人背包	Knapsack	ナップサック	배낭	a387e943b16	23371		0
+41466	斯塔缇丝之翼	Statice's Wings	スターチスウィング	스타티스 날개	94c5c58724c	23282		1
+41467	大叶伞	Giant Leaf Parasol	葉っぱの傘	잎사귀 우산	0635bf43757	23286		1
+41468	胡萝卜阳伞	Colorful Carrotsol	キャロットパラソル	당근 우산	a393d45096c	23186		1
+41469	拾穗人背包	Knapsack	ナップサック	배낭	a387e943b16	23371		1
 41470	旅行者装甲	Wayfarer's Barding	ウェイファーラー・バード	여행자 갑주	d05c232516a			1
 41471	乌洛萨帕	Uolosapa	オーロサパ	올로사파	5b845a79e50			0
 41472	东方的白色土龙？	The Great White Tsuchinoko	東方の白ツチノコ？	동방의 흰 츠치노코?	5d24d829d26			0
@@ -42983,9 +42983,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 44253	科学家手套	Scientist's Gloves	サイエンティスト・グローブ	과학자 장갑	560e39e1e6f	24907		1
 44254	科学家马裤	Scientist's Breeches	サイエンティスト・ブリーチ	과학자 바지	dc659dc0a90	24936		1
 44255	科学家短靴	Scientist's Boots	サイエンティスト・ブーツ	과학자 장화	f1ad2d989c2	24965		1
-44256	霓虹阳伞	Neon Parasol	ネオンパラソル	네온 우산	c1fb92b47e2	24667		0
-44257	缎带阳伞	Ribboned Parasol	リボンパラソル	리본 우산	64f436acab1	25046		0
-44258	爆弹怪阳伞	Bomb Parasol	ボムパラソル	봄 우산	3c331a933fb	24668		0
+44256	霓虹阳伞	Neon Parasol	ネオンパラソル	네온 우산	c1fb92b47e2	24667		1
+44257	缎带阳伞	Ribboned Parasol	リボンパラソル	리본 우산	64f436acab1	25046		1
+44258	爆弹怪阳伞	Bomb Parasol	ボムパラソル	봄 우산	3c331a933fb	24668		1
 44259	面部配饰：椭圆眼镜	The Faces We Wear - Oval Spectacles	スタイルカタログ:オーバルグラス	스타일카탈로그: 타원형 안경	427bf56beb3			0
 44260	面部配饰：金边墨镜	The Faces We Wear - Shaded Spectacles	スタイルカタログ:シェイデッドグラス	스타일카탈로그: 검은알 안경	961c6bdd45c			0
 44261	面部配饰：经典眼镜	The Faces We Wear - Classic Spectacles	スタイルカタログ:クラシックグラス	스타일카탈로그: 뿔테 안경	a4dee0c4076			0
@@ -43669,9 +43669,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 44992	皓光圆月轮	Adamant Chakrams	アダマンティン・チャクラム	영롱한 다이아몬드 차크람	2f6701c8eb9	25116		1
 44993	皓光步兵盾	Adamant Scutum	アダマンティン・スクトゥム	영롱한 다이아몬드 사각방패	a33b16a49d9	25141		1
 44994	皓光骑士武具	Paladin's Adamant Arms	アダマンティン・ナイトギア	영롱한 다이아몬드 나이트 장비	95ebe48101d			0
-44996	蔓德拉阳伞	Mandragora Parasol	マンドラパラソル	만드라 우산		25379		0
-44997	预言蛋阳伞	Archon Egg Parasol	アルコンエッグパラソル	현자의 알 우산	f5b144bcb44	25380		0
-44998	佩鲁佩鲁族背包	Pelupack	ペルパック	펠루펠루 등짐	131e03dea31	25381		0
+44996	蔓德拉阳伞	Mandragora Parasol	マンドラパラソル	만드라 우산		25379		1
+44997	预言蛋阳伞	Archon Egg Parasol	アルコンエッグパラソル	현자의 알 우산	f5b144bcb44	25380		1
+44998	佩鲁佩鲁族背包	Pelupack	ペルパック	펠루펠루 등짐	131e03dea31	25381		1
 44999	面部配饰：鼻眼镜	The Faces We Wear - Pince-nez	スタイルカタログ:パンスネ	스타일카탈로그: 코안경	11dc3053c09			0
 45000	面部配饰：作业眼镜	The Faces We Wear - Magnifiers	スタイルカタログ:マグニファイアーズ	스타일카탈로그: 확대경	77c6906ce8e			0
 45001	面部配饰：黄铜护目镜	The Faces We Wear - Brass Goggles	スタイルカタログ:ブラスゴーグル	스타일카탈로그: 황동 고글	9ac8ded41a4			0
@@ -45414,8 +45414,8 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 46783	尤卡巨人玩偶	Wind-up Yok Huy	マメット・ヨカフイ	요카후이 인형	ed0f7fc6c18			0
 46784	蟑虫	Oglop	ブリ虫	바벌레	cfbdc6f8470			0
 46785	迷你菲奥·乌儿	Wind-up Feo Ul	マメット・フェオ＝ウル	페오 울 인형	77bb613bcd1			0
-46787	仙子阳伞	Pixie Parasol	ピクシーパラソル	픽시 우산	089d11d3148	26796		0
-46788	泡狐龙猫花伞	Mizutsune Parasol	ミツネネコ華傘	미츠네고양이꽃우산	bed80e5da77	26795		0
+46787	仙子阳伞	Pixie Parasol	ピクシーパラソル	픽시 우산	089d11d3148	26796		1
+46788	泡狐龙猫花伞	Mizutsune Parasol	ミツネネコ華傘	미츠네고양이꽃우산	bed80e5da77	26795		1
 46789	死暗装甲	Barding of the Dead	ネクロン・バード	죽음의 갑주	4236a385424			1
 46790	朝圣装甲	Pilgrim's Barding	ピルグリム・バード	순례길 갑주	017b7ce5427			1
 46791	演技教材·霹雳舞	Ballroom Etiquette - Breaking the Monotony	演技教本:ブレイキン	연기 교본: 브레이크 댄스				0
@@ -45472,8 +45472,8 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 46844	面部配饰：猫眼读书眼镜	The Faces We Wear - Cat Eye Reading Glasses	スタイルカタログ:キャットアイ・リーディンググラス	스타일카탈로그: 독서용 고양이 눈 안경	b846567f05e			0
 46845	面部配饰：教授眼镜	The Faces We Wear - Professorial Glasses	スタイルカタログ:プロフェッサーズグラス	스타일카탈로그: 교수 안경	cb3904ad182			0
 46846	面部配饰：小夹鼻眼镜	The Faces We Wear - Petite Pince-nez	スタイルカタログ:プチパンスネ	스타일카탈로그: 작은 코안경	e5119d484f5			0
-46847	蓝色仙子阳伞	Blue Pixie Parasol	ブルーピクシーパラソル	푸른 픽시 우산	1000ef5e9be	26797		0
-46848	火炬	Torch	松明	횃불	0e1fe61cee4	26558		0
+46847	蓝色仙子阳伞	Blue Pixie Parasol	ブルーピクシーパラソル	푸른 픽시 우산	1000ef5e9be	26797		1
+46848	火炬	Torch	松明	횃불	0e1fe61cee4	26558		1
 46849	工作用的脚手架	Work Ladder	作業用足場	작업용 발판				0
 46850	上弦月矿石	Waxing Arcanite	上弦鉱石	상현달 광석	8d52f2d6db3			0
 46851	助燃材料	Kindling	燃焼促進材	연소 촉진제				0
@@ -46761,9 +46761,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 48157	魔法棱晶（礼花彩带）	Magicked Prism (Ribbons)	マジックプリズム:フライングリボン	마법의 프리즘: 리본 폭죽	08416ab8648			0
 48158	魔法棱晶（宇宙探索）	Magicked Prism (Cosmic Exploration)	マジックプリズム:コスモエクスプローラー	마법의 프리즘: 우주 개척	c5141bbeba7			0
 48159	魔法棱晶（水小滴头）	Magicked Prism (Drippy Head)	マジックプリズム:ドリッピーヘッド	마법의 프리즘: 또륵이 머리	93ecc87394a			0
-48160	兔兔阳伞	Loparasol	レポリットパラソル	레포릿 우산	27bed327472	26098		0
-48161	白色蕾丝阳伞	White Embroidered Parasol	ホワイトレースパラソル	흰색 레이스 우산	2f2f8eaecbb	26246		0
-48162	黑色蕾丝阳伞	Black Embroidered Parasol	ブラックレースパラソル	검은색 레이스 우산	156bead15ed	26245		0
+48160	兔兔阳伞	Loparasol	レポリットパラソル	레포릿 우산	27bed327472	26098		1
+48161	白色蕾丝阳伞	White Embroidered Parasol	ホワイトレースパラソル	흰색 레이스 우산	2f2f8eaecbb	26246		1
+48162	黑色蕾丝阳伞	Black Embroidered Parasol	ブラックレースパラソル	검은색 레이스 우산	156bead15ed	26245		1
 48163	霓虹粉染剂	Neon Pink Dye	カララント:ネオンピンク	염료: 형광 분홍색	6be29580edd			0
 48164	明亮橙染剂	Bright Orange Dye	カララント:ブライトオレンジ	염료: 밝은 주황색	5ec6df03bb4			0
 48165	霓虹绿染剂	Neon Green Dye	カララント:ネオングリーン	염료: 형광 녹색	3f5ab56e66b			0
@@ -49411,9 +49411,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 50822	头狼套装	Alpha Wolf Attire	アルファウルフ・アタイア	우두머리 늑대 의복				0
 50823	雕爪套装	Eagleclaw Attire	イーグルクロー・アタイア	독수리 발톱 의복				0
 50824	软软的海兽	Soothing Sea-beast	柔らかそうな海獣	말랑해우	0010fa530f2			0
-50825	獭獭先生背包	Senor Otter Pack	セニョールウソウソ・パック	세뇨르 달달이 배낭	b3ac1dc66aa	28040		0
-50826	天方阳伞	Corvosi Parasol	コルヴォシパラソル	코르보 우산	44ea7ddcf47	27507		0
-50827	魔石精阳伞	Spriggan Parasol	スプリガンパラソル	스프리건 우산		27508		0
+50825	獭獭先生背包	Senor Otter Pack	セニョールウソウソ・パック	세뇨르 달달이 배낭	b3ac1dc66aa	28040		1
+50826	天方阳伞	Corvosi Parasol	コルヴォシパラソル	코르보 우산	44ea7ddcf47	27507		1
+50827	魔石精阳伞	Spriggan Parasol	スプリガンパラソル	스프리건 우산		27508		1
 50828	宇宙动力服装备箱	Powersuit Coffer	コスモパワードスーツ・チェスト	강화 우주복 궤짝	b588ec5b853			0
 50829	俄匊斯探索计划证书	Oizys Token Booklet	惑星オイジュス探索計画の証書	행성 오이지스 탐색 계획 증서 묶음	551f86f0b9e			0
 50830	神话传令官布料	Cloth of Legend	ミソスヘラルド・クロス	신화 전령 옷감				0
@@ -50313,7 +50313,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 51737	兽王青铜重盾	Beastliege's Hoplon	ビーストリージュ・ホプロン	마수군주 전통방패	4738eb70d14	28450		1
 51739	改良型加特勒	Guttler Unleashed	ガトラーRE	보강된 거틀러	8c92f6e260b	28503		1
 51740	改良型科纳格青铜重盾	Augmented Kornago Hoplon	コルナゴホプロンRE	보강된 코르나고 전통방패	ac0a0ed6164	28451		1
-51744	干草叉	Pitchfork	ピッチフォーク	쇠스랑	e5288475e23			0
+51744	干草叉	Pitchfork	ピッチフォーク	쇠스랑	e5288475e23			1
 51745	兽主耳环	Beastmaster's Earrings	ビーストマスター・イヤリング	마수전문가 귀걸이	ede0901b209	28487		1
 51747	发型样式：半束波波头	Modern Aesthetics - Loosened Locks	ヘアカタログ:ハーフアップボブ	헤어카탈로그: 단발 반올림머리	540ff103ae2			0
 51748	面部配饰：泪滴形眼镜	The Faces We Wear - Teardrop Glasses	スタイルカタログ:ティアドロップグラス	스타일카탈로그: 눈물방울 안경	68c5b70d4f6			0
@@ -50850,9 +50850,9 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 52284	尼姆乌洛萨帕	Nymian Uolosapa	ニーム・オーロサパ	니므 올로사파	2248ebbf7b6			0
 52285	虚王装甲	Barding of Naught	ニヒリティ・バード	허무 갑주	8854cf10c4c			1
 52286	野餐装甲	Picnicker's Barding	ピクニック・バード	소풍 갑주	b23c167298a			1
-52287	雪崩加特林机枪	Avalanche Gatling Gun	アバランチ・ガトリングガン	아발란치 개틀링 건				0
-52288	铁锹	Shovel	スコップ	삽	e4a4d6badb1			0
-52289	古董提灯	Antique Lantern	アンティーク・ランタン	고풍스러운 등불	64688a1eb57			0
+52287	雪崩加特林机枪	Avalanche Gatling Gun	アバランチ・ガトリングガン	아발란치 개틀링 건				1
+52288	铁锹	Shovel	スコップ	삽	e4a4d6badb1			1
+52289	古董提灯	Antique Lantern	アンティーク・ランタン	고풍스러운 등불	64688a1eb57			1
 52290	演技教材·查看地图	Ballroom Etiquette - Geographic Guesswork	演技教本:地図を見る	연기 교본: 지도 보기	1d90bc7f7fa			0
 52291	演技教材·敲魔键盘	Ballroom Etiquette - Intrepid Inputs	演技教本:魔法盤を叩く	연기 교본: 마법자판 치기				0
 52292	演技教材·放声大笑	Ballroom Etiquette - Dignified Derision	演技教本:高笑い	연기 교본: 깔깔 웃기	777fd2e3ca4			0

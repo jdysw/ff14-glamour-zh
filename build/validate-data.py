@@ -2,7 +2,7 @@
 # build/validate-data.py — 数据与词典文件结构校验（v1.4 Phase 17；CI / 提交前复查）
 #
 # 只做结构完整性检查（不评判内容 / 翻译质量），失败即非零退出：
-#   data/ff14-items.tsv   表头 9 列、逐行列数一致、键非空、行数合理
+#   data/ff14-items.tsv   表头 9 列、逐行列数一致、glam 仅为 0/1（装备/时尚配饰/鸟甲允许名单）
 #   data/ff14-series.txt  行数合理、逐行含 | 分隔
 #   data/acl-cfc.txt      行数合理、逐行含 | 分隔
 #   dict/dict-*.json×6    可解析、kind=kv、entries 为「字符串 → 字符串」
@@ -39,6 +39,17 @@ def read_text(rel: str):
         return None
 
 
+def check_item_row(cols, line, bad_cols, bad_key, bad_glam):
+    """逐行结构校验独立于总表汇总，短行不继续读取列值。"""
+    if len(cols) != len(ITEMS_COLS):
+        bad_cols.append(f"L{line}（{len(cols)} 列）")
+        return
+    if not cols[0]:
+        bad_key.append(f"L{line}")
+    if cols[8] not in ('0', '1'):
+        bad_glam.append(f"L{line}={cols[8]!r}")
+
+
 def check_items() -> int:
     """校验物品总表；返回数据行数（失败路径记入 errors）"""
     text = read_text("data/ff14-items.tsv")
@@ -52,17 +63,16 @@ def check_items() -> int:
     if header != ITEMS_COLS:
         errors.append(f"items 表头不符：{header!r}")
         return 0
-    bad_cols, bad_key = [], []
+    bad_cols, bad_key, bad_glam = [], [], []
     for i, line in enumerate(lines[1:], start=2):
         cols = line.split("\t")
-        if len(cols) != len(ITEMS_COLS):
-            bad_cols.append(f"L{i}（{len(cols)} 列）")
-        elif not cols[0]:
-            bad_key.append(f"L{i}")
+        check_item_row(cols, i, bad_cols, bad_key, bad_glam)
     if bad_cols:
         errors.append(f"items 列数异常 {len(bad_cols)} 处：{detail(bad_cols)}")
     if bad_key:
         errors.append(f"items 空键 {len(bad_key)} 处：{detail(bad_key)}")
+    if bad_glam:
+        errors.append(f"items glam 必须是 0 或 1（明确允许名单），异常 {len(bad_glam)} 处：{detail(bad_glam)}")
     n = len(lines) - 1
     if n < ITEMS_MIN_ROWS:
         errors.append(f"items 行数异常偏低：{n} < {ITEMS_MIN_ROWS}")

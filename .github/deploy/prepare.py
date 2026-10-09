@@ -53,7 +53,7 @@ def main() -> int:
         return 1
     files['dict'] = m.group(1)
     print(f'  [dict   ] <- build/make_dict_json.py  fp={files["dict"]}  ({(v2 / "dict.json").stat().st_size} bytes)')
-    ver = {'v': datetime.date.today().strftime('%Y%m%d'), 'files': files}
+    ver = {'v': datetime.date.today().strftime('%Y%m%d'), 'candidatePolicy': 1, 'files': files}
     (v2 / 'version.json').write_text(json.dumps(ver, indent=1), encoding='utf-8')
     print('  version.json 已生成')
     # Runtime Data v3（v1.4 Phase 12）：按站数据 + manifest → site/ff14/v3/

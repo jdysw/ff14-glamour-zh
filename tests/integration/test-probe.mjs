@@ -16,7 +16,7 @@ const gmStub = `(() => {
   if (window.__gmStub) return;
   window.__gmStub = true;
   const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
   window.GM_xmlhttpRequest = (opt) => { try { opt.onerror && opt.onerror(new Error('blocked')); } catch (e) {} };
 })();`;

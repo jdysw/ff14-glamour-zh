@@ -69,27 +69,25 @@ const SERIES_HELPERS = ['_shortestStr', '_countIncludes', '_lcs90']
 
 // 构造样例：含真歧义（A/ア/가 → 甲|乙）、同名同译（B/イ/나 → 丙|丙）、别名（含分号拆分）
 const SAMPLE_TSV = [
-  'key\tzh\ten\tja\tko\thash\tecid\talias',
-  '1\t甲\tA\tア\t가\th1\t100\t',
-  '2\t乙\tA\tア\t가\th2\t101\t',
-  '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
-  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
-  '5\t丁\tC\tウ\t다\th5\t104\t',
-  '6\t炎灵长袍\tD\tエ\t라\th6\t105\t炎灵袍',
-  '7\t炎灵长裤\tE\tオ\t마\th7\t106\t炎灵裤',
-  '8\t炎灵\tF\tカ\t바\th8\t107\t',
-].join('\n');
+  'key\tzh\ten\tja\tko\thash\tecid\talias\tglam',
+  '1\t甲\tA\tア\t가\th1\t100\t\t1',
+  '2\t乙\tA\tア\t가\th2\t101\t\t1',
+  '3\t丙\tB\tイ\t나\th3\t102\t丙组合\t1',
+  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装\t1',
+  '5\t丁\tC\tウ\t다\th5\t104\t\t1',
+  '6\t炎灵长袍\tD\tエ\t라\th6\t105\t炎灵袍\t1',
+  '7\t炎灵长裤\tE\tオ\t마\th7\t106\t炎灵裤\t1',
+  '8\t炎灵\tF\tカ\t바\th8\t107\t\t1',].join('\n');
 
 // Legacy alias fixture：专门冻结 Phase 6 原有别名注册表契约。
 // 中文智能输入新增装备数据不应改变这个 golden test 的覆盖范围。
 const LEGACY_SAMPLE_TSV = [
-  'key\tzh\ten\tja\tko\thash\tecid\talias',
-  '1\t甲\tA\tア\t가\th1\t100\t',
-  '2\t乙\tA\tア\t가\th2\t101\t',
-  '3\t丙\tB\tイ\t나\th3\t102\t丙组合',
-  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装',
-  '5\t丁\tC\tウ\t다\th5\t104\t',
-].join('\n');
+  'key\tzh\ten\tja\tko\thash\tecid\talias\tglam',
+  '1\t甲\tA\tア\t가\th1\t100\t\t1',
+  '2\t乙\tA\tア\t가\th2\t101\t\t1',
+  '3\t丙\tB\tイ\t나\th3\t102\t丙组合\t1',
+  '4\t丙\tB\tイ\t나\th4\t103\t丙组合；丙套装\t1',
+  '5\t丁\tC\tウ\t다\th5\t104\t\t1',].join('\n');
 
 // nameMap 预置映射（模拟「已按首行胜构建完成」的状态；与样例首行一致）
 const PRESET_NAME_MAP = {
@@ -121,9 +119,9 @@ function buildResolver(env = {}) {
   const ret = [
     'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, _irBuildAux, _irBuildSearchFromNames, _irBuildSearchFromText, resolvePartialByZh, __stats: () => ({ ..._irStats }),',
     '  __maps: () => ({ dup: _irDupMap, ali: _irAliasMap }),',
-    '  __setV3: (v) => { _v3Applied = v; } };',
+    '  __setV3: (v) => { _v3Applied = v; }, __setPolicy: (v) => { _irCandidatePolicy = v; } };',
   ].join('\n');
-  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, ret].join('\n');
+  const body = [...stubs, SERIES_HELPERS, ...RESOLVER_SEG, '_irCandidatePolicy = __env.candidatePolicy ?? 1;', ret].join('\n');
   try {
     const fn = new Function('__env', '__rec', body);
     return fn(env, rec);
@@ -370,29 +368,71 @@ const mkEnv = (over = {}) => ({
 }
 
 // ─────────────────────────────────────────────────────────────
-// D. glam 过滤（v1.4.2 后续：候选过滤）——'0' 行不进中文搜索倒排
+// D. 候选允许名单过滤：只有明确标记 1 的装备、时尚配饰、鸟甲入倒排
 // ─────────────────────────────────────────────────────────────
 {
   const api = buildResolver(mkEnv());
-
-  // v3 名字路径：names 行级 glam 经 glam 映射传入（对应 names.tsv 第 3 列）
   const built = api._irBuildSearchFromNames(
-    { A1: '甲乙', B1: '乙丙', C1: '丙丁' },
-    null,
-    { A1: '1', B1: '0' },
+    { A1: '甲乙', B1: '乙丙', C1: '丙丁', D1: '丁戊', E1: '戊己' },
+    { '未知别名': ['丙丁'] },
+    { A1: '1', B1: '0', C1: '', D1: '1', E1: '2' },
   );
-  eq('D1 v3 路径：glam=1 保留', built.map['甲乙'], 'A1');
-  eq('D2 v3 路径：glam=0 剔除', built.map['乙丙'], undefined);
-  eq('D3 v3 路径：无标记（旧数据）保留', built.map['丙丁'], 'C1');
-  const builtNoGlam = api._irBuildSearchFromNames({ A1: '甲乙' }, null, null);
-  eq('D4 v3 路径：无 glam 映射不过滤', builtNoGlam.map['甲乙'], 'A1');
+  eq('D1 v3 明确允许 1 保留', built.map['甲乙'], 'A1');
+  eq('D2 v3 0 剔除', built.map['乙丙'], undefined);
+  eq('D3 v3 空标记剔除', built.map['丙丁'], undefined);
+  eq('D4 v3 明确 1 保留', built.map['丁戊'], 'D1');
+  eq('D5 v3 非法标记剔除', built.map['戊己'], undefined);
+  eq('D6 v3 无标记时默认剔除', api._irBuildSearchFromNames({ A1: '甲乙' }, null, null).map['甲乙'], undefined);
+  eq('D7 别名不能绕过主名允许标记', built.map['未知别名'], undefined);
 
-  // v2 文本路径：第 9 列 '0' 的行不进倒排
-  const text = '1\t甲装备\tAAA\tアア\t아아\t\t\t\t1\n2\t乙家具\tBBB\tイイ\t이이\t\t\t\t0\n3\t丙旧物\tCCC\tウウ\t우우\n';
+  // v2 真实误入样例 + 分类允许项，CRLF / 第9列 trim 均按严格标记处理。
+  const text = [
+    '8043\t英骑装备的改良材料\tGallant Armor Augmentation\tガラントアーマーの補材\t\t\t\t改良材料别称\t0',
+    '8881\t改良型加隆德御敌腰带\tAugmented Ironworks Belt of Fending\tガーロンド・ディフェンダーベルトRE\t\t\t\t\t0',
+    '7551\t光之鸟甲\tBarding of Light\tバード・オブ・ライト\t\t\t\t\t1',
+    '14972\t女仆发带\tHousemaid Brim\tメイドホワイトブリム\t\t\t\t\t1',
+    '30269\t阳伞\tParasol\tパラソル\t\t\t\t\t 1 ',
+    '48162\t黑色蕾丝阳伞\tBlack Embroidered Parasol\t黒い刺繍のパラソル\t\t\t\t\t1',
+    '38459\t魔法阳伞\tMagicked Parasol\t魔法のパラソル\t\t\t\t\t0',
+    '6482\t亚麻阳伞\tLinen Parasol\tリネンパラソル\t\t\t\t\t0',
+    '90000\t旧格式物品\tLegacy Item\t旧名\t\t\t\t',
+  ].join('\r\n') + '\r\n';
   const built2 = api._irBuildSearchFromText(text);
-  eq('D5 v2 路径：glam=1 保留', built2.map['甲装备'], 'アア');
-  eq('D6 v2 路径：glam=0 剔除', built2.map['乙家具'], undefined);
-  eq('D7 v2 路径：无 glam 列不过滤', built2.map['丙旧物'], 'ウウ');
+  eq('D8 v2 8043改良材料不进候选', built2.map['英骑装备的改良材料'], undefined);
+  eq('D9 v2 8881旧腰带不进候选', built2.map['改良型加隆德御敌腰带'], undefined);
+  eq('D10 v2 鸟甲保留', built2.map['光之鸟甲'], 'バード・オブ・ライト');
+  eq('D11 v2 时尚发带保留', built2.map['女仆发带'], 'メイドホワイトブリム');
+  eq('D12 v2 阳伞保留', built2.map['阳伞'], 'パラソル');
+  eq('D13 v2 黑色蕾丝阳伞保留', built2.map['黑色蕾丝阳伞'], '黒い刺繍のパラソル');
+  eq('D14 v2 坐骑魔法伞排除', built2.map['魔法阳伞'], undefined);
+  eq('D15 v2 家具伞排除', built2.map['亚麻阳伞'], undefined);
+  eq('D16 v2 旧8列未知标记排除', built2.map['旧格式物品'], undefined);
+  eq('D17 v2 被排除主名的别名不进候选', built2.map['改良材料别称'], undefined);
+}
+
+// D2. canonical 表回归：锁定历史误入项与三类允许样例
+{
+  const text = fs.readFileSync(itemsTsvPath, 'utf8');
+  const api = buildResolver(mkEnv({ text }));
+  api._irBuildAux(text);
+  for (const zh of ['英骑装备的改良材料', '改良型加隆德御敌腰带', '阿马罗装备的修复素材', '魔法阳伞', '亚麻阳伞']) {
+    eq(`真实 canonical 排除：${zh}`, api.resolveByZh(zh), null);
+  }
+  for (const zh of ['光之鸟甲', '航空兜帽', '猎蛋装甲', '防雨装甲', '女仆发带', '阳伞', '黑色蕾丝阳伞']) {
+    ok(`真实 canonical 允许：${zh}`, !!api.resolveByZh(zh));
+  }
+  const legacyZh = '阿马罗装备的修复素材';
+  const legacyEn = 'Amaro Barding Repair Materials';
+  const legacyText = '27242\t' + legacyZh + '\t' + legacyEn + '\tアマロ修理素材\t\t\t\t\t1\n';
+  const restricted = buildResolver(mkEnv({
+    candidatePolicy: 0,
+    nameMap: { [legacyEn]: legacyZh },
+    text: legacyText,
+  }));
+  restricted._irBuildAux(legacyText);
+  eq('未知策略下旧9列误标物不进候选', restricted.resolveByZh(legacyZh), null);
+  eq('未知策略不影响普通译名查表', restricted.resolveByName(legacyEn), legacyZh);
+
 }
 
 // E. resolvePartialByZh 部分词（v1.4.2 后续：完整名未命中 → 公共子串提取 + 英文质量门）

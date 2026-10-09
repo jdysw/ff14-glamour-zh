@@ -3,7 +3,7 @@
 """rebuild-db.py —— FF14 物品数据表重建/更新（跟随游戏版本）
 
 数据模型（9 列，一物品一行）:
-    key | zh | en | ja | ko | hash | ecid | alias | glam（可幻化 1/0；含鸟甲）
+    key | zh | en | ja | ko | hash | ecid | alias | glam（候选允许 1/0；可幻化装备、时尚配饰、鸟甲）
 
 规则:
   · 权威为主: 中/英/日/韩名以四语 datamining Item.csv 为准（新物品自动纳入，
@@ -40,6 +40,7 @@ SOURCES = {
     'en': 'https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/en/Item.csv',
     'ja': 'https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/ja/Item.csv',
     'ko': 'https://cdn.jsdelivr.net/gh/Ra-Workspace/ffxiv-datamining-ko@master/csv/Item.csv',
+    'action': 'https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/en/ItemAction.csv',
 }
 MIN_SIZE = 5 * 1024 * 1024   # 每个 CSV 至少 >5MB，小于视为下载损坏
 
@@ -65,9 +66,21 @@ def parse_args():
     return ap.parse_args()
 
 
-def fetch(url, dest, refresh=False):
-    """下载一个 CSV（带缓存；jsdelivr CDN）。"""
-    if os.path.exists(dest) and not refresh and os.path.getsize(dest) >= MIN_SIZE:
+def fetch(url, dest, refresh=False, min_size=MIN_SIZE, required_headers=None):
+    """下载一个 CSV（带缓存；大型表与辅助小表使用各自契约）。"""
+    def valid(path):
+        if not os.path.exists(path) or os.path.getsize(path) < min_size:
+            return False
+        if required_headers:
+            try:
+                with open(path, encoding='utf-8-sig', newline='') as f:
+                    header = next(csv.reader(f))
+                return all(h in header for h in required_headers)
+            except (OSError, StopIteration, UnicodeDecodeError, csv.Error):
+                return False
+        return True
+
+    if valid(dest) and not refresh:
         print(f'  {os.path.basename(dest)} 已缓存（{os.path.getsize(dest)/1048576:.1f} MB）')
         return dest
     tmp = dest + '.part'
@@ -79,8 +92,8 @@ def fetch(url, dest, refresh=False):
             with urllib.request.urlopen(req, timeout=180) as r, open(tmp, 'wb') as f:
                 shutil.copyfileobj(r, f)
             size = os.path.getsize(tmp)
-            if size < MIN_SIZE:
-                raise RuntimeError(f'文件过小（{size} B），疑下载损坏')
+            if not valid(tmp):
+                raise RuntimeError(f'文件大小或 CSV 表头校验失败（{size} B）')
             os.replace(tmp, dest)
             print(f'  {os.path.basename(dest)} 完成（{size/1048576:.1f} MB）')
             return dest
@@ -149,7 +162,7 @@ def _resolve_paths(args):
 
 
 def _fetch_csvs(csv_dir, refresh):
-    """① 获取四语 CSV → {lang: 本地路径}。"""
+    """① 获取四语 Item.csv 与英语 ItemAction.csv。"""
     print('══ 1. 权威源 ══')
     csv_paths = {}
     os.makedirs(CACHE, exist_ok=True)
@@ -163,7 +176,34 @@ def _fetch_csvs(csv_dir, refresh):
         else:
             csv_paths[lang] = fetch(SOURCES[lang], os.path.join(CACHE, f'{lang}-Item.csv'),
                                     refresh=refresh)
+    if csv_dir:
+        action_path = os.path.join(csv_dir, 'en-ItemAction.csv')
+        if not os.path.exists(action_path):
+            raise SystemExit(f'本地 CSV 不存在: {action_path}（候选分类需要 ItemAction.csv）')
+        _validate_action_csv(action_path)
+        csv_paths['action'] = action_path
+        print(f'  action: 本地 {action_path}')
+    else:
+        csv_paths['action'] = fetch(
+            SOURCES['action'], os.path.join(CACHE, 'en-ItemAction.csv'),
+            refresh=refresh, min_size=1024, required_headers=('#', 'Action'))
+        _validate_action_csv(csv_paths['action'])
     return csv_paths
+
+
+def _validate_action_csv(path):
+    """辅助小表需有有效 # / Action 列及数据行，避免静默丢失分类。"""
+    try:
+        with open(path, encoding='utf-8-sig', newline='') as f:
+            r = csv.DictReader(f)
+            if not r.fieldnames or not {'#', 'Action'}.issubset(r.fieldnames):
+                raise ValueError('缺少 # / Action 列')
+            if not any(row.get('#', '').isdigit() and row.get('Action', '').isdigit() for row in r):
+                raise ValueError('没有有效数据行')
+    except (OSError, UnicodeDecodeError, csv.Error) as e:
+        raise SystemExit(f'ItemAction.csv 无法读取: {e}') from e
+    except ValueError as e:
+        raise SystemExit(f'ItemAction.csv 格式无效: {e}') from e
 
 
 def _load_four(csv_paths):
@@ -176,23 +216,38 @@ def _load_four(csv_paths):
     return cn, en, ja, ko
 
 
-def _load_glam(csv_path):
-    """en-Item.csv → {key: '1'/'0'}：IsGlamorous=True 或 Barding（鸟甲）。
-    鸟甲在游戏内不走投影系统（IsGlamorous=False），但幻化站收录，故一并纳入。"""
-    glam = {}
+def _load_action_map(csv_path):
+    """ItemAction.csv → {ItemAction row ID: Action type ID}。"""
+    _validate_action_csv(csv_path)
+    out = {}
     with open(csv_path, encoding='utf-8-sig', newline='') as f:
-        r = csv.reader(f)
-        try:
-            header = next(r)
-            g_idx = header.index('IsGlamorous')
-            n_idx = header.index('Name')
-        except (StopIteration, ValueError):
-            return glam
+        for row in csv.DictReader(f):
+            if row.get('#', '').isdigit() and row.get('Action', '').isdigit():
+                out[int(row['#'])] = int(row['Action'])
+    return out
+
+
+def _load_glam(csv_path, action_map):
+    """候选允许项：可幻化装备、时尚配饰（Action=20086）、鸟甲（Action=1013）。"""
+    allowed = {}
+    with open(csv_path, encoding='utf-8-sig', newline='') as f:
+        r = csv.DictReader(f)
+        required = {'#', 'IsGlamorous', 'EquipSlotCategory', 'ItemAction'}
+        if not r.fieldnames or not required.issubset(r.fieldnames):
+            raise SystemExit('en-Item.csv 缺少候选分类所需字段: ' + ', '.join(sorted(required)))
         for row in r:
-            if row and row[0].isdigit() and len(row) > max(g_idx, n_idx):
-                g = row[g_idx] == 'True' or 'Barding' in row[n_idx]
-                glam[int(row[0])] = '1' if g else '0'
-    return glam
+            key = row.get('#', '')
+            if not key.isdigit():
+                continue
+            try:
+                equip = int(row.get('EquipSlotCategory', '')) > 0
+            except (TypeError, ValueError):
+                equip = False
+            action_key = row.get('ItemAction', '')
+            action = action_map.get(int(action_key), 0) if action_key.isdigit() else 0
+            is_glamorous_equip = row.get('IsGlamorous') == 'True' and equip
+            allowed[int(key)] = '1' if is_glamorous_equip or action in (1013, 20086) else '0'
+    return allowed
 
 
 def _inherit(o, idx):
@@ -229,7 +284,7 @@ def _merge_rows(cn, en, ja, ko, old, glam):
             n_upd_name += 1               # 权威更新了译名
         rows.append((k, z, en.get(k) or _inherit(o, 2), ja.get(k) or _inherit(o, 3),
                      ko.get(k) or _inherit(o, 4), _inherit(o, 5), _inherit(o, 6), _inherit(o, 7),
-                     glam.get(k, _inherit(o, 8) or '0')))
+                     glam.get(k, '0')))
     return rows, n_new, n_kept, n_upd_name
 
 
@@ -261,10 +316,11 @@ def main():
     old, extra = load_items_tsv(src_p)
     print(f'  现有 {len(old):,} 个物品 | 特殊行 {len(extra)} 条')
 
-    # 2.5) 可幻化标记（IsGlamorous；鸟甲含 Barding 一并纳入）
-    glam = _load_glam(csv_paths['en'])
+    # 2.5) 候选允许标记（可幻化装备 + Action=20086 时尚配饰 + Action=1013 鸟甲）
+    action_map = _load_action_map(csv_paths['action'])
+    glam = _load_glam(csv_paths['en'], action_map)
     n_glam = sum(1 for v in glam.values() if v == '1')
-    print(f'  可幻化标记 {n_glam:,} / {len(glam):,}（含鸟甲）')
+    print(f'  候选允许标记 {n_glam:,} / {len(glam):,}（装备、时尚配饰、鸟甲）')
 
     # 3) 并集构建
     rows, n_new, n_kept, n_upd_name = _merge_rows(cn, en, ja, ko, old, glam)

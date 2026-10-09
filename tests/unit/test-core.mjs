@@ -200,6 +200,28 @@ console.log('\n── storage：GM 存储读写封装 ──');
   }
 }
 
+
+{
+  const env = makeEnv();
+  env.GM_xmlhttpRequest = (opt) => { env.rec.xhrCalls.push(opt); opt.onload({ status: 200, responseText: 'fresh' }); };
+  const api = buildCore(env);
+  await api.httpGet('https://e.com/data?lang=ja#section', 1000, { fresh: true });
+  const call = env.rec.xhrCalls[0];
+  ok('fresh GM URL gets a unique cache-busting query', call.url.startsWith('https://e.com/data?lang=ja&_zhx_refresh='));
+  ok('fresh GM URL preserves fragment', call.url.endsWith('#section'));
+  eq('fresh GM request disables HTTP caches', call.headers['Cache-Control'], 'no-cache, no-store');
+  eq('fresh GM request sends Pragma', call.headers.Pragma, 'no-cache');
+}
+{
+  const env = makeEnv();
+  env.GM_xmlhttpRequest = undefined;
+  env.fetch = (url, opt) => { env.rec.fetchCalls.push({ url, opt }); return Promise.resolve({ ok: true, text: () => Promise.resolve('fresh') }); };
+  const api = buildCore(env);
+  eq('fresh fetch resolves', await api.httpGet('https://e.com/data', 1000, { fresh: true }), 'fresh');
+  ok('fresh fetch URL gets a cache-busting query', env.rec.fetchCalls[0].url.includes('_zhx_refresh='));
+  eq('fresh fetch bypasses HTTP cache', env.rec.fetchCalls[0].opt.cache, 'no-store');
+}
+
 console.log('\n── http：GM XHR 优先 + fetch 兜底 ──');
 {
   {
