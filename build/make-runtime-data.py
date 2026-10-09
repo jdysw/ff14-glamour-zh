@@ -3,13 +3,13 @@
 """Runtime Data v3 生成器：canonical data → 按站 runtime 文件 + manifest。
 
 输入（canonical——人工维护，勿手改输出）：
-    data/ff14-items.tsv   9 列：key|zh|en|ja|ko|hash|ecid|alias|glam
+    data/ff14-items.tsv   9 列：key|zh|en|ja|ko|hash|ecid|alias|glam（明确允许候选 1/0）
     data/ff14-series.txt  日文系列名|国服中文名
     data/acl-cfc.txt      日文副本名|国服中文名
 
 输出（默认 data/v3/——自动生成）：
     manifest.json          schema / version / generated / shared / sites（url+sha256+bytes）
-    <site>/names.tsv       该站语言的名称键 → zh → glam（1/0/空；含染剂回退展开）
+    <site>/names.tsv       该站语言的名称键 → zh → 候选允许标记 glam（1/0；含染剂回退展开）
     <site>/hash.tsv        hash → zh（mirapri/ec/fc）
     <site>/alias.tsv       alias → zh 多值（全角分号拆分；中文键，全站一致）
     <site>/dup.tsv         歧义键 → zh 多值（同键多译；按站语言）

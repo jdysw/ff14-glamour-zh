@@ -164,7 +164,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
   function applyTable(name, txt) {
     if (typeof txt !== 'string' || !txt) return;
     switch (name) {
-      case 'items':  ITEM_DB_TEXT = txt; break;        // 物品总表（8 列，制表符分隔）
+      case 'items':  ITEM_DB_TEXT = txt; break;        // 物品总表（含 glam 候选允许标记列）
       case 'series': SERIES_TEXT = '\n' + txt; break;  // 行首锚定查找需要前导换行
       case 'acl':    ACL_CFC_TEXT = '\n' + txt; break;
       case 'dict':   applyRuntimeDict(txt); break;     // 词库运行时合并（v1.2.0）
@@ -187,11 +187,23 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return Promise.all(need.map((t) => _readCachedTable(t).then((c) => { if (c) local[t] = c; }, () => {}))).then(() => local);
   }
 
+  function _itemsHaveCandidateFlags(text) {
+    if (typeof text !== 'string' || !text) return false;
+    const first = text.trimStart().match(/^[^\r\n]+/)?.[0] || '';
+    const p = first.split('\t');
+    if (p[0] === 'key') return p.length > 8 && p[8].trim() === 'glam';
+    return /^\d+$/.test(p[0]) && p.length > 8 && (p[8].trim() === '0' || p[8].trim() === '1');
+  }
+
+  function _canReuseCachedTable(t, fp, cached) {
+    if (!cached || (t === 'items' && !_itemsHaveCandidateFlags(cached.tx))) return false;
+    return !fp || cached.fp === fp;
+  }
+
   async function _ensureFetchTable(t, vfps, local) {
     const fp = vfps?.[t] ? String(vfps[t]) : null;
     const cached = local[t] || null;
-    if (fp && cached?.fp === fp) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }
-    if (!fp && cached) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }   // 无版本信息时不盲刷
+    if (_canReuseCachedTable(t, fp, cached)) { applyTable(t, cached.tx); _dlStats.cache++; return 1; }
     let txt = null;
     try { txt = await httpGet(DATA_BASE + DATA_FILES[t], 25000); }
     catch (e) { txt = null; _zhxErr('fetch:' + t, e); }
@@ -215,7 +227,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     try { const s = await storeGetAsync(META_KEY); meta = s ? JSON.parse(s) : null; } catch (e) { /* 忽略：元数据读取失败按无缓存处理（meta 保持 null） */ }
     const fresh = !!(meta?.t && (Date.now() - meta.t < DAY_MS));
     const allCached = need.every((t) => !!local[t]);
-    if (!allCached || !fresh) return { local };
+    const itemsCurrent = !need.includes('items') || _itemsHaveCandidateFlags(local.items?.tx);
+    if (!allCached || !fresh || !itemsCurrent) return { local };
     for (const t of need) applyTable(t, local[t].tx);
     DATA_VER = (meta.v ? String(meta.v) : '');
     _dlStats.cache += need.length;
@@ -373,15 +386,15 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     return m;
   }
 
-  // names 文本 → {原生名: glam('1'/'0'/'')}——行级、首见记录（与生成器首行胜一致）。
-  // 仅用于中文搜索过滤：'0' 的行不进倒排（候选与转换一致排除非可幻化物品）。
+  // names 文本 → {原生名: 候选允许标记('1'/'0'/'')}——行级、首见记录。
+  // 仅用于智能候选：只有明确允许的装备、时尚配饰、鸟甲进入倒排。
   function _v3Glam(txt) {
     const m = Object.create(null);
     for (const ln of String(txt || '').split('\n')) {
       if (!ln) continue;
       const p = ln.split('\t');
       if (!p[0] || p[2] === undefined) continue;
-      if (m[p[0]] === undefined) m[p[0]] = p[2];
+      if (m[p[0]] === undefined) m[p[0]] = p[2].trim();
     }
     return m;
   }
@@ -524,7 +537,27 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     }
   }
 
+  async function _ensureCandidatePolicy() {
+    const key = 'zhx.candidate.policy';
+    let policy = null;
+    try { policy = await storeGetAsync(key); } catch (e) { /* 存储读取失败时仍尝试迁移 */ }
+    if (String(policy || '') === '1') return false;
+    // 只清旧版本的检查时间并废弃 v3 manifest；保留数据版本号及物品缓存兜底。
+    let oldMeta = null;
+    try {
+      const raw = await storeGetAsync(META_KEY);
+      oldMeta = raw ? JSON.parse(raw) : null;
+    } catch (e) { /* 忽略：坏元数据按空状态迁移 */ }
+    try { storeSet('zhx.v3.manifest', ''); } catch (e) { /* 忽略：后续版本校验仍会尝试刷新 */ }
+    try {
+      storeSet(META_KEY, oldMeta?.v ? JSON.stringify({ v: String(oldMeta.v), t: 0 }) : '');
+    } catch (e) { /* 忽略：后续版本校验仍会尝试刷新 */ }
+    try { storeSet(key, '1'); } catch (e) { /* 忽略：存储不可写时不阻断初始化 */ }
+    return true;
+  }
+
   async function _ensureMain() {
+    await _ensureCandidatePolicy();
     const need = neededTables();
     if (!need.length) return;
     _buildScope = _siteIndexes();
@@ -600,7 +633,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
        src/core/item-resolver.js。 */
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
-  let _irGlamMap = null;    // names 行级 glam: 原生名 → '1'/'0'（'0' 不进中文搜索；v1.4.2 后续） // NOSONAR
+  let _irGlamMap = null;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
@@ -637,7 +670,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
     const out = Object.create(null);
     const kind = Object.create(null);
     for (const [native, zh] of Object.entries(names || {})) {
-      if (glam?.[native] === '0') continue;   // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      if (glam?.[native] !== '1') continue;   // 仅明确允许的装备、时尚配饰、鸟甲进入中文候选
       _irSearchPut(out, zh, native, 0, kind);
     }
     for (const [alias, zhs] of Object.entries(ali || {})) {
@@ -703,7 +736,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _btApplyTargets, _btHashRow, _btNamePut,
       if (c0 !== 45 && (c0 < 48 || c0 > 57)) continue;
       const p = ln.split('\t');
       if (p.length < 5 || !p[1] || !p[localeIndex]) continue;
-      if (p[8] === '0') continue;           // 非可幻化 → 不进中文搜索（v1.4.2 后续）
+      if (!p[8] || p[8].trim() !== '1') continue; // 仅明确允许项进入候选；旧/未知标记默认排除
       const native = p[localeIndex];
       _irSearchPut(out, p[1], native, 0, kind);
       _irBuildSearchAliases(out, p[7], native, kind);

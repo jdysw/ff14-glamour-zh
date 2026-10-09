@@ -226,7 +226,7 @@ const NAMES = [
 ];
 
 function makeWorld(over = {}) {
-  const rec = { xhr: [], set: [], timers: [], fires: [], builds: 0, tryFast: 0, fetchAll: 0, waitLoad: 0, dict: [], errs: [] };
+  const rec = { xhr: [], set: [], applied: [], timers: [], fires: [], builds: 0, tryFast: 0, fetchAll: 0, waitLoad: 0, dict: [], errs: [] };
   const store = Object.assign({}, over.store || {});
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
@@ -238,7 +238,7 @@ function makeWorld(over = {}) {
     DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
     DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
-    applyTable: () => {},
+    applyTable: (name, txt) => { rec.applied.push([name, txt]); },
     neededTables: () => over.need || ['items', 'dict'],
     _siteIndexes: () => over.scope || { nameMap: {}, itemHash: {} },
     buildTables: (scope, cb) => { rec.builds++; try { cb(); } catch (e) {} },
@@ -273,7 +273,7 @@ function buildDM(world) {
   const ret = [
     'return {',
     '  dataManager, ensureTables, itemDbReady,',
-    '  _ensureTryV3, _applyV3, _v3Pairs, _ensureMain, _ensureFinalize,',
+    '  _ensureTryV3, _applyV3, _v3Pairs, _ensureCandidatePolicy, _ensureFetchTable, _ensureTryFast, _ensureMain, _ensureFinalize,',
     '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, series: SERIES_TEXT, acl: ACL_CFC_TEXT, v3: _v3Applied }),',
     '};',
   ].join('\n');
@@ -447,7 +447,49 @@ const manText = JSON.stringify(man);
   const gl = dm._peek().gl || {};
   eq('B28 glam=1 解析', gl['A'], '1');
   eq('B29 glam=0 解析', gl['B'], '0');
-  eq('B30 无 glam 列 → 不标记', Object.prototype.hasOwnProperty.call(gl, 'C'), false);
+  eq('B30 CRLF glam trim', dm._applyV3({ names: 'D\t丁戊\t 1 \r\n' }) && dm._peek().gl.D, '1');
+  eq('B31 无 glam 列 → 不标记', Object.prototype.hasOwnProperty.call(gl, 'C'), false);
+}
+
+// B14: one-time migration clears stale markers and preserves cached item data.
+{
+  const w = makeWorld({ store: { 'zhx.v3.manifest': 'old', 'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() }), 'zhx.dt.items': 'fp\\nlegacy' } });
+  const dm = buildDM(w);
+  eq('B32 first migration runs', await dm._ensureCandidatePolicy(), true);
+  eq('B33 manifest invalidated', w.store['zhx.v3.manifest'], '');
+  eq('B34 preserves old version while clearing freshness', JSON.stringify(JSON.parse(w.store['zhx.meta'])), JSON.stringify({ v: 'old', t: 0 }));
+  eq('B35 items cache retained', w.store['zhx.dt.items'], 'fp\\nlegacy');
+  const writes = w.rec.set.length;
+  eq('B36 second migration is noop', await dm._ensureCandidatePolicy(), false);
+  eq('B37 second migration has no writes', w.rec.set.length, writes);
+}
+
+
+// B15: a matching old 8-column cache is refreshed, then retained on failure for translation.
+{
+  const legacy = ('1\tOld Item\tOld English\tOld Japanese\tOld Korean\t\t\t\n').repeat(8);
+  const w = makeWorld({ http: () => Promise.reject(new Error('offline')) });
+  const dm = buildDM(w);
+  const got = await dm._ensureFetchTable('items', { items: 'samefp' }, {
+    items: { fp: 'samefp', tx: legacy },
+  });
+  eq('B38 old items cache remains usable on offline fallback', got, 1);
+  eq('B39 matching fingerprint old cache still triggers refresh', w.rec.xhr.length, 1);
+  eq('B40 offline fallback applies old translation source', w.rec.applied.at(-1)?.[1], legacy);
+}
+
+// B16: a fresh meta marker cannot take the fast path with an old 8-column item table.
+{
+  const legacy = ('1\tOld Item\tOld English\tOld Japanese\tOld Korean\t\t\t\n').repeat(8);
+  const w = makeWorld({ store: {
+    'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() }),
+    'zhx.dt.items': 'samefp\n' + legacy,
+    'zhx.dt.dict': 'dictfp\n' + 'x'.repeat(200),
+  } });
+  const dm = buildDM(w);
+  const got = await dm._ensureTryFast(['items', 'dict']);
+  ok('B41 old 8-column cache falls through fast path', !!got?.local?.items);
+  eq('B42 old cache is not applied as fully current', w.rec.applied.length, 0);
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-runtime-v3：${pass}/${pass + fail} 通过`);
