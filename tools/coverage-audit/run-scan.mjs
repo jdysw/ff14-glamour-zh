@@ -15,7 +15,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
 import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
 import { discoverSitemapUrls } from './sitemap.mjs';
-import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady } from './coverage-core.mjs';
+import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
 
@@ -65,6 +65,12 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
   const c = t.cdp;
   try {
     await c.send('Network.enable');
+    const documentResponses = [];
+    c.on('Network.responseReceived', (e) => {
+      if (e.type === 'Document' && e.response) {
+        documentResponses.push({ url: e.response.url, httpStatus: e.response.status });
+      }
+    });
     await c.send('Network.setBlockedURLs', { urls: BLOCKED_URLS });
     // 先导航到目标站（about:blank 的 localStorage 不可用）
     await c.send('Page.navigate', { url });
@@ -91,6 +97,11 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
       }
     }
     if (!pageOk) throw new Error('页面未就绪，可能被重定向、反爬拦截或加载失败：' + url);
+    const pageIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
+    const response = documentResponses.findLast((e) => e.url === pageIdentity.finalUrl);
+    pageIdentity.httpStatus = response?.httpStatus || 0;
+    const rejection = pageIdentityFailure(pageIdentity, expectedHosts);
+    if (rejection) throw new Error('非业务页面，扫描无效：' + rejection);
     // Before snapshot includes *English* UI, enabling differential auditing.
     const before = await c.eval(COLLECTOR_JS);
     const links = await c.eval(LINKS_JS).catch(() => []);
@@ -109,9 +120,13 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     // page with apparently missing translations.
     await waitForAuditReady(() => c.eval(AUDIT_READY_JS), sleep);
     await sleep(waitMs); // allow MutationObserver / DOM work to settle
+    const afterIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
+    afterIdentity.httpStatus = documentResponses.findLast((e) => e.url === afterIdentity.finalUrl)?.httpStatus || 0;
+    const afterRejection = pageIdentityFailure(afterIdentity, expectedHosts);
+    if (afterRejection) throw new Error('扫描中被站点阻断：' + afterRejection);
     const raw = await c.eval(COLLECTOR_JS);
     if (!Array.isArray(raw)) throw new Error('collector 未返回数组');
-    return { site, pageId, url, beforeCount: before.length, items: pairSnapshots(before, raw), links, error: null, status: 'ok' };
+    return { site, pageId, url: afterIdentity.finalUrl, httpStatus: afterIdentity.httpStatus, beforeCount: before.length, items: pairSnapshots(before, raw), links, error: null, status: 'ok' };
   } finally {
     await closePage(port, t.target.id);
   }
@@ -235,7 +250,12 @@ async function main() {
   for (const site of sites) {
     const cfg = SITES[site];
     const ch = channel === 'auto' ? cfg.channel : channel;
-    const pages = pagesArg ? cfg.pages.filter((p) => pagesArg.split(',').includes(p.id)) : cfg.pages;
+    let pages = pagesArg ? cfg.pages.filter((p) => pagesArg.split(',').includes(p.id)) : cfg.pages;
+    // Live auditing on Wiki needs a real, public item URL: the normal audit
+    // fixture seed intentionally cannot be navigated by Chrome.
+    if (site === 'wiki' && ch === 'local' && process.env.ZHX_AUDIT_WIKI_URL) {
+      pages = [{ id: 'item-live', type: 'item', url: process.env.ZHX_AUDIT_WIKI_URL }];
+    }
 
     console.log(`\n===== 扫描 ${site}（通道: ${ch}）=====`);
     if (ch === 'local') {
@@ -265,7 +285,7 @@ async function main() {
         templateCounts.set(template, (templateCounts.get(template) || 0) + 1);
         console.log('  扫描 ' + (p.id || template) + ': ' + norm);
         try {
-          const r = await scanUrlLocal({ site, pageId: p.id || 'discovered-' + n, url: norm, port, waitMs });
+          const r = await scanUrlLocal({ site, pageId: p.id || 'discovered-' + n, url: norm, itemsTsv, port, waitMs });
           const classified = classifyResiduals(r.items.map((it) => ({ ...it, site })));
           const result = { site, pageId: r.pageId, url: norm, template, depth: p.depth,
             items: classified, status: 'ok', beforeCount: r.beforeCount, scannedAt: new Date().toISOString() };

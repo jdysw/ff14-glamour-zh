@@ -8,7 +8,7 @@ import {
 } from '../../tools/coverage-audit/audit.mjs';
 import {
   normalizeSiteUrl, templateKey, selectDiscoveredPages, pairSnapshots,
-  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady,
+  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure,
 } from '../../tools/coverage-audit/coverage-core.mjs';
 import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
@@ -29,6 +29,11 @@ assert.ok(SITES.fc.pages.some((p) => p.type === 'filtered'));
 assert.deepEqual(unmatchedHosts(['weapon.ffxivcollection.com', 'www.ffxivcollection.com'], header), []);
 assert.ok(header.includes('@match        https://end-closet.com/*'));
 assert.equal(unmatchedHosts(['unknown.example.net'], header).length, 1);
+assert.match(nonContentPageReason({title: 'Just a moment...', body: 'Performing security verification by Cloudflare'}), /WAF/);
+assert.match(nonContentPageReason({title: 'Sorry, you have been blocked', body: 'This page is blocked by Cloudflare'}), /WAF/);
+assert.match(nonContentPageReason({title: '404', body: 'This page could not be found.'}), /404/);
+assert.match(nonContentPageReason({title: 'XML Sitemap Index', body: 'This XML sitemap links to sub-sitemaps'}), /sitemap/);
+assert.equal(nonContentPageReason({title: 'FFXIV equipment search', body: 'Search gear, character and jobs'}), null);
 
 assert.equal(normalizeSiteUrl('https://example.com/item/?utm_source=x&a=2#part', 'https://example.com/', ['example.com']),
   'https://example.com/item/?a=2');
@@ -263,3 +268,15 @@ assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.user, true,
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');
+
+// Live audit: WAF / HTTP / SPA 404 and final-host redirects never count as valid UI.
+assert.match(nonContentPageReason({title:'Ronka Closet',body:'This page could not be found.'}),/404/);
+assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:404}),/HTTP 404/);
+assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:403}),/HTTP 403/);
+assert.equal(nonContentPageReason({title:'News',body:'An article discussing 404 pages in detail'}),null);
+assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'https://other.example/'},['ff14-fc.com']),/cross-origin/);
+assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'http://ff14-fc.com/'},['ff14-fc.com']),/cross-origin/);
+assert.equal(pageIdentityFailure({title:'Home',body:'Search, Jobs, Dyes',finalUrl:'https://ff14-fc.com/'},['ff14-fc.com']),null);
+assert.equal(templateKey('https://www.ffxivcollection.com/ark-angels-tunic-of-fending/'),
+  templateKey('https://www.ffxivcollection.com/ark-angels-cuirass-of-striking/'));
+assert.notEqual(templateKey('https://www.ffxivcollection.com/'),templateKey('https://www.ffxivcollection.com/ark-angels-tunic-of-fending/'));
