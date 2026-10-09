@@ -224,6 +224,15 @@ def _mirapri_dye_pairs(names, glams):
             for key in names['en'] if key in keys]
 
 
+def _site_name_pairs(site, langs, names, glams):
+    pairs = [(key, value, glams[lang].get(key, ''))
+             for lang in langs for key, value in names[lang].items()]
+    if site == 'mirapri':
+        seen = {key for key, _, _ in pairs}
+        pairs.extend(row for row in _mirapri_dye_pairs(names, glams) if row[0] not in seen)
+    return pairs
+
+
 def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text):
     """生成 {(site, 文件名): bytes}——含按站语言裁剪。"""
     out = {}
@@ -232,10 +241,7 @@ def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_t
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                pairs = [(k, v, glams[lang].get(k, '')) for lang in langs for k, v in names[lang].items()]
-                if site == 'mirapri':
-                    seen = {key for key, _, _ in pairs}
-                    pairs.extend(row for row in _mirapri_dye_pairs(names, glams) if row[0] not in seen)
+                pairs = _site_name_pairs(site, langs, names, glams)
                 out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
             elif name == 'dup':
                 pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]

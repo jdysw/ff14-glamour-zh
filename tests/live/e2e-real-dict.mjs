@@ -6,24 +6,28 @@ import { readDist, fixturePath } from '../helpers/paths.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const PROD_BASE = 'https://zhixia-data.pages.dev/ff14/v3/';
+// 请求仅选择固定的数据文件；上游地址不使用请求中的路径或查询参数。
+const dataFiles = ['manifest.json', 'dict.json', 'fc/names.tsv', 'fc/hash.tsv', 'fc/alias.tsv', 'fc/dup.tsv', 'fc/series.txt'];
+const upstreams = new Map(dataFiles.map((file) => ['/ff14/v3/' + file, PROD_BASE + file]));
 let proxied = 0;
 const fixture = fs.readFileSync(fixturePath('fc-search.html'));
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://' + req.headers.host);
+  const url = new URL(req.url, 'http://127.0.0.1');
   if (url.pathname === '/fc-search.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(fixture);
     return;
   }
-  if (!url.pathname.startsWith('/ff14/v3/')) {
+  const upstreamUrl = upstreams.get(url.pathname);
+  if (!upstreamUrl) {
     res.writeHead(404);
     res.end('Not found');
     return;
   }
   try {
     proxied++;
-    const upstream = await fetch('https://zhixia-data.pages.dev' + url.pathname + url.search);
+    const upstream = await fetch(upstreamUrl + '?e2e_refresh=' + Date.now(), { signal: AbortSignal.timeout(25000), headers: { 'Cache-Control': 'no-cache' } });
     const body = Buffer.from(await upstream.arrayBuffer());
     res.writeHead(upstream.status, {
       'Content-Type': upstream.headers.get('content-type') || 'text/plain; charset=utf-8',

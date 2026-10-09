@@ -8,7 +8,7 @@ import { tryEnToZh } from './item-resolver.js';
 import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { findSite, neededTables } from './site-registry.js';
-import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, storeSetAsync } from './storage.js';
+import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
@@ -192,20 +192,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return ok;
   }
 
+  async function _v3FindCachedFile(baseKey, fingerprint) {
+    let cached = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
+    if (cached === null) cached = await _v3ReadCachedFile(baseKey, fingerprint);
+    return cached !== null && await _v3VerifyFile(cached, fingerprint) ? cached : null;
+  }
+
   // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
     if (!meta?.url || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return null;
     const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
     const key = baseKey + '.' + meta.sha256;
-    if (!force) {
-      let cached = await _v3ReadCachedFile(key, meta.sha256);
-      if (cached === null) cached = await _v3ReadCachedFile(baseKey, meta.sha256);
-      if (cached !== null && !await _v3VerifyFile(cached, meta.sha256)) cached = null;
-      if (cached !== null) {
-        _dlStats.cache++;
-        if (staged) staged.set(key, meta.sha256 + '\n' + cached);
-        return cached;
-      }
+    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256);
+    if (cached !== null) {
+      _dlStats.cache++;
+      if (staged) staged.set(key, meta.sha256 + '\n' + cached);
+      return cached;
     }
     if (!networkAllowed) return null;
     let text = null;
@@ -236,7 +238,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
   function _validV3Manifest(man) {
     if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy) || !man.sites || typeof man.sites !== 'object') return false;
-    const validFile = (meta) => !!(meta && typeof meta.url === 'string' && /^[a-f0-9]{64}$/i.test(meta.sha256 || ''));
+    const validFile = (meta) => typeof meta?.url === 'string' && /^[a-f0-9]{64}$/i.test(meta?.sha256 || '');
     for (const site of Object.values(man.sites)) {
       if (!site || !site.files || typeof site.files !== 'object') return false;
       for (const meta of Object.values(site.files)) if (!validFile(meta)) return false;
@@ -388,8 +390,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     let manifest = await loadManifest(force, refreshManifest);
     const { siteSnapshot, siteSnapshotValid, globalSnapshot } = snapshots;
     const pinnedNewer = siteSnapshotValid && siteSnapshot.manT > globalSnapshot.manT;
-    if (!force && !_manifestRejected && pinnedNewer && !_manifestNeedsCommit) manifest = siteSnapshot.man;
-    else if (!manifest && !force && !_manifestRejected && siteSnapshotValid) manifest = siteSnapshot.man;
+    const canUseSiteCache = !force && !_manifestRejected && siteSnapshotValid;
+    if (canUseSiteCache && (!manifest || (pinnedNewer && !_manifestNeedsCommit))) manifest = siteSnapshot.man;
     return _validV3Manifest(manifest) && (!force || manifest.candidatePolicy === 1) ? manifest : null;
   }
 
@@ -481,11 +483,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _readCachedManifests() {
-    const manifests = [await readCachedManifest()];
-    for (const siteId of ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset']) {
-      manifests.push(await readCachedManifest(siteId));
-    }
-    return manifests;
+    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+    return Promise.all([readCachedManifest(), ...sites.map((siteId) => readCachedManifest(siteId))]);
   }
 
   async function _clearDataCaches() {
