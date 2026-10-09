@@ -56,6 +56,7 @@ class FakeElement {
   setAttribute(name, value) {
     this.attributes[name] = String(value);
     if (name === 'id') this.id = String(value);
+    if (name === 'name') this.name = String(value); // 与真实 HTMLInputElement 的反射属性保持一致
   }
 
   getAttribute(name) {
