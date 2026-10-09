@@ -18,6 +18,11 @@ const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), '
 
 assert.equal(Object.keys(SITES).length, 7, 'all seven active adapters must be audited');
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
+assert.equal(classify('検索', { site: 'endcloset', ui: true }), 'real');
+assert.equal(classify('検索中', { site: 'endcloset', ui: true }), 'real', 'load EndCloset kanji UI dictionary');
+assert.equal(classify('搜索', { site: 'endcloset', ui: true }), 'ok');
+assert.equal(classify('検索', { site: 'endcloset', ui: false }), 'ok');
+assert.equal(classify('検索', { site: 'ronka', ui: true }), 'ok');
 assert.ok(SITES.collection.hosts.some((host) => host === 'weapon.ffxivcollection.com'));
 assert.deepEqual(SITES.fc.pages.filter((p) => ['head','body','hand','leg','foot'].includes(p.id)).map((p) => p.id), ['head','body','hand','leg','foot']);
 assert.ok(SITES.fc.pages.some((p) => p.type === 'filtered'));

@@ -69,7 +69,7 @@ def normalize_url(candidate, base, hosts):
             return None
         if re.search(r"\.(png|jpe?g|gif|svg|webp|css|js|xml|json|zip|pdf|woff2?|ico)$", u.path, re.I):
             return None
-        query = urlencode(sorted((k, v) for k, v in parse_qsl(u.query) if not re.match(r"(utm_|fbclid$|gclid$|token|session)", k, re.I)))
+        query = urlencode(sorted((k, v) for k, v in parse_qsl(u.query) if not re.match(r"(utm_|fbclid$|gclid$|ref$|source$|share$|session|token|nonce)", k, re.I)))
         path = u.path.rstrip("/") + "/" if u.path and u.path != "/" else "/"
         return urlunsplit((u.scheme, u.netloc, path, query, ""))
     except (ValueError, TypeError):
