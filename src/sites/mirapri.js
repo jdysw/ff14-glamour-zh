@@ -1,10 +1,10 @@
 /* @phase15-module-order:sites/mirapri */
 /* @phase15-order-link:sites/mirapri<-core/dom */
-import { _markScan, _zhixiaTitleKeep, localScope } from '../core/dom.js';
+import { _markScan, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
-import { observeLocal } from '../core/observer.js';
+import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePage };
+export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePage, translateMirapriTitle };
 
 
   // 部分匹配（长句、带变量文本、placeholder）
@@ -21,6 +21,18 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
   ];
 
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
+  // These regions are player-authored; item-name data is handled separately.
+  const MIRAPRI_AUTHORED_SEL = [
+    '#gallery article .article-info .title',
+    '#gallery article figure',
+    '#photoDetail article .article-info .title',
+    '#photoDetail article .description',
+    '#photoDetail article .comment',
+    '#photoDetail article .user-comment',
+    '.comment-body',
+  ].join(',');
+  const MIRAPRI_TRANSLATABLE_ATTRS = ['title', 'alt', 'aria-label', 'placeholder'];
+  const isMirapriAuthored = (el) => !!el?.closest?.(MIRAPRI_AUTHORED_SEL);
   let busy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
   function tr(text) {
@@ -39,22 +51,47 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
   function trNode(node) {
     const raw = node.nodeValue;
     if (!raw?.trim() || raw.trim().length > 200) return;
+    const p = node.parentElement;
+    if (isMirapriAuthored(p)) return;
     const next = tr(raw);
     if (next !== raw) {
-      const p = node.parentElement;
-      if (p && !p.title) { p.title = raw.trim(); _zhixiaTitleKeep.add(p); }
+      // Retain translation diagnostics without creating Japanese hover titles.
+      if (p?.dataset && !p.dataset.zhixiaSourceText) p.dataset.zhixiaSourceText = raw.trim();
       node.nodeValue = next;
     }
   }
 
   function trEl(el) {
-    const ph = el.getAttribute('placeholder');
-    if (ph) { const n = tr(ph); if (n !== ph) el.setAttribute('placeholder', n); }
-    const val = el.getAttribute('value');
-    if (val) { const n = tr(val); if (n !== val) el.setAttribute('value', n); }
+    if (isMirapriAuthored(el)) return;
+    for (const attr of MIRAPRI_TRANSLATABLE_ATTRS) {
+      const original = el.getAttribute(attr);
+      if (!original || original.length > 200) continue;
+      if (attr === 'alt' && el.closest?.('#gallery article, #photoDetail article')) continue;
+      const translated = tr(original);
+      if (translated !== original) el.setAttribute(attr, translated);
+    }
+    // Only action buttons have UI value labels; don't rewrite user-entered fields.
+    if (el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) {
+      const value = el.getAttribute('value');
+      if (value) { const translated = tr(value); if (translated !== value) el.setAttribute('value', translated); }
+    }
+  }
+
+  function translateMirapriTitle() {
+    const old = document.title;
+    if (!old) return;
+    const translated = old
+      .replace('FF14ミラプリSS投稿・共有サイト', 'FF14 幻化截图投稿 · 分享站')
+      .replace('ミラプリを投稿', '发布幻化')
+      .replace('このサイトについて', '关于本站')
+      .replace('ガイドライン', '指南')
+      .replace('お問い合わせ', '联系我们');
+    // Player-authored article title segments must remain untouched.
+    if (translated !== old) document.title = translated;
   }
 
   function translatePage(rootArg) {
+    if (rootArg?.nodeType === 3) { trNode(rootArg); return; }
     if (busy) return;
     busy = true;
     const isFull = !rootArg;
@@ -62,9 +99,10 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
+      if (root.nodeType === 1) trEl(root);
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
-          if (n.nodeType === 1 && SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
+          if (n.nodeType === 1 && (SKIP_TAGS.has(n.tagName) || isMirapriAuthored(n))) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         },
       });
@@ -72,16 +110,9 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
       while (w.nextNode()) batch.push(w.currentNode);
       for (const n of batch) {
         if (n.nodeType === 3) trNode(n);
-        else if (n.tagName === 'INPUT') trEl(n);
+        else if (n.nodeType === 1) trEl(n);
       }
-      if (isFull && document.title) {
-        document.title = document.title
-          .replace('FF14ミラプリSS投稿・共有サイト', 'FF14 幻化截图投稿 · 分享站')
-          .replace('ミラプリを投稿', '发布幻化')
-          .replace('このサイトについて', '关于本站')
-          .replace('ガイドライン', '指南')
-          .replace('お問い合わせ', '联系我们');
-      }
+      if (isFull) translateMirapriTitle();
     } finally {
       busy = false;
     }
@@ -89,10 +120,17 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
 
   function startMirapri() {
     safe(translatePage, 'mirapri 全扫')();
-    // 局部：只翻译新增子树（祖先去重后逐个处理）
-    observeLocal((nodes) => {
-      for (const n of nodes) safe(translatePage, 'mirapri 局部')(n);
-    }, 300);
+    // Handle newly added UI plus attributes refreshed by PJAX/Turbo widgets.
+    createObserver({
+      root: document.documentElement,
+      attributes: true,
+      attributeFilter: MIRAPRI_TRANSLATABLE_ATTRS,
+      debounce: 300,
+      handler: (nodes) => {
+        for (const n of nodes) safe(translatePage, 'mirapri 局部')(n);
+        safe(translateMirapriTitle, 'mirapri 标题')();
+      },
+    });
     document.addEventListener('turbo:load', safe(translatePage, 'turbo'), false);
     document.addEventListener('pjax:end', safe(translatePage, 'pjax'), false);
   }
