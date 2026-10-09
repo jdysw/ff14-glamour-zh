@@ -56,6 +56,7 @@ class FakeElement {
   setAttribute(name, value) {
     this.attributes[name] = String(value);
     if (name === 'id') this.id = String(value);
+    if (name === 'name') this.name = String(value); // 与真实 HTMLInputElement 的反射属性保持一致
   }
 
   getAttribute(name) {
@@ -186,7 +187,7 @@ function buildSearchHarness(suggestionsOverride) {
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
     seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput };',
+    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput };',
   ].join('\n');
   try {
     const fn = new Function('__ready', '__suggestions', body);
@@ -505,7 +506,7 @@ try {
 
     const box = findSuggestBox(document);
     eq('G1 数据全量渲染（13 条 > 可视 8 行）', box.querySelectorAll('button[data-zhx-index]').length, 13);
-    eq('G2 列表高度 = 可视 8 行（8×40+8=328px）', box.style.maxHeight, '328px');
+    eq('G2 列表高度 = 可视 8 行（8×44+8=360px）', box.style.maxHeight, '360px');
 
     document.dispatch('scroll', { target: box });
     eq('G3a 列表自身滚动不关闭候选框', box.hidden, false);
@@ -606,6 +607,128 @@ try {
     document.dispatch('input', { target: input });
     await sleep(1000);
     eq(site + ' 延迟恢复不会覆盖后续输入', input.value, '用户继续输入');
+  }
+  console.log('\n── J：表单选择候选即提交，选中别名保持原生名称 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    harness.api.startChineseSearch('mirapri');
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
+    input.value = '炎灵';
+    const previousFormData = globalThis.FormData;
+    const previousLocation = globalThis.location;
+    const urls = [];
+    let submissions = 0;
+    globalThis.FormData = class {
+      entries() { return [['keyword', input.value]][Symbol.iterator](); }
+    };
+    globalThis.location = { href: 'https://mirapri.com/', assign(url) { urls.push(url); } };
+    form.requestSubmit = () => {
+      submissions++;
+      harness.api.handleChineseSearchSubmit({
+        target: form, preventDefault() {}, stopPropagation() {},
+      }, 'mirapri');
+    };
+    try {
+      harness.ready[0]();
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[3],
+        preventDefault() {},
+      });
+      eq('候选点击调用站点 requestSubmit 一次', submissions, 1);
+      eq('提交别名使用候选绑定的原生名称，不重新猜测', new URL(urls[0]).searchParams.get('keyword'), 'エ');
+      eq('候选中文显示不被提交时的原生名称覆盖', input.value, '炎灵袍');
+    } finally {
+      globalThis.FormData = previousFormData;
+      if (previousLocation === undefined) delete globalThis.location;
+      else globalThis.location = previousLocation;
+    }
+  }
+  console.log('\n── K：渐进加载与手机软键盘可视视口 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const rows = [];
+    for (let i = 0; i < 170; i++) rows.push({ zh: '炎灵装备' + i, native: 'ネイティブ' + i });
+    const harness = buildSearchHarness(rows);
+    harness.api.startChineseSearch('fc');
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備名の一部を入力して検索');
+    form.appendChild(input);
+    input.value = '炎灵';
+    const previousView = globalThis.visualViewport;
+    globalThis.visualViewport = { width: 320, height: 260, offsetLeft: 0, offsetTop: 100, addEventListener() {} };
+    input._rect = { left: 12, top: 310, right: 250, bottom: 340, width: 238, height: 30 };
+    try {
+      harness.ready[0]();
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      eq('170 条只初始渲染 80 个 DOM 节点', box.querySelectorAll('button[data-zhx-index]').length, 80);
+      eq('弹窗顶部不超出 visualViewport', Number.parseFloat(box.style.top) >= 100, true);
+      eq('弹窗宽度受 visualViewport 限制', Number.parseFloat(box.style.width) <= 304, true);
+      box.scrollTop = 980;
+      box.clientHeight = 150;
+      box.scrollHeight = 1000;
+      document.dispatch('scroll', { target: box });
+      eq('接近底部追加第二批 80 条', box.querySelectorAll('button[data-zhx-index]').length, 160);
+      for (let i = 0; i <= 160; i++) {
+        document.dispatch('keydown', { target: input, key: 'ArrowDown', preventDefault() {} });
+      }
+      eq('键盘导航跨过已渲染批次后继续追加', box.querySelectorAll('button[data-zhx-index]').length, 170);
+      eq('键盘导航可激活第 161 条', box.querySelectorAll('button[data-zhx-index]')[160].dataset.active, '1');
+    } finally {
+      if (previousView === undefined) delete globalThis.visualViewport;
+      else globalThis.visualViewport = previousView;
+    }
+  }
+  console.log('\n── L：六站输入框隔离 / 搜索能力矩阵 ──');
+  for (const site of ['mirapri', 'fc', 'ronka', 'collection', 'ec', 'endcloset']) {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const { api } = buildSearchHarness();
+    api.startChineseSearch(site);
+    const equipment = new FakeElement('input');
+    equipment.setAttribute('type', 'search');
+    equipment.setAttribute('placeholder', '搜索装备名');
+    eq(site + ' 装备独立搜索框可识别', api.isStandaloneSearchInput(equipment), true);
+
+    const author = new FakeElement('input');
+    author.setAttribute('type', 'text');
+    author.setAttribute('name', 'search_by_player');
+    author.setAttribute('placeholder', 'Search by player');
+    eq(site + ' 玩家字段不得误接管', api.isStandaloneSearchInput(author), false);
+
+    const title = new FakeElement('input');
+    title.setAttribute('type', 'text');
+    title.setAttribute('placeholder', 'Search by title');
+    eq(site + ' 标题字段不得误接管', api.isStandaloneSearchInput(title), false);
+
+    const masked = new FakeElement('input');
+    masked.setAttribute('type', 'password');
+    masked.setAttribute('placeholder', 'Search');
+    eq(site + ' 密码字段不得误接管', api.isStandaloneSearchInput(masked), false);
+
+    const vueSelect = new FakeElement('input');
+    vueSelect.setAttribute('type', 'search');
+    vueSelect.setAttribute('placeholder', 'Any head');
+    vueSelect.className = 'vs__search';
+    vueSelect.form = new FakeElement('form');
+    eq(site + ' vue-select 只有 EC 允许接管', api.isStandaloneSearchInput(vueSelect), site === 'ec');
   }
 } finally {
   globalThis.document = previousDocument;
