@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
+import { seedV3Browser } from '../helpers/v3-cache.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const FIXTURE = fixtureUrl('wiki-item.html');
@@ -19,7 +20,7 @@ const gmStub = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'v3-only-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);
@@ -73,17 +74,11 @@ await closePage(PORT, t1.target.id);
 // ============ 场景 B：预置数据、零网络 ============
 console.log('\n===== 场景 B：预置 items 缓存（零网络路径）=====');
 const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
-const FP = 'testfp000001';
-const setCache = (cdp, key, value) => cdp.callFn('function (k, v) { localStorage.setItem(k, v); return 1; }', [key, value]);
 const t2 = await newPage(PORT, FIXTURE);
 const c2 = t2.cdp;
 await sleep(800);
-const p1 = await setCache(c2, 'gm:zhx.dt.items', FP + '\n' + itemsTsv);
-const p3 = await c2.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
-// v3 探测节流（v1.4 Phase 12）：预置 v3 manifest 缓存（本站不在其中 → 静默跳过；24h 内不再探测）
-const p4 = await setCache(c2, 'gm:zhx.v3.manifest', String(Date.now()) + '\n' + JSON.stringify({ schema: 3, candidatePolicy: 1, sites: {} }));
-console.log('预置完成:', p1, p3, p4);
 await c2.eval("window.__zhxTestSite = 'wiki';");
+await seedV3Browser(c2, 'wiki');
 await c2.eval("window.__zhxTestTables = ['items'];" );
 await c2.eval(gmStub);
 await c2.eval(wrap(GF));
@@ -104,10 +99,8 @@ const FIXTURE_NON = fixtureUrl('wiki-nonitem.html');
 const t3 = await newPage(PORT, FIXTURE_NON);
 const c3 = t3.cdp;
 await sleep(800);
-await setCache(c3, 'gm:zhx.dt.items', FP + '\n' + itemsTsv);
-await c3.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
-await setCache(c3, 'gm:zhx.v3.manifest', String(Date.now()) + '\n' + JSON.stringify({ schema: 3, candidatePolicy: 1, sites: {} }));
 await c3.eval("window.__zhxTestSite = 'wiki';");
+await seedV3Browser(c3, 'wiki');
 await c3.eval("window.__zhxTestTables = ['items'];");
 await c3.eval(gmStub);
 await c3.eval(wrap(GF));

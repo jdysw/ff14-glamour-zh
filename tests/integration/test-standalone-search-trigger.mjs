@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
+import { v3CacheEntries } from '../helpers/v3-cache.mjs';
 const port = Number(process.env.ZHX_CDP_PORT || 9223);
 const lines = fs.readFileSync(itemsTsvPath, 'utf8').split(/\r?\n/);
 const row = lines.find((line) => line.startsWith('14972\t')).split('\t');
@@ -13,7 +14,8 @@ for (const [site, column] of [['endcloset', 4], ['ronka', 4], ['collection', 3],
   const page = await newPage(port, fixtureUrl('standalone-search.html'));
   const c = page.cdp;
   try {
-    await c.callFn('function(site,items){window.__zhxTestSite=site;window.__zhxTestTables=["items"];const store={"zhx.data.refresh.epoch":"candidate-policy-1-force-refresh","zhx.meta":JSON.stringify({v:"test",t:Date.now(),candidatePolicy:1}),"zhx.dt.items":"testfp000001\\n"+items,"zhx.v3.manifest":Date.now()+"\\n"+JSON.stringify({schema:3,candidatePolicy:1,sites:{}})};window.GM_getValue=(k,d)=>store[k]??d;window.GM_setValue=(k,v)=>store[k]=v;window.GM_xmlhttpRequest=o=>o.onerror?.({});}', [site, items]);
+    const entries = v3CacheEntries(site, '');
+    await c.callFn('function(site,entries){window.__zhxTestSite=site;window.__zhxTestTables=["items"];window.GM_getValue=(k,d)=>entries[k]??d;window.GM_setValue=(k,v)=>entries[k]=v;window.GM_xmlhttpRequest=o=>o.onerror?.({});}', [site, entries]);
     await c.eval(source);
     await sleep(1500);
     const inputChinese = () => c.eval('(()=>{const input=document.getElementById("equipment-search");input.focus();input.value="女仆发带";input.dispatchEvent(new Event("input",{bubbles:true}));})()');

@@ -1,5 +1,5 @@
 // fc 站（ミラプリライフ）真站测试：GF 版端到端（Phase 20：dump → 断言强化）
-// 覆盖：数据下载（v3 fc 文件集；回退 v2）→ 首扫 → 补扫（数据到后重扫）→ 界面词翻译
+// 覆盖：V3 fc 文件集 → 首扫 → 补扫（数据到后重扫）→ 界面词翻译
 // 断言：数据键 / 界面词 3 项 / 无残留 2 项 / 请求数 / 无注入错误（全程 dump 保留供诊断）
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
@@ -53,8 +53,8 @@ console.log('脚本已注入，等待数据流程 ...');
 let done = false;
 for (let i = 0; i < 50; i++) {
   await sleep(1500);
-  const st = await c.eval(`({ v3n: !!(localStorage.getItem('gm:zhx.v3.f.fc.names')), meta: !!localStorage.getItem('gm:zhx.meta'), jp: !!localStorage.getItem('gm:zhx.dt.items') })`).catch(() => ({}));
-  if (st && (st.v3n || st.meta || st.jp)) { done = true; console.log(`数据流程完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
+  const st = await c.eval("({ v3n: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.fc.names.')), manifest: !!localStorage.getItem('gm:zhx.v3.manifest') })").catch(() => ({}));
+  if (st && st.v3n && st.manifest) { done = true; console.log(`数据流程完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
 }
 if (!done) console.log('⚠️ 数据等待超时');
 await sleep(6000); // 留时间补扫
@@ -74,16 +74,16 @@ const r = await c.eval(`(() => {
     const s = (el.textContent || '').trim();
     if (s && s.length >= 2 && s.length <= 40 && /[\u3040-\u30ff]/.test(s)) samples.push(s);
   }
+  const fileSize = (prefix) => { const k = Object.keys(localStorage).find((x) => x.startsWith(prefix)); return k ? String(localStorage.getItem(k) || '').length : 0; };
   return {
     reqUrls: (window.__reqLog || []),
     jaCount: ja,
     ui, samples,
     stKeys: Object.keys(localStorage).filter((k) => k.indexOf('gm:') === 0).map((k) => k + '=' + String(localStorage.getItem(k)).length),
     data: {
-      v3n: String(localStorage.getItem('gm:zhx.v3.f.fc.names') || '').length,
-      v3s: String(localStorage.getItem('gm:zhx.v3.f.fc.series') || '').length,
-      meta: !!localStorage.getItem('gm:zhx.meta'),
-      jp: !!localStorage.getItem('gm:zhx.dt.items'),
+      v3n: fileSize('gm:zhx.v3.f.fc.names.'),
+      v3s: fileSize('gm:zhx.v3.f.fc.series.'),
+      manifest: !!localStorage.getItem('gm:zhx.v3.manifest'),
     },
   };
 })()`);

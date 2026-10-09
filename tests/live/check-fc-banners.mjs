@@ -51,8 +51,8 @@ await c.eval(gmStub);
 await c.eval(wrap(GF));
 for (let i = 0; i < 50; i++) {
   await sleep(1500);
-  const st = await c.eval(`({ jp: !!localStorage.getItem('gm:zhx.dt.items'), se: !!localStorage.getItem('gm:zhx.dt.series') })`).catch(() => ({}));
-  if (st && st.jp && st.se) { console.log('数据就绪 ✓'); break; }
+  const st = await c.eval("({ names: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.fc.names.')), series: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.fc.series.')) })").catch(() => ({}));
+  if (st && st.names && st.series) { console.log('数据就绪 ✓'); break; }
 }
 await sleep(8000);
 

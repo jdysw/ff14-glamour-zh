@@ -1,15 +1,15 @@
-// bench-lifecycle.mjs v1 — 生命周期基准（v1.4 Phase 19）
+// bench-lifecycle.mjs — V3 缓存命中下的生命周期基准
 // 锚点无关：注入前置 window.__zhxDiagOn = true，经 __zhxDiagRecord() 读取（不依赖 dist 文本注入；
 //   dist 形态变化不影响本基准——与 bench-read-path 的文本锚方案互补）。
-// 覆盖：boot（导航→脚本启动）/ readEnd / applied / finalize / buildStart / buildEnd / ready / fireDone
+// 覆盖：boot / finalize / ready / fireDone，以及 DOM、resolver、缓存命中与词典规模
 //   + 处理统计（dom / obs）+ 数据来源（dl）+ resolver / cache / 数据规模 / 词典规模
 //   + 就绪后 mutation 波形（插入节点触发观察器一批，量测处理增量）。
 // 用法：node tests/benchmark/bench-lifecycle.mjs [--save]（--save 另存 baseline/lifecycle-ec.json）
 // 环境变量：ZHX_BENCH_ROUNDS（默认 3）/ ZHX_CDP_PORT（默认 9223）
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { distFile, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
-import { ensureDictJson } from '../helpers/dict.mjs';
+import { distFile, fixtureUrl } from '../helpers/paths.mjs';
+import { seedV3Browser } from '../helpers/v3-cache.mjs';
 import { writeReport } from './report.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
@@ -33,13 +33,6 @@ const gmStub = `(() => {
 
 const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
 
-const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
-const dictJson = ensureDictJson();
-
-const FP = 'benchl0001';
-// 预置写入经 CDP callFunctionOn 传参执行（数据不走代码拼接；CodeQL: js/bad-code-sanitization）
-const SET_ITEM_FN = 'function (k, v) { localStorage.setItem(k, v); return 1; }';
-const seedItem = (c, k, txt) => c.callFn(SET_ITEM_FN, [k, FP + '\n' + txt]);
 const clear = `(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`;
 
 const MUT_JS = `(() => {
@@ -62,11 +55,7 @@ const runOne = async (round) => {
     await sleep(400);
     await c.eval(clear);
     await c.eval("window.__zhxTestSite = 'ec'; window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash']; window.__zhxDiagOn = true;");
-    await seedItem(c, 'gm:zhx.dt.items', itemsTsv);
-    await seedItem(c, 'gm:zhx.dt.dict', dictJson);
-    await c.callFn('function (v) { localStorage.setItem("gm:zhx.meta", v); return 1; }', [JSON.stringify({ v: 'bench', t: Date.now() })]);
-    // v3 探测预置：新鲜 manifest + 空 sites → 静默回退 v2（零网络、确定行为）
-    await c.callFn('function (v) { localStorage.setItem("gm:zhx.v3.manifest", v); return 1; }', [String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} })]);
+    await seedV3Browser(c, 'ec');
     await c.eval(gmStub);
     await c.eval(wrap(GF));
     let rec1 = null;
@@ -84,7 +73,7 @@ const runOne = async (round) => {
     const o1 = rec1.obs || {};
     const o2 = rec2.obs || {};
     const mutMs = (o2.ms || 0) - (o1.ms || 0);
-    console.log(`  [#${round}] boot=${rec1.boot}ms 读→${m.readEnd} apply→${m.applied} 构建起→${m.buildStart} 完→${m.fireDone} | dom=${(rec1.dom || {}).calls}次 | 变异批=${(o2.ticks || 0) - (o1.ticks || 0)} 用 ${mutMs.toFixed(1)}ms`);
+    console.log(`  [#${round}] boot=${rec1.boot}ms finalize=${m.finalize} ready=${m.ready} fireDone=${m.fireDone} | dom=${(rec1.dom || {}).calls}次 | 变异批=${(o2.ticks || 0) - (o1.ticks || 0)} 用 ${mutMs.toFixed(1)}ms`);
     return { rec1, rec2 };
   } finally {
     try { await closePage(PORT, t.target.id); } catch (e) {}
@@ -108,12 +97,9 @@ const pick = (fn) => med(good.map(fn));
 const mOf = (r) => r.rec1.marks || {};
 const sum = {
   boot: pick((r) => r.rec1.boot),
-  read: pick((r) => mOf(r).readEnd),
-  apply: pick((r) => mOf(r).applied - mOf(r).readEnd),
-  schedWait: pick((r) => mOf(r).buildStart - mOf(r).applied),
-  build: pick((r) => mOf(r).buildEnd - mOf(r).buildStart),
-  fire: pick((r) => mOf(r).fireDone - mOf(r).buildEnd),
-  total: pick((r) => mOf(r).fireDone),
+  finalize: pick((r) => mOf(r).finalize),
+  ready: pick((r) => mOf(r).ready),
+  fireDone: pick((r) => mOf(r).fireDone),
   domCalls: pick((r) => (r.rec1.dom || {}).calls),
   domFirstMs: pick((r) => (r.rec1.dom || {}).firstMs),
   domMs: pick((r) => (r.rec1.dom || {}).ms),
@@ -124,15 +110,17 @@ const sum = {
   dlNet: pick((r) => (r.rec1.dl || {}).net),
   resHit: pick((r) => (r.rec1.res || {}).hit),
   resMiss: pick((r) => (r.rec1.res || {}).miss),
-  itemsChars: pick((r) => (r.rec1.data || {}).items),
+  nameKeys: pick((r) => (r.rec1.data || {}).names),
   dictChars: pick((r) => (r.rec1.dict || {}).chars),
   runs: good.length,
 };
 
-console.log(`\n════════ lifecycle 汇总（中位数，ms）════════`);
-console.log(`段 | boot | 读 | apply | 调度等待 | 构建 | 广播 | 总计`);
-console.log(`   | ${[sum.boot, sum.read, sum.apply, sum.schedWait, sum.build, sum.fire, sum.total].map((x) => (Number.isFinite(x) ? x.toFixed(1) : '-').padStart(7)).join(' | ')}`);
-console.log(`统计 | dom=${sum.domCalls}次(首${sum.domFirstMs}ms/计${sum.domMs}ms) obs=${sum.obsMs}ms 变异批=${sum.mutTicks}(用${sum.mutMs}ms) | dl: c=${sum.dlCache} n=${sum.dlNet} | res: h=${sum.resHit} m=${sum.resMiss} | items=${sum.itemsChars} dict=${sum.dictChars}`);
+console.log('\n════════ lifecycle 汇总（中位数）════════');
+console.log('阶段 | boot | finalize | ready | fireDone');
+console.log('     | ' + [sum.boot, sum.finalize, sum.ready, sum.fireDone].map((x) => (Number.isFinite(x) ? x.toFixed(1) : '-').padStart(8)).join(' | '));
+console.log('DOM=' + sum.domCalls + '次(首' + sum.domFirstMs + 'ms/计' + sum.domMs + 'ms) obs=' + sum.obsMs
+  + 'ms 变异批=' + sum.mutTicks + '(用' + sum.mutMs + 'ms) | dl: cache=' + sum.dlCache + ' net=' + sum.dlNet
+  + ' | resolver: hit=' + sum.resHit + ' miss=' + sum.resMiss + ' | nameKeys=' + sum.nameKeys + ' dict=' + sum.dictChars);
 
 writeReport('lifecycle-ec', {
   summary: sum,

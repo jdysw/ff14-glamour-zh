@@ -3,10 +3,9 @@
 import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
-import { storeGetAsync, storeSet, storeSetAsync } from './storage.js';
 import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
 import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _readCachedTable, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, _writeCachedTable, _writeCachedTableAsync, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
 
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
@@ -154,47 +153,13 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
 
   /* @zhixia:core-cache-start */
   /* ── Core Cache（v1.4 Phase 4，段1/2）：缓存策略——每日至多一次版本探测、
-       元数据与表缓存键。本模块共 2 处标记区段（段2 = 读写接口，见下文）；
+       数据探测周期常量。本模块仅保留内存派生缓存相关逻辑；
        Phase 15 模块化构建时，原样抽出为 src/core/cache.js。 */
 
-  /* ── 版本与缓存：每日至多一次版本探测；指纹一致直接复用本地缓存 ──
-     缓存键 zhx.dt.<表名> = 「指纹 + 换行 + 文本」（单键原子写入） */
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const META_KEY = 'zhx.meta';        // {"v":"...","t":时间戳}
-  const DT_PREFIX = 'zhx.dt.';
 
   /* @zhixia:core-cache-end */
 
-  /* @zhixia:core-cache-start */
-  /* ── Core Cache（段2/2）：缓存读取 / 写入接口——zhx.dt.* 序列化格式
-       （指纹 + 换行 + 文本）与空闲延迟写入。Phase 15 随段1 一同抽出为
-       src/core/cache.js。 */
-  function _readCachedTable(t) {
-    return storeGetAsync(DT_PREFIX + t).then((raw) => {
-      if (!raw) return null;
-      const i = raw.indexOf('\n');
-      if (i <= 0) return null;
-      const fp = raw.slice(0, i);
-      const tx = raw.slice(i + 1);
-      return (fp && tx && tx.length > 100) ? { fp: fp, tx: tx } : null;
-    });
-  }
-  function _writeCachedTable(t, fp, tx) {
-    if (!fp || !tx) return;
-    // v1.3：大字符串（数 MB 级）写入推迟到页面空闲，避免同步写造成瞬时卡顿；
-    // 写入失败仅影响下次重新下载，可接受
-    const key = DT_PREFIX + t, val = fp + '\n' + tx;
-    const put = () => { try { storeSet(key, val); } catch (e) { /* 忽略：缓存写入失败仅影响下次重新下载（见上注释） */ } };
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(put, { timeout: 3000 });
-    else setTimeout(put, 50);
-  }
-
-  function _writeCachedTableAsync(t, fp, tx) {
-    if (!fp || !tx) return Promise.resolve(false);
-    return storeSetAsync(DT_PREFIX + t, fp + '\n' + tx);
-  }
-
-  /* @zhixia:core-cache-end */
 
   /* @zhixia:core-cache-registry-start */
   /* ── Core Cache Registry（v1.4 Phase 14）：缓存体系集中登记 ─────────────
@@ -203,8 +168,8 @@ export { CACHE_CAP_LOOKUP, DAY_MS, DT_PREFIX, META_KEY, _allKeysCache, _cacheReg
      并由 unit/test-cache.mjs 守卫（登记数量断言）。
 
      四类缓存（按职责划分，不强制统一数据结构）：
-       · data      数据缓存（持久，GM 存储）：zhx.meta / zhx.dt.* / zhx.v3.*
-                   生命周期：跨会话；由版本探测与 dataInvalidate 管理（不在此登记）
+       · data      数据缓存（持久，GM 存储）：zhx.v3.*
+                   生命周期：跨会话；由 V3 manifest 与 dataInvalidate 管理（不在此登记）
        · lookup    查找缓存（内存，页面生命周期）：名称 → 中文 的直查结果（含负缓存）
                    失效：数据到达（_fireTablesReady）/ 容量防线（CACHE_CAP_LOOKUP）
        · translate 翻译缓存（内存，页面生命周期）：由词典派生的子串键与组合键表

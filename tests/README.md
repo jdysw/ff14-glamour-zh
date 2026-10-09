@@ -19,7 +19,7 @@ CI（`.github/workflows/test.yml`）：push / PR 自动跑「数据校验 → �
 | `unit/` | 纯 Node 单元测试（正则行为、数据层 golden） | 否 | 否 |
 | `integration/` | 夹具（fixtures）级集成测试 + 构建幂等 | 是（自动维护） | 否 |
 | `live/` | 真站连通测试（fc / ronka / ACL / 数据站 e2e） | 是 | **是** |
-| `benchmark/` | 性能基准（读取路径细分 + v2/v3 parse 对比） | 是 | 否 |
+| `benchmark/` | 性能基准（V3 加载、读取路径与页面生命周期） | 是 | 否 |
 | `fixtures/` | 静态夹具页面（wiki / EC / mirapri 页结构） | — | — |
 | `helpers/` | CDP 客户端、Chrome 守护、路径解析、词典生成 | — | — |
 

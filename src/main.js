@@ -2,17 +2,12 @@
 /* @phase15-order-link:main<-core/probe */
 import './core/probe.js';
 import { DATA_REMOTE } from './core/constants.js';
-import { DATA_TEXT, _irBuildAux, ensureTables, itemDbReady } from './core/data-manager.js';
+import { ensureTables } from './core/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';
 
 
-  // 数据就绪后建立衍生注册表（加载早期未注册时保持 null——查询路径均有回退）。
-  if (typeof itemDbReady === 'function') {
-    try { itemDbReady(() => { try { _irBuildAux(DATA_TEXT.items); } catch (e) { _zhxErr('resolverAux', e); } }); }
-    catch (e) { _zhxErr('itemDbReady', e); }
-  }
   /* @zhixia:core-item-resolver-end */
 
   /* ===================================================================== */

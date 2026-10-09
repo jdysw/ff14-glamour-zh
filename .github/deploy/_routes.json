@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "include": ["/ff14/v2", "/ff14/v2/*"],
+  "exclude": []
+}

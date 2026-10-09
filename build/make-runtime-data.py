@@ -19,11 +19,13 @@
     wiki/ko.tsv            zh → 韩文名
     dict.json              词库（build/make_dict_json.py 生成；shared）
 
-生成逻辑与运行时（src 内 buildTables / _irBuildAux）逐语义等价：
-    首行胜 / '-' 行跳过 hash+ecid / 染剂「Xxx Dye → Xxx」补开 / alias 全角分号拆分。
+生成契约：
+    名称键及 hash / EC_ID 采用首条有效记录；首列为 '-' 的行只跳过 hash / EC_ID。
+    名称键以 ' Dye' 结尾时补充不带后缀的染剂键；别名按全角分号拆分并去重。
+    输出顺序与 canonical 源表顺序一致。
 
 语言裁剪（v1.4 Phase 13）：各站只输出其翻译链实际查询的语言键——
-    mirapri / fc / collection = ja，ec = en，ronka = ko，wiki 不使用 names；
+    mirapri / fc / collection = ja（mirapri 另含英文染剂），ec = en，ronka = ko，wiki 不使用 names；
     dup 同步按站语言输出；alias 为中文键（全站一致）。
     实测：跨语言键碰撞仅 1 键且同值、dup 键无跨语言共享（裁剪等价）。
 
@@ -165,7 +167,7 @@ def _scan_aux_line(ln, names, dup_by_lang, ali):
 
 
 def _dye_backfill(names, glams, dyes):
-    """染剂回退（_btApplyTargets）：「Xxx Dye → 中文名」补开「Xxx → 中文名」。"""
+    """染剂回退：「Xxx Dye → 中文名」补开「Xxx → 中文名」。"""
     for lang in LANGS:
         for key in dyes[lang]:
             base = key[:-4]
@@ -180,7 +182,7 @@ def parse_items(text: str):
     返回 (names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh)——
     names/dup 按语言分表（Phase 13 裁剪用）。
     """
-    names = {lang: {} for lang in LANGS}   # 各语言键 → zh（首行胜；Python dict 保插入序）
+    names = {lang: {} for lang in LANGS}   # 各语言键 → zh（首行胜；Python dict 保留插入序）
     glams = {lang: {} for lang in LANGS}   # 各语言键 → glam（与 names 同键同步）
     dyes = {lang: [] for lang in LANGS}    # 染剂候选（成功写入且形如「Xxx Dye」）
     hashes = {}  # hash → zh（首行胜；'-' 行跳过）
@@ -210,6 +212,18 @@ def _join_multi(pairs):
     return ''.join(f'{k}\t' + '\t'.join(v) + '\n' for k, v in pairs)
 
 
+def _mirapri_dye_pairs(names, glams):
+    """Mirapri 的共享染剂标签使用英文，补齐染剂及其去掉 Dye 的色名。"""
+    keys = set()
+    for key in names['en']:
+        if key.endswith(' Dye'):
+            keys.add(key)
+            if key[:-4] in names['en']:
+                keys.add(key[:-4])
+    return [(key, names['en'][key], glams['en'].get(key, ''))
+            for key in names['en'] if key in keys]
+
+
 def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text):
     """生成 {(site, 文件名): bytes}——含按站语言裁剪。"""
     out = {}
@@ -219,6 +233,9 @@ def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_t
         for name in want:
             if name == 'names':
                 pairs = [(k, v, glams[lang].get(k, '')) for lang in langs for k, v in names[lang].items()]
+                if site == 'mirapri':
+                    seen = {key for key, _, _ in pairs}
+                    pairs.extend(row for row in _mirapri_dye_pairs(names, glams) if row[0] not in seen)
                 out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
             elif name == 'dup':
                 pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]

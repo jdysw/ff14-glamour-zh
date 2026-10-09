@@ -1,19 +1,4 @@
 # FF14 数据站响应头规则（Cloudflare Pages）
-# 目的：对 items.tsv 启用传输压缩——Cloudflare 默认不压缩 text/tab-separated-values，
-# 6.7MB 原样传输；改为 text/plain 后自动走 Brotli/Gzip（实测约 1.76MB）。
-
-/ff14/v2/items.tsv
-  Content-Type: text/plain; charset=utf-8
-
-# 其余文本数据文件当前已是 text/plain / application/json（CF 压缩白名单内），
-# 此处显式声明避免未来回退：
-/ff14/v2/series.txt
-  Content-Type: text/plain; charset=utf-8
-
-/ff14/v2/acl.txt
-  Content-Type: text/plain; charset=utf-8
-
-# Runtime Data v3（v1.4 Phase 12）：按站数据与 manifest 均以字符串解析读取；
-# .tsv 默认 MIME（text/tab-separated-values）不在 CF 压缩白名单，统一声明 text/plain
+# items.tsv 的 text/tab-separated-values 默认不走压缩，声明 text/plain 以启用 Brotli/Gzip。
 /ff14/v3/*
   Content-Type: text/plain; charset=utf-8

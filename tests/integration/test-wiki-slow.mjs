@@ -3,6 +3,7 @@
 // 断言：新版脚本在阶梯重试窗口（15s）内最终完成反查区块注入（≥2 条基础链接，零网络依赖）。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
+import { seedV3Browser } from '../helpers/v3-cache.mjs';
 import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
@@ -16,7 +17,7 @@ const gmStub = `(() => {
   if (window.__gmStub) return;
   window.__gmStub = true;
   const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'v3-only-1-force-refresh' : d) : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
   window.GM_xmlhttpRequest = (opt) => { try { opt.onerror && opt.onerror(new Error('blocked-by-test')); } catch (e) {} };
 })();`;
@@ -30,9 +31,8 @@ await sleep(500);
 
 // 预置空数据路径（items 缓存存在 + meta 新鲜 → 快路径通过，避免网络等待干扰时序）
 const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
-await c.eval(`(() => { localStorage.setItem('gm:zhx.dt.items', ${JSON.stringify('testfp000001' + '\n' + itemsTsv)}); return 1; })()`);
-await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
 await c.eval("window.__zhxTestSite = 'wiki';");
+await seedV3Browser(c, 'wiki');
 await c.eval("window.__zhxTestTables = ['items'];");
 await c.eval(gmStub);
 const readyStateAtInject = await c.eval('document.readyState');

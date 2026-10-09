@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/constants */
 /* @phase15-order-link:core/constants<-sites/ronka */
 import '../sites/ronka.js';
-export { DATA_BASE, DATA_BASE_V3, DATA_FILES, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_ICON };
+export { DATA_BASE_V3, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_ICON };
 
 
   /* =====================================================================
@@ -23,17 +23,8 @@ export { DATA_BASE, DATA_BASE_V3, DATA_FILES, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_I
   /* ── 外置数据版（Greasy Fork 发布版）：按需下载 + 版本化本地缓存 ──
      内嵌自用版构建链已退役（v1.4），仅维护本外置版。 */
   /* @zhixia:core-constants-start */
-  /* ── Core Constants（v1.4 Phase 4）：数据源与网络契约（DATA_BASE /
-       DATA_FILES，均为 https）。Phase 15 模块化构建时，本区段将原样抽出为
+  /* ── Core Constants（v1.4 Phase 4）：数据源与网络契约（V3 数据端点，https）。Phase 15 模块化构建时，本区段将原样抽出为
        src/core/constants.js。 */
   const DATA_REMOTE = true;
-  const DATA_BASE = 'https://zhixia-data.pages.dev/ff14/v2/';
-  const DATA_BASE_V3 = 'https://zhixia-data.pages.dev/ff14/v3/';   // Runtime Data v3（Phase 12；失败回退 v2）
-  const DATA_FILES = {
-    items: 'items.tsv',   // 「key|中|英|日|韩|hash|EC_ID|别名」（制表符分隔，一物品一行）
-    series: 'series.txt', // 「日文系列名|国服中文名」
-    acl: 'acl.txt',       // 「日文副本名|国服中文名」
-    dict: 'dict.json',    // 词库（6 层合并紧凑 JSON；v1.2.0 起运行时更新，改词无需发版）
-  };
-
+  const DATA_BASE_V3 = 'https://zhixia-data.pages.dev/ff14/v3/';
   /* @zhixia:core-constants-end */

@@ -1,140 +1,78 @@
-// v1.3 索引裁剪 + 染剂顺手收集 测试
-// 场景 A：真表 + __zhxTestIndexes=['nameMap']（裁剪）→ 仅建 nameMap，其余三索引为 null + 真表抽查映射
-// 场景 B：小表 + 全建（null scope）→ 四索引正确 + 染剂补开精确断言（含「base 被占用不补」）
+// V3 按站索引与语言裁剪的浏览器集成回归。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
+import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
+import { seedV3Browser } from '../helpers/v3-cache.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
-const FIXTURE = fixtureUrl('ec-page.html');
-
-// ── 生成测试副本：__zhxDebug 暴露（v1.4 Phase 3：测试 hook 已内建于 src）──
-let s = readDist();
-const n3 = "        _replaceMap(itemHash, t.itemHash); _replaceMap(ecidMap, t.ecidMap); _replaceMap(nameMap, t.nameMap); _replaceMap(koByZh, t.koByZh);";
-if (s.split(n3).length - 1 !== 1) throw new Error('n3 计数异常: ' + (s.split(n3).length - 1));
-s = s.replace(n3, n3 + "\n      window.__zhxDebug = { itemHash: t.itemHash, ecidMap: t.ecidMap, nameMap: t.nameMap, koByZh: t.koByZh, dyeCount: t.dye.length };");
-fs.writeFileSync(cachePath('gf-idx-test.user.js'), s);
-const GF = s;
-console.log('测试副本已生成（__zhxDebug 暴露）');
-
-const gmStub = `(() => {
-  if (window.__gmStub) return;
-  window.__gmStub = true;
-  const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'candidate-policy-1-force-refresh' : d) : v; } catch (e) { return d; } };
-  window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
-  window.GM_xmlhttpRequest = (opt) => {
-    fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} }))
-      .catch((e) => { try { opt.onerror && opt.onerror(e); } catch (e2) {} });
-  };
-})();`;
-
-const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
-
-const FP = 'testfp000001';
-const preset = (k, txt) => `(() => { localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(FP + '\n' + txt)}); return 1; })()`;
-const clear = `(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); localStorage.setItem('gm:zhx.data.refresh.epoch', 'candidate-policy-1-force-refresh'); return 1; })()`;
-
-let pass = 0, fail = 0;
-const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log(`  ✅ ${name}`); } else { fail++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); } };
-
-/* ══════════ 场景 A：真表 + 裁剪 ['nameMap'] ══════════ */
-console.log('╔══ 场景 A：真表 + __zhxTestIndexes=[nameMap]（裁剪）══╗');
-{
-  const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
-  let probeZh = null;
-  for (const ln of itemsTsv.split('\n')) { const p = ln.split('\t'); if (p[2] === 'Snow White Dye') { probeZh = p[1]; break; } }
-  console.log('  真表抽查目标: Snow White Dye →', probeZh);
-
-  const t = await newPage(PORT, FIXTURE);
-  const c = t.cdp;
-  await sleep(800);
-  await c.eval(clear);
-  await c.eval("window.__zhxTestIndexes = ['nameMap'];");
-  await c.eval(preset('gm:zhx.dt.items', itemsTsv));
-  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
-  await c.eval("window.__zhxTestTables = ['items'];");
-  await c.eval(gmStub);
-  await c.eval(wrap(GF));
-  await sleep(9000);
-  const r = await c.eval(`(() => {
-    const d = window.__zhxDebug || null;
-    return {
-      has: !!d,
-      nmKeys: d && d.nameMap ? Object.keys(d.nameMap).length : -1,
-      ihNull: d ? d.itemHash === null : null,
-      emNull: d ? d.ecidMap === null : null,
-      kzNull: d ? d.koByZh === null : null,
-      probe: d && d.nameMap ? d.nameMap['Snow White Dye'] : null,
-    };
-  })()`);
-  console.log('  结果:', JSON.stringify(r));
-  ok('A1 __zhxDebug 已暴露（构建完成）', r.has === true);
-  ok('A2 nameMap 已建成（键 > 80000）', r.nmKeys > 80000, `实际 ${r.nmKeys}`);
-  ok('A3 itemHash 被裁剪（null）', r.ihNull === true);
-  ok('A4 ecidMap 被裁剪（null）', r.emNull === true);
-  ok('A5 koByZh 被裁剪（null）', r.kzNull === true);
-  ok('A6 真表抽查映射正确', r.probe === probeZh, `${JSON.stringify(r.probe)} vs ${probeZh}`);
-  await closePage(PORT, t.target.id);
+const marker = "__zhxMark('ready');";
+let script = readDist();
+if (script.split(marker).length !== 2) throw new Error('就绪锚点必须唯一');
+script = script.replace(marker, `window.__zhxDebug = Object.fromEntries(['nameMap', 'itemHash', 'ecidMap', 'koByZh'].map(k => [k, dataGetIndex(k)])); ${marker}`);
+const rows = fs.readFileSync(itemsTsvPath, 'utf8').split('\n').map(line => line.split('\t'));
+const dye = rows.find(row => row[2] === 'Snow White Dye');
+const maid = rows.find(row => row[0] === '14972');
+if (!dye || !maid) throw new Error('缺少固定回归物品');
+const profiles = [
+  ['ec', ['nameMap', 'itemHash'], 2],
+  ['mirapri', ['nameMap', 'itemHash'], 3],
+  ['fc', ['nameMap', 'itemHash'], 3],
+  ['ronka', ['nameMap'], 4],
+  ['collection', ['nameMap'], 3],
+  ['endcloset', ['nameMap'], 4],
+  ['wiki', ['ecidMap', 'koByZh'], null],
+];
+let passed = 0;
+function check(label, condition) {
+  if (!condition) throw new Error(label);
+  passed++;
+  console.log('✅ ' + label);
 }
-
-/* ══════════ 场景 B：小表 + 全建 + 染剂补开精确断言 ══════════ */
-console.log('╔══ 场景 B：小表 + 全建（含染剂补开断言）══╗');
-{
-  const rows = [
-    '10001\t白色染料\tSnow White Dye\tスノウホワイト\t스노우 화이트\th111\ta111\tx\t1',
-    '10002\t蓝色染料\tCeleste Dye\tセレスト\t셀레스트\th222\ta222\tx\t1',
-    '10003\t试作缠头巾\tProto Turban\tプロトターバン\t프로토 터번\th333\ta333\tx\t1',
-    '10004\t深红染料.B\tTrial Red Dye\tトライアルレッド\t트라이얼 레드\th444\ta444\tx\t1',
-    '10005\t深红\tDeep Red\tディープレッド\t딥 레드\th555\ta555\tx\t1',
-    '10006\t乌黑\tUnoccupied Black Dye\tウンオキュパイド\t언오큐파이드\th666\ta666\tx\t1',
-    '10007\t深红染料.C\tDeep Red Dye\tディープレッドC\t딥 레드C\th777\ta777\tx\t1',
-  ];
-  const mini = 'key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n' + rows.join('\n') + '\n';
-
-  const t = await newPage(PORT, FIXTURE);
-  const c = t.cdp;
-  await sleep(800);
-  await c.eval(clear);
-  await c.eval(preset('gm:zhx.dt.items', mini));
-  await c.eval(`(() => { localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now(), candidatePolicy: 1 })); return 1; })()`);
-  await c.eval("window.__zhxTestTables = ['items'];");
-  await c.eval(gmStub);
-  await c.eval(wrap(GF));
-  await sleep(9000);
-  const r = await c.eval(`(() => {
-    const d = window.__zhxDebug || null;
-    if (!d) return { has: false };
-    const nm = d.nameMap || {};
-    return {
-      has: true,
-      ih: d.itemHash ? d.itemHash['h111'] : 'NULL',
-      em: d.ecidMap ? d.ecidMap['白色染料'] : 'NULL',
-      kz: d.koByZh ? d.koByZh['白色染料'] : 'NULL',
-      sw: nm['Snow White Dye'], swBase: nm['Snow White'],
-      tr: nm['Trial Red Dye'], trBase: nm['Trial Red'],
-      dr: nm['Deep Red'], drDye: nm['Deep Red Dye'],
-      ubBase: nm['Unoccupied Black'],
-      ja: nm['スノウホワイト'], ko: nm['스노우 화이트'],
-      dyeCount: d.dyeCount,
-    };
-  })()`);
-  console.log('  结果:', JSON.stringify(r, null, 1));
-  ok('B1 __zhxDebug 已暴露', r.has === true);
-  ok('B2 itemHash 命中', r.ih === '白色染料', `${r.ih}`);
-  ok('B3 ecidMap 命中', r.em === 'a111', `${r.em}`);
-  ok('B4 koByZh 命中', r.kz === '스노우 화이트', `${r.kz}`);
-  ok('B5 nameMap en 命中', r.sw === '白色染料', `${r.sw}`);
-  ok('B6 染剂补开：Snow White', r.swBase === '白色染料', `${r.swBase}`);
-  ok('B7 染剂补开：Trial Red', r.trBase === '深红染料.B', `${r.trBase}`);
-  ok('B8 base 被占用不补（Deep Red 保持独立值）', r.dr === '深红', `${r.dr}`);
-  ok('B9 Dye 原键保留', r.drDye === '深红染料.C', `${r.drDye}`);
-  ok('B10 染剂补开：Unoccupied Black', r.ubBase === '乌黑', `${r.ubBase}`);
-  ok('B11 ja 命中', r.ja === '白色染料', `${r.ja}`);
-  ok('B12 ko 命中', r.ko === '白色染料', `${r.ko}`);
-  ok('B13 dyeCount=5（顺手收集数）', r.dyeCount === 5, `${r.dyeCount}`);
-  await closePage(PORT, t.target.id);
+for (const [site, indexes, languageColumn] of profiles) {
+  const tab = await newPage(PORT, fixtureUrl('ec-page.html'));
+  const cdp = tab.cdp;
+  try {
+    await cdp.eval("localStorage.clear();");
+    await seedV3Browser(cdp, site);
+    await cdp.callFn(`function(site) {
+      window.__zhxTestSite = site;
+      window.__networkHits = [];
+      window.GM_getValue = (key, fallback) => localStorage.getItem('gm:' + key) ?? fallback;
+      window.GM_setValue = (key, value) => localStorage.setItem('gm:' + key, String(value));
+      window.GM_xmlhttpRequest = options => { window.__networkHits.push(options.url); options.onerror?.(new Error('离线测试')); };
+    }`, [site]);
+    await cdp.eval(script);
+    let ready = false;
+    for (let i = 0; i < 50; i++) {
+      if (await cdp.eval('!!window.__zhxDebug')) { ready = true; break; }
+      await sleep(100);
+    }
+    check(site + ' 数据就绪', ready);
+    const result = await cdp.callFn(`function(dye, maid, column) {
+      const maps = window.__zhxDebug;
+      return {
+        counts: Object.fromEntries(Object.entries(maps).map(([key, value]) => [key, Object.keys(value || {}).length])),
+        dye: column === null ? null : maps.nameMap[dye[column]],
+        englishDye: maps.nameMap[dye[2]], dyeBase: maps.nameMap['Snow White'],
+        maidId: maps.ecidMap[maid[1]], maidKo: maps.koByZh[maid[1]],
+        network: window.__networkHits,
+      };
+    }`, [dye, maid, languageColumn]);
+    for (const name of ['nameMap', 'itemHash', 'ecidMap', 'koByZh']) {
+      check(site + ' ' + name + ' 按需加载', indexes.includes(name) ? result.counts[name] > 1000 : result.counts[name] === 0);
+    }
+    check(site + ' 缓存零网络', result.network.length === 0);
+    if (languageColumn !== null) check(site + ' 原生语言染剂名称映射', result.dye === dye[1]);
+    if (site === 'ec' || site === 'mirapri') {
+      check(site + ' 英文染剂名称映射', result.englishDye === dye[1]);
+      check(site + ' 染剂去掉 Dye 后仍可映射', result.dyeBase === dye[1]);
+    }
+    if (site === 'wiki') {
+      check('Wiki ECID 反查', result.maidId === maid[6]);
+      check('Wiki 韩文名称反查', result.maidKo === maid[4]);
+    }
+  } finally {
+    await closePage(PORT, tab.target.id);
+  }
 }
-
-console.log(`\n${pass}/${pass + fail} 通过`);
-process.exit(fail === 0 ? 0 : 1);
+console.log(`✅ V3 七站索引裁剪：${passed} 项通过`);

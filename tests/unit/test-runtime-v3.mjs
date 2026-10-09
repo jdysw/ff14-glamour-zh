@@ -1,18 +1,18 @@
-// tests/unit/test-runtime-v3.mjs — Phase 12：Runtime Data v3（生成器产物 + 运行时加载/回退）
+// tests/unit/test-runtime-v3.mjs — Phase 12：Runtime Data v3（生成器产物 + v3-only 运行时加载）
 //
 // 目的：
 //   A. 校验 build/make-runtime-data.py 的产物（data/v3/）：manifest 结构、
 //      逐文件 sha256/bytes、names 去重与染剂回退、站点清单、Phase 13 语言裁剪
 //      （各站 names/dup 仅含其翻译链语言：ja 表无韩文、en 表无韩文/假名、ko 表无假名）。
 //   B. 用桩装配 data-manager 段，钉死 v3 加载路径：成功应用（含缓存写入）、
-//      零网络快路径、manifest 404 / schema 不兼容 / 文件 sha 不匹配 → 回退，
-//      _ensureMain 接入（v3 成功不走 v2）、_ensureFinalize 跳过 buildTables。
+//      离线快路径、manifest/schema/hash 失败时安全空索引且无旧数据请求，
+//      强制迁移、每站 manifest 快照、ready 广播与内容寻址缓存。
 //
 // 机制：同 test-data-manager.mjs——从 dist 提取区段以桩装配，不依赖 Chrome / 外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
 import { readDist } from '../helpers/paths.mjs';
-import { readFileSync, readdirSync, existsSync, mkdtempSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -31,14 +31,12 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
 const ROOT = new URL('../../', import.meta.url);
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 
-// data/v3/ 是生成产物（.gitignore）；未预生成时动态生成到临时目录
-let V3_DIR = new URL('data/v3/', ROOT);
-if (!existsSync(new URL('manifest.json', V3_DIR))) {
-  const tmp = mkdtempSync(join(tmpdir(), 'zhx-v3-'));
-  execFileSync('python3', ['build/make-runtime-data.py', '--out', tmp],
-    { cwd: fileURLToPath(ROOT), stdio: 'pipe' });
-  V3_DIR = new URL('file://' + tmp + '/');
-}
+// 每次测试都从当前源码生成独立 V3 fixture，避免复用旧 data/v3 产物。
+const tmp = mkdtempSync(join(tmpdir(), 'zhx-v3-test-'));
+execFileSync('python3', ['build/make-runtime-data.py', '--out', tmp],
+  { cwd: fileURLToPath(ROOT), stdio: 'pipe' });
+process.once('exit', () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
+const V3_DIR = new URL('file://' + tmp + '/');
 
 // ══════════ A. 生成器产物校验 ══════════
 console.log('\n── A. 生成器产物（data/v3/）──');
@@ -215,20 +213,18 @@ const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 const NAMES = [
   'storeGetAsync', 'storeSet', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
-  'ITEM_DB_TEXT', 'SERIES_TEXT', 'ACL_CFC_TEXT',
+  'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
-  'DATA_VER', 'DATA_BASE', 'DATA_BASE_V3', 'DATA_FILES', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk',
-  'applyTable', 'neededTables', '_siteIndexes', 'buildTables', '_fireTablesReady',
+  'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
+  'neededTables', '_fireTablesReady',
   'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
-  // 注意：_ensureTryFast / _ensureFetchAll / _waitPageLoad 在提取段内有真实定义，
-  // 它们会遮蔽同名参数——因此不列入桩清单（其网络访问仍经下面的 httpGet 桩记录）。
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
 
 function makeWorld(over = {}) {
-  const rec = { xhr: [], set: [], deleted: [], applied: [], timers: [], fires: [], builds: 0, tryFast: 0, fetchAll: 0, waitLoad: 0, dict: [], errs: [] };
-  const store = Object.assign({ 'zhx.data.refresh.epoch': 'candidate-policy-1-force-refresh' }, over.store || {});
+  const rec = { xhr: [], set: [], deleted: [], timers: [], fires: [], dict: [], errs: [] };
+  const store = Object.assign({ 'zhx.data.refresh.epoch': 'v3-only-1-force-refresh' }, over.store || {});
   if (over.refreshRequired) delete store['zhx.data.refresh.epoch'];
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
@@ -237,27 +233,20 @@ function makeWorld(over = {}) {
     storeListAsync: async () => over.listUnavailable ? null : Object.keys(store),
     storeDeleteAsync: async (k) => { rec.deleted.push(k); if (over.deleteFail) return false; delete store[k]; return true; },
     httpGet: (url) => { rec.xhr.push(url); return (over.http || (() => Promise.reject(new Error('net down'))))(url); },
-    ITEM_DB_TEXT: '', SERIES_TEXT: '', ACL_CFC_TEXT: '',
+    SERIES_TEXT: '', ACL_CFC_TEXT: '',
     itemHash: Object.create(null), nameMap: Object.create(null), ecidMap: Object.create(null), koByZh: Object.create(null),
     DATA_VER: '',
-    DATA_REFRESH_EPOCH_KEY: 'zhx.data.refresh.epoch', DATA_REFRESH_EPOCH: 'candidate-policy-1-force-refresh',
+    DATA_REFRESH_EPOCH_KEY: 'zhx.data.refresh.epoch', DATA_REFRESH_EPOCH: 'v3-only-1-force-refresh',
+    _manifestRefreshRequested: false, _manifestNeedsCommit: false,
     _forceDataRefresh: false, _forceDataClearSucceeded: false, _forceDataCacheWritesOk: true,
-    DATA_BASE: 'https://example.test/ff14/v2/',
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
-    DATA_FILES: { items: 'items.tsv', series: 'series.txt', acl: 'acl.txt', dict: 'dict.json' },
-    applyTable: (name, txt) => { rec.applied.push([name, txt]); },
     neededTables: () => over.need || ['items', 'dict'],
-    _siteIndexes: () => over.scope || { nameMap: {}, itemHash: {} },
-    buildTables: (scope, cb) => { rec.builds++; try { cb(); } catch (e) {} },
     _fireTablesReady: () => { rec.fires.push(1); },
     findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
     _irAliasMap: null, _irDupMap: null, _irCandidatePolicy: 0,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
-    _ensureTryFast: async () => { rec.tryFast++; return over.fast === null ? null : (over.fast || { local: {} }); },
-    _ensureFetchAll: async () => { rec.fetchAll++; },
-    _waitPageLoad: async () => { rec.waitLoad++; },
     __zhxMark: () => {},
     document: { readyState: 'complete' },
     window: { addEventListener: () => {} },
@@ -280,8 +269,9 @@ function buildDM(world) {
   const ret = [
     'return {',
     '  dataManager, ensureTables, itemDbReady,',
-    '  _ensureTryV3, _applyV3, _v3Pairs, _prepareDataRefresh, _completeDataRefresh, _ensureFetchAll, _ensureFetchTable, _ensureTryFast, _ensureMain, _ensureFinalize,',
-    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT, v3: _v3Applied }),',
+    '  _ensureTryV3, _applyV3, _v3Pairs, _prepareDataRefresh, _completeDataRefresh, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
+
+    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
     '};',
   ].join('\n');
   const fn = new Function(...NAMES, body + '\n' + ret);
@@ -318,13 +308,14 @@ const manText = JSON.stringify(man);
   const pk = dm._peek();
   ok('B2 nameMap 已赋值且含预期键', !!pk.nm && Object.keys(pk.nm).length > 45000, `keys=${pk.nm ? Object.keys(pk.nm).length : 'null'}`);
   ok('B3 itemHash 已赋值', !!pk.ih && Object.keys(pk.ih).length > 30000);
-  ok('B4 _v3Applied 置位', pk.v3 === true);
+  ok('B4 V3 文件成功映射运行时索引', !!pk.nm && !!pk.ih);
   eq('B4b v3 manifest trust enables candidate policy', pk.policy, 1);
+  eq('B4c English dye mapping is present but candidate-disabled', pk.gl['Snow White Dye'], '0');
   ok('B5 dict 已应用', w.rec.dict.length === 1);
   const cacheKeys = w.rec.set.map(([k]) => k);
   ok('B6 manifest 已写缓存', cacheKeys.includes('zhx.v3.manifest'));
-  ok('B7 站点文件已写缓存', cacheKeys.includes('zhx.v3.f.mirapri.names') && cacheKeys.includes('zhx.v3.f.mirapri.hash'));
-  ok('B8 dict 已写缓存', cacheKeys.includes('zhx.v3.f.mirapri.dict'));
+  ok('B7 站点文件内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.names.')) && cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.hash.')));
+  ok('B8 dict 内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.dict.')));
 }
 
 // B2: 零网络快路径（缓存齐全 + manifest 新鲜 → 不发任何请求）
@@ -337,7 +328,7 @@ const manText = JSON.stringify(man);
   const r = await dm._ensureTryV3();
   eq('B9 缓存快路径返回 true', r, true);
   eq('B10 快路径零网络请求', w.rec.xhr.length, 0);
-  ok('B11 快路径完成应用', dm._peek().v3 === true && !!dm._peek().nm);
+  ok('B11 快路径完成应用', !!dm._peek().nm);
 }
 
 // B3: manifest 获取失败 → false（回退）
@@ -375,7 +366,7 @@ const manText = JSON.stringify(man);
   });
   const dm = buildDM(w);
   eq('B16 文件 sha 不匹配 → false', await dm._ensureTryV3(), false);
-  eq('B17 不应用（v3Applied=false）', dm._peek().v3, false);
+  eq('B17 校验失败不更改既有索引', Object.keys(dm._peek().nm).length, 0);
 }
 
 // B7: 无站点（findSite null）→ false
@@ -385,7 +376,7 @@ const manText = JSON.stringify(man);
   eq('B18 未知站点 → false', await dm._ensureTryV3(), false);
 }
 
-// B8: _ensureMain——v3 成功时不走 v2 链
+// B8: _ensureMain 成功时只走当前 V3 manifest/files endpoint
 {
   const w = makeWorld({
     http: (url) => {
@@ -399,22 +390,24 @@ const manText = JSON.stringify(man);
   });
   const dm = buildDM(w);
   await dm._ensureMain();
-  ok('B19 v3 成功时不发 v2 请求', !w.rec.xhr.some((u) => u.includes('/v2/')),
+  ok('B19 V3成功只使用manifest/files请求', !w.rec.xhr.some((u) => u.includes('/v2/')),
     `xhr=${w.rec.xhr.join(' | ')}`);
   ok('B20 _ensureMain 完成后索引就绪', !!dm._peek().nm);
 }
 
-// B9: _ensureMain——v3 失败时回退 v2 链（注意：_ensureTryFast/_ensureFetchAll 在
-// 提取段内有真实定义，会遮蔽同名桩参数——以「发出 v2 请求」观测回退行为本身）
+// B9: V3 失败时不尝试旧路径；空索引仍完成就绪广播。
 {
   const w = makeWorld({ http: () => Promise.reject(new Error('404')) });
   const dm = buildDM(w);
   await dm._ensureMain();
-  ok('B21 v3 失败时回退 v2 链（发出 v2 数据请求）', w.rec.xhr.some((u) => u.includes('/v2/')),
-    `tryFast=${w.rec.tryFast} xhr=${w.rec.xhr.join(' | ')} v3=${dm._peek().v3}`);
+  await dm._ensureFinalize();
+  ok('B21 V3 failure issues no retired version/table request', !w.rec.xhr.some((u) => u.includes('/v2/') || u.endsWith('version.json')),
+    'xhr=' + w.rec.xhr.join(' | '));
+  eq('B21b V3失败后索引保持空', Object.keys(dm._peek().nm).length, 0);
+  eq('B21c V3失败仍广播就绪', w.rec.fires.length, 1);
 }
 
-// B10: _ensureFinalize——_v3Applied=true 跳过 buildTables
+// B10: _ensureFinalize announces V3-ready data and retains side-table text
 {
   const w = makeWorld({});
   const dm = buildDM(w);
@@ -422,19 +415,18 @@ const manText = JSON.stringify(man);
   const p = dm._ensureFinalize();
   w.flushTimers();
   await p;
-  eq('B22 v3 就绪时 buildTables 被跳过', w.rec.builds, 0);
   eq('B23 就绪广播仍发出', w.rec.fires.length, 1);
-  eq('B24 series 前缀换行（与 v2 语义一致）', dm._peek().series, '\nS1\t系列1\n');
+  eq('B24 series text keeps its V3 runtime prefix', dm._peek().series, '\nS1\t系列1\n');
 }
 
-// B11: _ensureFinalize——普通路径仍走 buildTables
+// B11: empty-data finalize also releases ready waiters
 {
   const w = makeWorld({});
   const dm = buildDM(w);
   const p = dm._ensureFinalize();
   w.flushTimers();
   await p;
-  eq('B25 非 v3 路径 buildTables 被调用', w.rec.builds, 1);
+  eq('B25 失败路径仍广播就绪', w.rec.fires.length, 1);
 }
 
 // B12: _v3Pairs 多值语义
@@ -468,7 +460,7 @@ const manText = JSON.stringify(man);
 {
   const store = {
     'zhx.meta': 'meta', 'zhx.dt.items': 'old items', 'zhx.dt.legacy-table': 'old table',
-    'zhx.v3.manifest': 'old manifest', 'zhx.v3.f.mirapri.names': 'old names',
+    'zhx.v3.manifest': 'old manifest', 'zhx.v3.manifest.mirapri': 'old snapshot', 'zhx.v3.f.mirapri.names': 'old names',
     'zhx.v3.f.oldsite.oldfile': 'old site file', 'zhx.candidate.policy': 'old marker',
     'zhx.user.setting': 'keep me',
   };
@@ -476,128 +468,31 @@ const manText = JSON.stringify(man);
   const dm = buildDM(w);
   eq('B32 missing epoch requires refresh', await dm._prepareDataRefresh(), true);
   for (const key of ['zhx.meta', 'zhx.dt.items', 'zhx.dt.legacy-table', 'zhx.v3.manifest',
-    'zhx.v3.f.mirapri.names', 'zhx.v3.f.oldsite.oldfile', 'zhx.candidate.policy']) {
+    'zhx.v3.manifest.mirapri', 'zhx.v3.f.mirapri.names', 'zhx.v3.f.oldsite.oldfile', 'zhx.candidate.policy']) {
     eq('B33 cleared cache ' + key, Object.hasOwn(w.store, key), false);
   }
   eq('B34 preserves unrelated setting', w.store['zhx.user.setting'], 'keep me');
   eq('B35 refresh epoch is kept until success', w.store['zhx.data.refresh.epoch'], undefined);
   eq('B36 successful refresh writes epoch', await dm._completeDataRefresh(), true);
-  eq('B37 persisted epoch matches', w.store['zhx.data.refresh.epoch'], 'candidate-policy-1-force-refresh');
+  eq('B37 persisted epoch matches', w.store['zhx.data.refresh.epoch'], 'v3-only-1-force-refresh');
   eq('B38 next load needs no forced refresh', await dm._prepareDataRefresh(), false);
 }
 
-// B15: key-list API fallback enumerates known old site caches; deletion failure never enables cache reads.
+// B15: failed V3-only migration cannot reuse old V2 tables, and retries without writing epoch.
 {
   const store = {
-    'zhx.dt.items': 'legacy',
-    'zhx.v3.f.fc.names': 'legacy names',
-    'zhx.v3.f.endcloset.acl': 'legacy acl',
-    'zhx.profile.setting': 'preserve',
+    'zhx.meta': JSON.stringify({ v: 'old', t: Date.now(), candidatePolicy: 1 }),
+    'zhx.dt.items': 'oldfp\\n' + '90001\\t旧装备\\tOld Gear\\tオールドギア\\t옛 장비\\thold\\teold\\t\\t1\\n',
+    'zhx.user.setting': 'preserve',
   };
-  const w = makeWorld({ store, refreshRequired: true, listUnavailable: true, deleteFail: true,
-    http: () => Promise.reject(new Error('offline')) });
-  const dm = buildDM(w);
-  await dm._prepareDataRefresh();
-  const legacy = '27242\\t阿马罗装备的修复素材\\tAmaro Barding Repair Materials\\tアマロ修理素材\\t\\t\\t\\t\\t1\\n'.repeat(8);
-  const got = await dm._ensureFetchTable('items', { items: 'newfp' }, {
-    items: { fp: 'oldfp', tx: legacy },
-  }, 1, true);
-  eq('B39 forced fetch fails without serving old 9-column data', got, 0);
-  eq('B40 deletion failure does not apply legacy table', w.rec.applied.length, 0);
-  eq('B41 cache keys remain because delete failed', w.store['zhx.v3.f.fc.names'], 'legacy names');
-  eq('B42 unrelated setting remains untouched', w.store['zhx.profile.setting'], 'preserve');
-  eq('B43 failure never writes refresh epoch', w.store['zhx.data.refresh.epoch'], undefined);
-  eq('B44 failed refresh stays forced', dm._peek().force, true);
-  eq('B45 incomplete cleanup cannot mark epoch', await dm._completeDataRefresh(), false);
-}
-
-
-// B17: only explicit v2 metadata policy trusts cached flags; version claims cannot bless fallback data.
-{
-  const badLine = '27242\t阿马罗装备的修复素材\tAmaro Barding Repair Materials\tアマロ修理素材\t\t\t\t\t1\n';
-  const cached = badLine.repeat(8);
-  const w = makeWorld({
-    store: {
-      'zhx.meta': JSON.stringify({ v: 'old', t: Date.now() }),
-      'zhx.dt.items': 'oldfp\n' + cached,
-      'zhx.dt.dict': 'dictfp\n' + 'x'.repeat(200),
-    },
-  });
-  const dm = buildDM(w);
-  const fast = await dm._ensureTryFast(['items', 'dict']);
-  eq('B46 old metadata may use cache for translation', fast, null);
-  eq('B47 old metadata cannot trust wrong nine-column flag', dm._peek().policy, 0);
-  ok('B48 old nine-column table was applied for translation', w.rec.applied.some(([name, text]) => name === 'items' && text === cached));
-  eq('B49 wrong flag remains untrusted', dm._peek().policy, 0);
-}
-{
-  const badLine = '27242\t阿马罗装备的修复素材\tAmaro Barding Repair Materials\tアマロ修理素材\t\t\t\t\t1\n';
-  const cached = badLine.repeat(8);
-  const w = makeWorld({
-    http: (url) => url.endsWith('version.json')
-      ? Promise.resolve(JSON.stringify({ v: 'new', candidatePolicy: 1, files: { items: 'newfp' } }))
-      : Promise.reject(new Error('offline')),
-  });
-  const dm = buildDM(w);
-  const okFetch = await dm._ensureFetchAll(['items'], { items: { fp: 'oldfp', tx: cached } });
-  eq('B50 offline fallback remains available for lookup', okFetch, true);
-  eq('B51 server policy is not copied onto old fallback data', dm._peek().policy, 0);
-  eq('B52 fallback flags remain untrusted', dm._peek().policy, 0);
-  eq('B53 persisted metadata records actual policy 0', JSON.parse(w.store['zhx.meta']).candidatePolicy, 0);
-}
-
-// B18: a v2 cache with candidatePolicy=1 stays available offline for names and candidates.
-{
-  const row = '7551\t光之鸟甲\tBarding of Light\tバード・オブ・ライト\t\t\t\t\t1\n';
-  const items = 'key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n' + row.repeat(8);
-  const store = {
-    'zhx.meta': JSON.stringify({ v: 'current', t: Date.now(), candidatePolicy: 1 }),
-    'zhx.dt.items': 'itemsfp\n' + items,
-    'zhx.dt.dict': 'dictfp\n' + 'd'.repeat(200),
-  };
-  const w = makeWorld({ store });
-  const dm = buildDM(w);
-  eq('B54 current-policy v2 cache takes fast path', await dm._ensureTryFast(['items', 'dict']), null);
-  eq('B55 current-policy v2 cache enables candidates', dm._peek().policy, 1);
-  eq('B56 current-policy v2 cache trusts barding marker', dm._peek().policy, 1);
-}
-
-// B19: forced v2 updates require a real nine-column table before setting policy or epoch.
-{
-  const validItems = ('key\tzh\ten\tja\tko\thash\tecid\talias\tglam\n'
-    + '90001\t可用装备\tValid Gear\tテスト装備\t\t\t\t\t1\n').repeat(8);
-  const w = makeWorld({
-    refreshRequired: true,
-    need: ['items'],
-    http: (url) => {
-      if (url.includes('/v3/')) return Promise.reject(new Error('no v3'));
-      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'new', candidatePolicy: 1, files: { items: 'fp1' } }));
-      if (url.endsWith('items.tsv')) return Promise.resolve(validItems);
-      return Promise.reject(new Error('unexpected url'));
-    },
-  });
+  const w = makeWorld({ store, refreshRequired: true, deleteFail: true, need: ['items'], http: () => Promise.reject(new Error('offline')) });
   const dm = buildDM(w);
   await dm._ensureMain();
-  eq('B57 forced v2 loads trusted nine-column table', dm._peek().policy, 1);
-  eq('B58 forced v2 persists candidate policy metadata', JSON.parse(w.store['zhx.meta']).candidatePolicy, 1);
-  eq('B59 forced v2 marks refresh complete', w.store['zhx.data.refresh.epoch'], 'candidate-policy-1-force-refresh');
-}
-{
-  const malformedItems = ('27242\t阿马罗装备的修复素材\tAmaro Barding Repair Materials\tアマロ修理素材\t\t\t\t\n').repeat(8);
-  const w = makeWorld({
-    refreshRequired: true,
-    need: ['items'],
-    http: (url) => {
-      if (url.includes('/v3/')) return Promise.reject(new Error('no v3'));
-      if (url.endsWith('version.json')) return Promise.resolve(JSON.stringify({ v: 'new', candidatePolicy: 1, files: { items: 'fp2' } }));
-      if (url.endsWith('items.tsv')) return Promise.resolve(malformedItems);
-      return Promise.reject(new Error('unexpected url'));
-    },
-  });
-  const dm = buildDM(w);
-  await dm._ensureMain();
-  eq('B60 server policy cannot trust malformed v2 table', dm._peek().policy, 0);
-  eq('B61 malformed v2 table cannot mark refresh complete', w.store['zhx.data.refresh.epoch'], undefined);
+  eq('B39 V3强刷失败不应用旧V2缓存', Object.keys(dm._peek().nm).length, 0);
+  eq('B40 V3强刷失败不写迁移epoch', w.store['zhx.data.refresh.epoch'], undefined);
+  eq('B41 旧缓存删除失败时原数据仍不可用', w.store['zhx.dt.items'].startsWith('oldfp'), true);
+  eq('B42 用户设置保留', w.store['zhx.user.setting'], 'preserve');
+  ok('B43 下一次加载仍处于强制迁移态', dm._peek().force);
 }
 
 // B19: expired candidatePolicy=1 manifest and its verified files remain usable offline.
@@ -611,20 +506,6 @@ const manText = JSON.stringify(man);
   eq('B62 expired verified manifest falls back offline', await dm._ensureTryV3(), true);
   eq('B63 verified offline manifest retains candidate policy', dm._peek().policy, 1);
   eq('B64 old verifiable names still map for translation', dm._peek().nm['メイドホワイトブリム'], '女仆发带');
-}
-
-// B20: an expired old manifest can still serve translation, but never candidates.
-{
-  const oldMan = { ...man, candidatePolicy: 0 };
-  const store = { 'zhx.v3.manifest': '0\n' + JSON.stringify(oldMan) };
-  for (const [name, f] of Object.entries(siteFiles)) store['zhx.v3.f.mirapri.' + name] = f.sha256 + '\n' + f.text;
-  store['zhx.v3.f.mirapri.dict'] = dictFile.sha256 + '\n' + dictFile.text;
-  const w = makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
-  const dm = buildDM(w);
-  eq('B65 old manifest is available for translations offline', await dm._ensureTryV3(), true);
-  eq('B66 old manifest cannot establish candidate policy', dm._peek().policy, 0);
-  ok('B67 old manifest still fills ordinary name map', !!dm._peek().nm['メイドホワイトブリム']);
-  eq('B68 old manifest policy remains translation-only', dm._peek().policy, 0);
 }
 
 // B20a: wiki profiles use ecid/ko without requiring a names.tsv file.
@@ -656,7 +537,7 @@ const manText = JSON.stringify(man);
   const w = makeWorld({
     refreshRequired: true,
     store: { 'zhx.meta': JSON.stringify({ v: 'old', t: Date.now(), candidatePolicy: 0 }), 'zhx.dt.items': 'oldfp\n' + oldItems,
-      'zhx.v3.manifest': 'old manifest', 'zhx.v3.f.mirapri.names': 'old names', 'zhx.user.setting': 'keep' },
+      'zhx.v3.manifest': 'old manifest', 'zhx.v3.manifest.mirapri': 'old snapshot', 'zhx.v3.f.mirapri.names': 'old names', 'zhx.user.setting': 'keep' },
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(manText);
       for (const [name, f] of Object.entries(man.sites.mirapri.files)) if (url.endsWith(f.url)) return Promise.resolve(siteFiles[name].text);
@@ -668,10 +549,10 @@ const manText = JSON.stringify(man);
   await dm._ensureMain();
   const firstRequests = w.rec.xhr.length;
   ok('B72 force refresh fetched fresh strategy data', firstRequests > 0);
-  eq('B73 force refresh replaced wrong 9-column cache', w.store['zhx.dt.items'], undefined);
+  eq('B73 force refresh removed legacy V2 cache', w.store['zhx.dt.items'], undefined);
   eq('B74 v3 data has corrected 27242 flag', dm._peek().gl[badItem[3]], '0');
   eq('B75 corrected 27242 remains excluded by marker', dm._peek().gl[badItem[3]], '0');
-  eq('B76 epoch is written after successful refresh', w.store['zhx.data.refresh.epoch'], 'candidate-policy-1-force-refresh');
+  eq('B76 epoch is written after successful refresh', w.store['zhx.data.refresh.epoch'], 'v3-only-1-force-refresh');
   eq('B77 unrelated setting survives full cache clearing', w.store['zhx.user.setting'], 'keep');
   await dm._ensureMain();
   eq('B78 next load uses current cached strategy without refresh', w.rec.xhr.length, firstRequests);
@@ -688,6 +569,84 @@ const manText = JSON.stringify(man);
   await dm._ensureMain();
   ok('B81 next page retries network after failed force load', w.rec.xhr.length > requests);
 }
+
+function v3CacheEntriesForTest(siteId) {
+  const entries = {
+    'zhx.v3.manifest': String(Date.now()) + String.fromCharCode(10) + manText,
+    ['zhx.v3.manifest.' + siteId]: String(Date.now()) + String.fromCharCode(10) + manText,
+  };
+  for (const [name, f] of Object.entries(siteFiles))
+    entries['zhx.v3.f.' + siteId + '.' + name + '.' + f.sha256] = f.sha256 + String.fromCharCode(10) + f.text;
+  entries['zhx.v3.f.' + siteId + '.dict.' + dictFile.sha256] = dictFile.sha256 + String.fromCharCode(10) + dictFile.text;
+  return entries;
+}
+
+// B23: Site B retains its committed manifest when Site A advances the shared daily manifest.
+{
+  const newMan = structuredClone(man);
+  newMan.version = 'cross-site-new';
+  newMan.sites.ec.files.names.sha256 = 'f'.repeat(64);
+  const newText = JSON.stringify(newMan);
+  const store = {
+    'zhx.v3.manifest': '0' + String.fromCharCode(10) + manText,
+    'zhx.v3.manifest.ec': String(Date.now()) + String.fromCharCode(10) + manText,
+    'zhx.data.refresh.epoch': 'v3-only-1-force-refresh',
+  };
+  for (const [name, f] of Object.entries(man.sites.ec.files))
+    store['zhx.v3.f.ec.' + name + '.' + f.sha256] = f.sha256 + String.fromCharCode(10) + readFileSync(new URL(f.url, V3_DIR), 'utf8');
+  store['zhx.v3.f.ec.dict.' + dictFile.sha256] = dictFile.sha256 + String.fromCharCode(10) + dictFile.text;
+  const a = makeWorld({
+    store,
+    site: { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] },
+    http: (url) => {
+      if (url.endsWith('manifest.json')) return Promise.resolve(newText);
+      for (const [name, f] of Object.entries(man.sites.mirapri.files))
+        if (url.endsWith(f.url)) return Promise.resolve(siteFiles[name].text);
+      if (url.endsWith(dictFile.url)) return Promise.resolve(dictFile.text);
+      return Promise.reject(new Error('offline A: ' + url));
+    },
+  });
+  const dmA = buildDM(a);
+  eq('B23a Site A applies V3 update', await dmA._ensureTryV3(), true);
+  eq('B23b Site A commits global manifest', JSON.parse(a.store['zhx.v3.manifest'].split(String.fromCharCode(10))[1]).version, 'cross-site-new');
+  ok('B23c Site B snapshot survives Site A update', !!a.store['zhx.v3.manifest.ec']);
+
+  const b = makeWorld({
+    site: { id: 'ec', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] },
+    store: { ...a.store },
+    http: () => Promise.reject(new Error('offline B')),
+  });
+  const dmB = buildDM(b);
+  eq('B23d Site B uses old verified snapshot offline', await dmB._ensureTryV3(), true);
+  eq('B23e Site B keeps ordinary mapping', dmB._peek().nm['Snow White Dye'], '素雪白染剂');
+  ok('B23f old-site fallback was recorded', dmB._dlStats.fallback >= 1);
+}
+
+// B24: Base V3 cache records remain readable and are upgraded to content-addressed keys.
+{
+  const store = { 'zhx.v3.manifest': String(Date.now()) + String.fromCharCode(10) + manText };
+  for (const [name, f] of Object.entries(siteFiles))
+    store['zhx.v3.f.mirapri.' + name] = f.sha256 + String.fromCharCode(10) + f.text;
+  store['zhx.v3.f.mirapri.dict'] = dictFile.sha256 + String.fromCharCode(10) + dictFile.text;
+  const w = makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
+  const dm = buildDM(w);
+  eq('B24a compatible V3 base keys load offline', await dm._ensureTryV3(), true);
+  eq('B24b file copied to content-addressed key', Object.hasOwn(w.store, 'zhx.v3.f.mirapri.names.' + siteFiles.names.sha256), true);
+}
+
+// B25: Forced migration ignores previously committed V3 snapshot and file cache.
+{
+  const store = { ...v3CacheEntriesForTest('mirapri'), 'zhx.user.setting': 'keep' };
+  delete store['zhx.data.refresh.epoch'];
+  const w = makeWorld({ store, refreshRequired: true, http: () => Promise.reject(new Error('offline')) });
+  const dm = buildDM(w);
+  await dm._ensureMain();
+  eq('B25a failed migration leaves indexes empty', Object.keys(dm._peek().nm).length, 0);
+  eq('B25b failed migration does not write epoch', w.store['zhx.data.refresh.epoch'], undefined);
+  eq('B25c migration preserves user setting', w.store['zhx.user.setting'], 'keep');
+  ok('B25d migration did not restore old site snapshot', !w.store['zhx.v3.manifest.mirapri']);
+}
+
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-runtime-v3：${pass}/${pass + fail} 通过`);
 process.exit(fail ? 1 : 0);
