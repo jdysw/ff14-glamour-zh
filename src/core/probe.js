@@ -80,7 +80,7 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
     try { rec.res = { hit: _irStats.hit, miss: _irStats.miss }; } catch (e) { /* 忽略：解析统计读取失败 */ }
     try { rec.scan = { global: _scanStats.global, local: _scanStats.local }; } catch (e) { /* 忽略：扫描统计读取失败 */ }
     try { rec.cache = cacheInfo(); } catch (e) { /* 忽略：缓存信息读取失败 */ }
-    try { rec.data = { items: DATA_TEXT.items ? DATA_TEXT.items.length : 0, series: DATA_TEXT.series ? DATA_TEXT.series.length : 0, acl: DATA_TEXT.acl ? DATA_TEXT.acl.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
+    try { rec.data = { names: Object.keys(dataGetIndex('nameMap') || {}).length, series: DATA_TEXT.series ? DATA_TEXT.series.length : 0, acl: DATA_TEXT.acl ? DATA_TEXT.acl.length : 0, ver: DATA_VER || '' }; } catch (e) { /* 忽略：数据规模读取失败 */ }
     try { rec.dict = { chars: __zhxDictChars() }; } catch (e) { /* 忽略：词典规模读取失败 */ }
     return rec;
   }
@@ -89,7 +89,7 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
     L.push('marks: ' + JSON.stringify(window.__zhxMarks || {}), 'boot0: ' + Math.round(__zhxBootAt || 0));
     try { L.push('obs: ' + JSON.stringify(_obsStats) + ' resolver: ' + JSON.stringify(_irStats) + ' dom: ' + JSON.stringify(_domStats) + ' dl: ' + JSON.stringify(_dlStats) + ' scan: ' + JSON.stringify(_scanStats)); } catch (e) { /* 忽略：统计读取失败（可能尚未初始化） */ }
     try {
-      L.push('data: items=' + (DATA_TEXT.items ? DATA_TEXT.items.length : 0)
+      L.push('data: names=' + Object.keys(dataGetIndex('nameMap') || {}).length
         + ' series=' + (DATA_TEXT.series ? DATA_TEXT.series.length : 0)
         + ' acl=' + (DATA_TEXT.acl ? DATA_TEXT.acl.length : 0)
         + ' ver=' + (DATA_VER || 'n/a'));

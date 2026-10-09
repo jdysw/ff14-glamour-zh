@@ -49,8 +49,8 @@ await c1.eval(wrap(GF));
 let done = false;
 for (let i = 0; i < 40; i++) {
   await sleep(1500);
-  const st = await c1.eval(`({ v3n: !!(localStorage.getItem('gm:zhx.v3.f.ronka.names')), meta: !!localStorage.getItem('gm:zhx.meta') })`).catch(() => ({}));
-  if (st && (st.v3n || st.meta)) { done = true; console.log(`数据流程完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
+  const st = await c1.eval("({ v3n: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.ronka.names.')), manifest: !!localStorage.getItem('gm:zhx.v3.manifest') })").catch(() => ({}));
+  if (st && (st.v3n && st.manifest)) { done = true; console.log(`数据流程完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
 }
 if (!done) console.log('⚠️ 数据等待超时');
 await sleep(4000); // 留时间 observer 翻译

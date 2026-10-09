@@ -14,7 +14,7 @@ export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, 
   function tryEnToZh(en) {
     if (!en) return null;
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
-    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 buildTables 展开）
+    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 V3 names 文件展开）
     const out = resolveByName(en);
     cacheGuard(_en2zhCache, CACHE_CAP_LOOKUP);
     _en2zhCache.set(en, out);

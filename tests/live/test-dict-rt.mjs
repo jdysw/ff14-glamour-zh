@@ -1,111 +1,108 @@
-// test-dict-rt.mjs — 词库运行时更新（v1.2.0）端到端测试（v2：抗导航干扰；v3 增长期：预置空 v3 manifest 静默回退 v2）
-// 场景 A（下载路径）：无缓存首访 → mock version.json 指纹不同 → 下载 mock dict.json
-//   断言 T1 修正重译：「装備シリーズ」新译「装备系列Q」替换页面上旧译「装备系列」
-//   断言 T2 新增词补扫：mock 新增「ランダム→随机Q」，补扫后出现于 option 文本
-// 场景 B（缓存路径）：第二页加载 → fresh 缓存直接应用 → 同样断言通过
-import fs from 'node:fs';
+// test-dict-rt.mjs — V3 字典下载与内容寻址缓存端到端测试。
+// 场景 A：清缓存后由 V3 manifest/site files/shared.dict 拉取更新词典。
+// 场景 B：再次运行时命中同一份 V3 缓存，不发出数据请求。
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { readDist, dataDirPath } from '../helpers/paths.mjs';
-import { ensureDictJson } from '../helpers/dict.mjs';
+import http from 'node:http';
+import { readDist, fixturePath } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import { readRuntimeV3, sha256Text } from '../helpers/v3-cache.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
-const BASE = 'http://mock.local/ff14/v2/';
-
-// ── mock 数据 ──
-const dataDir = dataDirPath;
-const itemsTxt = fs.readFileSync(`${dataDir}/ff14-items.tsv`, 'utf8');
-const seriesTxt = fs.readFileSync(`${dataDir}/ff14-series.txt`, 'utf8');
-const aclTxt = fs.readFileSync(`${dataDir}/acl-cfc.txt`, 'utf8');
-const dictObj = JSON.parse(ensureDictJson());
+const BASE = 'http://mock.local/ff14/v3/';
+const fixture = fs.readFileSync(fixturePath('fc-search.html'));
+const pageServer = http.createServer((req, res) => {
+  if (req.url === '/fc-search.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(fixture);
+  } else {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+});
+await new Promise((resolve, reject) => { pageServer.once('error', reject); pageServer.listen(0, '127.0.0.1', resolve); });
+const FIXTURE = 'http://127.0.0.1:' + pageServer.address().port + '/fc-search.html';
+const runtime = readRuntimeV3('fc');
+const manifest = structuredClone(runtime.manifest);
+const dictObj = JSON.parse(runtime.dict.text);
 
 const origSeries = dictObj.fc['装備シリーズ'];
-if (origSeries !== '装备系列') { console.error(`防呆失败：「装備シリーズ」当前译 = ${JSON.stringify(origSeries)}`); process.exit(1); }
+if (origSeries !== '装备系列') { console.error('防呆失败：「装備シリーズ」当前译 = ' + JSON.stringify(origSeries)); process.exit(1); }
 if (dictObj.fc['ランダム'] !== undefined) { console.error('防呆失败：「ランダム」已存在于词典'); process.exit(1); }
 dictObj.fc['装備シリーズ'] = '装备系列Q';
 dictObj.fc['ランダム'] = '随机Q';
 
+const dictText = JSON.stringify(dictObj);
+const dictSha = sha256Text(dictText);
+manifest.shared.dict = { ...manifest.shared.dict, sha256: dictSha, bytes: Buffer.byteLength(dictText) };
 const mock = {
-  [BASE + 'version.json']: JSON.stringify({ v: '20261005t', files: { items: 'tt01', series: 'tt02', acl: 'tt03', dict: 'tt04' } }),
-  [BASE + 'items.tsv']: itemsTxt,
-  [BASE + 'series.txt']: seriesTxt,
-  [BASE + 'acl.txt']: aclTxt,
-  [BASE + 'dict.json']: JSON.stringify(dictObj),
-  // v3 兜底：预置缓存失效时也返回空 sites（静默回退 v2，避免真网络干扰本测试）
-  'https://zhixia-data.pages.dev/ff14/v3/manifest.json': JSON.stringify({ schema: 3, sites: {} }),
+  [BASE + 'manifest.json']: JSON.stringify(manifest),
+  [BASE + manifest.shared.dict.url]: dictText,
 };
+for (const [name, meta] of Object.entries(manifest.sites.fc.files)) {
+  mock[BASE + meta.url] = runtime.siteFiles[name].text;
+}
 
 const GF_REAL = readDist();
-const GF = GF_REAL.replace('https://zhixia-data.pages.dev/ff14/v2/', BASE);
-if (GF === GF_REAL) { console.error('DATA_BASE 替换失败'); process.exit(1); }
+const GF = GF_REAL.replace('https://zhixia-data.pages.dev/ff14/v3/', BASE);
+if (GF === GF_REAL) { console.error('V3 DATA_BASE 替换失败'); process.exit(1); }
 
 const gmStub = `(() => {
   if (window.__gmStub) return; window.__gmStub = true;
   const P = 'gm:';
-  window.__mockHits = { version: 0, dict: 0 };
+  window.__mockHits = { manifest: 0, dict: 0, files: 0, unexpected: [] };
   window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
-  // v3 已上线：预置「新鲜 manifest + 本站不在列」→ v3 静默回退 v2（本测试聚焦 v2 词库运行时链）
-  try { localStorage.setItem(P + 'zhx.v3.manifest', Date.now() + '\\n' + JSON.stringify({ schema: 3, sites: {}, shared: {} })); } catch (e) {}
+  window.GM_listValues = () => Object.keys(localStorage).filter((k) => k.startsWith(P)).map((k) => k.slice(P.length));
+  window.GM_deleteValue = (k) => { try { localStorage.removeItem(P + k); } catch (e) {} };
   const MOCK = ${JSON.stringify(mock)};
   window.GM_xmlhttpRequest = (opt) => {
-    const body = MOCK[opt.url];
-    if (body !== undefined) {
-      if (opt.url.indexOf('version.json') >= 0) window.__mockHits.version++;
-      if (opt.url.indexOf('dict.json') >= 0) window.__mockHits.dict++;
-      setTimeout(() => { try { opt.onload && opt.onload({ status: 200, responseText: body }); } catch (e) {} }, 15);
-      return;
-    }
-    fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} })).catch((e) => { try { opt.onerror && opt.onerror(e); } catch (e2) {} });
+    const url = opt.url.split('?')[0];
+    const body = MOCK[url];
+    if (body === undefined) window.__mockHits.unexpected.push(url);
+    else if (url.endsWith('/manifest.json')) window.__mockHits.manifest++;
+    else if (url.endsWith('/dict.json')) window.__mockHits.dict++;
+    else window.__mockHits.files++;
+    setTimeout(() => { try { opt.onload && opt.onload({ status: body === undefined ? 404 : 200, responseText: body || '' }); } catch (e) {} }, 15);
   };
 })();`;
 const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
 
 async function bootPage(clearCache, label) {
-  const t = await newPage(PORT, 'about:blank');
+  const t = await newPage(PORT, FIXTURE);
   const c = t.cdp;
-  await c.send('Network.enable');
-  await c.send('Network.setBlockedURLs', {
-    urls: ['*googleapis.com*', '*gstatic.com*', '*typesquare.com*', '*cdnjs.cloudflare.com*',
-           '*twitter.com*', '*valuecommerce.com*', '*doubleclick.net*', '*google-analytics*',
-           '*googletagmanager*', '*google.com*', '*facebook.net*', '*facebook.com*'],
-  });
-  await c.send('Page.navigate', { url: 'https://ff14-fc.com/equipment_series_search/' });
-  // 等 body 稳定（连续两次长度一致且 > 200）
-  let stable = 0, lastLen = -1;
-  for (let i = 0; i < 40; i++) {
-    await sleep(2500);
-    let st = null;
-    try { st = await c.eval(`(() => { const b = document.body; return { len: (b && b.innerText) ? b.innerText.length : -1 }; })()`); } catch (e) {}
-    const len = st ? st.len : -1;
-    if (len > 200 && len === lastLen) { stable++; if (stable >= 2) break; } else stable = 0;
-    lastLen = len;
-  }
-  console.log(`  [${label}] body 稳定（len=${lastLen}）`);
+  await c.eval("(() => { const p = document.createElement('p'); p.textContent = '装備シリーズ'; document.body.appendChild(p); const select = document.createElement('select'); const option = document.createElement('option'); option.textContent = 'ランダム'; select.appendChild(option); document.body.appendChild(select); return 1; })()");
+  console.log(`  [${label}] 本地 FC 夹具已就绪`);
+  await c.eval("window.__zhxTestSite = 'fc';");
   if (clearCache) await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
   const inject = async () => { await c.eval(gmStub).catch(() => {}); await c.eval(wrap(GF)).catch(() => {}); };
   await inject();
   // 等待就绪（含导航自愈：__gmStub 消失 = 文档被换 → 重注入）
   let injCount = 1;
-  for (let i = 0; i < 70; i++) {
-    await sleep(1500);
+  for (let i = 0; i < 30; i++) {
+    await sleep(500);
     let st = null;
-    try { st = await c.eval(`({ stub: !!window.__gmStub, dict: !!localStorage.getItem('gm:zhx.dt.dict') })`); } catch (e) {}
+    try { st = await c.eval(`({ stub: !!window.__gmStub, dict: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.fc.dict.')) })`); } catch (e) {}
     if (!st) continue;
     if (!st.stub) { if (injCount < 4) { injCount++; console.log(`  [${label}] 导航自愈：重注入 #${injCount}`); await inject(); } continue; }
     if (st.dict && injCount === 1) return { t, c, reinjected: false };
     if (st.dict && injCount > 1) return { t, c, reinjected: true };
   }
+  const state = await c.eval("({ stub:!!window.__gmStub, site:window.__zhxTestSite, tables:window.__zhxTestTables, manifest:!!localStorage.getItem('gm:zhx.v3.manifest'), keys:Object.keys(localStorage).filter((k)=>k.startsWith('gm:')).map((k)=>k.slice(3,70)), diag:typeof window.__zhxDiagRecord })").catch((e) => ({ error:e.message }));
+  console.log(`  [${label}] V3 状态诊断:`, JSON.stringify(state));
+  console.log(`  [${label}] 脚本日志:`, c.consoleLines.filter((l) => l.includes('TEST') || l.includes('zhx') || l.includes('error')).slice(-8).join(' | '));
   return { t, c, reinjected: injCount > 1, timeout: true };
 }
 
 async function probe(c) {
   try {
     return await c.eval(`(() => {
-      if (!document.body) return { noBody: true, hasFix: false, hasNew: false, randLeft: -1, qContext: '(no body)', hits: window.__mockHits || {} };
+      if (!document.body) return { noBody: true, hasFix: false, hasNew: false, randLeft: -1, qContext: '(no body)', hits: window.__mockHits || {}, dictCached: false, dictSha: '' };
       const parts = [];
       const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (w.nextNode()) parts.push(w.currentNode.nodeValue || '');
       const joined = parts.join('\\n');
+      const dictKey = Object.keys(localStorage).find((k) => k.startsWith('gm:zhx.v3.f.fc.dict.'));
+      const dictEntry = dictKey ? localStorage.getItem(dictKey) || '' : '';
       const opts = [...document.querySelectorAll('option')].map((o) => (o.textContent || '').trim());
       const qc = (joined.match(/.{0,26}装备系列Q.{0,26}/) || [''])[0].replace(/\\s+/g, ' ');
       return {
@@ -115,10 +112,12 @@ async function probe(c) {
         randLeft: opts.filter((s) => s.indexOf('ランダム') >= 0).length,
         qContext: qc,
         hits: window.__mockHits || {},
+        dictCached: !!dictKey,
+        dictSha: dictEntry.slice(0, dictEntry.indexOf(String.fromCharCode(10))),
       };
     })()`);
   } catch (e) {
-    return { noBody: true, hasFix: false, hasNew: false, randLeft: -1, qContext: '(eval fail: ' + e.message.slice(0, 80) + ')', hits: {} };
+    return { noBody: true, hasFix: false, hasNew: false, randLeft: -1, qContext: '(eval fail: ' + e.message.slice(0, 80) + ')', hits: {}, dictCached: false, dictSha: '' };
   }
 }
 
@@ -139,11 +138,14 @@ console.log('╔══ 场景 A：下载路径（无缓存）══╗');
 {
   const { t, c, timeout } = await bootPage(true, 'A');
   if (timeout) console.log('  ⚠️ 就绪等待超时');
-  const r = await waitBoth(c, 40);
+  const r = timeout ? await probe(c) : await waitBoth(c, 40);
   console.log('  mock 命中:', JSON.stringify(r.hits), '｜上下文:', JSON.stringify(r.qContext));
   ok('A1 修正重译：旧译「装备系列」→「装备系列Q」', r.hasFix);
   ok('A2 新增词补扫：「ランダム」→「随机Q」', r.hasNew);
   ok('A3 旧文本无残留（option 无「ランダム」）', r.randLeft === 0, `残留 ${r.randLeft}`);
+  ok('A4 V3 manifest 与字典文件已下载', r.hits.manifest > 0 && r.hits.dict > 0, JSON.stringify(r.hits));
+  ok('A5 更新词典写入 SHA 内容寻址缓存', r.dictCached && r.dictSha === dictSha);
+  ok('A6 请求均来自 V3 manifest 与当前站点文件', r.hits && r.hits.unexpected && r.hits.unexpected.length === 0, JSON.stringify(r.hits.unexpected));
   await closePage(PORT, t.target.id);
 }
 
@@ -151,14 +153,17 @@ console.log('╔══ 场景 B：缓存路径（不清缓存，fresh 直接用�
 {
   const { t, c, timeout } = await bootPage(false, 'B');
   if (timeout) console.log('  ⚠️ 就绪等待超时');
-  const r = await waitBoth(c, 40);
+  const r = timeout ? await probe(c) : await waitBoth(c, 40);
   console.log('  mock 命中:', JSON.stringify(r.hits));
   ok('B1 修正重译（缓存数据同样生效）', r.hasFix);
   ok('B2 新增词补扫（缓存数据同样生效）', r.hasNew);
   ok('B3 旧文本无残留', r.randLeft === 0, `残留 ${r.randLeft}`);
+  ok('B4 再次运行命中缓存且无数据网络请求', r.hits.manifest === 0 && r.hits.dict === 0 && r.hits.files === 0, JSON.stringify(r.hits));
+  ok('B5 没有未预期的请求', r.hits && r.hits.unexpected && r.hits.unexpected.length === 0, JSON.stringify(r.hits.unexpected));
   await closePage(PORT, t.target.id);
 }
 
 console.log();
 console.log(`总计: ${pass} 通过 / ${fail} 失败`);
+await new Promise((resolve) => pageServer.close(resolve));
 process.exit(fail ? 1 : 0);

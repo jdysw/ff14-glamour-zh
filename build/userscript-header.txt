@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · 与灰机 wiki 双向互查
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.4.2
+// @version      1.4.3
 // @description  FF14 幻化站中文化（Mirapri / Eorzea Collection / FF14-FC / Ronka LookBook / FFXIV ARMOURY COLLECTION / End Closet）：界面与装备、染剂名显示为国服中文，装备可点击查看灰机 wiki；支持中文装备搜索及可幻化装备、时尚配饰、鸟甲候选；灰机 wiki 物品页附幻化反查链接。词库按需下载、本地缓存，每日至多检查一次更新；不收集账号信息。
 // @author       zhixia
 // @license      GPL-3.0

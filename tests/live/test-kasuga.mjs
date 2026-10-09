@@ -43,8 +43,8 @@ async function probe(url) {
   await c.eval(wrap(GF));
   for (let i = 0; i < 50; i++) {
     await sleep(1500);
-    const st = await c.eval(`({ jp: !!localStorage.getItem('gm:zhx.dt.items') })`).catch(() => ({}));
-    if (st && st.jp) break;
+    const st = await c.eval("({ names: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.mirapri.names.')) })").catch(() => ({}));
+    if (st && st.names) break;
   }
   await sleep(8000);
   const r = await c.eval(`(() => {

@@ -1,9 +1,9 @@
 name: Deploy data station
 
-# 当 data/ 下三个数据文件在 main 分支变化时，自动组装并部署到 Cloudflare Pages。
+# 当 V3 canonical 数据、生成器、词典或部署配置变化时，自动组装并部署到 Cloudflare Pages。
 # 也可在 Actions 页面手动触发（workflow_dispatch）。
 # 依赖 repo secrets：CLOUDFLARE_API_TOKEN（仅 Pages 读写权限）、CLOUDFLARE_ACCOUNT_ID。
-# v1.4 Phase 17：部署前先做数据文件结构校验（build/validate-data.py，与 Test 工作流同源）。
+# 部署前校验 canonical 数据结构；prepare.py 清理 site/ 后仅生成 V3。
 
 on:
   push:
@@ -16,6 +16,7 @@ on:
       - 'build/make-runtime-data.py'
       - 'build/make_dict_json.py'
       - '.github/deploy/**'
+      - 'functions/**'
   workflow_dispatch:
 
 permissions:

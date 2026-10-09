@@ -12,7 +12,7 @@
 //   - 存储键（zhx.meta / zhx.dt.*）与缓存序列化格式（指纹 + 换行 + 文本）是跨版本
 //     兼容契约（用户本地已缓存数 MB 数据）——此处冻结。
 //   - 计划书 Phase 4-HTTP 清单的「HTTPS 限制」现以数据源契约形式冻结
-//     （DATA_BASE / DATA_FILES 均为 https），运行层无额外 scheme 校验（现状即规格）。
+//     （DATA_BASE_V3 为 https），运行层无额外 scheme 校验（现状即规格）。
 //   - 提取锚随 src 结构变化会失配并明确报错——届时按新结构更新锚点即可（有意的哨兵）。
 //   - 假宿主桩必须在 buildCore(env) 之前设置：装配参数为「值捕获」，装配后再替换
 //     env 上的桩不会生效（曾致「unsettled top-level await」找不到原因）。
@@ -56,7 +56,7 @@ const SEG = {
   constants: ['core-constants', 1],
   storage: ['core-storage', 1],
   http: ['core-http', 1],
-  cache: ['core-cache', 2],
+  cache: ['core-cache', 1],
   cacheReg: ['core-cache-registry', 1],
   dom: ['core-dom', 1],
   observer: ['core-observer', 1],
@@ -66,9 +66,9 @@ const ARG_NAMES = ['window', 'document', 'console', 'performance', 'GM', 'GM_get
   'GM_xmlhttpRequest', 'fetch', 'AbortController', 'setTimeout', 'clearTimeout', 'requestIdleCallback',
   'MutationObserver'];
 
-const RETURN_STMT = `return { _storeNorm, storeGetAsync, storeSet, httpGet, _readCachedTable, _writeCachedTable,
+const RETURN_STMT = `return { _storeNorm, storeGetAsync, storeSet, httpGet,
   safe, dedupeByAncestor, observeLocal, __zhxBootAt, __cacheReg: _cacheReg, cacheGuard, _zhxErr, __errLog: _errLog,
-  C: { DAY_MS, META_KEY, DT_PREFIX, DATA_BASE, DATA_FILES, DATA_REMOTE } };`;
+  C: { DAY_MS, DATA_BASE_V3, DATA_REMOTE } };`;
 
 function buildCore(env) {
   const parts = [];
@@ -119,7 +119,7 @@ console.log('\n── 区段哨兵（标记与装配） ──');
   const coreTot = DIST_TEXT.split('@zhixia:core-').length - 1;
   ok('core-* 标记成对且 ≥ 本文件提取的 10 对', coreTot % 2 === 0 && coreTot >= 20, `实际=${coreTot}`);
   const api = buildCore(makeEnv());
-  for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', '_readCachedTable', '_writeCachedTable', 'safe', 'dedupeByAncestor', 'observeLocal']) {
+  for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', 'safe', 'dedupeByAncestor', 'observeLocal']) {
     eq(`${f} 装配后可调用`, typeof api[f], 'function');
   }
   eq('__zhxBootAt 取 performance.now 值', api.__zhxBootAt, 123.45);
@@ -333,76 +333,13 @@ console.log('\n── http：GM XHR 优先 + fetch 兜底 ──');
   }
 }
 
-console.log('\n── cache：键 / 序列化格式 / 延迟写入 ──');
+console.log('\n── V3 数据路径契约（运行时加载详测见 test-runtime-v3）──');
 {
   const api = buildCore(makeEnv());
   eq('DAY_MS', api.C.DAY_MS, 86400000);
-  eq('META_KEY', api.C.META_KEY, 'zhx.meta');
-  eq('DT_PREFIX', api.C.DT_PREFIX, 'zhx.dt.');
-  eq('DATA_BASE（https 契约）', api.C.DATA_BASE, 'https://zhixia-data.pages.dev/ff14/v2/');
-  eq('DATA_FILES.items', api.C.DATA_FILES.items, 'items.tsv');
-  eq('DATA_FILES.series', api.C.DATA_FILES.series, 'series.txt');
-  eq('DATA_FILES.acl', api.C.DATA_FILES.acl, 'acl.txt');
-  eq('DATA_FILES.dict', api.C.DATA_FILES.dict, 'dict.json');
+  eq('V3 base URL（HTTPS）', api.C.DATA_BASE_V3, 'https://zhixia-data.pages.dev/ff14/v3/');
   eq('DATA_REMOTE', api.C.DATA_REMOTE, true);
-  ok('DATA_BASE 为 https', api.C.DATA_BASE.startsWith('https://'));
-}
-{
-  const env = makeEnv();
-  const fp = 'FP0001';
-  const tx = 'X'.repeat(101);
-  env.rec.store.set('zhx.dt.items', fp + '\n' + tx);
-  const api = buildCore(env);
-  const c = await api._readCachedTable('items');
-  eq('读：fp 解析', c?.fp, fp);
-  eq('读：tx 解析', c?.tx, tx);
-  eq('读：tx 长度 101 通过（>100）', c?.tx.length, 101);
-}
-{
-  const env = makeEnv();
-  env.rec.store.set('zhx.dt.items', 'FP\n' + 'X'.repeat(100));
-  const api = buildCore(env);
-  eq('读：tx 长度 100 拒绝（>100 才收）', await api._readCachedTable('items'), null);
-}
-{
-  const env = makeEnv();
-  env.rec.store.set('zhx.dt.items', 'NONEWLINE-VALUE');
-  const api = buildCore(env);
-  eq('读：无换行 → null', await api._readCachedTable('items'), null);
-}
-{
-  const env = makeEnv();
-  env.rec.store.set('zhx.dt.items', '\nSHORT');
-  const api = buildCore(env);
-  eq('读：空指纹 → null', await api._readCachedTable('items'), null);
-}
-{
-  const env = makeEnv();
-  const api = buildCore(env);
-  eq('读：缺失 → null', await api._readCachedTable('items'), null);
-}
-{
-  const env = makeEnv();
-  const api = buildCore(env);
-  api._writeCachedTable('items', 'FP9', 'BODY'.repeat(50));
-  const call = env.rec.setCalls[0];
-  eq('写：requestIdleCallback 路径被调', env.rec.idles.length, 1);
-  eq('写：键 zhx.dt.items', call?.[0], 'zhx.dt.items');
-  eq('写：值 = 指纹 + 换行 + 文本', call?.[1], 'FP9' + '\n' + 'BODY'.repeat(50));
-}
-{
-  const env = makeEnv({ requestIdleCallback: undefined });
-  const api = buildCore(env);
-  api._writeCachedTable('items', 'FP9', 'BODY'.repeat(50));
-  eq('写：无 idle 时 setTimeout 路径', env.rec.timers.length, 1);
-  eq('写：setTimeout 路径也写入', env.rec.setCalls[0]?.[1], 'FP9' + '\n' + 'BODY'.repeat(50));
-}
-{
-  const env = makeEnv();
-  const api = buildCore(env);
-  api._writeCachedTable('items', '', 'BODY'.repeat(50));
-  api._writeCachedTable('items', 'FP', '');
-  eq('写：空指纹 / 空文本不写', env.rec.setCalls.length, 0);
+  ok('V3 base URL 为 https', api.C.DATA_BASE_V3.startsWith('https://'));
 }
 
 console.log('\n── dom / runtime：去重 / 错误边界 ──');

@@ -1,5 +1,5 @@
 // ACL 站（ffxivcollection.com）真站测试 · 阶段1：主页（Phase 20：断言强化）
-// 覆盖：数据加载（v3 collection 文件集；回退 v2）+ 界面词翻译
+// 覆盖：V3 collection 文件集 + 界面词翻译
 // 断言：数据键 / 界面词 / 残留反例 / 请求数 / 无注入错误（dump 保留供诊断）
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { readDist } from '../helpers/paths.mjs';
@@ -43,8 +43,8 @@ console.log('脚本已注入，等待数据 ...');
 let done = false;
 for (let i = 0; i < 60; i++) {
   await sleep(1500);
-  const st = await c.eval(`({ v3n: !!(localStorage.getItem('gm:zhx.v3.f.collection.names')), meta: !!localStorage.getItem('gm:zhx.meta') })`).catch(() => ({}));
-  if (st && (st.v3n || st.meta)) { done = true; console.log(`数据完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
+  const st = await c.eval("({ v3n: Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.collection.names.')), manifest: !!localStorage.getItem('gm:zhx.v3.manifest') })").catch(() => ({}));
+  if (st && (st.v3n && st.manifest)) { done = true; console.log(`数据完成（${((Date.now() - t0) / 1000).toFixed(1)}s）:`, JSON.stringify(st)); break; }
 }
 if (!done) console.log('⚠️ 数据等待超时');
 await sleep(6000);
@@ -55,6 +55,7 @@ const r = await c.eval(`(() => {
   const T = ${CLEAN_BODY_TEXT};
   const has = (s) => T.indexOf(s) >= 0;
   let ja = 0; for (const ch of T) { const cc = ch.codePointAt(0); if (cc >= 0x3040 && cc <= 0x30ff) ja++; }
+  const fileSize = (prefix) => { const k = Object.keys(localStorage).find((x) => x.startsWith(prefix)); return k ? String(localStorage.getItem(k) || '').length : 0; };
   const ui = {
     '职业 / 特职': has('职业 / 特职'),
     '残留 クラス / ジョブ': has('クラス / ジョブ'),
@@ -75,10 +76,10 @@ const r = await c.eval(`(() => {
     jaCount: ja, ui, samples,
     stKeys: Object.keys(localStorage).filter((k) => k.indexOf('gm:') === 0).map((k) => k + '=' + String(localStorage.getItem(k)).length),
     data: {
-      v3n: String(localStorage.getItem('gm:zhx.v3.f.collection.names') || '').length,
-      v3s: String(localStorage.getItem('gm:zhx.v3.f.collection.series') || '').length,
-      v3a: String(localStorage.getItem('gm:zhx.v3.f.collection.acl') || '').length,
-      meta: !!localStorage.getItem('gm:zhx.meta'),
+      v3n: fileSize('gm:zhx.v3.f.collection.names.'),
+      v3s: fileSize('gm:zhx.v3.f.collection.series.'),
+      v3a: fileSize('gm:zhx.v3.f.collection.acl.'),
+      manifest: !!localStorage.getItem('gm:zhx.v3.manifest'),
     },
   };
 })()`);

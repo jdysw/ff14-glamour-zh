@@ -1,98 +1,118 @@
-// e2e-real-dict.mjs — 真实环境 e2e：真 dist + 真数据站（zhixia-data.pages.dev）拉取 v3 数据链
-// 验证：① v3 manifest + 站点文件（含 dict）真下载并写入缓存（zhx.v3.f.fc.*）② dict 结构完整
-//       ③ 页面翻译正常。v3 已上线（2026-10-06）：fc 站以 v3 链为首选路径，v2 为回退。
+// e2e-real-dict.mjs — 本地 FC 夹具从真实数据站读取 V3 manifest、站点文件与共享词典。
 import fs from 'node:fs';
+import http from 'node:http';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { readDist } from '../helpers/paths.mjs';
+import { readDist, fixturePath } from '../helpers/paths.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
-const GF = readDist();
+const PROD_BASE = 'https://zhixia-data.pages.dev/ff14/v3/';
+// 请求仅选择固定的数据文件；上游地址不使用请求中的路径或查询参数。
+const dataFiles = ['manifest.json', 'dict.json', 'fc/names.tsv', 'fc/hash.tsv', 'fc/alias.tsv', 'fc/dup.tsv', 'fc/series.txt'];
+const upstreams = new Map(dataFiles.map((file) => ['/ff14/v3/' + file, PROD_BASE + file]));
+let proxied = 0;
+const fixture = fs.readFileSync(fixturePath('fc-search.html'));
 
-const gmStub = `(() => {
-  if (window.__gmStub) return; window.__gmStub = true;
-  const P = 'gm:';
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
-  window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };
-  window.__net = [];
-  window.GM_xmlhttpRequest = (opt) => {
-    fetch(opt.url).then((r) => r.text().then((t) => {
-      try { window.__net.push({ url: opt.url.slice(0, 90), status: r.status, len: t.length }); } catch (e) {}
-      try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {}
-    })).catch((e) => { try { window.__net.push({ url: opt.url.slice(0, 90), status: 'ERR' }); } catch (e2) {} try { opt.onerror && opt.onerror(e); } catch (e2) {} });
-  };
-})();`;
-const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
-
-const t = await newPage(PORT, 'about:blank');
-const c = t.cdp;
-await c.send('Network.enable');
-await c.send('Network.setBlockedURLs', {
-  urls: ['*googleapis.com*', '*gstatic.com*', '*typesquare.com*', '*cdnjs.cloudflare.com*',
-         '*twitter.com*', '*valuecommerce.com*', '*doubleclick.net*', '*google-analytics*',
-         '*googletagmanager*', '*google.com*', '*facebook.net*', '*facebook.com*'],
-});
-await c.send('Page.navigate', { url: 'https://ff14-fc.com/equipment_series_search/' });
-let stable = 0, lastLen = -1;
-for (let i = 0; i < 40; i++) {
-  await sleep(2500);
-  let st = null;
-  try { st = await c.eval(`(() => { const b = document.body; return { len: (b && b.innerText) ? b.innerText.length : -1 }; })()`); } catch (e) {}
-  const len = st ? st.len : -1;
-  if (len > 200 && len === lastLen) { stable++; if (stable >= 2) break; } else stable = 0;
-  lastLen = len;
-}
-console.log(`  body 稳定（len=${lastLen}）`);
-await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
-await c.eval(gmStub);
-await c.eval(wrap(GF));
-
-let dictOk = false;
-for (let i = 0; i < 90; i++) {
-  await sleep(2000);
-  const st = await c.eval(`({ v3dict: !!localStorage.getItem('gm:zhx.v3.f.fc.dict'), man: !!localStorage.getItem('gm:zhx.v3.manifest') })`).catch(() => null);
-  if (st && st.v3dict) { dictOk = true; if (st.man) break; }
-}
-await sleep(6000);
-
-const r = await c.eval(`(() => {
-  const dictRaw = localStorage.getItem('gm:zhx.v3.f.fc.dict') || '';
-  const manRaw = localStorage.getItem('gm:zhx.v3.manifest') || '';
-  const v3Keys = Object.keys(localStorage).filter((k) => k.startsWith('gm:zhx.v3.f.fc.'));
-  const parts = [];
-  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  while (w.nextNode()) parts.push(w.currentNode.nodeValue || '');
-  const joined = parts.join('\\n');
-  let dictInfo = null;
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  if (url.pathname === '/fc-search.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(fixture);
+    return;
+  }
+  const upstreamUrl = upstreams.get(url.pathname);
+  if (!upstreamUrl) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
   try {
-    const body = dictRaw.slice(dictRaw.indexOf('\\n') + 1);
-    const d = JSON.parse(body);
-    dictInfo = { layers: Object.keys(d), fcLen: d.fc ? Object.keys(d.fc).length : 0 };
-  } catch (e) { dictInfo = { err: String(e).slice(0, 120) }; }
-  return {
-    net: window.__net || [],
-    dictCached: !!dictRaw,
-    dictLen: dictRaw.length,
-    dictInfo,
-    manOk: manRaw.length > 10,
-    v3KeyCount: v3Keys.length,
-    pageHas系列: joined.indexOf('装备系列') >= 0,
-    kanaLeft: (joined.match(/[\\u30A1-\\u30FA]{2,}/g) || []).length,
-  };
-})()`);
+    proxied++;
+    const upstream = await fetch(upstreamUrl + '?e2e_refresh=' + Date.now(), { signal: AbortSignal.timeout(25000), headers: { 'Cache-Control': 'no-cache' } });
+    const body = Buffer.from(await upstream.arrayBuffer());
+    res.writeHead(upstream.status, {
+      'Content-Type': upstream.headers.get('content-type') || 'text/plain; charset=utf-8',
+      'Cache-Control': upstream.headers.get('cache-control') || 'no-store',
+    });
+    res.end(body);
+  } catch (e) {
+    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Upstream request failed: ' + e.message);
+  }
+});
+await new Promise((resolve, reject) => {
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', resolve);
+});
+const serverPort = server.address().port;
+const BASE = 'http://127.0.0.1:' + serverPort + '/ff14/v3/';
+const GF_REAL = readDist();
+const GF = GF_REAL.replace(PROD_BASE, BASE);
+if (GF === GF_REAL) throw new Error('V3 DATA_BASE 替换失败');
 
-console.log('  网络请求:', JSON.stringify(r.net, null, 1));
-console.log('  dict 缓存（v3）:', r.dictCached, '| 长度:', r.dictLen);
-console.log('  dict 结构:', JSON.stringify(r.dictInfo));
-console.log('  manifest 缓存:', r.manOk, '| v3 站点文件键数:', r.v3KeyCount);
-console.log('  页面「装备系列」:', r.pageHas系列, '| 残留假名串:', r.kanaLeft);
+const gmStub = [
+  '(() => {',
+  '  const P = "gm:";',
+  '  window.__net = [];',
+  '  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };',
+  '  window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) {} };',
+  '  window.GM_xmlhttpRequest = (opt) => {',
+  '    fetch(opt.url).then((r) => r.text().then((t) => {',
+  '      try { window.__net.push({ url: opt.url, status: r.status, len: t.length }); } catch (e) {}',
+  '      try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {}',
+  '    })).catch((e) => { try { window.__net.push({ url: opt.url, status: "ERR" }); } catch (e2) {} try { opt.onerror && opt.onerror(e); } catch (e2) {} });',
+  '  };',
+  '})();',
+].join('\n');
 
-let pass = 0, fail = 0;
-const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log(`  ✅ ${name}`); } else { fail++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); } };
-ok('R1 v3 dict 真站下载并写缓存（zhx.v3.f.fc.dict）', r.dictCached && r.dictLen > 40000, `len=${r.dictLen}`);
-ok('R2 dict 结构完整（6 层、fc 692 条）', r.dictInfo && r.dictInfo.fcLen === 692 && r.dictInfo.layers && r.dictInfo.layers.length === 6, JSON.stringify(r.dictInfo));
-ok('R3 v3 缓存写入（manifest + 站点文件 ≥5）', r.manOk && r.v3KeyCount >= 5, `man=${r.manOk} keys=${r.v3KeyCount}`);
-ok('R4 页面翻译正常（含「装备系列」）', r.pageHas系列);
-console.log();
-console.log(`总计: ${pass} 通过 / ${fail} 失败`);
-await closePage(PORT, t.target.id);
-process.exit(fail ? 1 : 0);
+const wrap = (src) => '(function(){ try { ' + src + ' } catch (e) { console.error("[TEST-INJECT]", e && e.message); } })();';
+let tab;
+try {
+  tab = await newPage(PORT, 'http://127.0.0.1:' + serverPort + '/fc-search.html');
+  const c = tab.cdp;
+  await c.eval("window.__zhxTestSite = 'fc'; window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash']; window.__zhxDiagOn = true;");
+  await c.eval("(() => { const p=document.createElement('p'); p.textContent='装備シリーズ'; document.body.appendChild(p); return 1; })()");
+  await c.eval("(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()");
+  await c.eval(gmStub);
+  await c.eval(wrap(GF));
+
+  let ready = false;
+  for (let i = 0; i < 120; i++) {
+    await sleep(1000);
+    const st = await c.eval("Object.keys(localStorage).some((k) => k.startsWith('gm:zhx.v3.f.fc.dict.'))").catch(() => false);
+    if (st) { ready = true; break; }
+  }
+  await sleep(2500);
+
+  const probe = [
+    "(() => {",
+    "  const raw=localStorage.getItem('gm:zhx.v3.manifest') || '';",
+    "  let manifest=null; try { manifest=JSON.parse(raw.slice(raw.indexOf(String.fromCharCode(10))+1)); } catch(e) {}",
+    "  const dictMeta=manifest && manifest.shared && manifest.shared.dict;",
+    "  const dictKey=dictMeta ? 'gm:zhx.v3.f.fc.dict.' + dictMeta.sha256 : '';",
+    "  const dictRaw=dictKey ? localStorage.getItem(dictKey) || '' : '';",
+    "  const siteFiles=manifest && manifest.sites && manifest.sites.fc && manifest.sites.fc.files || {};",
+    "  const fileKeys=Object.entries(siteFiles).filter(([name,meta]) => localStorage.getItem('gm:zhx.v3.f.fc.'+name+'.'+meta.sha256));",
+    "  let dictInfo={}; try { const d=JSON.parse(dictRaw.slice(dictRaw.indexOf(String.fromCharCode(10))+1)); dictInfo={ layers:Object.keys(d), fcLen:d.fc ? Object.keys(d.fc).length : 0 }; } catch(e) { dictInfo={ err:String(e) }; }",
+    "  const text=document.body ? document.body.innerText : '';",
+    "  return { manifest, manifestCached:!!raw, dictMeta, dictCached:!!dictRaw, dictShaMatches:!!dictMeta && dictRaw.slice(0,dictRaw.indexOf(String.fromCharCode(10)))===dictMeta.sha256, dictInfo, expectedFiles:Object.keys(siteFiles).length, cachedFiles:fileKeys.length, pageTranslated:text.includes('装备系列'), net:window.__net || [] };",
+    "})()",
+  ].join(String.fromCharCode(10));
+  const r = await c.eval(probe);
+  console.log('真实数据请求数:', proxied);
+  console.log('缓存 manifest:', JSON.stringify(r.manifest && { schema:r.manifest.schema, candidatePolicy:r.manifest.candidatePolicy, version:r.manifest.version, fcFiles:Object.keys(r.manifest.sites.fc.files), dictSha:r.dictMeta && r.dictMeta.sha256 }));
+  console.log('缓存字典:', r.dictCached, '| SHA matches:', r.dictShaMatches, '| layers:', JSON.stringify(r.dictInfo));
+  console.log('站点文件缓存:', r.cachedFiles, '/', r.expectedFiles, '| 页面译文:', r.pageTranslated);
+
+  let pass = 0, fail = 0;
+  const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log('  ✅ ' + name); } else { fail++; console.log('  ❌ ' + name + (extra ? ' — ' + extra : '')); } };
+  ok('R1 真 manifest 与共享 dict 元数据可读', !!r.manifest && r.manifest.schema === 3 && !!r.dictMeta && /^[a-f0-9]{64}$/i.test(r.dictMeta.sha256));
+  ok('R2 V3 字典按 manifest SHA 写入缓存', r.dictCached && r.dictShaMatches);
+  ok('R3 V3 站点文件均按 manifest SHA 缓存', r.expectedFiles > 0 && r.cachedFiles === r.expectedFiles, r.cachedFiles + '/' + r.expectedFiles);
+  ok('R4 词典结构含 FC 词层', r.dictInfo && r.dictInfo.layers && r.dictInfo.layers.includes('fc') && r.dictInfo.fcLen > 0, JSON.stringify(r.dictInfo));
+  ok('R5 页面文本已使用站点词典翻译', r.pageTranslated);
+  console.log('总计: ' + pass + ' 通过 / ' + fail + ' 失败');
+  process.exitCode = fail ? 1 : 0;
+} finally {
+  if (tab) await closePage(PORT, tab.target.id).catch(() => {});
+  await new Promise((resolve) => server.close(resolve));
+}
