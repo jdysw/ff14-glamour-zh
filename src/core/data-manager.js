@@ -682,6 +682,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
+  // 除前缀外也支持中文装备名中间连续片段；保持允许名单、按站语言映射不变。
+  function _irSearchCollectContains(keys, target, limit, out, excluded) {
+    for (const candidate of keys) {
+      if (out.length >= limit) break;
+      if (candidate !== excluded && !candidate.startsWith(target) && candidate.includes(target)) out.push(candidate);
+    }
+  }
+
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
   const _irStats = { hit: 0, miss: 0 };
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
@@ -756,8 +764,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
-  // 智能输入候选：默认（未传 / <= 0）返回全部匹配——「显示所有含输入字的装备」；
-  // 显式传正数 limit 时按上限截断（保留给调用方按需限流的语义）。
+  // 统一候选排序：精确 → 正式名前缀 → 正式名包含 → 别名前缀 → 别名包含。
+  // V3 索引继续延迟生成；同时限制最终行数，避免大词条无限增长。
   function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
@@ -765,19 +773,18 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!map) return [];
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
-    const out = [];
+    const matches = [];
     const exact = map[key];
-    if (exact) out.push({ zh: key, native: exact });
-
-    const canonical = [];
-    _irSearchCollectPrefix(_getIrSearchKeysByKind(0), key, max, canonical, exact ? key : '');
-    for (const candidate of canonical) out.push({ zh: candidate, native: map[candidate] });
-    if (out.length < max) {
-      const aliases = [];
-      _irSearchCollectPrefix(_getIrSearchKeysByKind(1), key, max - out.length, aliases, exact ? key : '');
-      for (const candidate of aliases) out.push({ zh: candidate, native: map[candidate] });
+    if (exact) matches.push(key);
+    const canonical = _getIrSearchKeysByKind(0);
+    const aliases = _getIrSearchKeysByKind(1);
+    _irSearchCollectPrefix(canonical, key, max, matches, key);
+    _irSearchCollectContains(canonical, key, max, matches, key);
+    if (matches.length < max) {
+      _irSearchCollectPrefix(aliases, key, max, matches, key);
+      _irSearchCollectContains(aliases, key, max, matches, key);
     }
-    return out.slice(0, max);
+    return matches.slice(0, max).map(name => ({ zh: name, native: map[name] }));
   }
 
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
