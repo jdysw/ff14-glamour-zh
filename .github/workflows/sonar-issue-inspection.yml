@@ -1,0 +1,25 @@
+name: Inspect Sonar quality findings (temporary)
+on:
+  push:
+    branches: [feat/audit-localization-20261009]
+    paths: [.github/workflows/sonar-issue-inspection.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch public Sonar findings
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json
+          u="https://sonarcloud.io/api/issues/search?componentKeys=jdysw_ff14-glamour-zh&pullRequest=27&resolved=false&ps=100"
+          try:
+              with urllib.request.urlopen(u,timeout=25) as r: j=json.load(r)
+              for issue in j.get('issues',[]):
+                  print(json.dumps({k:issue.get(k) for k in ('rule','message','severity','type','component','line','effort','status')},ensure_ascii=False))
+              print('TOTAL',j.get('total'))
+          except Exception as e:
+              print('SONAR_ERROR',type(e).__name__,str(e))
+          PY
