@@ -24,6 +24,7 @@
 | [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服个人幻化网站（猫娘模特） |
 | [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
+| [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 
 ## 📦 安装
@@ -35,22 +36,22 @@
 3. 安装脚本：
    - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
    - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
-4. 打开任意支持站点，自动生效。
+4. 打开任意支持站点，脚本会自动生效。若已安装早期 v1.4.2 或预发行版，请从上方安装链接覆盖安装最新版。新版首次运行会清理旧数据缓存并获取新版数据，请保持联网。
 
 ## 💡 使用说明
 
 - 汉化后的装备名 / 染剂名**支持点击** → 跳转灰机 wiki 查国服译名与获取途径。
 - 灰机 wiki 物品页会多出「幻化反查」区块 → 一键跳去对应幻化站看同款穿搭。
-- 在支持的装备搜索框中可直接输入**国服中文装备名**；输入 2 个及以上中文字符后会显示本地候选，选中后提交时自动转换为当前站点所需的日文 / 韩文名称。中文补全只使用已加载的本地索引，不额外请求搜索服务。
-- 词库数据每天至多自动检查一次更新，全程无需手动操作。
+- 在支持的装备搜索框输入**国服中文装备名**，可查看可幻化装备、时尚配饰和鸟甲候选。按回车、使用站点原有搜索按钮或点击候选，都会按站点需要转换为原生名称并显示中文；输入停顿不会自动搜索。
+- 数据首次加载及更新时需要联网。成功缓存后会按每日规则检查更新；日常使用无需手动操作。
 
 ## ❓ 常见问题
 
 **Q：会影响网站正常功能吗？**
-不会。脚本只做「文本替换」与「附加链接」，不修改站点数据，不触碰你的账号与操作。
+脚本不会修改站点服务器上的数据，也不收集账号信息。装备搜索会在你主动提交或选择候选时转换搜索词。
 
 **Q：需要特殊网络环境吗？**
-不需要。词库托管在 Cloudflare 静态站、按站点按需加载（单站首次约 0.3~1MB，压缩传输约 2~3 秒完成），之后全部走本地缓存。
+不需要特殊网络环境；首次加载及获取更新需要连接数据站，成功缓存后可继续使用缓存内容。本次强制刷新若失败，不会恢复旧数据缓存，下次刷新会重试；成功后按每日规则检查更新。
 
 **Q：发现了翻译缺漏或错误？**
 欢迎到 [Issues](https://github.com/jdysw/ff14-glamour-zh/issues) 反馈：说明「哪个站、什么词、正确译文」即可。
@@ -65,131 +66,42 @@
 ### 目录结构
 
 ```
-ff14-glamour-zh/
-├── dict/                  ★ 界面词典（改词只改这里）
-│   ├── dict-common.json   — 各站共用界面词
-│   ├── dict-main.json     — mirapri/wiki 界面词
-│   ├── dict-ec.json       — Eorzea Collection 界面词
-│   ├── dict-fc.json       — ff14-fc.com 界面词
-│   ├── dict-ronka.json    — Ronka LookBook 界面词
-│   └── dict-acl.json      — FFXIV ARMOURY COLLECTION 界面词
-├── data/                  ★ 数据表
-│   ├── ff14-items.tsv     — 物品总表（8 列：key|中|英|日|韩|hash|EC_ID|别名；51,225 物品）
-│   ├── ff14-series.txt    — 系列/副本名
-│   └── acl-cfc.txt        — 副本名（fc/collection 用）
-├── src/                   ★ 唯一代码源码
-│   ├── main.js            — userscript 入口
-│   ├── core/              — Core 基础设施与数据/翻译管线
-│   └── sites/             — 六站适配器
-├── build/                 — 构建脚本与校验
-│   ├── inject_dicts.py    — 词典注入：dict/*.json → src/core/dictionary.js（全量覆盖词典块）
-│   ├── verify_dicts.js    — 词典校验（src 内嵌 vs JSON 源 / vs 远程产物）
-│   ├── rebuild-db.py      — 数据表重建（四语权威源 → ff14-items.tsv，跟随游戏版本）
-│   ├── make_dict_json.py  — 词库打包（dict/*.json → dict.json，数据站发布用）
-│   ├── version.mjs        — 版本单一源（package.json → header / 校验）
-│   ├── verify-module-source.mjs — 模块源码唯一性与构建入口门禁
-│   └── validate-data.py   — 数据与词典结构校验（CI / 提交前）
-├── dist/                  — 构建产物：本地生成（不入库）
-│   └── ff14-glamour-zh.greasyfork.user.js — Greasy Fork 发布版（数据外置）
-├── .github/               — 仓库自动化
-│   ├── workflows/         — deploy-data（数据站部署）/ release（自动发布）/ test（构建与测试）/ sonarqube-cloud（代码质量）
-│   └── deploy/            — 部署组装脚本（prepare.py）+ 数据站根页
-└── build.sh               — 一键全链构建
+dict/                  七站界面词典（改词编辑对应 JSON）
+data/                  权威物品与副本数据
+src/main.js            userscript 入口
+src/core/              核心数据、词典与翻译模块
+src/sites/             七站适配器（六个幻化站与灰机 wiki）
+build/                 构建、校验与数据生成脚本
+.github/workflows/     测试、发布与数据站部署
+tests/                 单元、集成、在线与基准测试
+tools/coverage-audit/  七站汉化覆盖审计工具
 ```
 
-### 发布形态
+src/main.js、src/core/、src/sites/ 是唯一代码源码。dict/*.json 是界面词典源；data/ff14-items.tsv 是九列物品表，其中 glam 列包含候选标记。候选分类依据 IsGlamorous、EquipSlotCategory 和 ItemAction：可幻化装备按装备槽判定，ItemAction 20086 为时尚配饰，1013 为鸟甲。
 
-| 产物 | 体积 | 用途 |
-|---|---|---|
-| `dist/ff14-glamour-zh.greasyfork.user.js` | ~195 KB | 发布版：数据与词库运行时按需加载（Greasy Fork ≤2MB 合规） |
+### 数据与发布
 
-**数据流**：装备 / 染剂数据与界面词库从 `https://zhixia-data.pages.dev/` **按需**拉取
-（`ff14/v2/items.tsv` 单文件合表：中英日韩名、光之收藏家 hash、Eorzea Collection ID 一表全含；
-`ff14/v2/dict.json` 界面词库）→ 缓存到本地（GM 存储）→ **每日至多一次**版本检查（sha256 指纹比对，
-变化才重新下载）。**改词条只需更新数据站的 dict.json，无需发新脚本版本，用户次日自动生效**
-（脚本内嵌词库仅作首屏兜底 / 离线兜底）。数据为只读纯文本 / JSON（非可执行代码）。
+运行时优先加载 v3 数据，加载失败时回退到 v2。1.4.2 候选策略版本（candidatePolicy=1）首次运行时会清理旧数据缓存并强制获取新数据，跳过常规检查间隔和 HTTP 缓存；普通设置不会清除。强制刷新失败时不恢复旧数据缓存，下次刷新重试；成功后回到每日检查更新。数据站部署根据生成规则和权威数据文件分别构建、发布 v2 与 v3 数据。
 
-### 更新链路（一次修改，两条分发线）
+### 构建与发布
 
-安装与同步的固定入口（恒指向最新发布版）：
-`https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js`
+需要 Node.js 22 或更新版本。克隆仓库后先安装依赖，再构建和运行默认离线套件：
 
 ```bash
-# ① 构建 + 校验（改词库或改代码后都先跑）
+npm ci
 bash build.sh
-# ② 提交推送
-git add -A && git commit -m "..." && git push
-# ③ 数据站 —— data/、dict/ 变动时，推送 main 即自动部署
-# ④ 脚本发布 —— 改代码时 bump package.json 的 version（唯一源），推送 main 自动构建并创建 Release
+npm test
 ```
 
-- 只改**界面词典**（dict/）→ 走 ①②（推送后数据站自动更新词库，用户次日生效）。
-- 只改**游戏数据**（data/）→ 重建后推送（③ 自动）。
-- 改**代码**（src/main.js、src/core/、src/sites/）→ ①④；发版前将 `package.json` 的 `version` +1（**唯一版本源**，构建自动同步 userscript header 与元数据）。
-- **数据站自动部署**：`data/` 三个数据文件、`dict/*.json`（词库）任一推送到 main →
-  GitHub Actions（`.github/workflows/deploy-data.yml`）自动组装并部署到 CF Pages
-  项目 `ff14-glamour-zh`（域名 `zhixia-data.pages.dev`）；也可在 Actions 页手动触发。
-  备用本地通道：`python3 ~/zhixia-data/update-data.py --deploy`。
-- **CI 测试**：push / PR 自动运行 `.github/workflows/test.yml`（数据校验 → 构建 → 产物语法 → 生成物一致性 → unit + integration），与本地命令同源。
+重建物品数据需提供四语 Item.csv 和英语 ItemAction.csv（en-ItemAction.csv）；可通过 --csv-dir 指定本地目录。package.json 是版本唯一源，新脚本发布时更新版本号。推送到 main 后，GitHub Actions 会按变更自动发布脚本或部署数据；数据站工作流也可在 Actions 页面手动运行。数据更新不需新脚本版本；同版本 Release 会跳过，更新其附件或说明需手动处理。
 
-### 数据更新流程（游戏版本更新后 / 数据表变动后）
+### 维护约定
 
-```bash
-python3 build/rebuild-db.py    # 1. 重建物品总表（自动下载四语权威源；--csv-dir 可离线）
-git add data/ && git commit -m "data: 重建物品总表" && git push
-                               # 2. 推送 → GitHub Actions 自动组装并部署数据站
-# （备用本地通道）python3 ~/zhixia-data/update-data.py --deploy —— 经 wrangler 登录态直连部署
-```
-
-- 源数据＝四语 datamining Item.csv（中 / 英 / 日 / 韩）；hash / EC_ID / 别名由本表继承，不因重建丢失。
-- 指纹 = `sha256(文件内容) 前 12 位`（`.github/deploy/prepare.py` 与 update-data.py 算法一致），写入 version.json。
-- **数据更新与脚本版本解耦**：数据变了不必发新脚本版，用户次日自动取到新数据。
-- **发布自动化**：`src/`、`build/` 或 `package.json` 推送到 main → Actions（`.github/workflows/release.yml`）读取 `package.json` 版本（唯一源）→ 构建 + 一致性校验 → 创建 Release（附发布件）；版本号已发布则自动跳过（幂等）。也可在 Actions 页手动触发。
-
-### 日常维护
-
-**改界面词**（最常见）：
-```bash
-# 1. 直接编辑 dict/dict-*.json（JSON: {"kind":"kv","entries":{"原文":"译文"}}）
-# 2. 一键构建 + 验证（顺带更新脚本内嵌兜底）
-bash build.sh
-# 3. 提交推送 → 数据站自动部署 dict.json → 用户下次访问自动生效（无需发新脚本版本）
-git add dict/ && git commit -m "dict: ..." && git push
-```
-
-**更新装备数据**：`python3 build/rebuild-db.py` 重建物品总表（四语权威源自动下载，跟随游戏版本）；分发给用户走「数据更新流程」。
-
-**词典单一源（v1.4 Phase 16）**：
-- `dict/*.json` 是词典唯一权威源；**只改 JSON，勿手改源码词典块**（块上方有「⚠️ 自动生成」标识，手改会被下次构建覆盖）。
-- 构建时自动生成两路产物并互核：源码内嵌兜底（`inject_dicts.py`）与数据站发布词库（`make_dict_json.py` → `dict.json`）；`build.sh` 第 ⑭/⑮/⑯ 步逐条校验「源 ≡ 内嵌 ≡ 远程」一致。
-- `extract_dicts.py`（反向提取工具）已于 v1.4 Phase 21 删除。
-
-### 规则
-
-- `dist/` 为本地构建产物（不入库）；发布走 GitHub Releases 自动构建（`release.yml`）。
-- 词典键值冲突时以 JSON 为准（inject 全量替换整块）。
-- 每次构建后跑 `verify_dicts.js`（build.sh 已含，含 ⑯ 远程产物核验），确保「src 内嵌 ≡ dict/*.json 源 ≡ 数据站 dict.json」三方逐条一致。
-- **数据外置**：src/main.js + src/core/ + src/sites/ 是唯一代码源码；界面词典在 `src/core/dictionary.js` 中作为构建时再生区块维护，装备 / 染剂数据按需从数据站加载。修改代码只动对应模块，构建不会反向覆盖模块源码。
-- **站点配置统一在 Site Registry（v1.4 Phase 3）**：src 内 `@zhixia:site-registry` 区段是六站唯一配置源（host 匹配 / 所需数据表 / 构建索引 / 页面入口）——**新增站点**或**为某站新增索引查询**时只改这一处；漏登记的后果是功能静默失效（查表跳过），由各站端到端测试兜底。
-- **Core 基础设施以 `@zhixia:core-*` 区段标记（v1.4 Phase 4）**：storage / http / cache / dom / runtime / constants 六组基础设施在 src 内均有独立标记区段（runtime 与 cache 各含 2 段）；**存储键（`zhx.meta` / `zhx.dt.*`）与缓存序列化格式是跨版本兼容契约**（用户本地缓存数 MB 数据），改动须过 `tests/unit/test-core.mjs`。
-- **翻译与词典分层（v1.4 Phase 5）**：`@zhixia:core-translator` 是翻译统一接口（按 profile 分发到各站翻译器，**不改变任何译文**）；`@zhixia:core-dictionary` 是运行时词典（dict.json 六层原地合并 / 修订号 / 派生缓存统一失效入口）——**改词典合并机制或派生缓存时认准 `@zhixia:core-dictionary` 区段**，行为由 `tests/unit/test-dictionary.mjs` 冻结。
-- **物品索引统一解析层（v1.4 Phase 6）**：`@zhixia:core-item-resolver` 是物品索引（hash / 名称）与衍生注册表（重名 / 别名）的统一访问入口——**站点与翻译器不再直查 `itemHash` / `nameMap`**，一律经 `resolveByHash` / `resolveByName` / `resolveAllByName` / `resolveAlias` / `resolve`；**解析语义与既有查询完全一致（同名键首行胜）**，重名键（同键多译）经 `resolveAllByName` 取全量（顺序 = TSV 行序，历史优先）；行为由 `tests/unit/test-item-resolver.mjs` 冻结。
-- **统一观察器（v1.4 Phase 7）**：`@zhixia:core-observer` 是全部站点 MutationObserver 调度的唯一入口——统一 pending 队列 / debounce 计时 / 洪峰保护（超限重置）/ 祖先去重（`dedupeByAncestor` 升级为 O(n·depth) 祖先链查询：同节点去重 + 父子不同队）；`childList` 默认订阅、`characterData` **仅 Ronka 显式开启**（配 RONKA_KR 过滤器），其余站点禁开；**新站点观察器一律经 `createObserver`（或兼容包装 `observeLocal`）创建**，行为由 `tests/unit/test-observer.mjs` 冻结。
-- **统一 Target Pipeline（v1.4 Phase 8）**：`@zhixia:core-targets` 是 DOM 目标采集与处理分派的统一层——`collectTargets(root)`（全页缺省 / 局部传元素，输出 `{type, element, text, context}` 标准 target）→ `dispatchTargets`（顺序 item → plain-item → card → dye）→ `processRoot(root, context)`；EC 物品链（装备 / 套装文本 / 卡片 / 染剂）已整体迁入，**新站点目标采集一律经 collectTargets 扩展**；行为由 `tests/unit/test-targets.mjs` 冻结。
-- **站点适配器（v1.4 Phase 9）**：`createSiteAdapter` 是六站统一接口——配置面 `id/hosts/tables/indexes`，生命周期 `start / processRoot / onDataReady / onPageShow / destroy`；数据就绪补扫由工厂统一登记（不再散落各站）；站点实现按拆分顺序（① ronka ② ec ③ mirapri ④ fc ⑤ collection ⑥ wiki）渐进归拢，Phase 15 时随区段抽出为 `src/sites/*.js`；接口行为由 `tests/unit/test-site-registry.mjs`（G 组）冻结。
-- **Core Probe（v1.4 Phase 10）**：`@zhixia:core-probe` 是运行诊断独立段——默认关闭（`?zhx_probe=1` 启用）、近零开销、不写存储、不发网络请求、不影响正常执行路径；读取面 = runtime timeline（`__zhxMarks`）/ data stats / observer stats（`_obsStats`）/ resolver hit-miss（`_irStats`）/ Wiki stats。Wiki 数据访问只经 Item Resolver：`resolveEcId` / `resolveKo`（禁用对 `ecidMap` / `koByZh` 的直接访问）；Phase 15 时本区段原样抽出为独立文件。
-- **Core Data Manager（v1.4 Phase 11）**：`@zhixia:core-data-manager` 是数据链（远程数据 + 版本 + 缓存 + 重试 + ready + fallback）的集中管理段——对外的 `dataManager` 提供统一 API：`ensure / ready / getTable / getIndex / invalidate`；既有入口（`ensureTables` / `itemDbReady` / `onTablesReady`）语义不变；缓存策略（每日至多一次版本探测、指纹复用、失败兜底旧缓存、无数据降级）由 `tests/unit/test-data-manager.mjs` 冻结；Phase 15 时本区段原样抽出为 `src/core/data-manager.js`。
-- **Runtime Data v3（v1.4 Phase 12）**：canonical 数据经 `build/make-runtime-data.py` 生成「按站最小数据 + manifest」（`data/v3/`，生成产物不入库；部署时由 `prepare.py` 重建到 `ff14/v3/`）。运行时加载顺序 = **v3 →（失败 / schema 不兼容）→ v2 → 缓存 / 内嵌 fallback**：v3 探测每日至多一次（manifest 24h 缓存）、站点不在 manifest 直接回退不额外请求；文件级 sha256 校验 + 缓存（`zhx.v3.f.<site>.<name>`）；v3 成功时 `_ensureFinalize` 跳过 v2 建表、就绪广播照常；v3 未上线（404）时行为与纯 v2 完全一致。
-- **服务端预构建索引（v1.4 Phase 13）**：v3 数据按站裁剪语言列（每站 `names` 只含其翻译链实际查询的语言键：mirapri / fc / collection = 日文、ec = 英文、ronka = 韩文；`dup` 同步裁剪），单站全链 6.35MB → 4.14MB raw（gzip 1.95MB → 1.15MB）、parse 全链 ~270ms → ~55ms；客户端不再做任何二次计算（v3 就绪时 `_irBuildAux` 直接返回）；对比数据见 `tests/benchmark/bench-v3-load.mjs`（结论：维持 TSV 格式）。
-- **统一缓存体系（v1.4 Phase 14）**：`@zhixia:core-cache-registry` 把全部内存缓存集中登记（四类职责：`lookup` 名称查找 / `translate` 词典派生 / `derived` 数据派生 / `data` 持久数据由 DataManager 管理）——统一入口 `cacheReset(kind)`（按类清理，无参全清）、`cacheInfo()`（修订号 + 条目数观测）、`cacheGuard`（容量防线：查找缓存上限 5000 条，达限清空重建）；`_fireTablesReady` / `dictInvalidate` 的散落手工 reset 已清零（新增缓存只需登记一行）；机制由 `tests/unit/test-cache.mjs` 冻结。
-- **模块化构建（v1.4 Phase 15）**：完成从单文件脚本到 `src/main.js` + `src/core/*.js` + `src/sites/*.js` 的模块拆分。
-- **模块源码收口（v1.4 Phase 22）**：模块树现在是**唯一代码源码**；`build.sh` 不再执行「切分 → 自动补 import/export → 顺序写回 → 安装生成模块」链，而是直接从 `src/main.js` 交给 Rollup 生成单个 userscript。原 `build/migrate/*` 工具仅属于历史迁移资产，不进入正常构建链；直接修改模块不会再被构建覆盖。模块依赖中的历史循环边仍保留为后续架构治理项，本阶段不改变运行时语义。
-- **词典单一源（v1.4 Phase 16）**：`dict/*.json` 是词典唯一权威源——内嵌兜底由 `build/inject_dicts.py` 构建时全量覆盖生成（6 个词典块上方带「⚠️ 自动生成」标识，手改无效），数据站词库由 `build/make_dict_json.py` 生成；`build.sh` ⑭/⑮/⑯ 步校验「src 内嵌 ≡ JSON 源 ≡ 远程产物」逐条一致；`extract_dicts.py`（一次性迁移工具）已随 Phase 21 删除；契约由 `tests/integration/test-dict-single-source.mjs` 冻结。
-- **发布 / CI 单一源（v1.4 Phase 17）**：`package.json` 的 `version` 是唯一版本源——构建时自动同步 `build/userscript-header.txt` 的 `@version`；`build/version.mjs --check` 校验「package ≡ header ≡ dist」，不再依赖任何单文件源码头；契约由 `tests/integration/test-version-consistency.mjs` 冻结。
-- **错误边界与统一记录（v1.4 Phase 18）**：运行时错误经统一设施 `_zhxErr(tag, err)` 记录（有界 20 条缓冲 + `console.warn`；不写存储、不发请求）；四类高风险边界（runtime 入口 / observer 回调 / 数据就绪回调 / 站点适配器入口）已加固——单点错误不拖垮站点、且不再静默；**禁止空 catch**（重要错误须经 `_zhxErr` 记录；良性路径须显式「忽略：原因」注释；纯函数区不设 catch）。`?zhx_probe=1` 时启动期错误随 `__zhxErrs` 一并在诊断面板呈现（报告含 `errs:` 行）。模块源码新增、拆分、合并后，直接维护对应模块的 import/export；不再存在需要重算的单文件块索引。提交前由 `build/verify-module-source.mjs` 检查源码树与构建入口。
-- **性能测量基建（v1.4 Phase 19）**：测量长期化 + 基线对比。① 脚本侧开关：`?zhx_probe=1`（面板）或注入前置 `window.__zhxDiagOn = true`（无面板，基准 / 自动化用）——开启后时间线（`__zhxMarks`：finalize / readEnd / applied / buildStart / buildEnd / ready / fireDone）与统计面可经 `__zhxDiagRecord()` 读取（boot / obs / dom / dl / resolver / cache / 数据规模 / 词典规模）。② 仓库侧基准：`tests/benchmark/` 产标准报告（`zhx-bench/1` → `tests/.cache/bench/`）；`npm run bench:baseline` 存基线（`tests/benchmark/baseline/`）、`npm run bench:compare -- 旧 新 [--pct 10] [--strict]` 出「旧 / 新 / Δ%」对比表——**性能结论一律以基准数据为准，不凭体感**。
-- **运行探测**：URL 追加 `?zhx_probe=1`（或 `#zhx_probe`）启用右下角诊断面板（环境 / 时间线 / 数据规模 / wiki 专项），可一键复制；默认关闭、零额外开销，报告仅在本地显示（用于移动端实测反馈，不写存储、不发请求）。无面板测量开关（`window.__zhxDiagOn`）与结构化记录 API（`__zhxDiagRecord()`）见上条「性能测量基建（v1.4 Phase 19）」。
-- **完整回归（v1.4 Phase 20）**：全站回归测试面固化——mirapri 因 Cloudflare 拦阻改以**夹具测试**冻结（`tests/integration/test-mirapri.mjs` 与 `fixtures/mirapri-page.html`）；live 套件全面**断言化**（fc / ronka / ACL×2 由 dump 升级为硬断言，覆盖数据下载 / 界面词 / 无残留 / 零网络缓存 / 动态追加节点 / 点击跳转）；EC 属性链（alt / aria-label / title）与 bfcache（`pageshow persisted`）纳入回归。**测试覆盖与站点行为以 `tests/` 为唯一基线，发布前跑 `npm run test:core`（9 项）或全量套件。**
+- 修改代码只编辑 `src/` 模块；构建不会覆盖模块源码。
+- 修改界面词编辑 `dict/*.json`，不要手改 `src/core/dictionary.js` 中自动生成的词典块。
+- 修改物品数据后运行 `python3 build/rebuild-db.py` 和 `bash build.sh` 校验。
+- `dist/` 是本地构建产物，不提交；构建会校验词典、版本和发布产物。
+- 模块架构的历史与进度记录见 [重构计划](docs/v1.4-refactor-plan.md) 和 [重构进度](docs/v1.4-progress.md)。
 
 </details>
 
