@@ -63,3 +63,27 @@ FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足
 当前工具可以审计有限样本，尚不能证明百分之百的整站覆盖。交互型筛选、弹窗、中文输入建议、登录后页面和移动端菜单应在后续逐站增加安全、确定性的 Playwright 场景脚本。单站数十个 URL 无法代表无限数量的玩家作品。正式的 UI 文案覆盖率需要在逐站人工标注的基线上计算，不应根据“漏译 0 项”推断为 100%。
 
 离线测试见 tests/unit/test-coverage-audit.mjs。真实站点受网站反爬、网络及动态内容影响，适合独立定期运行，不能把联网扫描强制设为 PR CI 的硬性门禁。
+
+## 实测扫描可信度与 V1.1 数据协议
+
+执行按需 GitHub Actions 工作流 `Live localization coverage audit (7 sites)`，或在自己的浏览器使用 `tools/manual-coverage-audit/`。工作流默认不随每次 PR 推送运行，避免网站 WAF/网络故障污染正常代码测试。
+
+- **scan-complete**：本次配置的七站均取得至少一个有效业务页面，且没有记录失败页面；仅表示有限 URL 的扫描执行完整，**不等于整站 100% 汉化**。
+- **partial**：至少一个站点采到有效页面，但其他站点或同站页面存在阻断、404、超时、未产生证据等情况。
+- **failed**：七站均未获得有效业务页面。
+- 工作流扫描步骤允许失败以便收集诊断，但最终报告任务对 incomplete 状态报错；因此不能以单个矩阵任务的绿色状态宣称扫描成功。
+- 合并产物包括 `coverage-audit-live.md`、`coverage-audit-live.json`、`coverage-audit-live-v1.1.json`。最后一个是兼容浏览器审计工具 `zhx-manual-audit-v2` 的脱敏导出，`baselineQuality` 最多为 `partial-inferred`，自动路径配对不冒充人工确认的基线。
+- CI 上传之前调用 `sanitize-evidence.mjs`：原始 JSON 留在临时扫描环境，玩家、物品及未知归属文本按作用域脱敏；诊断日志中的 URL 路径同样隐藏。
+- 云端 `cloud-audit.py` 每次代理重试使用独立的 `attempt-地区-批次` 目录保留证据，且明确校验最终域名与 HTTP 响应。
+- 线上 Wiki 必须使用真实 URL；默认 `fixture:wiki-item.html` 只用于离线集成测试，不得算作真实站点覆盖。
+
+本地可执行的离线回归测试：
+
+    node tests/run.mjs test-coverage-audit test-live-coverage-report
+    python3 -m unittest discover -s tools/coverage-audit -p 'test_cloud_audit.py'
+
+离线聚合已有采集结果：
+
+    node tools/coverage-audit/live-report.mjs --input tests/.cache/coverage-audit --out tests/.cache/coverage-report
+
+追加 `--strict` 可让未完成七站扫描的运行以非零状态退出；失败证据仍会写入报告。
