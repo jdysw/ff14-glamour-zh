@@ -223,6 +223,9 @@ function classifystatechange(t, before) {
   return before != null && before !== t && /[A-Za-z]{2}/.test(t) && /[\u4e00-\u9fff]/.test(t);
 }
 function isUserContent(t, ctx) {
+  // Action controls inside a post are UI even if an ancestor is user-authored.
+  // Keep text blocks / authored post titles as user content.
+  if (ctx.control) return false;
   if (ctx.user) return true;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
   if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;

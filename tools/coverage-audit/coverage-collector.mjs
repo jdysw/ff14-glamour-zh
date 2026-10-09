@@ -41,18 +41,22 @@ export const COLLECTOR_JS = String.raw`(() => {
       ancestors += ' ' + String(p.className || '') + ' ' + String(p.id || '');
     const full = cls + ' ' + id + ' ' + ancestors;
     const ad = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift|amazon|rakuten|affiliate)/i.test(full);
-    const user = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content|(?:^|[\s_-])(?:created[-_]at|posted[-_]at|relative[-_]time|timestamp)(?=$|[\s_-]))/i.test(full);
-    const linkAction = el.tagName === 'A' && (
-      /(?:^|[\s_-])(?:button|btn|load-more|show-more|read-more|page-numbers|next|prev)(?:$|[\s_-])/i.test(cls)
-      || !!el.closest('.pagination,.pager,[class*="pagination"],[class*="pager"]')
-      || /^(?:show results|load more|show more|see more|read more|view more|search|filter|next|previous|reset|apply)$/i.test((el.textContent || '').trim())
+    const authoredContext = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content|(?:^|[\s_-])(?:created[-_]at|posted[-_]at|relative[-_]time|timestamp)(?=$|[\s_-]))/i.test(full);
+    const link = el.closest('a[href]');
+    const linkCls = String(link?.className || '');
+    const actionLink = !!link && (
+      /(?:^|[\s_-])(?:button|btn|load-more|show-more|read-more|page-numbers|next|prev)(?:$|[\s_-])/i.test(linkCls)
+      || !!link.closest('.pagination,.pager,[class*="pagination"],[class*="pager"]')
+      || /^(?:show results|load more|show more|see more|read more|view more|search|filter|next|previous|reset|apply)$/i.test((link.textContent || '').trim())
     );
-    const ui = linkAction || /^(BUTTON|LABEL|OPTION|SELECT|SUMMARY|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
+    const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
+      || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
+    const user = authoredContext && !control;
+    const ui = control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
-      || kind.startsWith('attr:') || kind === 'option'
-      || !!el.closest('button,[role="button"],[role="tab"]');
+      || kind.startsWith('attr:') || kind === 'option';
     return {
-      tag: el.tagName.toLowerCase(), cls, id, ancestors, ad, user, ui,
+      tag: el.tagName.toLowerCase(), cls, id, ancestors, ad, user, ui, control,
       role: el.getAttribute('role') || '',
       name: el.getAttribute('name') || '',
       href: el.getAttribute('href') || '',
@@ -88,3 +92,8 @@ export const COLLECTOR_JS = String.raw`(() => {
 })()`;
 
 export const LINKS_JS = String.raw`(() => Array.from(document.querySelectorAll('a[href]'), a => a.href).filter(Boolean).slice(0, 5000))()`;
+
+// The data-manager calls __zhxMark('ready') only after table building and
+// onTablesReady callbacks finish. The audit enables the existing diagnostic
+// marker before injection; it never changes normal userscript behavior.
+export const AUDIT_READY_JS = String.raw`(() => Object.prototype.hasOwnProperty.call(window.__zhxMarks || {}, 'ready'))()`;

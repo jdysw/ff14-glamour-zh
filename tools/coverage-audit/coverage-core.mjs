@@ -7,7 +7,7 @@ const ASSET_EXT = /\.(?:png|jpe?g|gif|svg|webp|css|js|xml|json|zip|pdf|woff2?|ic
 export function normalizeSiteUrl(candidate, base, allowedHosts) {
   try {
     const u = new URL(candidate, base);
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    if (u.protocol !== 'https:') return null;
     if (!allowedHosts.includes(u.hostname)) return null;
     if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname)) return null;
     u.hash = '';
@@ -158,4 +158,16 @@ export function matchPatternCoversHost(pattern, host) {
 export function unmatchedHosts(siteHosts, header) {
   const patterns = extractMatches(header);
   return [...new Set(siteHosts)].filter((host) => !patterns.some((p) => matchPatternCoversHost(p, host)));
+}
+
+// The userscript's asynchronous data load can exceed 25s. Do not turn a
+// fixed delay into a false "success" scan. Poll its actual ready signal.
+export async function waitForAuditReady(readReady, delay, { timeoutMs = 90000, pollMs = 500 } = {}) {
+  if (!(timeoutMs > 0) || !(pollMs > 0)) throw new RangeError('Invalid audit readiness timeout');
+  const checks = Math.max(1, Math.ceil(timeoutMs / pollMs));
+  for (let i = 0; i < checks; i++) {
+    if (await readReady()) return true;
+    if (i + 1 < checks) await delay(pollMs);
+  }
+  throw new Error('翻译词库和就绪回调未在 ' + timeoutMs + 'ms 内完成；本次扫描不计为成功');
 }

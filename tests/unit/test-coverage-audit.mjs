@@ -8,9 +8,9 @@ import {
 } from '../../tools/coverage-audit/audit.mjs';
 import {
   normalizeSiteUrl, templateKey, selectDiscoveredPages, pairSnapshots,
-  latestResults, coverageStats, classifyChangedText, unmatchedHosts,
+  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady,
 } from '../../tools/coverage-audit/coverage-core.mjs';
-import { LINKS_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
+import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -28,6 +28,10 @@ assert.equal(unmatchedHosts(['unknown.example.net'], header).length, 1);
 assert.equal(normalizeSiteUrl('https://example.com/item/?utm_source=x&a=2#part', 'https://example.com/', ['example.com']),
   'https://example.com/item/?a=2');
 assert.equal(normalizeSiteUrl('https://badexample.com/', 'https://example.com/', ['example.com']), null);
+assert.equal(normalizeSiteUrl('http://example.com/', 'https://example.com/', ['example.com']), null,
+  'HTTP URLs must not count as coverage: published @match patterns are HTTPS only');
+assert.equal(normalizeSiteUrl('//example.com/page', 'https://example.com/', ['example.com']),
+  'https://example.com/page/');
 assert.equal(normalizeSiteUrl('https://www.example.com/', 'https://example.com/', ['example.com']), null,
   'unmatched subdomain cannot be audited as deployed coverage');
 assert.equal(normalizeSiteUrl('https://www.example.com/', 'https://example.com/', ['www.example.com']),
@@ -73,6 +77,12 @@ assert.equal(classify('すべて已筛选', { ui: true, before: 'すべて' }), 
 assert.equal(classify('提交搜索', { ui: true }), 'ok');
 assert.equal(classify('Some random English username', { ui: false, kind: 'text' }), 'ok');
 assert.equal(classify('検索', { cls: 'post-card', ui: true }), 'real', 'post-card must not blanket-ignore UI');
+assert.equal(classify('検索', { cls: 'post-content', ui: true, control: true, tag: 'button' }), 'real',
+  'action button nested in authored post content remains an untranslated UI candidate');
+assert.equal(classify('검색', { cls: 'comment-body', ui: true, control: true, tag: 'a' }), 'real',
+  'action link nested in comment body remains a UI candidate');
+assert.equal(classify('検索', { cls: 'post-content', ui: true, control: false, tag: 'span' }), 'user',
+  'authored content remains excluded');
 assert.equal(classify('검색', { cls: 'username', ui: true }), 'user');
 assert.equal(classify('검색', { ad: true }), 'ad');
 assert.equal(classify('3분 전', { cls: 'comment-created-at', tag: 'span' }), 'user');
@@ -185,18 +195,30 @@ function anchorContext(cls, label) {
 assert.equal(anchorContext('button-link', 'Show Results')[0]?.ctx.ui, true);
 assert.equal(anchorContext('content-entry', 'Player nickname')[0]?.ctx.ui, false);
 const { runInNewContext: runScript } = await import('node:vm');
-function hiddenText(parentOpacity = '1', childOpacity = '1') {
+assert.equal(runScript(AUDIT_READY_JS, {window: {__zhxMarks: {}}}), false);
+assert.equal(runScript(AUDIT_READY_JS, {window: {__zhxMarks: {ready: 0}}}), true,
+  'ready timestamp may be zero');
+let ticks = 0;
+assert.equal(await waitForAuditReady(async () => ++ticks >= 4, async () => {}), true);
+assert.equal(ticks, 4, 'poll until data actually finishes, not a hard-coded sleep');
+let timedOut = 0;
+await assert.rejects(waitForAuditReady(async () => { timedOut++; return false; },
+  async () => {}, { timeoutMs: 3, pollMs: 1 }), /未在 3ms 内完成/);
+assert.equal(timedOut, 3, 'timeout must fail instead of falsely reporting scan success');
+function hiddenText(parentOpacity = '1', childOpacity = '1', tagName = 'BUTTON') {
   const parent = {
     nodeType: 1, tagName: 'SECTION', id: '', className: '',
     parentElement: null, hasAttribute: () => false, getAttribute: () => null,
     closest: () => null, textContent: '',
   };
   const child = {
-    nodeType: 1, tagName: 'BUTTON', id: '', className: '',
+    nodeType: 1, tagName, id: '', className: tagName === 'A' ? 'btn' : '',
     parentElement: parent, isConnected: true, hasAttribute: () => false,
     getAttribute: () => null, closest: () => null, textContent: '검색',
     getClientRects: () => [{}], previousElementSibling: null,
   };
+  child.closest = (sel) => sel === 'a[href]' && tagName === 'A' ? child : null;
+  parent.className = 'post-content';
   parent.isConnected = true;
   parent.getClientRects = () => [{}];
   const node = { nodeValue: '검색', parentElement: child };
@@ -223,6 +245,15 @@ function hiddenText(parentOpacity = '1', childOpacity = '1') {
 assert.equal(hiddenText('0').length, 0, 'opaque child under zero-opacity ancestor is hidden');
 assert.equal(hiddenText('1', '0').length, 0, 'zero-opacity node is hidden');
 assert.equal(hiddenText('1', '1').length, 1, 'visible text remains included');
+assert.equal(hiddenText('1', '1', 'BUTTON')[0]?.ctx.control, true);
+assert.equal(hiddenText('1', '1', 'BUTTON')[0]?.ctx.user, false,
+  'authored parent must not hide actionable descendant buttons');
+assert.equal(hiddenText('1', '1', 'A')[0]?.ctx.control, true);
+assert.equal(hiddenText('1', '1', 'A')[0]?.ctx.user, false,
+  'styled link inside a post must remain an actionable control');
+assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.control, false);
+assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.user, true,
+  'ordinary authored nested text must remain excluded');
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');

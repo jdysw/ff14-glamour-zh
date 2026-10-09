@@ -13,9 +13,9 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
-import { LINKS_JS } from './coverage-collector.mjs';
+import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
 import { discoverSitemapUrls } from './sitemap.mjs';
-import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts } from './coverage-core.mjs';
+import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
 
@@ -60,7 +60,7 @@ function presetDataJs(itemsTsv) {
  * 扫描单个 URL（本地 CDP）。
  * @returns {Promise<object>} { site, pageId, url, items, error? }
  */
-export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, waitMs = 8000 }) {
+export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, waitMs = 1500 }) {
   const t = await newPage(port, 'about:blank');
   const c = t.cdp;
   try {
@@ -97,13 +97,18 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     // 现在清 localStorage + 预置数据 + 注入脚本（页面已就绪）
     await c.eval(presetDataJs(itemsTsv));
     await c.eval(GM_STUB);
+    // Enable the existing lightweight diagnostic lifecycle marker before the
+    // userscript loads; this does not display the probe panel.
+    await c.eval('window.__zhxDiagOn = true');
     const dist = fs.readFileSync(DIST_FILE, 'utf8');
     await c.eval(WRAP(dist + '\nwindow.__zhxAuditInjected = true;'));
-    // Data managers may not expose a public ready flag; bound the completion
-    // delay and preserve the before snapshot instead of assuming no misses.
-    await sleep(waitMs);
     const injected = await c.eval('window.__zhxAuditInjected === true');
     if (!injected) throw new Error('userscript 执行失败，不能判定汉化覆盖');
+    // __zhxMarks.ready is emitted after asynchronous table construction and
+    // onTablesReady translation callbacks. Timeout is a failed scan, never a
+    // page with apparently missing translations.
+    await waitForAuditReady(() => c.eval(AUDIT_READY_JS), sleep);
+    await sleep(waitMs); // allow MutationObserver / DOM work to settle
     const raw = await c.eval(COLLECTOR_JS);
     if (!Array.isArray(raw)) throw new Error('collector 未返回数组');
     return { site, pageId, url, beforeCount: before.length, items: pairSnapshots(before, raw), links, error: null, status: 'ok' };
@@ -154,7 +159,7 @@ export function saveResult(result, dir = CACHE_DIR) {
 // ---------- 主流程 ----------
 function usage() {
   console.log(`用法:
-  node tools/coverage-audit/run-scan.mjs --site <site> [--pages p1,p2] [--port 9223] [--discover --max-pages 60 --max-depth 2 --per-template 3 --wait 8000]
+  node tools/coverage-audit/run-scan.mjs --site <site> [--pages p1,p2] [--port 9223] [--discover --max-pages 60 --max-depth 2 --per-template 3 --wait 1500]
   node tools/coverage-audit/run-scan.mjs --all [--channel local|cloud|auto]
   node tools/coverage-audit/run-scan.mjs --report [--out <file.md>]`);
 }
@@ -199,7 +204,7 @@ async function main() {
   const maxPages = Math.max(1, Math.min(500, Number(getArg('--max-pages') || 60)));
   const maxDepth = Math.max(0, Math.min(5, Number(getArg('--max-depth') || 2)));
   const perTemplate = Math.max(1, Math.min(15, Number(getArg('--per-template') || 3)));
-  const waitMs = Math.max(1000, Math.min(60000, Number(getArg('--wait') || 8000)));
+  const waitMs = Math.max(0, Math.min(60000, Number(getArg('--wait') ?? 1500)));
 
   if (!siteArg) { usage(); process.exit(2); }
 

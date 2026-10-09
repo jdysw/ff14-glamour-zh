@@ -36,17 +36,17 @@ from urllib.parse import urlsplit, urlunsplit, urljoin, parse_qsl, urlencode
 
 def browser_scripts():
     code = (
-        "import { COLLECTOR_JS, LINKS_JS } from './tools/coverage-audit/coverage-collector.mjs';"
-        "process.stdout.write(JSON.stringify({collector:COLLECTOR_JS,links:LINKS_JS}));"
+        "import { COLLECTOR_JS, LINKS_JS, AUDIT_READY_JS } from './tools/coverage-audit/coverage-collector.mjs';"
+        "process.stdout.write(JSON.stringify({collector:COLLECTOR_JS,links:LINKS_JS,ready:AUDIT_READY_JS}));"
     )
     process = subprocess.run(
         ["node", "--input-type=module", "-e", code], cwd=REPO_ROOT,
         capture_output=True, text=True, check=True, timeout=15,
     )
     scripts = json.loads(process.stdout)
-    return scripts["collector"], scripts["links"]
+    return scripts["collector"], scripts["links"], scripts["ready"]
 
-COLLECTOR_JS, LINKS_JS = browser_scripts()
+COLLECTOR_JS, LINKS_JS, AUDIT_READY_JS = browser_scripts()
 
 def pair_snapshots(before, after):
     source = {}
@@ -61,7 +61,7 @@ def pair_snapshots(before, after):
 def normalize_url(candidate, base, hosts):
     try:
         u = urlsplit(urljoin(base, candidate))
-        if u.scheme not in ("https", "http") or not u.hostname:
+        if u.scheme != "https" or not u.hostname:
             return None
         if u.hostname not in hosts:
             return None
@@ -164,6 +164,7 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
         links = await page.evaluate(LINKS_JS)
         # 清 gm + 预置数据（云环境无本地数据，依赖脚本从数据站拉取）
         await page.evaluate(GM_STUB)
+        await page.evaluate("window.__zhxDiagOn = true")
         # The marker is executed *inside* the same synchronous script after
         # startup. Successful tag insertion alone does not imply execution.
         wrapped_dist = (
@@ -186,8 +187,14 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
             entry["error"] = "userscript execution not confirmed (CSP/runtime failure)"
             entry["status"] = "failed"
             return entry
-        # 等待数据流程 + 补扫（约 15s）
-        await asyncio.sleep(15)
+        # Wait for actual data build and translation-ready callbacks, rather
+        # than counting an arbitrary 15-second snapshot as a successful scan.
+        try:
+            await page.wait_for_function(AUDIT_READY_JS, timeout=90000)
+        except Exception as e:
+            entry["error"] = "translation tables not ready within 90000ms: " + str(e)[:120]
+            return entry
+        await asyncio.sleep(1.5)  # settle MutationObserver / DOM updates
         # 运行收集器
         try:
             items = await page.evaluate(COLLECTOR_JS)

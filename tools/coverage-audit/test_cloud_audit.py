@@ -12,9 +12,11 @@ spec.loader.exec_module(cloud)
 
 
 class DummyPage:
-    def __init__(self, executed):
+    def __init__(self, executed, ready=True):
         self.executed = executed
+        self.ready = ready
         self.script = ""
+        self.waited_on = None
 
     async def goto(self, *args, **kwargs):
         pass
@@ -33,6 +35,11 @@ class DummyPage:
 
     async def add_script_tag(self, content):
         self.script = content  # Insertion succeeded even if the browser never executed it.
+
+    async def wait_for_function(self, script, timeout=None):
+        self.waited_on = (script, timeout)
+        if not self.ready:
+            raise TimeoutError("tables not ready")
 
 
 class CloudAuditTests(unittest.TestCase):
@@ -94,6 +101,16 @@ class CloudAuditTests(unittest.TestCase):
         self.assertNotEqual(result["items"], [{"text": "success"}])
         self.assertIn("__zhxAuditInjected = true", page.script)
 
+    def test_injected_but_tables_unready_is_failed_scan(self):
+        page = DummyPage(executed=True, ready=False)
+        with patch.object(cloud, "wait_ok", new=AsyncMock(return_value=True)), \
+                patch.object(cloud.asyncio, "sleep", new=AsyncMock(return_value=None)):
+            result = asyncio.run(cloud.scan_page(page, "https://example.com/", "// script",
+                                                 None, "fc", "home", []))
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("translation tables not ready", result["error"])
+        self.assertEqual(page.waited_on, (cloud.AUDIT_READY_JS, 90000))
+
     def test_confirmed_execution_allows_snapshot_collection(self):
         page = DummyPage(executed=True)
         with patch.object(cloud, "wait_ok", new=AsyncMock(return_value=True)), \
@@ -103,6 +120,7 @@ class CloudAuditTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertIsNone(result["error"])
         self.assertEqual(result["items"][0]["before"], "검색")
+        self.assertEqual(page.waited_on, (cloud.AUDIT_READY_JS, 90000))
 
 
 if __name__ == "__main__":
