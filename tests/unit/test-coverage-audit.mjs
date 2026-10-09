@@ -76,13 +76,13 @@ assert.equal(classify('検索', { cls: 'post-card', ui: true }), 'real', 'post-c
 assert.equal(classify('검색', { cls: 'username', ui: true }), 'user');
 assert.equal(classify('검색', { ad: true }), 'ad');
 assert.equal(classify('3분 전', { cls: 'comment-created-at', tag: 'span' }), 'user');
-assert.equal(classify('昨日', { cls: 'post-date', tag: 'span' }), 'user');
+assert.equal(classify('きのう', { cls: 'post-date', tag: 'span' }), 'user');
 assert.equal(classify('검색', { cls: 'timestamp', tag: 'time', ui: false }), 'user');
-assert.equal(classify('日付設定', { cls: 'date-picker', tag: 'button', ui: true }), 'real',
+assert.equal(classify('날짜 선택', { cls: 'date-picker', tag: 'button', ui: true }), 'real',
   'date-picker buttons are UI controls, not user dates');
 assert.equal(classify('广告 广告', { cls: 'amazon-banner', ui: true }), 'ok');
-assert.equal(classify('広告情報', { cls: 'amazon-affiliate', ui: true }), 'ad');
-assert.equal(classify('楽天特典', { cls: 'rakuten-widget', ui: true }), 'ad');
+assert.equal(classify('広告のお知らせ', { cls: 'amazon-affiliate', ui: true }), 'ad');
+assert.equal(classify('楽天セール', { cls: 'rakuten-widget', ui: true }), 'ad');
 assert.equal(classify('Eorzea Collection', { ui: true }), 'exempt');
 assert.equal(isResidual('Search', { ui: true }), true);
 assert.equal(isResidual('Search', { ui: false }), false);
