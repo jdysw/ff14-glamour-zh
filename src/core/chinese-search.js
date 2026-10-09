@@ -149,13 +149,15 @@ const SUGGEST_MIN_CHARS = 2;
 // 候选列表可视行数：数据全量渲染（显示所有含输入字的装备），
 // 列表高度限 8 行，超出的通过滚轮在列表内滑动翻看。
 const SUGGEST_VISIBLE_ROWS = 8;
-const SUGGEST_ROW_HEIGHT = 40;   // 与 CSS 中 button min-height:40px 对齐
+const SUGGEST_ROW_HEIGHT = 44;   // 触摸目标不少于 44px，与 CSS 对齐
+const SUGGEST_RENDER_BATCH = 80;  // 首批至多 80 行，滚动接近底部时渐进追加
 const SUGGEST_DEBOUNCE_MS = 70;
 const SUGGEST_HIDE_DELAY_MS = 120;
 
 let _suggestBox = null;
 let _suggestInput = null;
 let _suggestRows = [];
+let _suggestRendered = 0;
 let _suggestActive = -1;
 let _suggestTimer = null;
 let _suggestHideTimer = null;
@@ -195,7 +197,7 @@ function ensureSuggestionStyle() {
   style.textContent = [
     '[data-zhx-chinese-suggest]{position:fixed;display:block;box-sizing:border-box;overflow:auto;margin:0;padding:4px;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:2147483647;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}',
     '[data-zhx-chinese-suggest][hidden]{display:none;}',
-    '[data-zhx-chinese-suggest] button{display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;width:100%;min-height:40px;margin:0;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:#222;text-align:left;cursor:pointer;}',
+    '[data-zhx-chinese-suggest] button{display:flex;align-items:center;justify-content:space-between;box-sizing:border-box;width:100%;min-height:44px;margin:0;padding:10px 10px;border:0;border-radius:6px;background:transparent;color:#222;text-align:left;cursor:pointer;}',
     '[data-zhx-chinese-suggest] button:hover,[data-zhx-chinese-suggest] button[data-active="1"]{background:#f0f2f5;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-zh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-native{margin-left:12px;overflow:hidden;color:#777;font-size:12px;text-overflow:ellipsis;white-space:nowrap;}',
@@ -210,25 +212,22 @@ function positionSuggestionBox(input) {
   const rect = input.getBoundingClientRect();
   const gap = 4;
   const margin = 8;
-  const viewportWidth = Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
-  const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
-  const width = Math.min(Math.max(rect.width, 180), Math.max(180, viewportWidth - margin * 2));
-  const left = Math.min(Math.max(margin, rect.left), Math.max(margin, viewportWidth - width - margin));
-  const belowSpace = Math.max(0, viewportHeight - rect.bottom - gap - margin);
-  const aboveSpace = Math.max(0, rect.top - gap - margin);
-  const openBelow = belowSpace >= 120 || belowSpace >= aboveSpace;
+  // 手机软键盘会缩小 visualViewport，但不一定同步更新 innerHeight。
+  const view = globalThis.visualViewport;
+  const viewportWidth = Number(view?.width) || Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
+  const viewportHeight = Number(view?.height) || Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
+  const viewLeft = Number(view?.offsetLeft) || 0;
+  const viewTop = Number(view?.offsetTop) || 0;
+  const roomWidth = Math.max(0, viewportWidth - margin * 2);
+  const width = Math.min(Math.max(rect.width, 180), roomWidth);
+  const left = Math.min(Math.max(viewLeft + margin, rect.left), viewLeft + Math.max(margin, viewportWidth - width - margin));
+  const belowSpace = Math.max(0, viewTop + viewportHeight - rect.bottom - gap - margin);
+  const aboveSpace = Math.max(0, rect.top - viewTop - gap - margin);
+  const openBelow = belowSpace >= SUGGEST_ROW_HEIGHT * 2 || belowSpace >= aboveSpace;
   const available = openBelow ? belowSpace : aboveSpace;
-  // 可视 8 行（行高 40px + 容器纵向 padding 8）：数据全量在列表内，超出部分滚轮翻看。
   const rowsHeight = SUGGEST_VISIBLE_ROWS * SUGGEST_ROW_HEIGHT + 8;
-  const maxHeight = Math.max(80, Math.min(rowsHeight, available));
-  let top = openBelow
-    ? rect.bottom + gap
-    : Math.max(margin, rect.top - gap - maxHeight);
-  // 兜底：只要上方有足够空间，就不能让候选框仍落在输入框下方。
-  // 这样可以避免异常/不完整的视口尺寸信息造成错误的展开方向。
-  if (top >= rect.top && aboveSpace >= 120) {
-    top = Math.max(margin, rect.top - gap - maxHeight);
-  }
+  const maxHeight = Math.max(0, Math.min(rowsHeight, available));
+  const top = openBelow ? rect.bottom + gap : Math.max(viewTop + margin, rect.top - gap - maxHeight);
   _suggestBox.style.left = left + 'px';
   _suggestBox.style.top = top + 'px';
   _suggestBox.style.width = width + 'px';
@@ -250,9 +249,12 @@ function syncSuggestionsOnScroll() {
     hideSuggestions(true);
     return;
   }
-  const viewportWidth = Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
-  const viewportHeight = Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
-  const onScreen = rect.bottom > 0 && rect.top < viewportHeight && rect.right > 0 && rect.left < viewportWidth;
+  const view = globalThis.visualViewport;
+  const width = Number(view?.width) || Number(globalThis.innerWidth) || document.documentElement?.clientWidth || 0;
+  const height = Number(view?.height) || Number(globalThis.innerHeight) || document.documentElement?.clientHeight || 0;
+  const left = Number(view?.offsetLeft) || 0;
+  const top = Number(view?.offsetTop) || 0;
+  const onScreen = rect.bottom > top && rect.top < top + height && rect.right > left && rect.left < left + width;
   if (!onScreen) {
     hideSuggestions(true);
     return;
@@ -275,6 +277,7 @@ function hideSuggestions(clearInputState = false) {
     if (clearInputState) _suggestInput.removeAttribute('aria-activedescendant');
   }
   _suggestRows = [];
+  _suggestRendered = 0;
   _suggestActive = -1;
 }
 
@@ -309,9 +312,34 @@ function selectSuggestion(index) {
   }
 }
 
+// 保留完整候选数组，但只渲染小批量 DOM；触底和键盘导航时按需追加。
+function appendSuggestionBatch() {
+  if (!_suggestBox || !_suggestRows.length) return;
+  const end = Math.min(_suggestRows.length, _suggestRendered + SUGGEST_RENDER_BATCH);
+  for (let index = _suggestRendered; index < end; index++) {
+    const row = _suggestRows[index];
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'zhx-chinese-suggest-' + index;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', 'false');
+    button.dataset.zhxIndex = String(index);
+    const zh = document.createElement('span');
+    zh.className = 'zhx-suggest-zh';
+    zh.textContent = row.zh;
+    const native = document.createElement('span');
+    native.className = 'zhx-suggest-native';
+    native.textContent = row.native;
+    button.append(zh, native);
+    _suggestBox.appendChild(button);
+  }
+  _suggestRendered = end;
+}
+
 function updateSuggestionActive(index) {
   if (!_suggestBox) return;
   _suggestActive = index;
+  while (index >= _suggestRendered && _suggestRendered < _suggestRows.length) appendSuggestionBatch();
   const buttons = _suggestBox.querySelectorAll('button[data-zhx-index]');
   for (const button of buttons) {
     const active = Number(button.dataset.zhxIndex) === index;
@@ -358,6 +386,7 @@ function showSuggestions(input) {
 
   _suggestInput = input;
   _suggestRows = rows;
+  _suggestRendered = 0;
   _suggestActive = -1;
   _suggestBox.replaceChildren();
 
@@ -376,24 +405,10 @@ function showSuggestions(input) {
   }
 
   _suggestBox.setAttribute('role', 'listbox');
-  rows.forEach((row, index) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.id = 'zhx-chinese-suggest-' + index;
-    button.setAttribute('role', 'option');
-    button.setAttribute('aria-selected', 'false');
-    button.dataset.zhxIndex = String(index);
-    const zh = document.createElement('span');
-    zh.className = 'zhx-suggest-zh';
-    zh.textContent = row.zh;
-    const native = document.createElement('span');
-    native.className = 'zhx-suggest-native';
-    native.textContent = row.native;
-    button.append(zh, native);
-    _suggestBox.appendChild(button);
-  });
+  appendSuggestionBatch();
 
   input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-haspopup', 'listbox');
   input.setAttribute('aria-expanded', 'true');
   input.setAttribute('aria-controls', _suggestBox.id);
   _suggestBox.hidden = false;
@@ -638,10 +653,18 @@ function bindChineseSearchUi() {
   document.addEventListener('scroll', (event) => {
     // 列表自身滚动（滚轮翻看全部装备）无需处理；页面滚动只做同步——
     // 输入框仍在视口内则保持打开并跟随重定位，已滚出视口才关闭。
-    if (_suggestBox && event.target && _suggestBox.contains(event.target)) return;
+    if (_suggestBox && event.target && _suggestBox.contains(event.target)) {
+      if (event.target === _suggestBox && !_suggestBox.hidden
+          && _suggestBox.scrollTop + _suggestBox.clientHeight >= _suggestBox.scrollHeight - SUGGEST_ROW_HEIGHT * 2) {
+        appendSuggestionBatch();
+      }
+      return;
+    }
     syncSuggestionsOnScroll();
   }, true);
   globalThis.addEventListener?.('resize', () => syncSuggestionsOnScroll());
+  globalThis.visualViewport?.addEventListener?.('resize', () => syncSuggestionsOnScroll());
+  globalThis.visualViewport?.addEventListener?.('scroll', () => syncSuggestionsOnScroll());
 }
 
 function handleChineseSearchSubmit(event, siteId) {
