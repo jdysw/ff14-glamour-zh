@@ -3,18 +3,16 @@
 import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh } from './data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
 
+// 站点能力表：统一交互由 Core 调度；form 与 SPA 输入的提交路径各用原站行为。
 const SEARCH_SITES = Object.freeze({
-  mirapri: true,
-  fc: true,
-  ronka: true,
-  collection: true,
-  // 1.4.2 后续修复：Eorzea Collection（英文站）——中文装备名 → 英文名。
-  // 覆盖场景：部位筛选器（vue-select，输入触发 POST /gear/<slot>/search）
-  // 与装备库页搜索框（/gearsets、/accessories 的 "Search..." 框）。
-  ec: true,
-  // End Closet（韩服幻化站）：中文装备名 → 韩文名（站内搜索用韩文）。
-  endcloset: true,
+  mirapri: { vueSelect: false },
+  fc: { vueSelect: false },
+  ronka: { vueSelect: false },
+  collection: { vueSelect: false },
+  ec: { vueSelect: true },
+  endcloset: { vueSelect: false },
 });
+let _activeSearchSiteId = null;
 
 const SEARCH_EXCLUDE_RE = /author|player|title|comment|tag|username|email|password|作者|标题|标签|用户/i;
 const SEARCH_INPUT_TYPES = new Set(['', 'text', 'search']);
@@ -166,6 +164,7 @@ let _suggestDataReady = false;
 const _composingInputs = new WeakSet();
 const _convertedInputs = new WeakMap();
 const _programmaticInputs = new WeakSet();
+const _selectedSearchRows = new WeakMap();
 
 function isSearchInput(input) {
   const form = input?.form;
@@ -293,6 +292,7 @@ function selectSuggestion(index) {
   const input = _suggestInput;
   input.focus({ preventScroll: true });
   input.value = row.zh;
+  _selectedSearchRows.set(input, row);
   hideSuggestions(true);
   try {
     input.setSelectionRange(input.value.length, input.value.length);
@@ -301,7 +301,12 @@ function selectSuggestion(index) {
   }
   // 独立搜索框（React 站点，b 方案）：选中候选后做「转换式搜索」——
   // 用原生名触发站内检索，随后输入框显示恢复为中文。
-  if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input);
+  // 两类控件遵循相同选择语义：选择候选就执行一次站内搜索。
+  // 原站表单必须经过 requestSubmit（触发现有校验及捕获监听），不能调用 form.submit()。
+  if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input, false, row.native);
+  else if (isSearchInput(input) && typeof input.form?.requestSubmit === 'function') {
+    input.form.requestSubmit();
+  }
 }
 
 function updateSuggestionActive(index) {
@@ -397,7 +402,10 @@ function showSuggestions(input) {
 
 function handleSearchInput(event) {
   const input = event.target;
-  if (!_programmaticInputs.has(input)) _convertedInputs.delete(input);
+  if (!_programmaticInputs.has(input)) {
+    _convertedInputs.delete(input);
+    _selectedSearchRows.delete(input);
+  }
   if (isSearchInput(input)) {
     if (_composingInputs.has(input)) return;
     scheduleSuggestions(input);
@@ -491,7 +499,9 @@ function isStandaloneSearchInput(input) {
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
   // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
   // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
-  if (/vs__search/.test(String(input.className || ''))) return true;
+  if (/vs__search/.test(String(input.className || ''))) {
+    return SEARCH_SITES[_activeSearchSiteId]?.vueSelect === true;
+  }
   if (input.form) return false;
   const meta = [
     input.getAttribute?.('placeholder'),
@@ -533,13 +543,14 @@ function rewriteInputNatively(input, native) {
 
 // b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
 // 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
-function convertStandaloneForSearch(input, allowPartial = false) {
+function convertStandaloneForSearch(input, allowPartial = false, selectedNative = null) {
   try {
     if (!input || input.isConnected === false || _composingInputs.has(input)) return false;
     const shown = input.value;
     const query = normalizeSearchQuery(shown);
     if (query.length < 2 || !isChineseSearchQuery(query)) return false;
-    const native = (isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
+    const native = selectedNative
+      || (isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
       || resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
@@ -643,7 +654,11 @@ function handleChineseSearchSubmit(event, siteId) {
   const query = normalizeSearchQuery(input.value);
   if (!isChineseSearchQuery(query)) return;
 
-  const native = resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+  const selected = _selectedSearchRows.get(input);
+  const native = selected?.zh === query && selected.native
+    ? selected.native
+    : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+  _selectedSearchRows.delete(input);
   // 套装页优先系列/职能片段映射；其余站点仍以物品总表 + 公共子串兜底。
   if (!native || native === query) return;
 
@@ -667,6 +682,7 @@ function handleChineseSearchSubmit(event, siteId) {
 
 function startChineseSearch(siteId) {
   if (!SEARCH_SITES[siteId]) return;
+  _activeSearchSiteId = siteId;
   if (typeof document === 'undefined' || !document.addEventListener) return;
   if (globalThis.__zhxChineseSearchBound) return;
   globalThis.__zhxChineseSearchBound = true;
