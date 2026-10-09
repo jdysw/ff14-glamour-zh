@@ -67,7 +67,7 @@ def normalize_url(candidate, base, hosts):
             return None
         if re.search(r"/(login|logout|signout|register|delete|remove|checkout|account|settings|admin|api)(/|$)", u.path, re.I):
             return None
-        if re.search(r"\.(png|jpg|jpeg|svg|css|js|json|xml|pdf|zip)$", u.path, re.I):
+        if re.search(r"\.(png|jpe?g|gif|svg|webp|css|js|xml|json|zip|pdf|woff2?|ico)$", u.path, re.I):
             return None
         query = urlencode(sorted((k, v) for k, v in parse_qsl(u.query) if not re.match(r"(utm_|fbclid$|gclid$|token|session)", k, re.I)))
         path = u.path.rstrip("/") + "/" if u.path and u.path != "/" else "/"
@@ -130,7 +130,7 @@ async def wait_ok(page, tries=60):
 
 
 async def scan_page(page, url, dist, out, site, page_id, console_msgs):
-    entry = {"site": site, "pageId": page_id, "url": url, "items": [], "error": None}
+    entry = {"site": site, "pageId": page_id, "url": url, "items": [], "error": None, "status": "failed"}
     try:
         await page.goto(url, timeout=60000, wait_until="domcontentloaded")
         ok = await wait_ok(page)
@@ -143,16 +143,28 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
         links = await page.evaluate(LINKS_JS)
         # 清 gm + 预置数据（云环境无本地数据，依赖脚本从数据站拉取）
         await page.evaluate(GM_STUB)
+        # The marker is executed *inside* the same synchronous script after
+        # startup. Successful tag insertion alone does not imply execution.
+        wrapped_dist = (
+            "(function(){try{\n" + dist +
+            "\nwindow.__zhxAuditInjected = true;\n"
+            "}catch(e){console.error('[AUDIT-INJECT]', e && e.message);}})();"
+        )
         try:
-            await page.add_script_tag(content=dist)
+            await page.add_script_tag(content=wrapped_dist)
             print("[%s] dist 注入 add_script_tag" % page_id, flush=True)
         except Exception as e:
             print("[%s] add_script_tag 失败，尝试 evaluate: %s" % (page_id, str(e)[:120]), flush=True)
             try:
-                await page.evaluate(dist)
+                await page.evaluate(wrapped_dist)
             except Exception as e2:
                 entry["error"] = "inject failed: " + str(e2)[:150]
+                entry["status"] = "failed"
                 return entry
+        if not await page.evaluate("window.__zhxAuditInjected === true"):
+            entry["error"] = "userscript execution not confirmed (CSP/runtime failure)"
+            entry["status"] = "failed"
+            return entry
         # 等待数据流程 + 补扫（约 15s）
         await asyncio.sleep(15)
         # 运行收集器

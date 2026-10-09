@@ -85,9 +85,17 @@ export function latestResults(results) {
   for (const r of results) {
     const pages = r.pages || [r];
     for (const p of pages) {
-      const one = { ...p, site: r.site || p.site, scannedAt: p.scannedAt || r.scannedAt || '' };
+      const one = { ...p, site: r.site || p.site, pageId: p.pageId || p.id || r.pageId || r.id || 'page',
+        scannedAt: p.scannedAt || r.scannedAt || '' };
       if (!one.site || !one.url || String(one.url).startsWith('fixture:')) continue;
-      const key = one.site + '\u0000' + one.url;
+      // Historical caches may lack a trailing slash, contain sorted/unsorted
+      // query parameters, or include tracking parameters.
+      let canonical = one.url;
+      try {
+        const parsed = new URL(one.url);
+        canonical = normalizeSiteUrl(one.url, one.url, [parsed.hostname]) || one.url;
+      } catch { /* retain invalid legacy URLs so failures remain visible */ }
+      const key = one.site + '\u0000' + canonical;
       const old = latest.get(key);
       if (!old || (one.scannedAt || '') >= (old.scannedAt || '')) latest.set(key, one);
     }

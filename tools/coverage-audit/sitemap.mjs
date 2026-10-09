@@ -5,7 +5,9 @@ export function parseSitemapLocs(xml) {
   const urls = [];
   const re = /<loc(?:\s[^>]*)?>\s*([^<]+?)\s*<\/loc>/gi;
   for (const m of String(xml).matchAll(re)) {
-    const url = m[1].replace(/&amp;/g, '&').replace(/&#38;/g, '&').trim();
+    // Decode ampersand entities in one pass only: &amp;amp; must become
+    // &amp;, never a second decoded '&' (double-unescape/security risk).
+    const url = m[1].trim().replace(/&(?:amp|#0*38|#x0*26);/gi, '&');
     if (url) urls.push(url);
   }
   return { index: /<sitemapindex(?:\s|>)/i.test(xml), urls };

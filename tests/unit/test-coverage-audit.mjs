@@ -18,7 +18,7 @@ const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), '
 
 assert.equal(Object.keys(SITES).length, 7, 'all seven active adapters must be audited');
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
-assert.ok(SITES.collection.hosts.includes('weapon.ffxivcollection.com'));
+assert.ok(SITES.collection.hosts.some((host) => host === 'weapon.ffxivcollection.com'));
 assert.deepEqual(SITES.fc.pages.filter((p) => ['head','body','hand','leg','foot'].includes(p.id)).map((p) => p.id), ['head','body','hand','leg','foot']);
 assert.ok(SITES.fc.pages.some((p) => p.type === 'filtered'));
 assert.deepEqual(unmatchedHosts(['weapon.ffxivcollection.com', 'www.ffxivcollection.com'], header), []);
@@ -77,6 +77,17 @@ const next = { site: 'ec', pageId: 'home', url: 'https://example.com/', scannedA
   items: [{ text: 'Show Results', category: 'real' }] };
 const fail = { site: 'fc', pageId: 'search', url: 'https://example.com/search/', scannedAt: '2026-10-09T00:00:00Z',
   items: [], status: 'failed', error: 'HTTP 403' };
+const previousSlash = { ...old, url: 'https://example.com/equip', pageId: 'legacy',
+  scannedAt: '2026-10-08T03:00:00Z' };
+const newerSlash = { ...next, url: 'https://example.com/equip/', pageId: 'current',
+  scannedAt: '2026-10-09T03:00:00Z' };
+const mergedPaths = latestResults([previousSlash, newerSlash]);
+assert.equal(mergedPaths.length, 1, 'path with and without / is same URL');
+assert.equal(mergedPaths[0].pageId, 'current');
+const aggregate = latestResults([{ site: 'fc', scannedAt: '2026-10-09',
+  pages: [{ id: 'home', url: 'https://example.com/', items: [] },
+          { id: 'search', url: 'https://example.com/search/', items: [] }] }]);
+assert.deepEqual(aggregate.map((p) => p.pageId), ['home', 'search'], 'page ID must survive aggregation');
 const latest = latestResults([old, next, fail]);
 assert.equal(latest.length, 2);
 assert.equal(latest.find((x) => x.site === 'ec').items[0].text, 'Show Results');
@@ -101,6 +112,10 @@ assert.match(cloudReport, /Show Results/);
 
 const xml = '<sitemapindex><sitemap><loc>https://example.com/detail.xml</loc></sitemap></sitemapindex>';
 assert.deepEqual(parseSitemapLocs(xml), { index: true, urls: ['https://example.com/detail.xml'] });
+assert.deepEqual(parseSitemapLocs('<urlset><loc>https://example.com/?a=1&amp;b=2</loc>' +
+  '<loc>https://example.com/?a=1&amp;amp;b=2</loc><loc>https://example.com/?a=1&#38;b=2</loc></urlset>').urls,
+  ['https://example.com/?a=1&b=2', 'https://example.com/?a=1&amp;b=2', 'https://example.com/?a=1&b=2'],
+  'XML entities must be decoded exactly once');
 const mockPages = {
   'https://example.com/sitemap.xml': '<sitemapindex><sitemap><loc>https://example.com/detail.xml</loc></sitemap></sitemapindex>',
   'https://example.com/detail.xml': '<urlset><url><loc>https://example.com/equip/1/</loc></url><url><loc>https://external.test/login/</loc></url><url><loc>https://example.com/equip/2/</loc></url></urlset>',
@@ -110,6 +125,39 @@ const sitemapUrls = await discoverSitemapUrls({
 });
 assert.deepEqual(sitemapUrls, ['https://example.com/equip/1/', 'https://example.com/equip/2/']);
 
+// Simulate minimal visible DOM to verify a standalone action link is captured
+// as UI, while an ordinary user-submitted link is not considered UI.
+const { runInNewContext } = await import('node:vm');
+function anchorContext(cls, label) {
+  const el = {
+    tagName: 'A', className: cls, id: '', textContent: label, parentElement: null,
+    getAttribute: () => null, closest: () => null,
+  };
+  const fakeDocument = {
+    title: '', body: { nodeType: 1 },
+    createTreeWalker() { return { nextNode() { return null; } }; },
+    querySelectorAll() { return [el]; },
+    documentElement: {},
+  };
+  el.isConnected = true;
+  el.getClientRects = () => [{ width: 10 }];
+  el.hasAttribute = () => false;
+  el.parentElement = fakeDocument.body;
+  el.closest = () => null;
+  fakeDocument.body.tagName = 'BODY';
+  fakeDocument.body.className = '';
+  fakeDocument.body.parentElement = null;
+  fakeDocument.body.getAttribute = () => null;
+  fakeDocument.body.textContent = '';
+  const result = runInNewContext(COLLECTOR_JS, {
+    document: fakeDocument,
+    NodeFilter: { SHOW_TEXT: 4, FILTER_REJECT: 2, FILTER_ACCEPT: 1 },
+    getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
+  });
+  return result;
+}
+assert.equal(anchorContext('button-link', 'Show Results')[0]?.ctx.ui, true);
+assert.equal(anchorContext('content-entry', 'Player nickname')[0]?.ctx.ui, false);
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');

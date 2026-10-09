@@ -42,7 +42,12 @@ export const COLLECTOR_JS = String.raw`(() => {
     const full = cls + ' ' + id + ' ' + ancestors;
     const ad = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift)/i.test(full);
     const user = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(full);
-    const ui = /^(BUTTON|LABEL|OPTION|SELECT|SUMMARY|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
+    const linkAction = el.tagName === 'A' && (
+      /(?:^|[\s_-])(?:button|btn|load-more|show-more|read-more|page-numbers|next|prev)(?:$|[\s_-])/i.test(cls)
+      || !!el.closest('.pagination,.pager,[class*="pagination"],[class*="pager"]')
+      || /^(?:show results|load more|show more|see more|read more|view more|search|filter|next|previous|reset|apply)$/i.test((el.textContent || '').trim())
+    );
+    const ui = linkAction || /^(BUTTON|LABEL|OPTION|SELECT|SUMMARY|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
       || kind.startsWith('attr:') || kind === 'option'
       || !!el.closest('button,[role="button"],[role="tab"]');
