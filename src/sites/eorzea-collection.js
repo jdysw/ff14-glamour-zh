@@ -3,11 +3,11 @@
 import { DICT_EC } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
-import { observeLocal } from '../core/observer.js';
+import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, startEC, translateECAttrs, translateECPage, trimECNode };
+export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
@@ -56,6 +56,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     [/^(\d+)\s+Loves?$/i, '$1 点赞'],
     [/^(\d+)\s+Comments?$/i, '$1 评论'],
     [/^(\d+)\s+Views?$/i, '$1 浏览'],
+    [/^Page\s+(\d+)\s+of\s+([\d,]+)$/i, '第 $1 页 / 共 $2 页'],
+    [/^Go to Page\s+(\d+)$/i, '前往第 $1 页'],
+    [/^Go to slide\s+(\d+)$/i, '切换到第 $1 张'],
+    [/^Browse All\s+(.{1,80})$/i, (m, name) => DICT_EC[name] ? '浏览全部' + DICT_EC[name] : m],
     [/^Page\s+(\d+)$/i, '第 $1 页'],
     [/^Submitted\s+(\d+)\s+years?\s+ago$/i, '$1 年前投稿'],
     [/^Submitted\s+(\d+)\s+months?\s+ago$/i, '$1 个月前投稿'],
@@ -97,39 +101,39 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
     const next = trEC(raw);
     if (next !== raw) {
-      if (p && !p.title) { p.title = raw.trim(); _zhixiaTitleKeep.add(p); }
+      // Keep the original for diagnostics, not as an untranslated English hover tooltip.
+      if (p?.dataset && !p.hasAttribute?.('title')) p.dataset.zhixiaSourceText = raw.trim();
       node.nodeValue = next;
     }
   }
 
   let ecBusy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
+  // Site hydration updates tooltips and accessibility labels after the initial scan.
+  // Translate each current attribute value: sticky 'done' flags hide later updates.
+  function _translateECAttr(el, attr) {
+    if (el.closest?.(EC_SKIP_SEL)) return;
+    if (attr === 'title' && _zhixiaTitleKeep.has(el)) return;
+    const old = el.getAttribute(attr);
+    if (!old || old.length > 90) return;
+    const translated = trEC(old);
+    if (translated !== old) el.setAttribute(attr, translated);
+  }
+
   function translateECAttrs(rootArg) {
     const scope = localScope(rootArg);
-    ['alt', 'aria-label'].forEach((attr) => {
-      queryIn(scope, '[' + attr + ']').forEach((el) => {
-        const flag = 'zhixiaA' + (attr === 'alt' ? 'lt' : 'Lbl');
-        if (el.dataset[flag]) return;
-        const v = el.getAttribute(attr);
-        if (!v || v.length < 2 || v.length > 90) return;
-        const nv = trEC(v);
-        if (nv !== v) {
-          el.setAttribute(attr, nv);
-          el.dataset[flag] = '1';
-        }
-      });
-    });
-    queryIn(scope, '[title]').forEach((el) => {
-      if (_zhixiaTitleKeep.has(el)) return;
-      if (el.dataset.zhixiaTitleDone) return;
-      const v = el.getAttribute('title');
-      if (!v || v.length < 2 || v.length > 90) return;
-      const nv = trEC(v);
-      if (nv !== v) {
-        el.setAttribute('title', nv);
-        el.dataset.zhixiaTitleDone = '1';
-      }
-    });
+    for (const attr of ['title', 'alt', 'aria-label', 'placeholder']) {
+      for (const el of queryIn(scope, '[' + attr + ']')) _translateECAttr(el, attr);
+    }
+  }
+
+  // Translate only recognized UI title segments. Preserve creator names and site branding.
+  function translateECTitle() {
+    const old = document.title;
+    if (!old || !old.includes(' | Eorzea Collection')) return;
+    const parts = old.split(' | ');
+    const translated = parts.map((part) => DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    if (translated !== old) document.title = translated;
   }
 
   function translateECPage(rootArg) {
@@ -155,10 +159,6 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       while (w.nextNode()) batch.push(w.currentNode);
       for (const n of batch) {
         if (n.nodeType === 3) trimECNode(n);
-        else if (n.tagName === 'INPUT') {
-          const ph = n.getAttribute('placeholder');
-          if (ph) { const nn = trEC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
-        }
       }
       translateECAttrs(rootArg);
     } finally {
@@ -203,12 +203,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
 
   function startEC() {
     safe(translateECPage, 'EC 全扫')();
+    safe(translateECTitle, 'EC 页面标题')();
     safe(bindECPieceTiles, 'EC 部位图')();
-    observeLocal((nodes) => {
-      for (const n of nodes) {
-        safe(translateECPage, 'EC 局部')(n);
-        safe(bindECPieceTiles, 'EC 部位图')(n);   // v1.4.1：随批次节点局部扫描（原为每批全页）
-      }
-    }, 300);
+    createObserver({
+      root: document.documentElement,
+      debounce: 300,
+      attributes: true,
+      attributeFilter: ['title', 'alt', 'aria-label', 'placeholder'],
+      handler: (nodes) => {
+        for (const n of nodes) {
+          safe(translateECPage, 'EC 局部')(n);
+          safe(bindECPieceTiles, 'EC 部位图')(n);
+        }
+        safe(translateECTitle, 'EC 页面标题')();
+      },
+    });
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

@@ -67,6 +67,7 @@ const SUITES = {
 SUITES.unit.push('unit/test-endcloset.mjs');
 SUITES.unit.push('unit/test-coverage-audit.mjs');
 SUITES.unit.push('unit/test-audit-localization.mjs');
+SUITES.unit.push('unit/test-ec-manual-audit.mjs');
 SUITES.integration.push('integration/test-standalone-search-trigger.mjs');
 
 const args = process.argv.slice(2);
