@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -74,6 +75,48 @@ def normalize_url(candidate, base, hosts):
         return urlunsplit((u.scheme, u.netloc, path, query, ""))
     except (ValueError, TypeError):
         return None
+
+def non_content_page_reason(identity):
+    title = str(identity.get("title", "")).strip().lower()
+    body = str(identity.get("body", "")).strip().lower()[:5000]
+    first = body[:650]
+    status = identity.get("httpStatus") or 0
+    try:
+        if int(status) >= 400:
+            return "HTTP %s error" % status
+    except (ValueError, TypeError):
+        pass
+    if (re.search(r"just a moment|attention required|access denied|sorry, you have been blocked", title + " " + first)
+            or "performing security verification" in first) and re.search(
+            r"cloudflare|security service|verify you are not a bot|you have been blocked", first):
+        return "Cloudflare / WAF challenge"
+    if (re.fullmatch(r"(?:404\s*(?:not found)?\s*[-—|:]?\s*)?(?:this page could not be found\.?|page not found\.?|the page you are looking for (?:does not exist|could not be found))", first)
+            or re.fullmatch(r"404|page not found|404 not found", title)
+            or re.match(r"^404\s*[-—|:]?\s*(?:this page could not be found|page not found)", first)):
+        return "404 / nonexistent site route"
+    if ("sitemap" in title or "xml sitemap index" in first) and re.search(
+            r"xml sitemap|sub-sitemap|sitemap generator", first):
+        return "sitemap, not site UI"
+    return None
+
+
+def final_url_error(url, hosts):
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or parsed.hostname not in hosts:
+            return "cross-origin redirect or unsupported final host"
+    except (TypeError, ValueError):
+        pass
+    return "missing or invalid final URL" if not url or not urlsplit(url).hostname else None
+
+
+def attempt_directory(root, country):
+    """Each proxy attempt has an isolated directory. Never overwrite previous evidence."""
+    if not re.fullmatch(r"[a-zA-Z]{2}", country):
+        raise ValueError("invalid proxy country")
+    tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return Path(root) / ("attempt-" + country.lower() + "-" + tag)
+
 
 def template_key(url):
     """Use the same template grouping as coverage-core.mjs (JS local scanner)."""
@@ -150,14 +193,31 @@ async def wait_ok(page, tries=60):
     return False
 
 
-async def scan_page(page, url, dist, out, site, page_id, console_msgs):
+async def scan_page(page, url, dist, out, site, page_id, console_msgs, hosts=None):
     entry = {"site": site, "pageId": page_id, "url": url, "items": [], "error": None, "status": "failed"}
     try:
-        await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        response = await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        allowed = hosts or [urlsplit(url).hostname]
+        actual = str(getattr(page, "url", url) or url)
+        redirect = final_url_error(actual, allowed)
+        if redirect:
+            entry["error"] = redirect
+            return entry
+        status = getattr(response, "status", None)
+        entry["httpStatus"] = status
+        if status is not None and status >= 400:
+            entry["error"] = "HTTP %s response" % status
+            return entry
         ok = await wait_ok(page)
         print("[%s] load ok=%s | %s" % (page_id, ok, (await page.title())[:70]), flush=True)
         if not ok:
             entry["error"] = "CF challenge / page not ready"
+            return entry
+        identity = await page.evaluate("({title:document.title,body:(document.body?.innerText||'').slice(0,5000)})")
+        identity["httpStatus"] = status
+        rejected = non_content_page_reason(identity)
+        if rejected:
+            entry["error"] = "non-content page: " + rejected
             return entry
         await asyncio.sleep(2)
         before = await page.evaluate(COLLECTOR_JS)
@@ -195,6 +255,19 @@ async def scan_page(page, url, dist, out, site, page_id, console_msgs):
             entry["error"] = "translation tables not ready within 90000ms: " + str(e)[:120]
             return entry
         await asyncio.sleep(1.5)  # settle MutationObserver / DOM updates
+        identity = await page.evaluate("({title:document.title,body:(document.body?.innerText||'').slice(0,5000)})")
+        identity["httpStatus"] = status
+        rejected = non_content_page_reason(identity)
+        if rejected:
+            entry["error"] = "non-content after injection: " + rejected
+            return entry
+        # A SPA or third-party script may redirect again during translation.
+        final_page_url = str(getattr(page, "url", url) or url)
+        redirect = final_url_error(final_page_url, allowed)
+        if redirect:
+            entry["error"] = "post-injection " + redirect
+            return entry
+        entry["url"] = final_page_url
         # 运行收集器
         try:
             items = await page.evaluate(COLLECTOR_JS)
@@ -245,7 +318,7 @@ async def run_session(browser, plan, dist, out_dir):
             page.on("console", lambda m, _c=console_msgs: _c.append((m.type, (m.text or "")[:200])))
             try:
                 ident = page_cfg.get("id", "discovered-%d" % index)
-                r = await scan_page(page, normalized, dist, out_dir, plan["site"], ident, console_msgs)
+                r = await scan_page(page, normalized, dist, out_dir, plan["site"], ident, console_msgs, hosts)
                 r["template"] = template
                 r["scannedAt"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
                 links = r.pop("links", [])
@@ -308,11 +381,13 @@ async def main():
                 print("创建失败: %s" % str(e)[:150], flush=True)
                 continue
             try:
-                results = await asyncio.wait_for(run_session(browser, plan, dist, out_dir), timeout=900)
+                per_attempt = attempt_directory(out_dir, country)
+                per_attempt.mkdir(parents=True, exist_ok=False)
+                results = await asyncio.wait_for(run_session(browser, plan, dist, per_attempt), timeout=900)
                 ok_seeds = seed_success_count(results, plan)
                 print("=== 结果 === country=%s 成功种子页=%d/%d；发现页不计入代理成功门槛" %
                       (country, ok_seeds, len(plan["pages"])), flush=True)
-                if ok_seeds >= max(1, len(plan["pages"]) // 2):
+                if ok_seeds >= max(1, (len(plan["pages"]) * 3 + 4) // 5):
                     print("CLOUD AUDIT SUCCESS", flush=True)
                     return
             except asyncio.TimeoutError:

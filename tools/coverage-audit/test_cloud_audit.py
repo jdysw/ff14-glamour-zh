@@ -18,8 +18,9 @@ class DummyPage:
         self.script = ""
         self.waited_on = None
 
-    async def goto(self, *args, **kwargs):
-        pass
+    async def goto(self, url, **kwargs):
+        self.url = url
+        return None
 
     async def title(self):
         return "Normal page"
@@ -29,6 +30,8 @@ class DummyPage:
             return [{"kind": "text", "text": "검색", "path": "button", "ctx": {"ui": True}}]
         if code == cloud.LINKS_JS:
             return []
+        if "document.title,body:" in code:
+            return {"title": "Normal page", "body": "Real application content"}
         if code == "window.__zhxAuditInjected === true":
             return self.executed
         return None
@@ -89,6 +92,32 @@ class CloudAuditTests(unittest.TestCase):
         failed = enough + [{"pageId": "list", "url": "https://example.com/list/",
                             "status": "failed", "error": "CF"}]
         self.assertEqual(cloud.seed_success_count(failed, plan), 2)
+
+    def test_waf_and_error_pages_never_count_as_coverage(self):
+        for title, body, expected in [
+            ("Just a moment...", "Performing security verification Cloudflare", "WAF"),
+            ("Attention Required!", "Sorry, you have been blocked by Cloudflare", "WAF"),
+            ("404", "This page could not be found.", "404"),
+            ("XML Sitemap Index", "This XML sitemap contains links to sub-sitemaps", "sitemap"),
+        ]:
+            self.assertIn(expected, cloud.non_content_page_reason({"title": title, "body": body}))
+        self.assertIsNone(cloud.non_content_page_reason({"title": "Home", "body": "Regular category buttons"}))
+        self.assertIn("404", cloud.non_content_page_reason({
+            "title": "Ronka Closet", "body": "This page could not be found."}))
+        self.assertIn("HTTP 404", cloud.non_content_page_reason({
+            "title": "Legitimate looking title", "body": "Article", "httpStatus": 404}))
+        self.assertIsNone(cloud.non_content_page_reason({
+            "title": "News", "body": "This article discusses 404 and web redirects."}))
+        self.assertIn("cross-origin", cloud.final_url_error("https://evil.test/", ["ff14-fc.com"]))
+        self.assertIsNone(cloud.final_url_error("https://ff14-fc.com/", ["ff14-fc.com"]))
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temporary:
+            first = cloud.attempt_directory(temporary, "jp")
+            first.mkdir()
+            second = cloud.attempt_directory(temporary, "jp")
+            self.assertNotEqual(first, second)
+            self.assertFalse(second.exists())
+
 
     def test_insertion_without_execution_is_failure(self):
         page = DummyPage(executed=False)

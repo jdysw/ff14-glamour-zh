@@ -26,7 +26,13 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
 export function templateKey(url) {
   const u = new URL(url);
   const parts = [];
-  for (const part of u.pathname.split('/').filter(Boolean)) {
+  const originalParts = u.pathname.split('/').filter(Boolean);
+  // FFXIV Collection has root-level equipment detail slugs; do not count each gear as a new template.
+  if (['www.ffxivcollection.com', 'weapon.ffxivcollection.com'].includes(u.hostname)
+      && originalParts.length === 1 && /(?:-of-|-from-|-attire|-gearset)/i.test(originalParts[0])) {
+    return u.hostname + '/:gear-detail';
+  }
+  for (const part of originalParts) {
     if (/^\d+$|^[0-9a-f]{8}-[0-9a-f-]{16,}$/i.test(part)) { parts.push(':id'); continue; }
     if (/^[0-9a-f]{20,}$/i.test(part)) { parts.push(':hash'); continue; }
     // Detail slugs (even short slugs after numeric IDs), unicode-encoded
@@ -170,4 +176,41 @@ export async function waitForAuditReady(readReady, delay, { timeoutMs = 90000, p
     if (i + 1 < checks) await delay(pollMs);
   }
   throw new Error('翻译词库和就绪回调未在 ' + timeoutMs + 'ms 内完成；本次扫描不计为成功');
+}
+
+// A browser may have a fully loaded DOM and matching URL while showing a
+// Cloudflare challenge, server denial, HTTP 404 or sitemap instead of a site UI.
+// Such documents MUST NOT be counted as successful translation coverage.
+export function nonContentPageReason({ title = '', body = '', httpStatus = 0 } = {}) {
+  const t = String(title).toLowerCase().trim();
+  const b = String(body).toLowerCase().trim().slice(0, 5000);
+  const top = b.slice(0, 650);
+  const status = Number(httpStatus);
+  if (Number.isFinite(status) && status >= 400) return 'HTTP ' + status + ' error';
+  if ((/just a moment|attention required|access denied|sorry, you have been blocked/.test(t + ' ' + top)
+      || top.includes('performing security verification'))
+      && /cloudflare|security service|verify you are not a bot|you have been blocked/.test(top)) {
+    return 'Cloudflare / WAF challenge instead of site UI';
+  }
+  // A SPA may keep its ordinary website title while rendering a Next.js 404 body.
+  if (/^(?:404\s*(?:not found)?\s*[-—|:]?\s*)?(?:this page could not be found\.?|page not found\.?|the page you are looking for (?:does not exist|could not be found))$/i.test(top)
+      || /^(?:404|page not found|404 not found)$/i.test(t)
+      || /^404\s*[-—|:]?\s*(?:this page could not be found|page not found)/i.test(top)) {
+    return '404 / nonexistent site route';
+  }
+  if ((t.includes('sitemap') || top.includes('xml sitemap index'))
+      && /xml sitemap|sub-sitemap|sitemap generator/.test(top)) return 'sitemap, not site UI';
+  return null;
+}
+
+export function pageIdentityFailure(identity, allowedHosts) {
+  const actual = identity?.finalUrl;
+  if (!actual) return 'missing final document URL';
+  try {
+    const u = new URL(actual);
+    if (u.protocol !== 'https:' || !allowedHosts.includes(u.hostname)) {
+      return 'cross-origin redirect or unsupported final host: ' + u.hostname;
+    }
+  } catch { return 'invalid final document URL'; }
+  return nonContentPageReason(identity);
 }
