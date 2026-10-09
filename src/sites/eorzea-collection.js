@@ -7,7 +7,7 @@ import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode };
+export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
@@ -80,6 +80,111 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       (m, r) => (DICT_EC[r] || r) + '男性'],
   ];
 
+
+  // EC /gearsets 标题不是单件物品：按系列 + 职能合成，不能交给 resolveByName
+  // 的装备卡片链（否则找不到译名，还可能将套装链接改写到灰机物品页）。
+  // 系列译名取自 dict-ec.json，只有经确认的系列参与转换，未知名称保留英文。
+  const EC_GEARSET_ROLES = ['Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting', 'Healing'];
+  const EC_GEARSET_ROLE_SERIES = ['Phantom Vision', "Vana'dielian", 'Praemagitek'];
+  const EC_GEARSET_SINGLE_SERIES = [
+    "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
+    'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
+    'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
+    'Graffiti Neotunic',
+  ];
+  // 此站新增系列尚无物品总表对应名称；使用明确的套装展示译名，不混入装备词典。
+  const EC_GEARSET_NAME_EXTRAS = { 'Graffiti Neotunic': '涂鸦新式上衣套装' };
+  const EC_GEARSET_SOURCES = [
+    'Battle Content Gear', 'Raid Gear', 'Dungeon Drop', 'Quest Reward',
+    'Mogstation Set', 'Token Exchange', 'Crafted Glamour',
+  ];
+
+  function ecGearsetSeriesZh(en) {
+    return EC_GEARSET_NAME_EXTRAS[en] || DICT_EC[en] || null;
+  }
+
+  function ecGearsetDisplayName(raw) {
+    const text = String(raw || '').trim();
+    if (!text || text.length > 110) return null;
+    // 部分页面在同一文本节点拼接了来源标签，先剥离以便系列解析。
+    const source = EC_GEARSET_SOURCES.find(s => text.endsWith(' ' + s));
+    const title = source ? text.slice(0, -(source.length + 1)) : text;
+    const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
+    let zh = null;
+    for (const en of EC_GEARSET_ROLE_SERIES) {
+      if (!bare.startsWith(en + ' ')) continue;
+      const role = bare.slice(en.length + 1);
+      if (EC_GEARSET_ROLES.includes(role)) {
+        zh = ecGearsetSeriesZh(en) + DICT_EC[role] + '套装';
+        break;
+      }
+    }
+    if (!zh && EC_GEARSET_SINGLE_SERIES.includes(bare)) zh = ecGearsetSeriesZh(bare);
+    return zh ? zh + (source ? ' ' + (DICT_EC[source] || source) : '') : null;
+  }
+
+  // 将套装的中文展示名解析为站内英文搜索词；仅在 /gearsets 使用。
+  // 单词片段（「御敌」「幻境」）、组合片段（「幻境意象御敌」）与完整套装名皆可解析。
+  // 优先系列 / 职能词边界，不以字符级 LCS 拼出英文词中碎片。
+  function resolveECGearsetSearch(query) {
+    const q = String(query || '').trim().replace(/[ \t\u00a0]+/g, ' ');
+    if (q.length < 2 || !/[\u3400-\u9fff]/u.test(q)) return null;
+    const key = q.replace(/套装$/u, '').trim();
+    const role = EC_GEARSET_ROLES.find(en => key.includes(DICT_EC[en]));
+    const rest = role ? key.replace(DICT_EC[role], '').trim() : key;
+    if (!rest && role) return role;
+    const allSeries = [...EC_GEARSET_ROLE_SERIES, ...EC_GEARSET_SINGLE_SERIES];
+    const hits = allSeries.filter(en => {
+      const zh = ecGearsetSeriesZh(en);
+      if (!zh) return false;
+      const base = zh.replace(/套装$/u, '');
+      return base.includes(rest) || rest.includes(base);
+    });
+    if (hits.length !== 1) return null; // 多个不同系列不能随意选一个英文名
+    const en = hits[0];
+    if (role && !EC_GEARSET_ROLE_SERIES.includes(en)) return null;
+    return en + (role ? ' ' + role : '');
+  }
+
+  function suggestECGearsetsByZh(query) {
+    const q = String(query || '').trim();
+    if (q.length < 2 || !/[\u3400-\u9fff]/u.test(q)) return [];
+    const rows = [];
+    for (const en of EC_GEARSET_ROLE_SERIES) {
+      for (const role of EC_GEARSET_ROLES) {
+        const native = en + ' ' + role;
+        const zh = ecGearsetDisplayName(native);
+        if (zh?.includes(q)) rows.push({ zh, native });
+      }
+    }
+    for (const native of EC_GEARSET_SINGLE_SERIES) {
+      const zh = ecGearsetDisplayName(native);
+      if (zh?.includes(q)) rows.push({ zh, native });
+    }
+    return rows;
+  }
+
+  // Gearsets 与 Related Sets 卡片的链接必须继续指向 /gearset/<slug>；
+  // 只替换已知标题文本节点，绝不绑定卡片点击事件或改写 href。
+  function translateECGearsetNames(rootArg) {
+    const scope = localScope(rootArg);
+    const translateText = root => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const raw = node.nodeValue || '';
+        const zh = ecGearsetDisplayName(raw);
+        if (!zh) continue;
+        const trimmed = raw.trim();
+        node.nodeValue = raw.replace(trimmed, zh);
+      }
+    };
+    for (const a of queryIn(scope, 'a[href*="/gearset/"]')) translateText(a);
+    if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')) {
+      for (const h1 of queryIn(scope, 'h1')) translateText(h1);
+    }
+  }
+
   // 用户产出的内容：绝不翻译
   const EC_SKIP_SEL = [
     '.c-glamour-grid-item-content-title',
@@ -132,7 +237,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const old = document.title;
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
-    const translated = parts.map((part) => DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    const translated = parts.map((part) => ecGearsetDisplayName(part) || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }
 
@@ -161,6 +266,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
+      translateECGearsetNames(rootArg);
     } finally {
       ecBusy = false;
     }
