@@ -1,6 +1,7 @@
 /* @phase23-module-order:core/chinese-search */
 /* @phase23-order-link:core/chinese-search<-core/data-manager */
 import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh } from './data-manager.js';
+import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
 
 const SEARCH_SITES = Object.freeze({
   mirapri: true,
@@ -21,6 +22,22 @@ const _searchInputCache = new WeakMap();
 
 function normalizeSearchQuery(value) {
   return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
+}
+
+// 只有装备库列表页的查询可以按“套装系列 + 职能”映射。其它 EC 页面
+// （如 /glamours、装备部位 vue-select）继续使用单件装备索引。
+function isECGearsetsPage() {
+  const loc = globalThis.location;
+  return /^\/gearsets\/?$/.test(loc?.pathname || '')
+    && /(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '');
+}
+
+function resolveSearchNative(query, gearsets = false) {
+  if (gearsets) {
+    const gearset = resolveECGearsetSearch(query);
+    if (gearset) return gearset;
+  }
+  return resolveByZh(query) || resolvePartialByZh(query);
 }
 
 function isChineseSearchQuery(value) {
@@ -322,7 +339,7 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = suggestByZh(query);   // 全量候选（显示所有含输入字的装备）；可视区域由列表高度控制
+  const rows = isECGearsetsPage() ? suggestECGearsetsByZh(query) : suggestByZh(query);
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -522,7 +539,8 @@ function convertStandaloneForSearch(input, allowPartial = false) {
     const shown = input.value;
     const query = normalizeSearchQuery(shown);
     if (query.length < 2 || !isChineseSearchQuery(query)) return false;
-    const native = resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
+    const native = (isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
+      || resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
     restoreStandaloneDisplay(input, shown, native);
@@ -625,8 +643,8 @@ function handleChineseSearchSubmit(event, siteId) {
   const query = normalizeSearchQuery(input.value);
   if (!isChineseSearchQuery(query)) return;
 
-  let native = resolveByZh(query);
-  if (!native) native = resolvePartialByZh(query);   // v1.4.2 后续：部分词（如「女仆」）→ 公共子串兜底
+  const native = resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+  // 套装页优先系列/职能片段映射；其余站点仍以物品总表 + 公共子串兜底。
   if (!native || native === query) return;
 
   const method = String(form.getAttribute?.('method') || 'get').toLowerCase();
@@ -673,6 +691,8 @@ export {
   handleChineseSearchSubmit,
   isChineseSearchQuery,
   normalizeSearchQuery,
+  isECGearsetsPage,
+  resolveSearchNative,
   positionSuggestionBox,
   searchInputScore,
   startChineseSearch,
