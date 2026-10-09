@@ -133,9 +133,13 @@ function anchorContext(cls, label) {
     tagName: 'A', className: cls, id: '', textContent: label, parentElement: null,
     getAttribute: () => null, closest: () => null,
   };
+  const textNode = { nodeValue: label, parentElement: el };
   const fakeDocument = {
     title: '', body: { nodeType: 1 },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+    createTreeWalker() {
+      let emitted = false;
+      return { nextNode() { if (emitted) return null; emitted = true; return textNode; } };
+    },
     querySelectorAll() { return [el]; },
     documentElement: {},
   };
@@ -148,6 +152,7 @@ function anchorContext(cls, label) {
   fakeDocument.body.className = '';
   fakeDocument.body.parentElement = null;
   fakeDocument.body.getAttribute = () => null;
+  fakeDocument.body.hasAttribute = () => false;
   fakeDocument.body.textContent = '';
   const result = runInNewContext(COLLECTOR_JS, {
     document: fakeDocument,
