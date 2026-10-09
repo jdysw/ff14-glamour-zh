@@ -240,7 +240,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy) || !man.sites || typeof man.sites !== 'object') return false;
     const validFile = (meta) => typeof meta?.url === 'string' && /^[a-f0-9]{64}$/i.test(meta?.sha256 || '');
     for (const site of Object.values(man.sites)) {
-      if (!site || !site.files || typeof site.files !== 'object') return false;
+      if (!site?.files || typeof site.files !== 'object') return false;
       for (const meta of Object.values(site.files)) if (!validFile(meta)) return false;
     }
     if (man.shared?.dict && !validFile(man.shared.dict)) return false;
