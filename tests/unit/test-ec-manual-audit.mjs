@@ -15,7 +15,7 @@ const body = { items: [] };
 const document = { title: 'Glamour Collection | Eorzea Collection', documentElement: body, body };
 const captured = [];
 const stubs = {
-  DICT_EC, document, dictGetRevision: () => 0,
+  DICT_EC, document, dictGetRevision: () => 0, dataGetIndex: () => null,
   createObserver: opts => { captured.push(opts); return { disconnect() {} }; },
   queryIn: (scope, selector) => body.items.filter(node => node.hasAttribute(selector.slice(1, -1))),
   localScope: node => node || null, _zhixiaTitleKeep: titleKeep,
