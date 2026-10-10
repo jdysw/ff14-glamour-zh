@@ -239,6 +239,23 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return rows;
   }
 
+  // Official game outfit packages also cover standalone and single-variant
+  // sets. They do NOT prove the corresponding EC Gearset page exists, so rows
+  // from this broad catalogue are provisional search suggestions only.
+  // Never invent or navigate to a /gearset/<slug> link from these entries.
+  function ecGearsetOfficialOutfitRows(nameIndex) {
+    const rows = [];
+    const pattern = /^(.+?) (?:Attire|Armor)(?: (\([^()]{1,60}\)|\[[^\]]{1,40}\]))?$/;
+    for (const [item, zh] of Object.entries(nameIndex || {})) {
+      const match = pattern.exec(item);
+      if (!match || !/^[\u3400-\u9fff]/u.test(zh)
+          || !/(?:套装|装束)$/u.test(zh)) continue;
+      const native = match[1] + (match[2] ? ' ' + match[2] : '');
+      rows.push({ native, zh, provisional: true });
+    }
+    return rows;
+  }
+
   function ecGearsetKnownRows() {
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
@@ -259,7 +276,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetAppendInferredRows(rows, nameIndex) {
     if (!nameIndex) return;
     const seen = new Set(rows.map(row => row.native));
-    const derived = [...inferECGearsetsFromItems(nameIndex), ...ecGearsetOfficialVariantRows(nameIndex)];
+    const derived = [
+      ...inferECGearsetsFromItems(nameIndex),
+      ...ecGearsetOfficialVariantRows(nameIndex),
+      ...ecGearsetOfficialOutfitRows(nameIndex),
+    ];
     for (const row of derived) {
       if (seen.has(row.native)) continue;
       rows.push(row);
@@ -327,7 +348,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       if (series && role && /[\u3400-\u9fff]/u.test(series)
           && !/(?:套装|装束)$/u.test(series)) return series + role + '套装';
     }
-    return ecGearsetOfficialPackageZh(native, dataGetIndex('nameMap'));
+    const nameIndex = dataGetIndex('nameMap');
+    const official = ecGearsetOfficialPackageZh(native, nameIndex);
+    if (official) return official;
+    // Some EC titles add possessive 's (Royal Seneschal's) while the
+    // official game package omits it (Royal Seneschal Attire).
+    if (native.endsWith("'s")) {
+      return ecGearsetOfficialPackageZh(native.slice(0, -2), nameIndex);
+    }
+    // The site may elide "Far" (Eastern Socialite's vs Far Eastern
+    // Socialite's); only apply this to an already observed Gearsets title.
+    if (native.startsWith('Eastern ')) {
+      return ecGearsetOfficialPackageZh('Far ' + native, nameIndex);
+    }
+    return null;
   }
 
   function ecGearsetDisplayName(raw) {
@@ -360,7 +394,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetMatchesZh(query) {
     const key = ecGearsetNormalizedZh(query);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
-    const rows = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    const matching = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    // Do not let unverified game packages displace confirmed EC search rows.
+    const verified = matching.filter(row => !row.provisional);
+    const rows = verified.length ? verified : matching;
     // 已核实的 EC 英文套装名/公共关键词，兼容用户实际输入的俗称与简繁体。
     // 去重使用英文原生名，避免常见别名与现有国服译名重复展示。
     for (const alias of EC_GEARSET_SEARCH_ALIASES) {
