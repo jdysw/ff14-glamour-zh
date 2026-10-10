@@ -97,6 +97,15 @@ class CandidateClassificationTest(unittest.TestCase):
         self.assertEqual(names['en']['Test Robe'], '1')
         self.assertEqual(names['ko']['반지'], '5')
         self.assertEqual(names['ja'].get('不存在', '5'), '5')
+        parsed = runtime_data.parse_items(source)
+        result = runtime_data.build_files(*parsed, '', '', names)
+        ja_lines = result[('mirapri', 'names.tsv')].decode('utf-8').splitlines()
+        self.assertIn('頭\\t测试头\\t1\\t0', ja_lines)
+        self.assertIn('胴\\t测试身\\t1\\t1', ja_lines)
+        self.assertIn('指輪\\t测试戒指\\t1\\t5', ja_lines)
+        legacy = runtime_data.build_files(*parsed, '', '')
+        self.assertIn('頭\\t测试头\\t1\\t5',
+                      legacy[('mirapri', 'names.tsv')].decode('utf-8').splitlines())
 
     def test_invalid_equip_csv_rejected(self):
         missing = self.root / 'missing.csv'
