@@ -1,0 +1,86 @@
+name: Refresh v1.4.3 Gearsets search hotfix asset (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refresh-ec-gearsets-143.yml'
+permissions:
+  contents: write
+concurrency:
+  group: release-v143-ec-gearsets-hotfix
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.repository == 'jdysw/ff14-glamour-zh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout complete updated source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify hotfix and rebuild same-version user script
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "1.4.3"
+          git merge-base --is-ancestor 7d8c22acac13169d80818f5114a1de6b2260046c HEAD
+          npm ci
+          bash build.sh
+          npm run version:check
+          npm run check:dist
+          git diff --exit-code
+          test -s dist/ff14-glamour-zh.greasyfork.user.js
+          grep -Eq '^// @version[[:space:]]+1\.4\.3$' dist/ff14-glamour-zh.greasyfork.user.js
+          sha256sum dist/ff14-glamour-zh.greasyfork.user.js
+
+      - name: Append EC Gearsets hotfix to existing release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v1.4.3 --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > "$RUNNER_TEMP/v143-notes.md"
+          grep -Fq 'PR #39' "$RUNNER_TEMP/v143-notes.md"
+          grep -Fq 'PR #34' "$RUNNER_TEMP/v143-notes.md"
+          if ! grep -Fq 'PR #40' "$RUNNER_TEMP/v143-notes.md"; then
+            cat >> "$RUNNER_TEMP/v143-notes.md" <<'NOTES'
+
+          ### 2026-10-10 修复：Eorzea Collection Gearsets 中文检索（PR #40）
+          - 修复在套装列表输入中文后无法得到检索结果的问题：中文查询解析为英文套装关键词后，直接使用 EC 原生 `/gearsets?search=...` GET 检索，不再仅靠临时改写动态输入框/派发 input 事件。
+          - 候选点击、Enter 和搜索表单提交统一使用原生搜索参数；保留当前 URL 的站点筛选参数，并重置旧分页 `page`。
+          - 兼容搜索占位符 `Search...` 被汉化为 `搜索…` 的情况，支持 `/gearsets/casters` 等子分类套装列表，不误接管单件套装详情或其他搜索输入框。
+          - Gearsets 候选依赖内置译名目录，不必等待 V3 物品表加载完毕；补齐输入框识别和搜索 URL 的回归测试。
+          - 版本仍是 `1.4.3`。**由于与旧附件版本号相同，已有 1.4.3 用户必须重新下载附件手动覆盖安装，脚本管理器通常不会自动升级同版本。** Git 标签仍保留原历史提交。
+
+          [修复 PR #40](https://github.com/jdysw/ff14-glamour-zh/pull/40)
+          NOTES
+          fi
+
+      - name: Replace v1.4.3 attachment and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload v1.4.3 "dist/ff14-glamour-zh.greasyfork.user.js" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit v1.4.3 --notes-file "$RUNNER_TEMP/v143-notes.md" --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify download and release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release-check"
+          gh release download v1.4.3 --pattern ff14-glamour-zh.greasyfork.user.js --dir "$RUNNER_TEMP/release-check" --repo "$GITHUB_REPOSITORY"
+          cmp -s dist/ff14-glamour-zh.greasyfork.user.js "$RUNNER_TEMP/release-check/ff14-glamour-zh.greasyfork.user.js"
+          gh release view v1.4.3 --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/actual-notes.md"
+          grep -Fq 'PR #40' "$RUNNER_TEMP/actual-notes.md"
+          grep -Fq 'PR #39' "$RUNNER_TEMP/actual-notes.md"
+          grep -Fq 'PR #34' "$RUNNER_TEMP/actual-notes.md"
+          echo 'v1.4.3 hotfix attachment and notes verified'
