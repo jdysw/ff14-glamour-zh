@@ -189,8 +189,14 @@ assert.equal(api.resolveECGearsetSearch('首席机械师'), "Head Engineer's",
   '单款国服套装名输入后可直接转换为英文系列搜索');
 assert.ok(api.suggestECGearsetsByZh('血盟女士').some(row => row.native === "Antecedent's"
   && row.provisional), '宽泛官方目录标识未核验 EC 页面');
-assert.equal(tr("Royal Seneschal's"), officialRows.get('Royal Seneschal Attire') || null,
-  'EC 添加所有格的套装标题可以对照不含所有格的官方 Attire 名称');
+assert.equal(tr("Royal Seneschal's"), '总管套装',
+  '已核验的 EC 词典译名优先于泛化的官方物品别名');
+itemIndex['Uncatalogued Steward Attire'] = '测试侍从套装';
+itemIndex["Far Eastern Uncatalogued Socialite's Attire"] = '测试东方式社交服套装';
+assert.equal(tr("Uncatalogued Steward's"), '测试侍从套装',
+  '仅已出现的 EC 标题可安全尝试官方游戏物品不含所有格的英文别名');
+assert.equal(tr("Eastern Uncatalogued Socialite's"), '测试东方式社交服套装',
+  'EC 标题省略 Far 时可使用官方完整 Far Eastern 物品名');
 assert.equal(api.resolveECGearsetSearch('女仆'), "Loyal Housemaid's",
   '广义官方包候选不能挤掉已在 EC 实测的女仆专用别名');
 
