@@ -169,6 +169,27 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return prefix;
   }
 
+  function ecGearsetAddInferredGroups(grouped, native, zh, englishPart, role) {
+    const words = englishPart.split(' ');
+    for (let n = 1; n < words.length && n <= 4; n++) {
+      const title = words.slice(0, n).join(' ') + ' ' + role;
+      if (!grouped.has(title)) grouped.set(title, new Map());
+      grouped.get(title).set(native, zh);
+    }
+  }
+
+  function ecGearsetInferredRow(native, items) {
+    if (items.size < 3) return null;
+    const names = [...new Set(items.values())];
+    if (names.length < 3) return null;
+    const prefix = ecGearsetCommonZhPrefix(names);
+    const role = native.slice(native.lastIndexOf(' ') + 1);
+    const roleZh = DICT_EC[role];
+    if (!roleZh || prefix.length < roleZh.length + 2 || !prefix.endsWith(roleZh)
+        || prefix.length > 22) return null;
+    return { native, zh: prefix + '套装' };
+  }
+
   function inferECGearsetsFromItems(nameIndex) {
     const grouped = new Map();
     const rolePattern = /^(.+?) of (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/;
@@ -177,39 +198,17 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       if (!hit || !/^[\u3400-\u9fff]/u.test(zh)) continue;
       const roleZh = DICT_EC[hit[2]];
       if (!roleZh || !zh.includes(roleZh)) continue;
-      const words = hit[1].split(' ');
-      for (let n = 1; n < words.length && n <= 4; n++) {
-        const title = words.slice(0, n).join(' ') + ' ' + hit[2];
-        if (!grouped.has(title)) grouped.set(title, new Map());
-        grouped.get(title).set(native, zh);
-      }
+      ecGearsetAddInferredGroups(grouped, native, zh, hit[1], hit[2]);
     }
     const derived = [];
     for (const [native, items] of grouped) {
-      if (items.size < 3) continue;
-      const names = [...new Set(items.values())];
-      if (names.length < 3) continue;
-      const prefix = ecGearsetCommonZhPrefix(names);
-      const role = native.slice(native.lastIndexOf(' ') + 1);
-      const roleZh = DICT_EC[role];
-      if (prefix.length < roleZh.length + 2 || !prefix.endsWith(roleZh)
-          || prefix.length > 22) continue;
-      derived.push({ native, zh: prefix + '套装' });
+      const row = ecGearsetInferredRow(native, items);
+      if (row) derived.push(row);
     }
     return derived;
   }
 
-  // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
-  let _ecGearsetRows = null;
-  let _ecGearsetHadItemIndex = false;
-  let _ecGearsetRevision = -1;
-  function ecGearsetCatalog() {
-    const revision = dictGetRevision();
-    const nameIndex = dataGetIndex('nameMap');
-    const hasItems = !!nameIndex;
-    if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
-      return _ecGearsetRows;
-    }
+  function ecGearsetKnownRows() {
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
       const zhSeries = ecGearsetSeriesZh(series);
@@ -223,12 +222,32 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       const zh = ecGearsetSeriesZh(native);
       if (zh) rows.push({ native, zh });
     }
-    if (hasItems) {
-      const seen = new Set(rows.map(row => row.native));
-      for (const row of inferECGearsetsFromItems(nameIndex)) {
-        if (!seen.has(row.native)) { rows.push(row); seen.add(row.native); }
-      }
+    return rows;
+  }
+
+  function ecGearsetAppendInferredRows(rows, nameIndex) {
+    if (!nameIndex) return;
+    const seen = new Set(rows.map(row => row.native));
+    for (const row of inferECGearsetsFromItems(nameIndex)) {
+      if (seen.has(row.native)) continue;
+      rows.push(row);
+      seen.add(row.native);
     }
+  }
+
+  // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
+  let _ecGearsetRows = null;
+  let _ecGearsetHadItemIndex = false;
+  let _ecGearsetRevision = -1;
+  function ecGearsetCatalog() {
+    const revision = dictGetRevision();
+    const nameIndex = dataGetIndex('nameMap');
+    const hasItems = !!nameIndex;
+    if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
+      return _ecGearsetRows;
+    }
+    const rows = ecGearsetKnownRows();
+    ecGearsetAppendInferredRows(rows, nameIndex);
     _ecGearsetRows = rows;
     _ecGearsetRevision = revision;
     _ecGearsetHadItemIndex = hasItems;
@@ -329,7 +348,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         const zh = ecGearsetDisplayName(raw);
         if (!zh) continue;
         const trimmed = raw.trim();
-        const display = splitSet && !/ Set$/.test(trimmed) && zh.endsWith('套装')
+        const display = splitSet && !trimmed.endsWith(' Set') && zh.endsWith('套装')
           ? zh.slice(0, -2) : zh;
         node.nodeValue = raw.replace(trimmed, display);
       }
