@@ -1,0 +1,79 @@
+name: Refresh v1.4.3 EC search audit hotfix (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refresh-v143-audit-ec-search.yml'
+permissions:
+  contents: write
+concurrency:
+  group: refresh-v143-audit-ec-search
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.repository == 'jdysw/ff14-glamour-zh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout final main source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rebuild verified 1.4.3 with PR43
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "1.4.3"
+          git merge-base --is-ancestor 37c94d33ae2a65322a8ddee64be380144f2d6c84 HEAD
+          npm ci
+          bash build.sh
+          npm run version:check
+          npm run check:dist
+          git diff --exit-code
+          test -s dist/ff14-glamour-zh.greasyfork.user.js
+          grep -Eq '^// @version[[:space:]]+1\.4\.3$' dist/ff14-glamour-zh.greasyfork.user.js
+          sha256sum dist/ff14-glamour-zh.greasyfork.user.js
+      - name: Keep existing release notes and append audit-driven fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v1.4.3 --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > "$RUNNER_TEMP/notes.md"
+          for pr in 34 39 40 41; do grep -Fq "PR #$pr" "$RUNNER_TEMP/notes.md"; done
+          if ! grep -Fq 'PR #43' "$RUNNER_TEMP/notes.md"; then
+            cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+
+          ### 2026-10-10：根据 V1.2 真实搜索审计修复 EC Gearsets 中文检索（PR #43）
+          - 审计实证：在 /gearsets 输入「女仆」「兽王」「东方」后，中文候选均为空（rendered=0），提交参数仍是中文，页面结果为空；问题不在于输入法或浏览器没有触发表单。
+          - 增补经 EC 套装页核实的中文查询映射：**女仆 → Loyal Housemaid's**、**兽王 → Beastmaster's**、**东方 → Eastern**。其中 Eastern 是匹配多套东方套装的公共英文关键词，非虚构的单个套装译名；支持相应繁体输入。
+          - 改进中文「搜索」占位符的表单输入框识别优先级，兼容 name/id 为空的实际 EC 搜索框。
+          - 按审计日志新增词典候选、真实表单形态、搜索 GET 参数、分页重置与既有筛选条件的回归测试。Test、SonarQube Quality Gate 全部通过。
+          - 主项目仍为 **1.4.3**。这是同版本附件替换，旧 1.4.3 用户需手动覆盖安装；原始历史 Git 标签不移动。
+          - 真实 EC 浏览器上的最终结果仍需按修复版重新实测；审计日志目前仅验证了原有缺陷，并不等于新附件已完成实测验收。
+
+          [PR #43](https://github.com/jdysw/ff14-glamour-zh/pull/43)
+          NOTES
+          fi
+      - name: Replace v1.4.3 asset and release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload v1.4.3 dist/ff14-glamour-zh.greasyfork.user.js --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit v1.4.3 --notes-file "$RUNNER_TEMP/notes.md" --repo "$GITHUB_REPOSITORY"
+      - name: Verify downloaded asset byte-for-byte
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/download"
+          gh release download v1.4.3 --pattern ff14-glamour-zh.greasyfork.user.js --dir "$RUNNER_TEMP/download" --repo "$GITHUB_REPOSITORY"
+          cmp -s dist/ff14-glamour-zh.greasyfork.user.js "$RUNNER_TEMP/download/ff14-glamour-zh.greasyfork.user.js"
+          gh release view v1.4.3 --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/check.md"
+          for pr in 34 39 40 41 43; do grep -Fq "PR #$pr" "$RUNNER_TEMP/check.md"; done
+          echo 'Updated v1.4.3 user script and release notes verified'
