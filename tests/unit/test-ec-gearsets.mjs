@@ -297,6 +297,13 @@ Object.assign(itemIndex, {
   'Other Necklace of Fending': '无关款式御敌项链',
   'Other Bracelet of Fending': '不一致御敌手镯',
   'Other Ring of Fending': '杂项御敌戒指',
+  'Arena Earring of Slaying': '斗技强攻耳坠',
+  'Arena Necklace of Slaying': '斗技强攻项链',
+  'Arena Bracelet of Slaying': '斗技强攻手镯',
+  'Arena Ring of Slaying': '斗技强攻戒指',
+  'Clip-only Earring of Slaying': '孤立强攻耳坠',
+  'Clip-only Ear Cuff of Slaying': '孤立强攻耳夹',
+  'Clip-only Ear Clip of Slaying': '孤立强攻耳饰',
 });
 dictRevision++;
 const accessories = api.ecAccessoryDisplayName;
@@ -312,6 +319,10 @@ assert.equal(accessories("Courtly Lover's Crafted Sets"), '华美恋人饰品 �
   '系列卡片名称与获取方式同节点也能译');
 assert.equal(accessories('Other Accessories'), null,
   '不同系列装备没有中文共同前缀时不应猜造译名');
+assert.equal(accessories('Arena Accessories'), '斗技饰品',
+  'Slaying 强攻饰品应推导中文系列名');
+assert.equal(accessories('Clip-only Accessories'), null,
+  '三种耳饰形态不能冒充两个独立的饰品部位');
 assert.equal(accessories('Accessories'), null,
   '网站导航的 Accessories 词不能识别为套装系列');
 const inferredAccessories = api.inferECAccessorySeriesFromItems(itemIndex);
@@ -342,6 +353,21 @@ try {
   api.translateECGearsetNames();
   assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
     '饰品 H1 多次 DOM 扫描后保持幂等');
+  const duplicatedSuffix = { tagName: 'H1', nodes: [
+    { nodeValue: 'Mistic Memory Accessories' }, { nodeValue: 'Accessories' },
+  ] };
+  scope.headings = [duplicatedSuffix];
+  api.translateECGearsetNames();
+  assert.equal(duplicatedSuffix.nodes.map(n => n.nodeValue).join(''), '雾忆饰品',
+    '内联和独立 Accessories 同时存在时不能重复后缀');
+  const withSource = { tagName: 'H1', nodes: [
+    { nodeValue: 'Mistic Memory Dungeon Drop' }, { nodeValue: 'Accessories' },
+  ] };
+  scope.headings = [withSource];
+  api.translateECGearsetNames();
+  assert.equal(withSource.nodes.map(n => n.nodeValue).join(''), '雾忆饰品 ' + DICT_EC['Dungeon Drop'],
+    '套装来源与系列同节点时不应重复饰品后缀');
+  scope.headings = [accessoryH1];
   const nested = {
     nodeType: 1,
     closest: selector => selector === 'h1' ? accessoryH1 : null,
@@ -428,6 +454,13 @@ try {
   api.translateECGearsetNames();
   assert.equal(everseekerH1.nodes.map(n => n.nodeValue).join(''), '探求永恒巧匠套装',
     '重复 DOM 翻译必须幂等');
+  const duplicatedSet = { tagName: 'H1', nodes: [
+    { nodeValue: "Everseeker's Crafting Set" }, { nodeValue: 'Set' },
+  ] };
+  scope.headings = [duplicatedSet];
+  api.translateECGearsetNames();
+  assert.equal(duplicatedSet.nodes.map(n => n.nodeValue).join(''), '探求永恒巧匠套装',
+    '内联和独立 Set 同时存在时不能重复后缀');
 } finally {
   globalThis.location = beforeLocation;
   scope.headings = [];

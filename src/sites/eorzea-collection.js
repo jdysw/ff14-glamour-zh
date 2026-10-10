@@ -383,21 +383,32 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // Infer a shared game-localized series prefix from independent earrings,
   // neckpieces, bracelets and rings rather than hardcoding every new release.
   const EC_ACCESSORY_ITEM_NAME =
-    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering))?$/;
+    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Slaying|Crafting|Gathering))?$/;
+
+  // Multiple earring forms count as ONE real slot, not separate accessories.
+  function ecAccessoryItemSlot(part) {
+    if (/^(?:Earrings?|Ear Cuffs?|Ear Clips?)$/.test(part)) return 'ears';
+    if (/^(?:Necklaces?|Chokers?|Neckbands?|Necklets?)$/.test(part)) return 'neck';
+    if (/^(?:Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?)$/.test(part)) return 'wrists';
+    if (/^Rings?$/.test(part)) return 'rings';
+    return null;
+  }
 
   function inferECAccessorySeriesFromItems(nameIndex) {
     const groups = new Map();
     for (const [native, zh] of Object.entries(nameIndex || {})) {
       const match = EC_ACCESSORY_ITEM_NAME.exec(native);
       if (!match || !/^[\u3400-\u9fff]/u.test(zh)) continue;
+      const slot = ecAccessoryItemSlot(match[2]);
+      if (!slot) continue;
       let entries = groups.get(match[1]);
       if (!entries) { entries = new Map(); groups.set(match[1], entries); }
-      entries.set(native, { zh, part: match[2] });
+      entries.set(native, { zh, slot });
     }
-    const roleEndings = ['御敌', '制敌', '强袭', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
+    const roleEndings = ['御敌', '制敌', '强袭', '强攻', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
     const rows = [];
     for (const [native, entries] of groups) {
-      if (entries.size < 3 || new Set([...entries.values()].map(x => x.part)).size < 2) continue;
+      if (entries.size < 3 || new Set([...entries.values()].map(x => x.slot)).size < 2) continue;
       const names = [...new Set([...entries.values()].map(x => x.zh))];
       const prefix = ecGearsetCommonZhPrefix(names);
       const role = roleEndings.find(x => prefix.endsWith(x));
@@ -509,12 +520,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const suffix = type === 'accessories' ? '饰品' : '套装';
     const hasInlineSuffix = type === 'accessories'
       ? title.endsWith(' Accessories') : title.endsWith(' Set');
-    if (suffixNodes.length && !hasInlineSuffix && zh.endsWith(suffix)) {
-      node.nodeValue = raw.replace(title, zh.slice(0, -suffix.length));
+    if (suffixNodes.length && zh.endsWith(suffix)) {
+      // The suffix may already be inline and separately rendered in the H1.
+      if (hasInlineSuffix) {
+        node.nodeValue = raw.replace(title, zh);
+        for (const trailing of suffixNodes) trailing.nodeValue = '';
+      } else {
+        node.nodeValue = raw.replace(title, zh.slice(0, -suffix.length));
+      }
       return;
     }
     node.nodeValue = raw.replace(title, zh);
-    if (suffixNodes.length && zh.endsWith('装束')) {
+    // E.g. "Mistic Memory Dungeon Drop" followed by a separate "Accessories":
+    // the series suffix is already before the translated source description.
+    if (suffixNodes.length && (zh.endsWith('装束') || zh.includes(suffix + ' '))) {
       for (const trailing of suffixNodes) trailing.nodeValue = '';
     }
   }
