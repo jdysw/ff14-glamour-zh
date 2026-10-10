@@ -395,9 +395,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const key = ecGearsetNormalizedZh(query);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const matching = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
-    // Do not let unverified game packages displace confirmed EC search rows.
-    const verified = matching.filter(row => !row.provisional);
-    const rows = verified.length ? verified : matching;
+    // Stronger evidence always wins over provisional official game packages;
+    // include alias matches before choosing the fallback candidate tier.
+    const rows = matching.filter(row => !row.provisional);
     // 已核实的 EC 英文套装名/公共关键词，兼容用户实际输入的俗称与简繁体。
     // 去重使用英文原生名，避免常见别名与现有国服译名重复展示。
     for (const alias of EC_GEARSET_SEARCH_ALIASES) {
@@ -407,7 +407,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         rows.push({ native: alias.native, zh: alias.zh });
       }
     }
-    return rows;
+    return rows.length ? rows : matching.filter(row => row.provisional);
   }
 
   // 搜索实际发送的是英文子串：一个中文词若对应多个套装，应寻找所有
