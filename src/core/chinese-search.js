@@ -103,6 +103,9 @@ function searchInputScore(input) {
   if (/装備名(?:の一部)?を入力して検索|装備名.*検索|検索.*装備名/u.test(meta)) score += 120;
   if (/keyword/i.test(meta)) score += 100;
   if (/search/i.test(meta)) score += 80;
+  // EC 主搜索框在正式汉化后占位符变成「搜索」，name/id 均可能为空。
+  // 提交表单时必须为该输入框赋予与英文 Search 相同的识别优先级。
+  if (/搜索|搜尋|检索|檢索/u.test(meta)) score += 80;
   if (/query|(^|[-_])q([-_]|$)/i.test(meta)) score += 70;
   if (/关键词|关键字|キーワード|検索|装備品|装備|검색|장비|키워드/u.test(meta)) score += 70;
   if (input.getAttribute?.('placeholder')) score += 5;
