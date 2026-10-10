@@ -151,7 +151,7 @@ for (const [en, zh] of [
 const variants = [...officialRows.entries()]
   .map(([native, zh]) => ({
     native, zh,
-    hit: /^(.+?) (Attire|Armor|Set|Outfit) (\\([^)]{1,60}\\)|\\[[^\\]]{1,40}\\])$/.exec(native),
+    hit: /^(.+?) (Attire|Armor|Set|Outfit) (\([^)]{1,60}\)|\[[^\]]{1,40}\])$/.exec(native),
   }))
   .filter(row => row.hit && /(?:套装|装束)$/u.test(row.zh));
 assert.ok(variants.length >= 50, '国服 TSV 必须包含足够多的括号变体套装测试样本');
