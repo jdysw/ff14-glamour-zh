@@ -1,0 +1,87 @@
+name: Build PR44 EC contextual intelligent search preview (one-time)
+on:
+  push:
+    branches:
+      - preview/pr44-ec-gearsets-test
+    paths:
+      - .github/workflows/pr44-ec-preview-build-once.yml
+permissions:
+  contents: write
+jobs:
+  preview:
+    if: github.repository == 'jdysw/ff14-glamour-zh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current PR44 source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build and verify category regression
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor d7ce5f1997d32ac17803f9b26b58fdfb3b38a512 HEAD
+          test "$(node -p "require('./package.json').version")" = "1.4.3"
+          npm ci
+          bash build.sh
+          npm run version:check
+          npm run check:dist
+          node tests/unit/test-chinese-search-ui.mjs
+          node tests/unit/test-item-resolver.mjs
+          node tests/unit/test-ec-gearsets.mjs
+          python3 -m py_compile tools/update-ec-search-categories.py
+          git diff --exit-code
+      - name: Wrap original PR44 JavaScript in isolated EC header
+        run: |
+          set -euo pipefail
+          mkdir -p preview
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          original = Path("dist/ff14-glamour-zh.greasyfork.user.js").read_text(encoding="utf-8")
+          assert original.startswith("// ==UserScript==\n")
+          header, sep, code = original.partition("// ==/UserScript==")
+          assert sep and code
+          fields = {
+            "name": "FF14 幻化站中文化 · PR44 EC 测试版",
+            "namespace": "https://github.com/jdysw/ff14-glamour-zh/preview/pr44",
+            "version": "1.4.3.44.7",
+            "description": "PR44 EC 分类中文智能候选测试版：鸟甲、面饰、头身手腿脚分组；测试时请关闭正式汉化脚本。",
+          }
+          lines, checks = [], dict.fromkeys(fields, 0)
+          for line in header.splitlines():
+            m = re.match(r"^(// @([\w:-]+)\s+)(.*)$", line)
+            if m:
+              key = m.group(2)
+              if key in ("downloadURL", "updateURL"): continue
+              if key == "match" and m.group(3).strip() != "https://ffxiv.eorzeacollection.com/*": continue
+              if key in fields:
+                line = m.group(1) + fields[key]
+                checks[key] += 1
+            lines.append(line)
+          assert all(count == 1 for count in checks.values()), checks
+          lines.append("// @tag          PR44-TEST-ONLY")
+          wrapped = "\n".join(lines) + "\n" + sep + code
+          assert wrapped.partition(sep)[2] == code
+          assert wrapped.count("// @match") == 1
+          output = Path("preview/ff14-glamour-zh-pr44-ec-test.user.js")
+          output.write_text(wrapped, encoding="utf-8")
+          print(f"Test installer size: {output.stat().st_size}")
+          PY
+          node --check preview/ff14-glamour-zh-pr44-ec-test.user.js
+          sha256sum preview/ff14-glamour-zh-pr44-ec-test.user.js > preview/ff14-glamour-zh-pr44-ec-test.user.js.sha256
+          sed -n '1,25p' preview/ff14-glamour-zh-pr44-ec-test.user.js
+      - name: Commit installer to preview only and remove workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/pr44-ec-preview-build-once.yml
+          git add preview/ff14-glamour-zh-pr44-ec-test.user.js preview/ff14-glamour-zh-pr44-ec-test.user.js.sha256
+          git commit -m "test(preview): publish EC category-aware intelligent search installer"
+          git push origin HEAD:refs/heads/preview/pr44-ec-gearsets-test
