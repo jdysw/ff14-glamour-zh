@@ -23,6 +23,7 @@ jobs:
       - name: Check out updated 1.4.3 source
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js 22
