@@ -358,54 +358,56 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return ecGearsetMatchesZh(query);
   }
 
-  // Gearsets 与 Related Sets 卡片的链接必须继续指向 /gearset/<slug>；
-  // 只替换已知标题文本节点，绝不绑定卡片点击事件或改写 href。
+  function ecGearsetTranslateTitleNode(node, setNodes) {
+    const raw = node.nodeValue || '';
+    const zh = ecGearsetDisplayName(raw);
+    if (!zh) return;
+    const title = raw.trim();
+    if (setNodes.length && !title.endsWith(' Set') && zh.endsWith('套装')) {
+      // Keep the website's original accent styling on the separate Set suffix.
+      node.nodeValue = raw.replace(title, zh.slice(0, -2));
+      return;
+    }
+    node.nodeValue = raw.replace(title, zh);
+    // "...装束" already denotes an outfit; an extra "Set" is redundant.
+    if (setNodes.length && zh.endsWith('装束')) {
+      for (const suffix of setNodes) suffix.nodeValue = '';
+    }
+  }
+
+  function ecGearsetTranslateTitleRoot(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    // Real EC h1: <span>Phantom Vision Fending<span>Set</span></span>,
+    // plus legacy <b>Hempen ...</b> Set. Match actual text nodes, not span text.
+    const setNodes = nodes.filter(n => /^(?:Set|套装)$/iu.test((n.nodeValue || '').trim()));
+    for (const node of nodes) {
+      // "Set" is a UI suffix, not another gearset title.
+      if (!setNodes.includes(node)) ecGearsetTranslateTitleNode(node, setNodes);
+    }
+    // Also process partial h1 updates that generic trimECNode deliberately skips.
+    if (root.tagName === 'H1') {
+      for (const suffix of setNodes) {
+        if (suffix.nodeValue?.trim() === 'Set') suffix.nodeValue = suffix.nodeValue.replace('Set', '套装');
+      }
+    }
+  }
+
+  function ecGearsetTitleRoots(scope, selector) {
+    const found = queryIn(scope, selector);
+    // MutationObserver may provide only a nested span, not its containing h1/a.
+    const parent = scope?.closest?.(selector);
+    if (parent && !found.includes(parent)) found.unshift(parent);
+    return found;
+  }
+
+  // Gearset link href is never touched; only the verified title text is changed.
   function translateECGearsetNames(rootArg) {
     const scope = localScope(rootArg);
-    const translateText = root => {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      const nodes = [];
-      while (walker.nextNode()) nodes.push(walker.currentNode);
-      // Observed EC h1: <span>Phantom Vision Fending<span>Set</span></span>.
-      // Also cover <b>Hempen ...</b> Set (Set is a direct H1 text node).
-      // Check actual text nodes, not spans: the outer span includes both strings.
-      const setNodes = nodes.filter(n => /^(?:Set|套装)$/iu.test((n.nodeValue || '').trim()));
-      for (const node of nodes) {
-        // "Set" is a separate UI suffix, never another gearset title.
-        // Otherwise its dictionary translation "套装" would itself be stripped.
-        if (setNodes.includes(node)) continue;
-        const raw = node.nodeValue || '';
-        const zh = ecGearsetDisplayName(raw);
-        if (!zh) continue;
-        const title = raw.trim();
-        if (setNodes.length && !title.endsWith(' Set') && zh.endsWith('套装')) {
-          // Keep the original accent styling on the website's own Set suffix.
-          node.nodeValue = raw.replace(title, zh.slice(0, -2));
-        } else {
-          node.nodeValue = raw.replace(title, zh);
-          // "...装束" already denotes an outfit; do not append another 套装.
-          if (setNodes.length && zh.endsWith('装束')) {
-            for (const suffix of setNodes) suffix.nodeValue = '';
-          }
-        }
-      }
-      // The generic text scan can later localize these independent labels;
-      // doing it here also covers incremental observer updates inside the H1.
-      if (root.tagName === 'H1') {
-        for (const suffix of setNodes) {
-          if (suffix.nodeValue?.trim() === 'Set') suffix.nodeValue = suffix.nodeValue.replace('Set', '套装');
-        }
-      }
-    };
-    const roots = selector => {
-      const found = queryIn(scope, selector);
-      const parent = scope?.closest?.(selector);
-      if (parent && !found.includes(parent)) found.unshift(parent);
-      return found;
-    };
-    for (const a of roots('a[href*="/gearset/"]')) translateText(a);
+    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/gearset/"]')) ecGearsetTranslateTitleRoot(a);
     if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')) {
-      for (const h1 of roots('h1')) translateText(h1);
+      for (const h1 of ecGearsetTitleRoots(scope, 'h1')) ecGearsetTranslateTitleRoot(h1);
     }
   }
 
