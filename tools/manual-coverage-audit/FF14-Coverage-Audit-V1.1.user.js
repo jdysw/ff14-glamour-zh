@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.1.1
-// @description  原文变化见证、UI/玩家内容分类、跨状态采集与私密导出。不上传数据。
+// @version      1.2.0
+// @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
 // @match        https://ff14-fc.com/*
@@ -219,10 +219,302 @@
   global.ZHXAuditCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 
-/* FF14 manual browser audit v1.1.1. Bundled after audit-core.js. */
+/* Search diagnostics for the existing FF14 manual localization audit.
+ * Opt-in, local-only, no request interception or page behavior changes. */
+(function (global) {
+  'use strict';
+  const C = global.ZHXAuditCore;
+  const KEY = 'zhx.audit.search.v1';
+  const MAX_SESSIONS = 3;
+  const MAX_EVENTS = 360;
+  const SEARCH_HINT = /search|keyword|query|検索|检索|檢索|搜索|搜尋|装备|裝備|套装|套裝|装備|검색|키워드/i;
+  const PRIVATE_HINT = /password|passcode|token|secret|api[-_]?key|auth|mail|e-mail|user(name)?|player|author|creator|login|comment|title|description|留言|邮箱|郵箱|用户|用戶|玩家|作者|标题|標題|账户|帳戶/i;
+  const HAN = /[\u3400-\u9fff]/u;
+  const INPUT_TYPES = new Set(['', 'text', 'search']);
+  const now = () => new Date().toISOString();
+  const empty = () => ({ format: 'zhx-search-audit-v1', enabled: false, sessions: [] });
+  let state = empty(), started = false, bound = false, ready = null;
+  let subscribed = null, saveTimer = null, settleTimer = null;
+  let active = null, lastChineseInput = null, lastInputTime = 0;
+  let resourceWatcher = null;
+
+  function cleanValue(raw) {
+    const value = String(raw ?? '').trim().replace(/\s+/gu, ' ').slice(0, 96);
+    if (!value || /@|https?:|(?:bearer|password|token|secret|api[_-]?key)/i.test(value)) return '[redacted]';
+    return value.replace(/\d{6,}/g, '[digits]').slice(0, 96);
+  }
+  function cleanMeta(value) {
+    return String(value ?? '').trim().replace(/\s+/g, ' ').replace(/[^\w\s\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\-._]/gu, '').slice(0, 72);
+  }
+  function allowed() {
+    try { return !!C?.siteFor(location.href) && C.allowedRoute(location.href); }
+    catch { return false; }
+  }
+  function currentPath() {
+    try { return new URL(location.href).pathname.slice(0, 120); }
+    catch { return ''; }
+  }
+  function isSearchInput(input) {
+    if (!input || input.tagName !== 'INPUT' || input.disabled || input.readOnly) return false;
+    if (!INPUT_TYPES.has(String(input.getAttribute?.('type') || '').toLowerCase())) return false;
+    if (input.closest?.('#zhx-manual-audit-overlay')) return false;
+    const id = input.getAttribute?.('id') || '';
+    const name = input.getAttribute?.('name') || '';
+    const ph = input.getAttribute?.('placeholder') || '';
+    const label = input.getAttribute?.('aria-label') || '';
+    const meta = [id, name, ph, label].join(' ');
+    if (PRIVATE_HINT.test(meta)) return false;
+    if (SEARCH_HINT.test(meta)) return true;
+    // EC Gearsets has a standalone Search... input, sometimes without a name.
+    return /^\/gearsets(?:\/[a-z-]+)?\/?$/i.test(currentPath())
+      && location.hostname === 'ffxiv.eorzeacollection.com'
+      && (String(input.getAttribute?.('type') || '') === 'search');
+  }
+  function inputInfo(input) {
+    if (!isSearchInput(input)) return null;
+    return {
+      id: cleanMeta(input.getAttribute('id')),
+      name: cleanMeta(input.getAttribute('name')),
+      placeholder: cleanMeta(input.getAttribute('placeholder')),
+      className: cleanMeta(typeof input.className === 'string' ? input.className : ''),
+      type: String(input.getAttribute('type') || 'text').slice(0, 12),
+      inForm: !!input.form,
+      value: cleanValue(input.value),
+      length: String(input.value || '').length,
+      hasChinese: HAN.test(String(input.value || '')),
+      ariaExpanded: input.getAttribute('aria-expanded') || null,
+      ariaControls: cleanMeta(input.getAttribute('aria-controls')),
+      connected: input.isConnected !== false,
+    };
+  }
+  function candidateInfo() {
+    const el = document.querySelector?.('[data-zhx-chinese-suggest]');
+    if (!el) return { exists: false };
+    const buttons = [...el.querySelectorAll('button[data-zhx-index]')];
+    return {
+      exists: true, hidden: !!el.hidden, role: el.getAttribute('role') || '',
+      rendered: buttons.length,
+      first: buttons.slice(0, 4).map(b => ({
+        zh: cleanValue(b.querySelector('.zhx-suggest-zh')?.textContent || ''),
+        native: cleanValue(b.querySelector('.zhx-suggest-native')?.textContent || ''),
+      })),
+      empty: !!el.querySelector('.zhx-suggest-empty'),
+    };
+  }
+  function domState(input = active) {
+    let count = null;
+    try {
+      if (location.hostname === 'ffxiv.eorzeacollection.com' && /^\/gearsets/.test(currentPath())) {
+        count = document.querySelectorAll('a[href*="/gearset/"]').length;
+      }
+    } catch { /* DOM may change during navigation */ }
+    return {
+      input: inputInfo(input), candidates: candidateInfo(), gearsetLinks: count,
+      searchBoundVisible: global.__zhxChineseSearchBound === true,
+      readyState: document.readyState || 'unknown',
+      // Neither the searchBound flag nor the link count alone proves the search succeeded.
+    };
+  }
+  function queryInfo(raw) {
+    try {
+      const u = new URL(raw, location.href);
+      if (u.origin !== location.origin) return null;
+      const params = {};
+      for (const key of ['search', 'keyword', 'query']) {
+        if (u.searchParams.has(key)) params[key] = cleanValue(u.searchParams.get(key));
+      }
+      return { path: u.pathname.slice(0, 120), query: params,
+        otherParamNames: [...u.searchParams.keys()].filter(k => !['search','keyword','query'].includes(k))
+          .slice(0, 12).map(cleanMeta) };
+    } catch { return null; }
+  }
+  function activeSession() {
+    return state.sessions[0] || null;
+  }
+  function notify() {
+    try { subscribed?.(getSummary()); } catch { /* no UI dependency */ }
+  }
+  function getSummary() {
+    return { enabled: !!state.enabled, events: activeSession()?.events.length || 0,
+      sessions: state.sessions.length, startedAt: activeSession()?.startedAt || null, allowed: allowed() };
+  }
+  function enqueueSave(immediate = false) {
+    if (saveTimer) clearTimeout(saveTimer);
+    if (immediate) {
+      saveTimer = null;
+      try { void GM_setValue(KEY, JSON.stringify(state)); }
+      catch { /* recording continues in memory */ }
+    } else saveTimer = setTimeout(() => enqueueSave(true), 220);
+  }
+  function logEvent(type, details = {}, input = active) {
+    if (!state.enabled || !allowed()) return;
+    const session = activeSession();
+    if (!session) return;
+    session.events.push({ at: now(), type, page: currentPath(), ...details, state: domState(input) });
+    if (session.events.length > MAX_EVENTS) session.events.splice(0, session.events.length - MAX_EVENTS);
+    enqueueSave(/^(enter|submit|candidate-|pagehide|network|start|stop)/.test(type));
+    notify();
+  }
+  function setActive(input) {
+    if (isSearchInput(input)) active = input;
+  }
+  function onFocus(event) {
+    if (!isSearchInput(event.target)) return;
+    setActive(event.target);
+    logEvent('focus', {}, active);
+  }
+  function onInput(event) {
+    const input = event.target;
+    if (!isSearchInput(input)) return;
+    setActive(input);
+    const value = String(input.value || '');
+    if (!HAN.test(value) && lastChineseInput !== input) return;
+    if (HAN.test(value)) lastChineseInput = input;
+    const t = Date.now();
+    // Record the last value in each burst; do not create one entry per keystroke.
+    if (t - lastInputTime > 500) logEvent('input', { trusted: event.isTrusted === true }, input);
+    lastInputTime = t;
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => logEvent('input-settled', {}, input), 300);
+  }
+  function onKey(event) {
+    const input = event.target;
+    if (!isSearchInput(input)) return;
+    if (!['Enter', 'ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return;
+    setActive(input);
+    logEvent(event.key === 'Enter' ? 'enter' : 'key-' + event.key,
+      { composing: !!event.isComposing }, input);
+    if (event.key === 'Enter') setTimeout(() => logEvent('after-enter', {}, input), 450);
+  }
+  function onComposition(event) {
+    if (!isSearchInput(event.target)) return;
+    setActive(event.target);
+    logEvent(event.type, {}, active);
+  }
+  function onSubmit(event) {
+    const form = event.target;
+    const inputs = [...(form?.querySelectorAll?.('input') || [])].filter(isSearchInput);
+    const input = inputs.find(x => HAN.test(String(x.value || ''))) || inputs[0];
+    if (!input) return;
+    setActive(input);
+    logEvent('submit', { method: String(form.getAttribute?.('method') || 'get').toLowerCase(),
+      action: queryInfo(form.getAttribute?.('action') || location.href) }, input);
+    setTimeout(() => logEvent('after-submit', {}, input), 450);
+  }
+  function onSelect(event) {
+    const candidate = event.target?.closest?.('[data-zhx-chinese-suggest] button[data-zhx-index]');
+    if (candidate) {
+      logEvent('candidate-' + event.type, {
+        index: Number(candidate.getAttribute('data-zhx-index')),
+        zh: cleanValue(candidate.querySelector('.zhx-suggest-zh')?.textContent),
+        native: cleanValue(candidate.querySelector('.zhx-suggest-native')?.textContent),
+      });
+      setTimeout(() => logEvent('after-candidate', {}, active), 500);
+      return;
+    }
+    const button = event.target?.closest?.('button,input[type="submit"],[role="button"]');
+    if (!button || !active || !isSearchInput(active)) return;
+    const text = String(button.textContent || button.getAttribute?.('title') || '').slice(0, 90);
+    if (/search|搜尋|搜索|查询|检索|検索|검색|apply/i.test(text)) logEvent('search-click', {}, active);
+  }
+  function onResource(entry) {
+    if (!state.enabled || !allowed() || !['fetch', 'xmlhttprequest'].includes(entry.initiatorType)) return;
+    const info = queryInfo(entry.name);
+    if (!info) return;
+    if (!/\/(?:gearsets?|search)(?:\/|$)/i.test(info.path) && !Object.keys(info.query).length) return;
+    logEvent('network', { request: info, initiator: entry.initiatorType,
+      responseStatus: Number.isInteger(entry.responseStatus) && entry.responseStatus > 0 ? entry.responseStatus : null,
+      durationMs: Math.round(entry.duration) });
+  }
+  function bind() {
+    if (bound) return;
+    bound = true;
+    for (const [type, fn] of [
+      ['focusin', onFocus], ['input', onInput], ['change', onInput], ['keydown', onKey],
+      ['compositionstart', onComposition], ['compositionend', onComposition],
+      ['submit', onSubmit], ['pointerdown', onSelect], ['click', onSelect],
+    ]) document.addEventListener(type, fn, true);
+    window.addEventListener('pagehide', () => { logEvent('pagehide'); enqueueSave(true); }, true);
+    window.addEventListener('pageshow', () => { logEvent('pageshow'); }, true);
+    window.addEventListener('popstate', () => logEvent('popstate'), true);
+    try {
+      resourceWatcher = new PerformanceObserver(list => {
+        for (const item of list.getEntries()) onResource(item);
+      });
+      resourceWatcher.observe({ type: 'resource', buffered: false });
+    } catch { resourceWatcher = null; }
+  }
+  async function init() {
+    if (ready) return ready;
+    ready = (async () => {
+      try {
+        const raw = await GM_getValue(KEY, '');
+        const old = raw ? JSON.parse(raw) : null;
+        if (old?.format === 'zhx-search-audit-v1' && Array.isArray(old.sessions)) {
+          state = { format: 'zhx-search-audit-v1', enabled: !!old.enabled,
+            sessions: old.sessions.slice(0, MAX_SESSIONS).map(s => ({
+              startedAt: s.startedAt || now(),
+              endedAt: s.endedAt || null,
+              events: Array.isArray(s.events) ? s.events.slice(-MAX_EVENTS) : [],
+            })) };
+        }
+      } catch { state = empty(); }
+      if (state.enabled && allowed()) {
+        if (!activeSession()) state.sessions.unshift({ startedAt: now(), endedAt: null, events: [] });
+        bind(); logEvent('page-load', { resumed: true });
+      }
+      notify();
+    })();
+    return ready;
+  }
+  async function start() {
+    await init();
+    if (!allowed()) return false;
+    if (!state.enabled) {
+      state.enabled = true;
+      state.sessions.unshift({ startedAt: now(), endedAt: null, events: [] });
+      state.sessions = state.sessions.slice(0, MAX_SESSIONS);
+    }
+    bind(); logEvent('start', { path: currentPath() });
+    enqueueSave(true); notify();
+    return true;
+  }
+  async function stop() {
+    await init();
+    if (state.enabled) {
+      logEvent('stop');
+      state.enabled = false;
+      if (activeSession()) activeSession().endedAt = now();
+      enqueueSave(true);
+    }
+    notify();
+  }
+  async function clear() {
+    await init();
+    state = empty();
+    active = null; lastChineseInput = null;
+    enqueueSave(true); notify();
+  }
+  async function exportState() {
+    await init();
+    return { format: 'zhx-search-audit-v1', note: 'Opt-in search fields only; never request/response bodies',
+      sessions: JSON.parse(JSON.stringify(state.sessions)) };
+  }
+  function snapshot() {
+    logEvent('manual-snapshot', { url: queryInfo(location.href) });
+  }
+  function onUpdate(fn) { subscribed = fn; notify(); }
+
+  const api = { init, start, stop, clear, exportState, snapshot, onUpdate,
+    getSummary, isSearchInput, cleanValue, queryInfo };
+  global.ZHXSearchAudit = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* FF14 manual browser audit v1.2.0. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
+const S=globalThis.ZHXSearchAudit;
 const site=C.siteFor(location.href);
 if(!site)return;
 const KEY='zhx.audit.manual.v2',OLD='zhx.audit.manual.v1';
@@ -232,6 +524,7 @@ const CAP=6000,MAX_SNAPSHOTS=320,MAX_BASELINES=320;
 const BAD=new Set(['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','IFRAME','SVG']);
 const ATTRS=['title','alt','aria-label','placeholder'];
 let busy=false,box,status,stats,modePick,autoCheck,roundInput,labelInput,privateCheck;
+let searchStatus,searchButton;
 let lastMut=performance.now(),afterReady=false;
 // A document-start observer records pre-mutation values where possible. These are
 // *inferred* evidence, never a verified before snapshot: userscripts may execute
@@ -254,6 +547,8 @@ function watchMutations(){
   window.addEventListener('zhx:translation-ready',()=>{afterReady=true;},{passive:true});
 }
 watchMutations();
+// Restore an opt-in diagnostic session early across page navigations.
+void S?.init?.();
 async function readyForCapture(){
   const t0=performance.now();
   while(performance.now()-t0<15000){
@@ -322,7 +617,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.1.1',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.2.0',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -375,24 +670,27 @@ async function capture(automatic=false){
   }catch(e){say('采集失败：'+String(e.message||e),true);console.error('[FF14 audit v1.1]',e)}
   finally{busy=false}
 }
-async function count(d){const x=d||await load();if(stats)stats.textContent=`原文状态 ${Object.keys(x.baselines).length} / 译后快照 ${Object.keys(x.pages).length}`}
+async function count(d){const x=d||await load();if(stats)stats.textContent=`原文状态 ${Object.keys(x.baselines).length} / 译后快照 ${Object.keys(x.pages).length} / 搜索事件 ${S?.getSummary?.().events||0}`}
 function download(data,name){const blob=new Blob([data],{type:'application/json;charset=utf-8'});
   const uri=URL.createObjectURL(blob),a=document.createElement('a');a.href=uri;a.download=name;document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(uri),2000);
 }
 async function exportJSON(){
-  const d=await load();if(!Object.keys(d.pages).length&&!Object.keys(d.baselines).length){say('尚无数据。',true);return}
+  const d=await load(),search=await S?.exportState?.();
+  const searchEvents=(search?.sessions||[]).reduce((n,s)=>n+(s.events?.length||0),0);
+  if(!Object.keys(d.pages).length&&!Object.keys(d.baselines).length&&!searchEvents){say('尚无数据。',true);return}
   // Never leak parentText. Player content and unverified names are redacted by default.
   const out=JSON.parse(JSON.stringify(d)),includeUser=!!privateCheck?.checked;
+  if(searchEvents)out.searchAudit=search;
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
   out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
-  download(JSON.stringify(out,null,2),'ff14-audit-v1.1-'+clock().replace(/[:.]/g,'-')+'.json');
-  say('已导出 '+Object.keys(out.pages).length+' 个快照；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
+  download(JSON.stringify(out,null,2),'ff14-audit-v1.2-'+clock().replace(/[:.]/g,'-')+'.json');
+  say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
-async function clear(){if(!confirm('清空所有审计记录（包含 V1.0 导入数据）？请先导出备份。'))return;
-  await set(KEY,JSON.stringify(blank()));await set(OLD,'');await count();say('已清空。')}
+async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
+  await set(KEY,JSON.stringify(blank()));await set(OLD,'');await S?.clear?.();await count();say('已清空。')}
 function btn(text,fn){const x=document.createElement('button');x.type='button';x.textContent=text;x.addEventListener('click',fn);return x}
 async function init(){
   if(!document.body){await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}))}
@@ -406,7 +704,7 @@ async function init(){
   input[type=text]{width:100%;min-width:60px}button{cursor:pointer}button:hover{background:#35517b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .hint{font-size:11px;color:#c6d1e2}.bad{color:#ffb9b9}.closed .body{display:none}#status{max-height:85px;overflow:auto;overflow-wrap:anywhere}#status[data-error=true]{color:#ffb9b9}`;
   box.append(style);const panel=document.createElement('div');panel.className='panel';
-  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.1'));
+  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.2'));
   head.append(btn('−',()=>{panel.classList.toggle('closed');head.lastChild.textContent=panel.classList.contains('closed')?'+':'−'}));panel.append(head);
   const body=document.createElement('div');body.className='body';
   const hint=document.createElement('div');hint.className='hint';hint.textContent='只读采集；同一网址可保留不同状态和版本。自动推断的原文不等同于完整基线。';body.append(hint);
@@ -423,6 +721,26 @@ async function init(){
   const priv=document.createElement('label');privateCheck=document.createElement('input');privateCheck.type='checkbox';
   priv.append(privateCheck,document.createTextNode('导出玩家内容 / 物品名（默认隐藏）'));body.append(priv);
   body.append(btn('采集当前页面／状态',()=>capture(false)));
+  const searchTitle=document.createElement('div');searchTitle.className='hint';
+  searchTitle.textContent='中文搜索诊断：手动开始后记录搜索框、候选、提交与请求元数据；不修改网页、不上传数据，也不抓取请求正文。';
+  body.append(searchTitle);
+  const searchActions=document.createElement('div');searchActions.className='grid';
+  searchButton=btn('开始搜索诊断',async()=>{
+    if(S?.getSummary?.().enabled){await S.stop();say('搜索诊断已停止，现在可以导出 JSON。')}
+    else if(await S.start()){say('搜索诊断已开始。请尝试中文输入、选择候选并检索，再导出 JSON。')}
+    else say('此页不允许搜索诊断。',true);
+    await count();
+  });
+  searchActions.append(searchButton,btn('记录搜索状态',()=>{
+    S?.snapshot?.();say('已记录当前搜索状态。');void count();
+  }));
+  body.append(searchActions);
+  searchStatus=document.createElement('div');searchStatus.className='hint';body.append(searchStatus);
+  S?.onUpdate?.(summary=>{
+    if(searchStatus)searchStatus.textContent='搜索诊断：'+(summary.enabled?'记录中':'已停止')
+      +' · 当前会话 '+summary.events+' 条 / 累计 '+summary.sessions+' 次';
+    if(searchButton)searchButton.textContent=summary.enabled?'停止搜索诊断':'开始搜索诊断';
+  });
   const actions=document.createElement('div');actions.className='grid';actions.append(btn('导出 JSON',()=>exportJSON()),btn('清空记录',()=>clear()));body.append(actions);
   stats=document.createElement('div');stats.className='hint';body.append(stats);
   status=document.createElement('div');status.id='status';status.className='hint';
@@ -430,6 +748,7 @@ async function init(){
   panel.append(body);box.append(panel);await count();
   if(autoCheck.checked&&C.allowedRoute(location.href))void capture(true);
 }
-try{GM_registerMenuCommand('FF14 V1.1：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.1：导出 JSON',()=>exportJSON());}catch{}
+try{GM_registerMenuCommand('FF14 V1.2：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.2：导出 JSON',()=>exportJSON());
+  GM_registerMenuCommand('FF14 V1.2：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
 void init().catch(err=>console.error('[FF14 manual audit init]',err));
 })();
