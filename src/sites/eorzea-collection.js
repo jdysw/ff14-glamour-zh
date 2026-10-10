@@ -382,11 +382,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // Its titles omit the slot and often omit "Accessories" on the cards.
   // Infer a shared game-localized series prefix from independent earrings,
   // neckpieces, bracelets and rings rather than hardcoding every new release.
-  const EC_ACCESSORY_ITEM_NAME =
-    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Slaying|Crafting|Gathering|Blood|Magic))?$/;
-  // Sea-folk and similar sets put the series after the piece: "Ring of the Sea-folk".
-  const EC_ACCESSORY_INVERTED_NAME =
-    /^(Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Collars?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?) of the (.{2,80})$/;
+  // Parse native names using strict slot classification rather than a single
+  // highly complex alternation regex (Sonar S5843). Unsupported roles are
+  // rejected before item names can contribute to a translated series.
+  const EC_ACCESSORY_ROLE_SUFFIXES = new Set([
+    'Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting',
+    'Healing', 'Slaying', 'Crafting', 'Gathering', 'Blood', 'Magic',
+  ]);
   // Only strip prefixes confirmed by the game's localized stat-specific names.
   const EC_ACCESSORY_STAT_PREFIX = Object.freeze({ Blood: '力之', Magic: '魔之' });
 
@@ -399,37 +401,58 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return null;
   }
 
+  // EC sometimes reverses the order: "Ring of the Sea-folk".
+  function ecAccessoryItemDescriptor(native) {
+    const pivot = native.indexOf(' of the ');
+    if (pivot >= 0) {
+      const slot = ecAccessoryItemSlot(native.slice(0, pivot));
+      const series = native.slice(pivot + ' of the '.length);
+      return slot && series.length >= 2 && series.length <= 80 ? { series, slot } : null;
+    }
+    const role = / of ([A-Za-z]+)$/.exec(native);
+    if (role && !EC_ACCESSORY_ROLE_SUFFIXES.has(role[1])) return null;
+    const bare = role ? native.slice(0, -role[0].length) : native;
+    const words = bare.split(' ');
+    const twoWordPart = words.slice(-2).join(' ');
+    const part = ecAccessoryItemSlot(twoWordPart) ? twoWordPart : words.at(-1);
+    const slot = ecAccessoryItemSlot(part);
+    const series = bare.slice(0, -(part.length + 1));
+    if (!slot || !series) return null;
+    return { series, slot, stat: role?.[1] };
+  }
+
+  function ecAccessoryGroupEntry(groups, native, zh) {
+    if (!/^[\u3400-\u9fff]/u.test(zh)) return;
+    const item = ecAccessoryItemDescriptor(native);
+    if (!item) return;
+    const statPrefix = EC_ACCESSORY_STAT_PREFIX[item.stat];
+    // "Occult Earrings of Blood" -> "力之新月魔耳饰":
+    // only remove the stat label after it matches the official Chinese name.
+    if (statPrefix && !zh.startsWith(statPrefix)) return;
+    const localized = statPrefix ? zh.slice(statPrefix.length) : zh;
+    let entries = groups.get(item.series);
+    if (!entries) { entries = new Map(); groups.set(item.series, entries); }
+    entries.set(native, { zh: localized, slot: item.slot });
+  }
+
+  function ecAccessoryGroupRow(native, entries) {
+    if (entries.size < 3 || new Set([...entries.values()].map(x => x.slot)).size < 2) return null;
+    const names = [...new Set([...entries.values()].map(x => x.zh))];
+    const prefix = ecGearsetCommonZhPrefix(names);
+    const roleEndings = ['御敌', '制敌', '强袭', '强攻', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
+    const role = roleEndings.find(x => prefix.endsWith(x));
+    const base = role ? prefix.slice(0, -role.length) : prefix;
+    if (base.length < 2 || base.length > 18 || /(?:套装|装束)$/u.test(base)) return null;
+    return { native, zh: base };
+  }
+
   function inferECAccessorySeriesFromItems(nameIndex) {
     const groups = new Map();
     for (const [native, zh] of Object.entries(nameIndex || {})) {
-      const match = EC_ACCESSORY_ITEM_NAME.exec(native);
-      const inverted = match ? null : EC_ACCESSORY_INVERTED_NAME.exec(native);
-      if ((!match && !inverted) || !/^[\u3400-\u9fff]/u.test(zh)) continue;
-      const series = match ? match[1] : inverted[2];
-      const slot = ecAccessoryItemSlot(match ? match[2] : inverted[1]);
-      if (!slot) continue;
-      const stat = match && / of (Blood|Magic)$/.exec(native);
-      const prefix = stat && EC_ACCESSORY_STAT_PREFIX[stat[1]];
-      // "Occult Earrings of Blood" -> "力之新月魔耳饰":
-      // after verifying the stat prefix, compare "新月魔..." across slots.
-      if (stat && !zh.startsWith(prefix)) continue;
-      const localized = stat ? zh.slice(prefix.length) : zh;
-      let entries = groups.get(series);
-      if (!entries) { entries = new Map(); groups.set(series, entries); }
-      entries.set(native, { zh: localized, slot });
+      ecAccessoryGroupEntry(groups, native, zh);
     }
-    const roleEndings = ['御敌', '制敌', '强袭', '强攻', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
-    const rows = [];
-    for (const [native, entries] of groups) {
-      if (entries.size < 3 || new Set([...entries.values()].map(x => x.slot)).size < 2) continue;
-      const names = [...new Set([...entries.values()].map(x => x.zh))];
-      const prefix = ecGearsetCommonZhPrefix(names);
-      const role = roleEndings.find(x => prefix.endsWith(x));
-      const base = role ? prefix.slice(0, -role.length) : prefix;
-      if (base.length < 2 || base.length > 18 || /(?:套装|装束)$/u.test(base)) continue;
-      rows.push({ native, zh: base });
-    }
-    return rows;
+    return [...groups].map(([native, entries]) => ecAccessoryGroupRow(native, entries))
+      .filter(Boolean);
   }
 
   // Rare EC variant catalogues have only one physical slot but two independent
@@ -441,7 +464,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const base = native.slice(0, -5);
     const blood = /^超力之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Blood'] || '');
     const magic = /^超魔之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Magic'] || '');
-    return blood && magic && blood[1] === magic[1] ? '超' + blood[1] : null;
+    return blood?.[1] && blood[1] === magic?.[1] ? '超' + blood[1] : null;
   }
 
   let _ecAccessoryRows = null;
@@ -537,6 +560,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return ecGearsetMatchesZh(query);
   }
 
+  function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {
+    const splitSuffix = zh.endsWith(suffix) && !hasInlineSuffix;
+    node.nodeValue = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
+    // Split H1 labels must contribute the suffix exactly once, including when
+    // the title also contains an acquisition source (e.g. Dungeon Drop).
+    const redundant = hasInlineSuffix || zh.endsWith('装束') || zh.includes(suffix + ' ');
+    if (redundant) for (const trailing of suffixNodes) trailing.nodeValue = '';
+  }
+
   function ecGearsetTranslateTitleNode(node, suffixNodes, type) {
     const raw = node.nodeValue || '';
     const zh = type === 'accessories' ? ecAccessoryDisplayName(raw) : ecGearsetDisplayName(raw);
@@ -545,21 +577,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const suffix = type === 'accessories' ? '饰品' : '套装';
     const hasInlineSuffix = type === 'accessories'
       ? title.endsWith(' Accessories') : title.endsWith(' Set');
-    if (suffixNodes.length && zh.endsWith(suffix)) {
-      // The suffix may already be inline and separately rendered in the H1.
-      if (hasInlineSuffix) {
-        node.nodeValue = raw.replace(title, zh);
-        for (const trailing of suffixNodes) trailing.nodeValue = '';
-      } else {
-        node.nodeValue = raw.replace(title, zh.slice(0, -suffix.length));
-      }
-      return;
-    }
-    node.nodeValue = raw.replace(title, zh);
-    // E.g. "Mistic Memory Dungeon Drop" followed by a separate "Accessories":
-    // the series suffix is already before the translated source description.
-    if (suffixNodes.length && (zh.endsWith('装束') || zh.includes(suffix + ' '))) {
-      for (const trailing of suffixNodes) trailing.nodeValue = '';
+    if (suffixNodes.length) {
+      ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes);
+    } else {
+      node.nodeValue = raw.replace(title, zh);
     }
   }
 

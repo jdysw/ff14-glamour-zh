@@ -314,6 +314,9 @@ Object.assign(itemIndex, {
   'Clip-only Earring of Slaying': '孤立强攻耳坠',
   'Clip-only Ear Cuff of Slaying': '孤立强攻耳夹',
   'Clip-only Ear Clip of Slaying': '孤立强攻耳饰',
+  'Unrecognized Ear Cuff of Mystery': '假想战斗耳夹',
+  'Unrecognized Necklace of Mystery': '假想战斗项链',
+  'Unrecognized Ring of Mystery': '假想战斗戒指',
 });
 dictRevision++;
 const accessories = api.ecAccessoryDisplayName;
@@ -333,6 +336,8 @@ assert.equal(accessories('Arena Accessories'), '斗技饰品',
   'Slaying 强攻饰品应推导中文系列名');
 assert.equal(accessories('Clip-only Accessories'), null,
   '三种耳饰形态不能冒充两个独立的饰品部位');
+assert.equal(accessories('Unrecognized Accessories'), null,
+  '不属于游戏装备角色的英文 of 后缀不得进入自动饰品系列推导');
 assert.equal(accessories('Occult Accessories'), '新月魔饰品',
   'Blood/Magic 属性型饰品应按验证过的国服前缀推导共用系列');
 assert.equal(accessories('Occult Deep Accessories'), '超新月魔饰品',
