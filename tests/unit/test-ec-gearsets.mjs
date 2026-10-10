@@ -145,6 +145,57 @@ for (const [en, zh] of [
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }
 
+// 2026-10 用户实测的生产／采集漏译。数据直接取仓库真实国服 TSV，
+// 不在测试里伪造国服译名，也不手动登记套装目录来绕开自动推导。
+for (const [title, names, prefix, expected] of [
+  ["Everseeker's Crafting", [
+    "Everseeker's Headgear of Crafting", "Everseeker's Top of Crafting",
+    "Everseeker's Armguards of Crafting", "Everseeker's Slops of Crafting",
+    "Everseeker's Workboots of Crafting",
+  ], '探求永恒巧匠', '探求永恒巧匠套装'],
+  ["Everseeker's Gathering", [
+    "Everseeker's Goggles of Gathering", "Everseeker's Coat of Gathering",
+    "Everseeker's Work Gloves of Gathering", "Everseeker's Kecks of Gathering",
+    "Everseeker's Shoes of Gathering",
+  ], '探求永恒大地', '探求永恒大地套装'],
+]) {
+  for (const native of names) {
+    const zh = officialRows.get(native);
+    assert.ok(zh?.startsWith(prefix), native + ' 必须使用已有的国服装备译名');
+    itemIndex[native] = zh;
+  }
+  // 先建立 V3 倒排再验证新增标题：有单件装备不等于硬编码了套装。
+  dictRevision++;
+  assert.equal(tr(title), expected, title + ' 可以完全自动推导');
+  assert.equal(tr(title + ' Set'), expected, title + ' 含 Set 后缀仍正确');
+  const suggested = api.suggestECGearsetsByZh(prefix);
+  assert.ok(suggested.some(r => r.native === title && r.zh === expected),
+    title + ' 进入中文套装搜索候选');
+  assert.equal(api.resolveECGearsetSearch(prefix), title,
+    title + ' 中文检索转换为真实 EC 英文标题');
+}
+assert.equal(DICT_EC['Crafting'], '制作', '全站 UI「Crafting」含义不能为装备套装更改');
+assert.equal(tr("Everseeker's Crafting Crafted Sets"),
+  '探求永恒巧匠套装 制作套装', '目录卡片同时出现来源标签时准确转换');
+const everseekerH1 = {
+  tagName: 'H1',
+  nodes: [{ nodeValue: "Everseeker's Crafting" }, { nodeValue: '套装' }],
+};
+const beforeLocation = globalThis.location;
+try {
+  globalThis.location = { pathname: '/gearset/everseekers-crafting', hostname: 'ffxiv.eorzeacollection.com' };
+  scope.headings = [everseekerH1];
+  api.translateECGearsetNames();
+  assert.equal(everseekerH1.nodes.map(n => n.nodeValue).join(''), '探求永恒巧匠套装',
+    '已汉化的独立 Set 标签不能导致「套装套装」');
+  api.translateECGearsetNames();
+  assert.equal(everseekerH1.nodes.map(n => n.nodeValue).join(''), '探求永恒巧匠套装',
+    '重复 DOM 翻译必须幂等');
+} finally {
+  globalThis.location = beforeLocation;
+  scope.headings = [];
+}
+
 const search = api.resolveECGearsetSearch;
 assert.equal(search('幻境意象御敌套装'), 'Phantom Vision Fending');
 assert.equal(search('幻境意象御敌'), 'Phantom Vision Fending');
