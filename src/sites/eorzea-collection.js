@@ -432,6 +432,18 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return rows;
   }
 
+  // Rare EC variant catalogues have only one physical slot but two independent
+  // officially translated stat versions. Translate an OBSERVED title only when
+  // both names demonstrate the same localized series stem. This produces a
+  // descriptive display label, never a new speculative accessory link.
+  function ecAccessoryDeepStatSeriesZh(native, nameIndex) {
+    if (!nameIndex || !native.endsWith(' Deep')) return null;
+    const base = native.slice(0, -5);
+    const blood = /^超力之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Blood'] || '');
+    const magic = /^超魔之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Magic'] || '');
+    return blood && magic && blood[1] === magic[1] ? '超' + blood[1] : null;
+  }
+
   let _ecAccessoryRows = null;
   let _ecAccessoryRevision = -1;
   let _ecAccessoryHasData = false;
@@ -453,7 +465,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       _ecAccessoryRevision = revision;
       _ecAccessoryHasData = hasData;
     }
-    return _ecAccessoryRows.get(native) || null;
+    return _ecAccessoryRows.get(native) || ecAccessoryDeepStatSeriesZh(native, nameIndex);
   }
 
   function ecAccessoryDisplayName(raw) {

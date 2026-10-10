@@ -34,7 +34,7 @@ const mockQuery = (_root, selector) => selector.includes('/accessories/') ? scop
 let dictRevision = 0;
 const itemIndex = Object.create(null);
 const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
-  '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
+  '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, ecAccessoryDeepStatSeriesZh, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
   doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery);
 
@@ -297,6 +297,8 @@ Object.assign(itemIndex, {
   'Occult Necklace of Magic': '魔之新月魔项链',
   'Occult Bracelet of Magic': '魔之新月魔手镯',
   'Occult Ring of Magic': '魔之新月魔戒指',
+  'Occult Ring of Deep Blood': '超力之新月魔戒指',
+  'Occult Ring of Deep Magic': '超魔之新月魔戒指',
   "Courtly Lover's Earrings of Fending": '华美恋人御敌耳坠',
   "Courtly Lover's Choker of Fending": '华美恋人御敌项环',
   "Courtly Lover's Wristlet of Fending": '华美恋人御敌腕饰',
@@ -333,8 +335,12 @@ assert.equal(accessories('Clip-only Accessories'), null,
   '三种耳饰形态不能冒充两个独立的饰品部位');
 assert.equal(accessories('Occult Accessories'), '新月魔饰品',
   'Blood/Magic 属性型饰品应按验证过的国服前缀推导共用系列');
-assert.equal(accessories('Occult Deep Accessories'), null,
-  '只有两件同部位物品的深层系列不可强行推导未核实名称');
+assert.equal(accessories('Occult Deep Accessories'), '超新月魔饰品',
+  '已观测的 Deep 变体只在两种官方属性译名的共同中文系列严格一致时标注描述性名称');
+assert.equal(api.ecAccessoryDeepStatSeriesZh('Occult Deep', {
+  'Occult Ring of Deep Blood': '超力之新月魔戒指',
+  'Occult Ring of Deep Magic': '超魔之不同系列戒指',
+}), null, '两个官方属性变体不一致时不得推导 Deep 名称');
 assert.equal(accessories('Accessories'), null,
   '网站导航的 Accessories 词不能识别为套装系列');
 const inferredAccessories = api.inferECAccessorySeriesFromItems(itemIndex);
@@ -422,6 +428,21 @@ for (const [native, zh] of [
 }
 assert.ok(realAccessories.length >= 20,
   '国服真实物品库必须支持至少二十个独立饰品系列的高置信推导');
+assert.equal(api.ecAccessoryDeepStatSeriesZh('Occult Deep', officialAccessories), '超新月魔',
+  'Deep 描述性名称必须由真实国服物品表中的两个属性版本共同支持');
+// 2026-10 EC 饰品首页实页系列名；对全页而非某个用户案例做汉化覆盖回归。
+for (const [en, zh] of [
+  ["Beastmaster's", '兽主'], ['Praemagitek', '前魔导'],
+  ['Sea-folk', '海族'], ['Bygone Brass', '王国黄铜'],
+  ["Courtly Lover's", '宫廷爱人'], ['Heavyweight', '重量级'],
+  ['Mistwake', '雾迹'], ['Star Tech', '星际科技'],
+  ['Occult', '新月魔'], ['Occult Deep', '超新月魔'],
+  ['Alpha Wolf', '头狼'], ["En Fortune-teller's", '恩城预言师'],
+  ["Realm-roamer's", '维度漫游者'], ['Mistic Memory', '雾忆'],
+]) {
+  assert.equal(api.ecAccessoryDisplayName(en + ' Accessories'), zh + '饰品',
+    'EC 饰品首页已出现系列必须能在完整国服物品表加载后汉化：' + en);
+}
 for (const series of realAccessories.slice(0, 100)) {
   assert.ok(series.zh.length >= 2 && !/(?:套装|装束)$/u.test(series.zh),
     '真实饰品系列使用中文基础系列名，而非既有 Gearsets 套装名');
