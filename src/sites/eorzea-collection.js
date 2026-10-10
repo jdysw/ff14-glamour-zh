@@ -154,6 +154,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return EC_GEARSET_NAME_EXTRAS[en] || DICT_EC[en] || null;
   }
 
+  // EC Gearsets uses "Crafting/Gathering" as equipment roles; ordinary UI
+  // translation "Crafting → 制作" is not an official equipment-name suffix.
+  const EC_GEARSET_ITEM_ROLES = /^(.*?) of (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering)$/;
+  const EC_GEARSET_TITLE_ROLES = /^(.*?) (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering)$/;
+  const EC_GEARSET_NONCOMBAT_ROLE_ZH = Object.freeze({ Crafting: '巧匠', Gathering: '大地' });
+  function ecGearsetRoleZh(role) {
+    return EC_GEARSET_NONCOMBAT_ROLE_ZH[role] || DICT_EC[role] || null;
+  }
+
   // 自动推导仅使用 V3 已有的官方英中装备映射，不维护逐套名单：
   // 如 3 件 Ceremonial ... of Scouting 同时映射至「仪仗游击...」，
   // 则推断 Ceremonial Scouting → 仪仗游击套装。
@@ -184,7 +193,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     if (names.length < 3) return null;
     const prefix = ecGearsetCommonZhPrefix(names);
     const role = native.slice(native.lastIndexOf(' ') + 1);
-    const roleZh = DICT_EC[role];
+    const roleZh = ecGearsetRoleZh(role);
     if (!roleZh || prefix.length < roleZh.length + 2 || !prefix.endsWith(roleZh)
         || prefix.length > 22) return null;
     return { native, zh: prefix + '套装' };
@@ -192,11 +201,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
 
   function inferECGearsetsFromItems(nameIndex) {
     const grouped = new Map();
-    const rolePattern = /^(.+?) of (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/;
     for (const [native, zh] of Object.entries(nameIndex || {})) {
-      const hit = rolePattern.exec(native);
+      const hit = EC_GEARSET_ITEM_ROLES.exec(native);
       if (!hit || !/^[\u3400-\u9fff]/u.test(zh)) continue;
-      const roleZh = DICT_EC[hit[2]];
+      const roleZh = ecGearsetRoleZh(hit[2]);
       if (!roleZh || !zh.includes(roleZh)) continue;
       ecGearsetAddInferredGroups(grouped, native, zh, hit[1], hit[2]);
     }
@@ -274,11 +282,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetObservedTitleZh(native) {
     const exact = DICT_EC[native];
     if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
-    const roles = /^(.*?) (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/;
-    const parts = roles.exec(native);
+    const parts = EC_GEARSET_TITLE_ROLES.exec(native);
     if (parts) {
       const series = DICT_EC[parts[1]];
-      const role = DICT_EC[parts[2]];
+      const role = ecGearsetRoleZh(parts[2]);
       if (series && role && /[\u3400-\u9fff]/u.test(series)
           && !/(?:套装|装束)$/u.test(series)) return series + role + '套装';
     }
