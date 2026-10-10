@@ -17,14 +17,14 @@ assert.ok(start >= 0 && end > start, 'EC Gearsets 源区段必须存在');
 const scope = { anchors: [], headings: [] };
 const doc = {
   createTreeWalker(element) {
-    let moved = false;
+    const nodes = element.nodes || (element.textNode ? [element.textNode] : []);
+    let index = 0;
     return {
       currentNode: null,
       nextNode() {
-        if (moved) return false;
-        moved = true;
-        this.currentNode = element.textNode;
-        return !!this.currentNode;
+        if (index >= nodes.length) return false;
+        this.currentNode = nodes[index++];
+        return true;
       },
     };
   },
@@ -61,9 +61,27 @@ assert.equal(tr('Ceremonial Scouting'), '仪仗游击套装',
 assert.equal(tr('Ceremonial Maiming'), '仪仗制敌套装',
   '同系列不同职能单独从游戏物品推导');
 assert.equal(tr('Ceremonial Scouting Set'), '仪仗游击套装', '兼容 EC 标题带 Set');
+// A real EC gearset title may not belong to the enumerated catalogue, but an
+// existing verified localized dictionary series can translate the observed title.
+DICT_EC['Verified New Series'] = '核验新系列';
+assert.equal(tr('Verified New Series Casting'), '核验新系列咏咒套装',
+  '已出现的页面标题可按已有词典自动组词，不需要枚举每个系列');
+assert.equal(api.suggestECGearsetsByZh('核验新系列').length, 0,
+  '仅观测到的标题可安全兜底，但不能虚构对应站点搜索候选');
+delete DICT_EC['Verified New Series'];
+itemIndex['Verified Special Attire'] = '核验特殊装束';
+assert.equal(tr('Verified Special'), '核验特殊装束',
+  '可直接从国服套装物品名字获得译名，而无需维护人工清单');
+delete itemIndex['Verified Special'];
+
 assert.equal(tr('Hempen Viera Male'), '维埃拉族男性贴身衣套装',
   '未单独维护的种族内衣套装使用明确的描述性语法');
 assert.equal(tr('Hempen Viera Male Set'), '维埃拉族男性贴身衣套装');
+assert.equal(tr('Hempen Auri Male'), '敖龙族男性贴身衣套装',
+  '站点使用 Auri 代替国服 Au Ra 时自动规范种族译名');
+assert.equal(tr('Hempen Lalafellin Female'), '拉拉菲尔族女性贴身衣套装',
+  'Lalafellin 实际 Gearset 标题应命中');
+
 assert.equal(tr('Hempen Unknown Male'), null, '不推导不支持的种族/套装');
 
 assert.equal(tr('Random Scouting'), null, '中文共同前缀不一致时不可自动造套装名');
@@ -196,15 +214,50 @@ try {
   globalThis.location.pathname = '/gearset/praemagitek-healing';
   api.translateECGearsetNames();
   assert.equal(h1.textNode.nodeValue, '前魔导治愈套装', '详情标题也翻译');
-  // 实际 EC 的 h1 由套装名和独立 Set span 构成，不应重复“套装 套装”。
-  const splitH1 = Object.assign(makeNode('Ceremonial Scouting'), {
+  // 从实际 EC 审计还原：H1 的主名称 span 中嵌套一个独立 Set span。
+  // TreeWalker 会产生「名称」「Set」两个文本节点；单靠 outer span.textContent
+  // 的精确判定会漏掉、被泛用 PATTERNS 翻译时还可能造成重复的“套装”。
+  const splitTitle = (native, suffix = 'Set') => ({
     tagName: 'H1',
-    querySelectorAll: () => [{ textContent: 'Set' }],
+    nodes: [{ nodeValue: native }, { nodeValue: suffix }],
   });
-  scope.headings = [splitH1];
+  for (const [native, expected] of [
+    ['Ceremonial Scouting', '仪仗游击'],
+    ['Phantom Vision Fending', '幻境意象御敌'],
+    ['Hempen Viera Male', '维埃拉族男性贴身衣'],
+    ["Fallen's", '堕落'],
+  ]) {
+    const node = splitTitle(native);
+    scope.headings = [node];
+    api.translateECGearsetNames();
+    assert.equal(node.nodes.map(x => x.nodeValue).join(''), expected + '套装',
+      native + ' + 独立 Set 节点仅显示一次套装');
+    api.translateECGearsetNames();
+    assert.equal(node.nodes.map(x => x.nodeValue).join(''), expected + '套装',
+      native + ' 再次扫描保持幂等');
+  }
+  const alreadyLocalized = splitTitle('Ceremonial Scouting', '套装');
+  scope.headings = [alreadyLocalized];
   api.translateECGearsetNames();
-  assert.equal(splitH1.textNode.nodeValue, '仪仗游击',
-    '独立 Set 子元素存在时不重复追加「套装」');
+  assert.equal(alreadyLocalized.nodes.map(x => x.nodeValue).join(''), '仪仗游击套装',
+    '通用词典先把 Set 翻译为套装的场景也不能重复');
+  const outfit = splitTitle('Yozakura');
+  scope.headings = [outfit];
+  api.translateECGearsetNames();
+  assert.equal(outfit.nodes.map(x => x.nodeValue).join(''), '夜樱装束',
+    '已有装束后缀的标题不应叠加一层套装');
+  // EC 详情页也会出现 <b>Hempen Viera Male</b> Set (Set 为直接文本节点)。
+  const directTextH1 = splitTitle('Hempen Viera Male');
+  scope.headings = [directTextH1];
+  api.translateECGearsetNames();
+  assert.equal(directTextH1.nodes.map(x => x.nodeValue).join(''), '维埃拉族男性贴身衣套装');
+  // 模拟局部 DOM 增量刷新：rootArg 是 H1 内的 span，应向上定位所属标题。
+  const incremental = splitTitle('Phantom Vision Fending');
+  const partial = { nodeType: 1, closest: selector => selector === 'h1' ? incremental : null };
+  scope.headings = [];
+  api.translateECGearsetNames(partial);
+  assert.equal(incremental.nodes.map(x => x.nodeValue).join(''), '幻境意象御敌套装',
+    'H1 内局部更新不会漏译标题或重复后缀');
 } finally {
   globalThis.location = originalLocation;
 }
