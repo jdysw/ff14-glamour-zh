@@ -11,6 +11,10 @@ spec = importlib.util.spec_from_file_location('rebuild_db', ROOT / 'build' / 're
 rebuild = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rebuild)
 
+slot_spec = importlib.util.spec_from_file_location('make_runtime_data', ROOT / 'build' / 'make-runtime-data.py')
+runtime_data = importlib.util.module_from_spec(slot_spec)
+slot_spec.loader.exec_module(runtime_data)
+
 
 class CandidateClassificationTest(unittest.TestCase):
     def setUp(self):
@@ -68,6 +72,40 @@ class CandidateClassificationTest(unittest.TestCase):
         self.assertEqual(flags[6482], '0')
         self.assertEqual(flags[38459], '0')
         self.assertEqual(flags[90001], '0')
+
+    def test_equip_slot_categories_and_name_mapping(self):
+        """使用官方 EquipSlotCategory ID 分类，不能依据中文名后缀推测。"""
+        self.assertEqual([runtime_data.SLOT_GROUP[x] for x in (3, 4, 5, 7, 8)],
+                         ['0', '1', '2', '3', '4'])
+        self.assertEqual(runtime_data.SLOT_GROUP[15], '1')  # 连体服跨头身，归身体
+        self.assertEqual(runtime_data.SLOT_GROUP.get(12, runtime_data.OTHER_SLOT), '5')
+        slot_csv = self.root / 'slots.csv'
+        with slot_csv.open('w', encoding='utf-8', newline='') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(['#', 'EquipSlotCategory'])
+            writer.writerows([(1, 3), (2, 4), (3, 5), (4, 7), (5, 8), (6, 15), (7, 9)])
+        slots = runtime_data.load_equipment_slots(str(slot_csv))
+        self.assertEqual([slots[str(i)] for i in range(1, 8)], ['0','1','2','3','4','1','5'])
+        source = (
+            'key\\tzh\\ten\\tja\\tko\\thash\\tecid\\talias\\tglam\\n'
+            '1\\t测试头\\tTest Hood\\t頭\\t모자\\t\\t\\t\\t1\\n'
+            '2\\t测试身\\tTest Robe\\t胴\\t로브\\t\\t\\t\\t1\\n'
+            '7\\t测试戒指\\tTest Ring\\t指輪\\t반지\\t\\t\\t\\t1\\n'
+        )
+        names = runtime_data.equipment_slots_by_name(source, slots)
+        self.assertEqual(names['ja']['頭'], '0')
+        self.assertEqual(names['en']['Test Robe'], '1')
+        self.assertEqual(names['ko']['반지'], '5')
+        self.assertEqual(names['ja'].get('不存在', '5'), '5')
+
+    def test_invalid_equip_csv_rejected(self):
+        missing = self.root / 'missing.csv'
+        with self.assertRaises(FileNotFoundError):
+            runtime_data.load_equipment_slots(str(missing))
+        malformed = self.root / 'malformed.csv'
+        malformed.write_text('#,Name\\n3,Item\\n', encoding='utf-8')
+        with self.assertRaises(ValueError):
+            runtime_data.load_equipment_slots(str(malformed))
 
     def test_unknown_historical_item_defaults_to_excluded(self):
         old = {99999: ['99999', 'Historic item', 'Historic item', '旧物', '옛 물건', '', '', '', '1']}
