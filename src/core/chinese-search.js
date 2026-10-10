@@ -55,7 +55,20 @@ function ecSlotFromHint(hint) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function ecSlotFromInput(input) {
+// Accessory selectors share the same EC Vue input component but use four
+// distinct official EquipSlotCategory IDs, not the five armor slot groups.
+function ecAccessorySlotFromHint(hint) {
+  const patterns = [
+    ['ears', /\b(?:ears?|earrings?|earpieces?)\b|耳饰|耳环|耳部/iu],
+    ['neck', /\b(?:necks?|necklaces?|neckpieces?|chokers?)\b|项链|项圈|颈部/iu],
+    ['wrists', /\b(?:wrists?|bracelets?|bangles?|wristpieces?)\b|腕部|手镯|腕饰/iu],
+    ['rings', /\b(?:rings?|fingers?|fingerpieces?)\b|戒指|指环|手指/iu],
+  ];
+  const matches = patterns.filter(([, pattern]) => pattern.test(hint));
+  return matches.length === 1 ? matches[0][0] : null;
+}
+
+function ecSlotFromInput(input, resolveHint = ecSlotFromHint) {
   const hint = [
     input?.getAttribute?.('placeholder'),
     input?.getAttribute?.('aria-label'),
@@ -63,7 +76,7 @@ function ecSlotFromInput(input) {
     input?.getAttribute?.('name'),
     input?.closest?.('[data-slot]')?.getAttribute?.('data-slot'),
   ].filter(Boolean).join(' ');
-  const explicit = ecSlotFromHint(hint);
+  const explicit = resolveHint(hint);
   if (explicit !== null) return explicit;
   // EC occasionally supplies only a generic placeholder. Read the nearest
   // compact field label, never a full form containing multiple slot names.
@@ -71,7 +84,7 @@ function ecSlotFromInput(input) {
   for (let depth = 0; node && depth < 4; depth++, node = node.parentElement) {
     const label = String(node.textContent || '').trim();
     if (label.length > 0 && label.length < 50) {
-      const slot = ecSlotFromHint(label);
+      const slot = resolveHint(label);
       if (slot !== null) return slot;
     }
   }
@@ -89,7 +102,9 @@ function ecSearchContext(input) {
   // Slot-scoped Vue selects, not the free-text Gearsets search box.
   if (!/\bvs__search\b/.test(String(input?.className || ''))) return null;
   const slot = ecSlotFromInput(input);
-  return slot === null ? null : { kind: 'slot', slot };
+  if (slot !== null) return { kind: 'slot', slot };
+  const accessory = ecSlotFromInput(input, ecAccessorySlotFromHint);
+  return accessory === null ? null : { kind: 'accessory-slot', slot: accessory };
 }
 
 function ecScopedSuggestions(query, input) {
@@ -97,6 +112,9 @@ function ecScopedSuggestions(query, input) {
   if (context?.kind === 'facewear') return EC_FACEWEAR_ROWS.filter(row => row.zh.includes(query));
   if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
   if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot);
+  if (context?.kind === 'accessory-slot') {
+    return suggestByZh(query, 0, EC_ACCESSORY_SLOT_NATIVES[context.slot]);
+  }
   return isECGearsetsPage() && !/\bvs__search\b/.test(String(input?.className || ''))
     ? suggestECGearsetsByZh(query) : suggestByZh(query);
 }
