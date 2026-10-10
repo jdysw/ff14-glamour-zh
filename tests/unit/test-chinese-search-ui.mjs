@@ -822,7 +822,7 @@ try {
       { zh: '装备靴子', native: 'Official Feet', slot: 4 },
       { zh: '饰品耳环', native: 'Abyssos Earrings of Fending', slot: 9 },
       { zh: '饰品戒指', native: 'Abyssos Ring of Fending', slot: 12 },
-      { zh: '饰品头盔', native: 'Unrelated Headgear', slot: 0 },
+      { zh: '饰品相关材料', native: 'Barding Repair Materials' },
     ];
     try {
       const harness = buildSearchHarness(suggestions);
@@ -899,7 +899,7 @@ try {
       input.setAttribute('placeholder','Search for option');
       eq('N15 未绑定具体部位的饰品搜索框也只能显示饰品',
         harness.api.ecSearchContext(input)?.kind, 'accessories');
-      eq('N16 饰品列表使用官方耳颈腕指部位的并集，不会显示普通头盔',
+      eq('N16 饰品列表使用官方耳颈腕指部位的并集，排除不属于装备的材料',
         harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
         'Abyssos Earrings of Fending|Abyssos Ring of Fending');
       input.setAttribute('placeholder','Any earrings');
