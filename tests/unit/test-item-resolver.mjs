@@ -38,7 +38,7 @@ function buildResolver(env = {}) {
     '_irAliasMap = __env.aliasMap || null;',
     '_irGlamMap = __env.glamMap || null;',
     '_irCandidatePolicy = __env.candidatePolicy ?? 1;',
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, _irBuildSearchFromNames, __stats: () => ({ ..._irStats }) };',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, _irBuildSearchFromNames, __setSlots: (slots) => { _irSearchSlotByNative = slots; }, __stats: () => ({ ..._irStats }) };',
   ].join('\n');
   return new Function('__env', body)(env);
 }
@@ -96,6 +96,25 @@ console.log('\n── B1：中文中间词匹配与候选排序 ──');
  eq('词中中文别名仍对应原站语言名',rows.at(-1)?.native,'メイドトップ');
  eq('跨匹配分组时仍受 limit 约束',api.suggestByZh('女仆',3).length,3);
  eq('不含输入词的物品不混入候选',rows.some(r=>r.zh==='时尚饰品'),false);
+}
+
+console.log('\n── B2：按真实装备部位优先，组内再按匹配度排序 ──');
+{
+ const names={
+   'ja-head':'装备头盔', 'ja-body':'装备', 'ja-gloves':'装备手套',
+   'ja-legs':'装备长裤', 'ja-feet':'装备战靴', 'ja-ring':'装备戒指',
+ };
+ const flags=Object.fromEntries(Object.keys(names).map(k=>[k,'1']));
+ const api=buildResolver(mkEnv({nameMap:names,glamMap:flags,aliasMap:{'装备礼袍':['装备']}}));
+ api.__setSlots({'ja-head':0,'ja-body':1,'ja-gloves':2,'ja-legs':3,'ja-feet':4});
+ const rows=api.suggestByZh('装备');
+ eq('头身手腿脚其余，组内先精确后别名',rows.map(r=>r.zh).join('|'),
+   '装备头盔|装备|装备礼袍|装备手套|装备长裤|装备战靴|装备戒指');
+ eq('部位排序优先于全词精确命中',rows[0].native,'ja-head');
+ eq('limit 在所有部位排序完成后截断',api.suggestByZh('装备',3).map(r=>r.zh).join('|'),
+   '装备头盔|装备|装备礼袍');
+ api.__setSlots(null);
+ eq('无旧部位元数据时安全退回原匹配排序',api.suggestByZh('装备')[0].zh,'装备');
 }
 
 console.log('\n── C：候选安全策略 ──');
