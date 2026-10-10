@@ -274,11 +274,25 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return race && gender ? race + gender + '贴身衣套装' : null;
   }
 
-  // A visible EC title is evidence that the set exists; for those exact titles,
-  // we may use an already verified dictionary or official "Attire/Armor" item
-  // even when the title was absent from the manually enumerated search catalogue.
-  // These fallback rows are NOT added to search suggestions unless separately
-  // confirmed by the existing catalogue inference.
+  // EC drops the item-type word from many official outfit items:
+  // "Wintertide Attire (Culottes)" -> displayed "Wintertide (Culottes)".
+  // Keep the parenthesized / bracketed variant exactly; the variant distinguishes
+  // genuinely different official sets such as Culottes vs Sheath Skirt.
+  // Only a real official item with an outfit-style Chinese name is accepted.
+  function ecGearsetOfficialPackageZh(native, nameIndex) {
+    if (!nameIndex) return null;
+    const match = /^(.+?) (\([^)]{1,60}\)|\[[^\]]{1,40}\])$/.exec(native);
+    const base = match ? match[1] : native;
+    const variant = match ? ' ' + match[2] : '';
+    for (const type of [' Attire', ' Armor', ' Set', ' Outfit']) {
+      const official = nameIndex[base + type + variant];
+      if (official && /(?:套装|装束)$/u.test(official)) return official;
+    }
+    return null;
+  }
+
+  // A visible EC title is evidence that the set exists; official package
+  // lookups can translate it without adding speculative search suggestions.
   function ecGearsetObservedTitleZh(native) {
     const exact = DICT_EC[native];
     if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
@@ -289,12 +303,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       if (series && role && /[\u3400-\u9fff]/u.test(series)
           && !/(?:套装|装束)$/u.test(series)) return series + role + '套装';
     }
-    const itemIndex = dataGetIndex('nameMap');
-    for (const suffix of [' Attire', ' Armor']) {
-      const official = itemIndex?.[native + suffix];
-      if (official && /(?:套装|装束)$/u.test(official)) return official;
-    }
-    return null;
+    return ecGearsetOfficialPackageZh(native, dataGetIndex('nameMap'));
   }
 
   function ecGearsetDisplayName(raw) {
