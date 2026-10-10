@@ -31,12 +31,40 @@ const doc = {
 };
 const mockQuery = (_root, selector) => selector.startsWith('a[href') ? scope.anchors : selector === 'h1' ? scope.headings : [];
 let dictRevision = 0;
-const api = new Function('DICT_EC', 'dictGetRevision', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
-  '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };')(
-  DICT_EC, () => dictRevision, doc, { SHOW_TEXT: 4 }, () => scope, mockQuery);
+const itemIndex = Object.create(null);
+const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
+  '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems };')(
+  DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
+  doc, { SHOW_TEXT: 4 }, () => scope, mockQuery);
 
 const tr = api.ecGearsetDisplayName;
 assert.equal(tr('Phantom Vision Fending'), '幻境意象御敌套装');
+// 直接使用实测 EC /gearset/ceremonial-scouting 中的国服物品英中配对，
+ // 不提前把 Ceremonial 放进任何人工 Gearsets 白名单。
+Object.assign(itemIndex, {
+  'Ceremonial Longcap of Scouting': '仪仗游击护耳帽',
+  'Ceremonial Vest of Scouting': '仪仗游击坎肩',
+  'Ceremonial Armguards of Scouting': '仪仗游击护臂',
+  'Ceremonial Culottes of Scouting': '仪仗游击宽松直筒裤',
+  'Ceremonial Crakows of Scouting': '仪仗游击尖头靴',
+  'Ceremonial Helmet of Maiming': '仪仗制敌头盔',
+  'Ceremonial Mail of Maiming': '仪仗制敌甲胄',
+  'Ceremonial Gloves of Maiming': '仪仗制敌手套',
+  'Random Cap of Scouting': '无关游击头盔',
+  'Random Coat of Scouting': '其他游击大衣',
+  'Random Shoes of Scouting': '其它游击靴',
+});
+assert.equal(tr('Ceremonial Scouting'), '仪仗游击套装',
+  '依 V3 物品中英对应自动生成未维护的套装标题');
+assert.equal(tr('Ceremonial Maiming'), '仪仗制敌套装',
+  '同系列不同职能单独从游戏物品推导');
+assert.equal(tr('Ceremonial Scouting Set'), '仪仗游击套装', '兼容 EC 标题带 Set');
+assert.equal(tr('Random Scouting'), null, '中文共同前缀不一致时不可自动造套装名');
+assert.equal(api.resolveECGearsetSearch('仪仗游击'), 'Ceremonial Scouting',
+  '自动推导的套装应进入相同的中文搜索引擎');
+assert.ok(api.suggestECGearsetsByZh('仪仗制敌').some(r => r.native === 'Ceremonial Maiming'),
+  '自动推导套装进入中文候选');
+
 assert.equal(tr('Phantom Vision Fending Set'), '幻境意象御敌套装');
 assert.equal(tr('Vana\u0027dielian Casting'), '瓦纳·迪尔咏咒套装');
 assert.equal(tr('Praemagitek Healing'), '前魔导治愈套装');
@@ -161,6 +189,15 @@ try {
   globalThis.location.pathname = '/gearset/praemagitek-healing';
   api.translateECGearsetNames();
   assert.equal(h1.textNode.nodeValue, '前魔导治愈套装', '详情标题也翻译');
+  // 实际 EC 的 h1 由套装名和独立 Set span 构成，不应重复“套装 套装”。
+  const splitH1 = Object.assign(makeNode('Ceremonial Scouting'), {
+    tagName: 'H1',
+    querySelectorAll: () => [{ textContent: 'Set' }],
+  });
+  scope.headings = [splitH1];
+  api.translateECGearsetNames();
+  assert.equal(splitH1.textNode.nodeValue, '仪仗游击',
+    '独立 Set 子元素存在时不重复追加「套装」');
 } finally {
   globalThis.location = originalLocation;
 }
