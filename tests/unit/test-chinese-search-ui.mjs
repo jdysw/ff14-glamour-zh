@@ -869,6 +869,17 @@ try {
         eq('N 识别 EC '+enSlot+' 的官方装备部位',harness.api.ecSearchContext(input)?.slot,expectedSlot);
         eq('N EC '+enSlot+' 只保留同部位候选',harness.api.ecScopedSuggestions('装备',input).map(r=>r.native).join('|'),expectedName);
       }
+      input.setAttribute('placeholder','Search for option');
+      const field = new FakeElement('div');
+      field.textContent = 'HEAD';
+      input.parentElement = field;
+      eq('N 未提供部位 placeholder 时，读取邻近单一 HEAD 标签',
+        harness.api.ecSearchContext(input)?.slot, 0);
+      field.textContent = 'HEAD BODY';
+      eq('N 多个邻近部位冲突时不猜测所属部位', harness.api.ecSearchContext(input), null);
+      input.parentElement = null;
+      input.setAttribute('placeholder','手部筛选');
+      eq('N 已汉化的部位名称也能准确识别', harness.api.ecSearchContext(input)?.slot, 2);
       const main = new FakeElement('input');
       main.setAttribute('placeholder','搜索');
       eq('N12 Gearsets 普通主搜索不误判为头部槽位',harness.api.ecSearchContext(main),null);
