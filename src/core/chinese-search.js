@@ -493,7 +493,9 @@ function showSuggestions(input) {
   }
   // Gearsets 候选只依赖已加载的本地套装目录/词典，不必等待 V3 物品表；
   // 否则 V3 网络超时会让整个套装检索也无法使用。
-  if (!_suggestDataReady && !isECGearsetsPage()) {
+  // Facewear's dedicated, bundled Glasses sheet works even without remote V3.
+  // Bardings / equipment slots still require the classified V3 item index.
+  if (!_suggestDataReady && !isECGearsetsPage() && ecSearchContext(input)?.kind !== 'facewear') {
     hideSuggestions(true);
     return;
   }
