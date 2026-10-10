@@ -69,6 +69,13 @@ assert.equal(link.getAttribute('title'), null, 'do not synthesize English hover 
 assert.equal(link.dataset.zhixiaSourceText,'Glamours');
 api.translateECTitle();
 assert.equal(document.title, '幻化收藏 | Eorzea Collection');
+document.title = 'Praemagitek Accessories | Eorzea Collection';
+api.translateECTitle();
+assert.equal(document.title, '前魔导饰品 | Eorzea Collection',
+  'EC 饰品系列详情浏览器标题应汉化');
+api.translateECTitle();
+assert.equal(document.title, '前魔导饰品 | Eorzea Collection',
+  '浏览器标题补扫不能重复加饰品后缀');
 document.title = 'The Crafty Fox | Glams for Arkania | Eorzea Collection';
 api.translateECTitle();
 assert.equal(document.title, 'The Crafty Fox | Glams for Arkania | Eorzea Collection');
