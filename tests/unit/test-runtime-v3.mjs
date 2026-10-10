@@ -217,7 +217,7 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
   'neededTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irCandidatePolicy', '_zhxErr',
+  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
@@ -244,7 +244,7 @@ function makeWorld(over = {}) {
     _fireTablesReady: () => { rec.fires.push(1); },
     findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
-    _irAliasMap: null, _irDupMap: null, _irCandidatePolicy: 0,
+    _irAliasMap: null, _irDupMap: null, _irSearchSlotByNative: null, _irCandidatePolicy: 0,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
     _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
     __zhxMark: () => {},
@@ -271,7 +271,7 @@ function buildDM(world) {
     '  dataManager, ensureTables, itemDbReady,',
     '  _ensureTryV3, _applyV3, _v3Pairs, _prepareDataRefresh, _completeDataRefresh, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
 
-    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
+    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, slots: _irSearchSlotByNative, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
     '};',
   ].join('\n');
   const fn = new Function(...NAMES, body + '\n' + ret);
@@ -316,6 +316,19 @@ const manText = JSON.stringify(man);
   ok('B6 manifest 已写缓存', cacheKeys.includes('zhx.v3.manifest'));
   ok('B7 站点文件内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.names.')) && cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.hash.')));
   ok('B8 dict 内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.dict.')));
+}
+
+// B1b: V3 names 可选第四列为部位组，旧缓存无分类不报错、不猜测。
+{
+  const world = makeWorld();
+  const dm = buildDM(world);
+  const items = { candidatePolicy: 1, names: '日文头盔\\t中文头盔\\t1\\t0\\n日文长袍\\t中文长袍\\t1\\t1\\n日文戒指\\t中文戒指\\t1\\t5\\n' };
+  eq('B1b 带装备分类列的 V3 正常应用', dm._applyV3(items), true);
+  eq('B1c 能识别头部类别', dm._peek().slots['日文头盔'], 0);
+  eq('B1d 能识别身体类别', dm._peek().slots['日文长袍'], 1);
+  eq('B1e 其余装备不需要存额外映射', dm._peek().slots['日文戒指'], undefined);
+  eq('B1f 旧 V3 无分类列仍可应用', dm._applyV3({candidatePolicy: 1, names: '旧装备\\t中文旧装备\\t1\\n'}), true);
+  eq('B1g 旧缓存不继承前一次部位数据', dm._peek().slots['日文头盔'], undefined);
 }
 
 // B2: 零网络快路径（缓存齐全 + manifest 新鲜 → 不发任何请求）
