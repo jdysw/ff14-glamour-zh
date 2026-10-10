@@ -47,9 +47,11 @@ Object.assign(itemIndex, {
   'Ceremonial Armguards of Scouting': '仪仗游击护臂',
   'Ceremonial Culottes of Scouting': '仪仗游击宽松直筒裤',
   'Ceremonial Crakows of Scouting': '仪仗游击尖头靴',
-  'Ceremonial Helmet of Maiming': '仪仗制敌头盔',
-  'Ceremonial Mail of Maiming': '仪仗制敌甲胄',
-  'Ceremonial Gloves of Maiming': '仪仗制敌手套',
+  'Ceremonial Longcap of Maiming': '仪仗制敌护耳帽',
+  'Ceremonial Corselet of Maiming': '仪仗制敌护甲',
+  'Ceremonial Vambraces of Maiming': '仪仗制敌臂甲',
+  'Ceremonial Hose of Maiming': '仪仗制敌骑兵裤',
+  'Ceremonial Greaves of Maiming': '仪仗制敌胫甲',
   'Random Cap of Scouting': '无关游击头盔',
   'Random Coat of Scouting': '其他游击大衣',
   'Random Shoes of Scouting': '其它游击靴',
@@ -59,6 +61,11 @@ assert.equal(tr('Ceremonial Scouting'), '仪仗游击套装',
 assert.equal(tr('Ceremonial Maiming'), '仪仗制敌套装',
   '同系列不同职能单独从游戏物品推导');
 assert.equal(tr('Ceremonial Scouting Set'), '仪仗游击套装', '兼容 EC 标题带 Set');
+assert.equal(tr('Hempen Viera Male'), '维埃拉族男性贴身衣套装',
+  '未单独维护的种族内衣套装使用明确的描述性语法');
+assert.equal(tr('Hempen Viera Male Set'), '维埃拉族男性贴身衣套装');
+assert.equal(tr('Hempen Unknown Male'), null, '不推导不支持的种族/套装');
+
 assert.equal(tr('Random Scouting'), null, '中文共同前缀不一致时不可自动造套装名');
 assert.equal(api.resolveECGearsetSearch('仪仗游击'), 'Ceremonial Scouting',
   '自动推导的套装应进入相同的中文搜索引擎');
