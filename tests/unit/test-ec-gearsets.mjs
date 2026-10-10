@@ -177,8 +177,25 @@ for (const [ec, native, expected] of [
 assert.equal(tr('Wintertide (Unknown Variant)'), null,
   '没有国服套装物品的变体不应凭空生成');
 assert.equal(tr('Completely New (Culottes)'), null, '不能按括号关键词猜造不存在的套装');
-assert.equal(api.suggestECGearsetsByZh('冬季宽松直筒裤').length, 0,
-  '官方物品记录不等于 EC 已存在的套装链接，不预生成无证据搜索候选');
+// Both Wintertide variants are independently verified to exist on the EC site.
+// The search catalogue derives these from the two official Attire item rows;
+// no manual per-series translated alias is added.
+const winterRows = api.suggestECGearsetsByZh('冬季');
+for (const [native, zh] of [
+  ['Wintertide (Culottes)', '冬季宽松直筒裤套装'],
+  ['Wintertide (Sheath Skirt)', '冬季紧身短裙套装'],
+]) {
+  assert.ok(winterRows.some(row => row.native === native && row.zh === zh),
+    '「冬季」应包含 EC 上实际存在的 ' + native);
+}
+assert.equal(winterRows.filter(row => row.native.startsWith('Wintertide (')).length, 2,
+  '两种冬季裙装变体应各显示一次');
+assert.equal(api.resolveECGearsetSearch('冬季'), 'Wintertide',
+  '两个变体的中文公共词必须解析成站点能检索两套的英文系列 Wintertide');
+assert.equal(api.resolveECGearsetSearch('冬季宽松直筒裤'), 'Wintertide (Culottes)');
+assert.equal(api.resolveECGearsetSearch('冬季紧身短裙'), 'Wintertide (Sheath Skirt)');
+assert.equal(api.suggestECGearsetsByZh('不存在的冬季款式').length, 0,
+  '不可猜测或生成国服物品库没有的冬季变体');
 
 const variantH1 = {
   tagName: 'H1', nodes: [
@@ -410,7 +427,9 @@ try {
   globalThis.location.href = 'https://ffxiv.eorzeacollection.com/gearsets?search=%E6%97%A7&page=9&filter%5Bjob%5D=PLD';
   globalThis.location.assign = url => destinations.push(new URL(url));
   for (const [zh, native] of [['女仆', "Loyal Housemaid's"],
-    ['兽王', "Beastmaster's"], ['东方', 'Eastern']]) {
+    ['兽王', "Beastmaster's"], ['东方', 'Eastern'],
+    ['冬季', 'Wintertide'], ['冬季宽松直筒裤', 'Wintertide (Culottes)'],
+    ['冬季紧身短裙', 'Wintertide (Sheath Skirt)']]) {
     actualSearch.value = zh;
     assert.equal(searchApi.submitECGearsetsSearch(actualSearch), true, zh + ' 可以触发专用搜索提交');
     assert.equal(destinations.at(-1).searchParams.get('search'), native,
@@ -421,7 +440,7 @@ try {
   }
   actualSearch.value = '尚未收录';
   assert.equal(searchApi.submitECGearsetsSearch(actualSearch), false, '未知中文不能臆造英文关键词');
-  assert.equal(destinations.length, 3, '未知查询不得额外触发提交');
+  assert.equal(destinations.length, 6, '未知查询不得额外触发提交');
   assert.equal(searchApi.resolveSearchNative('御敌', true), 'Fending');
   assert.equal(searchApi.resolveSearchNative('幻境', true), 'Phantom Vision');
   assert.equal(searchApi.resolveSearchNative('女仆', true), "Loyal Housemaid's",
