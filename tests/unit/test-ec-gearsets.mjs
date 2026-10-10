@@ -101,6 +101,13 @@ assert.equal(search('御敌'), 'Fending', '中文职能词能够跨系列检索'
 assert.equal(search('治愈'), 'Healing');
 assert.equal(search('瓦纳·迪尔咏咒'), "Vana'dielian Casting");
 assert.equal(search('兽主套装'), "Beastmaster's");
+// 以下均为用户实际审计输入；映射使用已确认存在的 EC Gearsets 英文标题/关键词。
+assert.equal(search('女仆'), "Loyal Housemaid's", '女仆 → EC 忠诚女仆套装');
+assert.equal(search('女僕'), "Loyal Housemaid's", '繁体女仆同样命中');
+assert.equal(search('兽王'), "Beastmaster's", '兽王是 Beastmaster 的搜索别名');
+assert.equal(search('獸王'), "Beastmaster's", '繁体兽王同样命中');
+assert.equal(search('东方'), 'Eastern', '多个东方套装使用安全的英文共同关键词');
+assert.equal(search('東方'), 'Eastern', '繁体东方同样命中');
 assert.equal(search('涂鸦'), 'Graffiti Neotunic');
 assert.equal(search('幻境意象御'), 'Phantom Vision Fending', '跨系列与职能边界的部分词');
 assert.equal(search('素色'), 'Plain Hooded', '多个套装可以共享原生完整词序列');
@@ -127,6 +134,13 @@ assert.ok(!api.suggestECGearsetsByZh('治愈').some(r => r.native === "Prishe's 
   '不展示不存在的职业变体');
 assert.deepEqual(api.suggestECGearsetsByZh('希望套装').map(r => r.native), ['Hope [F]', 'Hope [M]']);
 assert.ok(api.suggestECGearsetsByZh('夜樱').some(r => r.native === 'Yozakura'));
+assert.deepEqual(api.suggestECGearsetsByZh('女仆').map(r => r.native), ["Loyal Housemaid's"]);
+assert.deepEqual(api.suggestECGearsetsByZh('兽王').map(r => r.native), ["Beastmaster's"]);
+assert.deepEqual(api.suggestECGearsetsByZh('东方').map(r => r.native), ['Eastern']);
+assert.equal(api.suggestECGearsetsByZh('东方')[0].zh.includes('全部'), true,
+  '广义关键词不得误显示为某一套装的正式名称');
+assert.equal(api.suggestECGearsetsByZh('兽主').filter(r => r.native === "Beastmaster's").length, 1,
+  '别名和正式译名同英文关键词应去重');
 assert.equal(api.suggestECGearsetsByZh('不存在的').length, 0);
 
 const makeNode = text => ({ textNode: { nodeValue: text } });
@@ -159,16 +173,51 @@ const searchEnd = searchSource.indexOf('\nexport {', searchStart);
 assert.ok(searchStart >= 0 && searchEnd > searchStart);
 const searchApi = new Function('resolveECGearsetSearch', 'resolveByZh', 'resolvePartialByZh',
   'suggestECGearsetsByZh', 'suggestByZh', searchSource.slice(searchStart, searchEnd) +
-    '\nreturn { isECGearsetsPage, resolveSearchNative };')(
+    '\nreturn { isECGearsetsPage, resolveSearchNative, findSearchInput, submitECGearsetsSearch };')(
   search, q => q === '测试物品' ? 'Native Test Item' : null,
   q => q === '女仆' ? 'Maid' : q === '装束' ? 'Wrong-Item' : null,
   api.suggestECGearsetsByZh, () => []);
 try {
   globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/gearsets' };
   assert.equal(searchApi.isECGearsetsPage(), true);
+  // 取自用户审计：EC 真实表单中搜索框 name/id 为空、placeholder=搜索、
+  // type=text、form 存在；不能在表单提交时误选旁边的其它筛选输入框。
+  const actualSearch = {
+    tagName: 'INPUT', className: 'input is-background is-rounded has-background-background',
+    disabled: false, readOnly: false, isConnected: true, value: '女仆',
+    getAttribute(name) {
+      return ({ type: 'text', name: '', id: '', placeholder: '搜索' })[name] ?? null;
+    },
+  };
+  const adjacentFilter = {
+    tagName: 'INPUT', className: 'vs__search', disabled: false, readOnly: false,
+    getAttribute(name) {
+      return ({ type: 'search', name: '', placeholder: 'Search for option' })[name] ?? null;
+    },
+  };
+  const form = { querySelectorAll: () => [adjacentFilter, actualSearch] };
+  assert.equal(searchApi.findSearchInput(form), actualSearch,
+    '真实 EC 主搜索框在同一 form 含其它输入框时仍必须被识别');
+  const destinations = [];
+  globalThis.location.href = 'https://ffxiv.eorzeacollection.com/gearsets?search=%E6%97%A7&page=9&filter%5Bjob%5D=PLD';
+  globalThis.location.assign = url => destinations.push(new URL(url));
+  for (const [zh, native] of [['女仆', "Loyal Housemaid's"],
+    ['兽王', "Beastmaster's"], ['东方', 'Eastern']]) {
+    actualSearch.value = zh;
+    assert.equal(searchApi.submitECGearsetsSearch(actualSearch), true, zh + ' 可以触发专用搜索提交');
+    assert.equal(destinations.at(-1).searchParams.get('search'), native,
+      zh + ' 应提交网站认识的英文标题/公共关键词');
+    assert.equal(destinations.at(-1).searchParams.has('page'), false, '搜索重置旧分页');
+    assert.equal(destinations.at(-1).searchParams.get('filter[job]'), 'PLD',
+      '搜索保留原有筛选条件');
+  }
+  actualSearch.value = '尚未收录';
+  assert.equal(searchApi.submitECGearsetsSearch(actualSearch), false, '未知中文不能臆造英文关键词');
+  assert.equal(destinations.length, 3, '未知查询不得额外触发提交');
   assert.equal(searchApi.resolveSearchNative('御敌', true), 'Fending');
   assert.equal(searchApi.resolveSearchNative('幻境', true), 'Phantom Vision');
-  assert.equal(searchApi.resolveSearchNative('女仆', true), 'Maid', '未知套装词才回退物品公共子串');
+  assert.equal(searchApi.resolveSearchNative('女仆', true), "Loyal Housemaid's",
+    '套装实际标题优先于单件物品的 Maid 模糊回退');
   assert.equal(searchApi.resolveSearchNative('装束', true), null,
     '已命中多个套装却无共同搜索词时，不回退到无关物品');
   assert.equal(searchApi.resolveSearchNative('装束', false), 'Wrong-Item',
