@@ -779,9 +779,42 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
-  // 先按头、身、手、腿、脚、其余；分类内沿用精确、正式名前缀、
-  // 正式名包含、别名前缀、别名包含的匹配优先级。
-  // 完整扫描后再截断 limit，避免候选过多时高优先级装备被提前丢弃。
+  // 匹配度在每个装备部位内计算：精确 / 正式名前缀 / 正式名包含 /
+  // 别名前缀 / 别名包含；非匹配项返回 -1。
+  function _irSuggestionScore(name, query, kind) {
+    if (name === query) return 0;
+    if (name.startsWith(query)) return kind === 0 ? 1 : 3;
+    if (name.includes(query)) return kind === 0 ? 2 : 4;
+    return -1;
+  }
+
+  // 每个部位设五个有序匹配桶；先采集完整匹配，再进行最终限流，
+  // 否则高优先级部位可能被词典顺序和 limit 提前截断。
+  function _irSuggestionCollect(buckets, query, kind, limit, map) {
+    for (const name of _getIrSearchKeysByKind(kind)) {
+      const score = _irSuggestionScore(name, query, kind);
+      if (score < 0) continue;
+      const native = map[name];
+      if (!native) continue;
+      const group = _irSearchSlotByNative?.[native] ?? 5;
+      const bucket = buckets[group][score];
+      if (bucket.length < limit) bucket.push({ zh: name, native });
+    }
+  }
+
+  function _irSuggestionFlatten(buckets, limit) {
+    const rows = [];
+    for (const bucket of buckets.flat()) {
+      for (const row of bucket) {
+        rows.push(row);
+        if (rows.length >= limit) return rows;
+      }
+    }
+    return rows;
+  }
+
+  // 先按头、身、手、腿、脚、其余；组内按匹配度排序，保持已存在的
+  // 正式名、别名、limit、旧 V3 缓存及六站原生名行为。
   function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
@@ -790,34 +823,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const buckets = Array.from({ length: 6 }, () => Array.from({ length: 5 }, () => []));
-    const add = (name, score) => {
-      const native = map[name];
-      if (!native) return;
-      const group = _irSearchSlotByNative?.[native] ?? 5;
-      const bucket = buckets[group][score];
-      if (bucket.length < max) bucket.push({ zh: name, native });
-    };
-    if (map[key]) add(key, 0);
-    for (const name of _getIrSearchKeysByKind(0)) {
-      if (name === key) continue;
-      if (name.startsWith(key)) add(name, 1);
-      else if (name.includes(key)) add(name, 2);
-    }
-    for (const name of _getIrSearchKeysByKind(1)) {
-      if (name === key) continue;
-      if (name.startsWith(key)) add(name, 3);
-      else if (name.includes(key)) add(name, 4);
-    }
-    const rows = [];
-    for (const group of buckets) {
-      for (const bucket of group) {
-        for (const row of bucket) {
-          rows.push(row);
-          if (rows.length >= max) return rows;
-        }
-      }
-    }
-    return rows;
+    _irSuggestionCollect(buckets, key, 0, max, map);
+    _irSuggestionCollect(buckets, key, 1, max, map);
+    return _irSuggestionFlatten(buckets, max);
   }
 
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
