@@ -5,7 +5,7 @@ import { DATA_REMOTE } from './constants.js';
 import { onTablesReady } from './data-manager.js';
 import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, startItems } from './targets.js';
-import { bindECPieceTiles, startEC, translateECPage } from '../sites/eorzea-collection.js';
+import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
 import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-collection.js';
 import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
