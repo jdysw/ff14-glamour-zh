@@ -177,6 +177,9 @@ for (const [ec, native, expected] of [
 assert.equal(tr('Wintertide (Unknown Variant)'), null,
   '没有国服套装物品的变体不应凭空生成');
 assert.equal(tr('Completely New (Culottes)'), null, '不能按括号关键词猜造不存在的套装');
+// Runtime V3 nameMap is replaced as one ready dataset; the test injects the
+// same records in-place, so explicitly invalidate the cached test catalogue.
+dictRevision++;
 // Both Wintertide variants are independently verified to exist on the EC site.
 // The search catalogue derives these from the two official Attire item rows;
 // no manual per-series translated alias is added.
