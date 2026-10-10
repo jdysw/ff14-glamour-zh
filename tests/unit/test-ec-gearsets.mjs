@@ -336,7 +336,7 @@ try {
   api.translateECGearsetNames();
   assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
     'H1 分离的 Accessories 不能重复叠加「饰品饰品」');
-  assert.equal(accessoryLink.nodes[0].nodeValue, '海民饰品 地下城掉落',
+  assert.equal(accessoryLink.nodes[0].nodeValue, '海民饰品 ' + DICT_EC['Dungeon Drop'],
     '饰品列表及相关套装卡片的链接正文汉化，不改动 href');
   assert.equal(accessoryLink.href, '/accessories/sea-folk');
   api.translateECGearsetNames();
