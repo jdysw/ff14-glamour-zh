@@ -48,7 +48,7 @@ function harness(path = '/gearsets') {
   realm.addEventListener = (type, fn) => { globalHandlers.set(type, fn); };
   vm.runInNewContext(source, realm, { filename: 'search-diagnostics.js' });
   return {
-    api: realm.ZHXSearchAudit, realm,
+    api: realm.ZHXSearchAudit, realm, candidate,
     dispatch(type, target, rest = {}) {
       for (const fn of handlers.get(type) || []) fn({ type, target, isTrusted: true, ...rest });
     },
@@ -64,7 +64,7 @@ const searchInput = value => ({
   closest() { return null; },
 });
 const mock = harness();
-const { api } = mock;
+const { api, candidate } = mock;
 assert.equal(api.getSummary().enabled, false, 'opt-in defaults off');
 const input = searchInput('幻境');
 assert.equal(api.isSearchInput(input), true, 'translated Chinese placeholder is a search field');
