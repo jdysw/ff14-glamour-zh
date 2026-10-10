@@ -724,8 +724,8 @@ try {
       ignored.form = form;
       ignored.setAttribute('placeholder', 'Filter by head');
       form.appendChild(ignored);
-      eq('M1 主搜索框在 gearsets 页面识别成功',
-        harness.api.findSearchInput(form), input);
+      ok('M1 主搜索框在 gearsets 页面识别成功',
+        harness.api.findSearchInput(form) === input);
 
       // 不手动触发 onTablesReady：套装词典不应被 V3 物品数据就绪状态阻塞。
       input.value = '幻境';
