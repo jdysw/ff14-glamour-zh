@@ -125,9 +125,16 @@ assert.equal(tr('Legend Crafted Glamour'), null, '无国服核验译名的套装
 assert.equal(tr("Prishe's Healing"), null, '未收录的职业变体不能虚构套装');
 
 // 独立从国服物品表核对新增的系列译名，不用维护代码中的映射反向生成预期。
-const officialRows = new Map(fs.readFileSync(path.join(root, 'data/ff14-items.tsv'), 'utf8')
-  .split('\n').map(line => line.split('\t')).filter(row => row.length >= 3)
-  .map(row => [row[2], row[1]]));
+// Runtime V3 `build/make-runtime-data.py` preserves the FIRST valid English
+// entry, not Map(last-write-wins). Mirror production precisely: duplicate
+// names in the canonical TSV can have different Chinese aliases later on.
+const officialRows = new Map();
+for (const line of fs.readFileSync(path.join(root, 'data/ff14-items.tsv'), 'utf8').split('\n')) {
+  const row = line.split('\t');
+  if (row.length < 3) continue;
+  const [zh, en] = [row[1], row[2]];
+  if (en && zh && !officialRows.has(en)) officialRows.set(en, zh);
+}
 for (const [en, zh] of [
   ['Mistwake Visor of Fending', '雾迹御敌面罩'],
   ['Mistic Memory Sallet of Fending', '雾忆御敌角盔'],
