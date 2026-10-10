@@ -53,11 +53,6 @@ def report(rows):
     standalone = [(en, zh) for group in groups.values() for en, zh, _, variant in group
                   if not variant]
     role_items = [(en, zh) for en, zh in rows.items() if ROLE.fullmatch(en)]
-    item_traces = [
-        (en, zh) for en, zh in rows.items()
-        if not PACKAGE.fullmatch(en) and not ROLE.fullmatch(en)
-        and any(en.startswith(base + " ") for base in list(groups)[:400])
-    ]
     lines = [
         "# EC Gearsets 命名结构数据覆盖审计",
         "",
