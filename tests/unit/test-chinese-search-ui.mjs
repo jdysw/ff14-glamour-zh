@@ -787,10 +787,20 @@ try {
       document.dispatch('keydown', independentEnter);
       eq('M15 无表单搜索框回车也导航', new URL(navigations[3]).searchParams.get('search'), 'Phantom Vision');
 
+      globalThis.location.pathname = '/gearsets/casters';
+      globalThis.location.href = 'https://ffxiv.eorzeacollection.com/gearsets/casters?page=3';
+      independent.value = '幻境';
+      document.dispatch('keydown', independentEnter);
+      eq('M16 职业分类套装页也支持中文搜索', new URL(navigations[4]).pathname, '/gearsets/casters');
+      eq('M17 职业分类搜索参数正确', new URL(navigations[4]).searchParams.get('search'), 'Phantom Vision');
+      globalThis.location.pathname = '/gearset/phantom-vision-fending';
+      independent.value = '幻境';
+      document.dispatch('keydown', independentEnter);
+      eq('M18 单件套装详情页不接管搜索', navigations.length, 5);
       globalThis.location.pathname = '/glamours';
       independent.value = '幻境';
       document.dispatch('keydown', independentEnter);
-      eq('M16 EC 其他页面不走 Gearsets 专用导航', navigations.length, 4);
+      eq('M19 EC 其他页面不走 Gearsets 专用导航', navigations.length, 5);
     } finally {
       if (originalLocation === undefined) delete globalThis.location;
       else globalThis.location = originalLocation;
