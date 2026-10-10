@@ -46,6 +46,42 @@ function isChineseSearchQuery(value) {
   return q.length > 0 && /[\u3400-\u9fff]/u.test(q);
 }
 
+// EC /gearsets 的检索由站点 GET 参数 search 驱动。Vue/动态过滤器不保证在
+// input 事件时同步读取被临时改写的值；因此只在明确提交时用站点原生 URL 查询。
+// 仅识别 Gearsets 主搜索框，不接管筛选部位、职业或其他页面的输入框。
+function isECGearsetsSearchInput(input) {
+  if (!isECGearsetsPage() || String(input?.tagName || '').toUpperCase() !== 'INPUT'
+      || input.disabled || input.readOnly) return false;
+  if (/vs__search/.test(String(input.className || ''))) return false;
+  const meta = [input.getAttribute?.('name'), input.getAttribute?.('id'),
+    input.getAttribute?.('placeholder'), input.getAttribute?.('aria-label')]
+    .filter(Boolean).join(' ');
+  if (/search by (title|player)|author|username|creator|filter by/i.test(meta)) return false;
+  return /\b(search|keyword)\b/i.test(meta);
+}
+
+function ecGearsetsSearchUrl(native, href) {
+  if (!native) return null;
+  try {
+    const url = new URL(href);
+    url.searchParams.set('search', native);
+    url.searchParams.delete('page'); // 换关键词后必须回到第一页，否则会误报无结果。
+    return url.toString();
+  } catch { return null; }
+}
+
+function submitECGearsetsSearch(input, selectedNative = null) {
+  if (!isECGearsetsSearchInput(input)) return false;
+  const query = normalizeSearchQuery(input.value);
+  if (!isChineseSearchQuery(query)) return false;
+  const native = selectedNative || resolveECGearsetSearch(query);
+  if (!native) return false; // 多个不相关套装不猜测英文词，继续由候选明确选择。
+  const url = ecGearsetsSearchUrl(native, globalThis.location?.href);
+  if (!url || typeof globalThis.location?.assign !== 'function') return false;
+  globalThis.location.assign(url);
+  return true;
+}
+
 function searchInputScore(input) {
   if (!input) return -Infinity;
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
@@ -308,6 +344,9 @@ function selectSuggestion(index) {
   // 独立搜索框（React 站点，b 方案）：选中候选后做「转换式搜索」——
   // 用原生名触发站内检索，随后输入框显示恢复为中文。
   // 两类控件遵循相同选择语义：选择候选就执行一次站内搜索。
+  // EC Gearsets 候选点击必须使用原站 GET 检索，不能仅派发 input 事件；
+  // 站点的动态组件可能在事件后重新写入中文，导致结果恒为空。
+  if (submitECGearsetsSearch(input, row.native)) return;
   // 原站表单必须经过 requestSubmit（触发现有校验及捕获监听），不能调用 form.submit()。
   if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input, false, row.native);
   else if (isSearchInput(input) && typeof input.form?.requestSubmit === 'function') {
@@ -370,7 +409,9 @@ function showSuggestions(input) {
     hideSuggestions(true);
     return;
   }
-  if (!_suggestDataReady) {
+  // Gearsets 候选只依赖已加载的本地套装目录/词典，不必等待 V3 物品表；
+  // 否则 V3 网络超时会让整个套装检索也无法使用。
+  if (!_suggestDataReady && !isECGearsetsPage()) {
     hideSuggestions(true);
     return;
   }
@@ -475,7 +516,15 @@ function handleSearchKeydown(event) {
   const input = event.target;
   if (event.isComposing || _composingInputs.has(input) || event.keyCode === 229) return;
   if (handleSuggestionKeydown(event)) return;
-  // 显式搜索与候选点选使用同一转换链；保留原回车事件交给站点处理。
+  // Gearsets 的 search GET 参数是网站的查询入口；按回车时立即导航，
+  // 而不是向可能有异步状态的前端组件派发临时原生名 input。
+  if (event.key === 'Enter' && submitECGearsetsSearch(input)) {
+    event.preventDefault();
+    event.stopPropagation();
+    hideSuggestions(true);
+    return;
+  }
+  // 其他站点显式搜索保留原站回车事件。
   if (event.key === 'Enter' && isStandaloneSearchInput(input) && convertStandaloneForSearch(input, true)) hideSuggestions(true);
 }
 
@@ -611,6 +660,12 @@ function handleStandaloneSearchClick(event) {
   if (/clear|reset|取消|重置|清空|初期化|초기화|지우기/i.test(label)) return;
   if (!/搜索|搜尋|查询|查找|검색|検索|\bsearch\b|필터\s*적용|应用筛选|適用|\bapply\b/i.test(label)) return;
   const input = findStandaloneTriggerInput(button);
+  if (input && submitECGearsetsSearch(input)) {
+    event.preventDefault();
+    event.stopPropagation();
+    hideSuggestions(true);
+    return;
+  }
   if (input && convertStandaloneForSearch(input, true)) hideSuggestions(true);
 }
 
@@ -681,6 +736,14 @@ function handleChineseSearchSubmit(event, siteId) {
   if (!isChineseSearchQuery(query)) return;
 
   const selected = _selectedSearchRows.get(input);
+  if (siteId === 'ec' && submitECGearsetsSearch(input,
+    selected?.zh === query ? selected.native : null)) {
+    _selectedSearchRows.delete(input);
+    event.preventDefault();
+    event.stopPropagation();
+    hideSuggestions(true);
+    return;
+  }
   const native = selected?.zh === query && selected.native
     ? selected.native
     : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
