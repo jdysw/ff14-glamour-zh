@@ -1,0 +1,29 @@
+name: PR44 regenerate EC dictionary (temporary)
+on:
+  push:
+    branches:
+      - feat/ec-gearsets-auto-translate-143
+    paths:
+      - .github/workflows/pr44-regenerate-dictionary.yml
+permissions:
+  contents: write
+jobs:
+  update-generated:
+    if: github.repository == 'jdysw/ff14-glamour-zh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate checked-in dictionary from source data
+        run: |
+          set -euo pipefail
+          python3 build/inject_dicts.py src/core/dictionary.js
+          git add src/core/dictionary.js
+          if git diff --cached --quiet; then
+            echo "No generated dictionary change required"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "build(dict): sync generated dictionary for EC detail translations"
+          git push origin HEAD:refs/heads/feat/ec-gearsets-auto-translate-143
