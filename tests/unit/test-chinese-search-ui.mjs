@@ -726,6 +726,8 @@ try {
       form.appendChild(ignored);
       ok('M1 主搜索框在 gearsets 页面识别成功',
         harness.api.findSearchInput(form) === input);
+      // 站点翻译会把 Search... 改写成 搜索…；主搜索字段必须继续能识别。
+      input.setAttribute('placeholder', '搜索…');
 
       // 不手动触发 onTablesReady：套装词典不应被 V3 物品数据就绪状态阻塞。
       input.value = '幻境';
@@ -779,7 +781,7 @@ try {
       // 套装页还可能使用无 form 的动态搜索框，必须同样可靠提交。
       const independent = new FakeElement('input');
       independent.setAttribute('type', 'search');
-      independent.setAttribute('placeholder', 'Search...');
+      independent.setAttribute('placeholder', '搜索…');
       independent.value = '幻境';
       const independentEnter = { target: independent, key: 'Enter', preventDefault() {}, stopPropagation() {} };
       document.dispatch('keydown', independentEnter);
