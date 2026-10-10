@@ -189,7 +189,7 @@ function buildSearchHarness(suggestionsOverride) {
     'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
     'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
     seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput, ecSearchContext, ecScopedSuggestions, ecScopedNative };',
+    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput, ecSearchContext, ecScopedSuggestions, ecScopedNative, facewearNatives: new Set(EC_FACEWEAR_ROWS.map(row => row.native)) };',
   ].join('\n');
   try {
     const fn = new Function('__ready', '__suggestions', body);
@@ -857,8 +857,9 @@ try {
       document.dispatch('focusin',{target:input});
       await sleep();
       box=findSuggestBox(document);
-      ok('N11 面饰弹出候选只有独立面饰项目',
-        box?.querySelectorAll('button[data-zhx-index]').every(btn=>btn.children[1]?.textContent.includes('Spectacles')));
+      ok('N11 面饰弹出候选全部来自官方 Glasses Sheet，不把普通眼镜装备混入',
+        box?.querySelectorAll('button[data-zhx-index]').every(btn=>
+          harness.api.facewearNatives.has(btn.children[1]?.textContent)));
       globalThis.location.pathname = '/gearsets';
       for (const [enSlot,expectedSlot,expectedName] of [
         ['head',0,'Official Head'],['body',1,'Official Body'],
