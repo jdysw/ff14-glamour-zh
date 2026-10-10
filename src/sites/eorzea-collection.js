@@ -260,9 +260,34 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     // 不为未见过的种族变体创建搜索候选，也不宣称它是国服官方套装名。
     const match = /^Hempen (Au Ra|Hyur|Elezen|Miqo'te|Lalafell|Roegadyn|Viera|Hrothgar|Auri|Midlander|Highlander|Lalafellin) (Male|Female)$/.exec(native);
     if (!match) return null;
-    const race = DICT_EC[match[1]];
+    const raceAliases = { Auri: 'Au Ra', Lalafellin: 'Lalafell' };
+    const race = DICT_EC[raceAliases[match[1]] || match[1]];
     const gender = DICT_EC[match[2]];
     return race && gender ? race + gender + '贴身衣套装' : null;
+  }
+
+  // A visible EC title is evidence that the set exists; for those exact titles,
+  // we may use an already verified dictionary or official "Attire/Armor" item
+  // even when the title was absent from the manually enumerated search catalogue.
+  // These fallback rows are NOT added to search suggestions unless separately
+  // confirmed by the existing catalogue inference.
+  function ecGearsetObservedTitleZh(native) {
+    const exact = DICT_EC[native];
+    if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
+    const roles = /^(.*?) (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/;
+    const parts = roles.exec(native);
+    if (parts) {
+      const series = DICT_EC[parts[1]];
+      const role = DICT_EC[parts[2]];
+      if (series && role && /[\u3400-\u9fff]/u.test(series)
+          && !/(?:套装|装束)$/u.test(series)) return series + role + '套装';
+    }
+    const itemIndex = dataGetIndex('nameMap');
+    for (const suffix of [' Attire', ' Armor']) {
+      const official = itemIndex?.[native + suffix];
+      if (official && /(?:套装|装束)$/u.test(official)) return official;
+    }
+    return null;
   }
 
   function ecGearsetDisplayName(raw) {
@@ -272,7 +297,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const title = source ? text.slice(0, -(source.length + 1)) : text;
     const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
     const row = ecGearsetCatalog().find(r => r.native === bare);
-    const zh = row?.zh || ecGearsetDescriptiveName(bare);
+    const zh = row?.zh || ecGearsetDescriptiveName(bare) || ecGearsetObservedTitleZh(bare);
     if (!zh) return null;
     const suffix = source ? ' ' + (DICT_EC[source] || source) : '';
     return zh + suffix;
@@ -339,25 +364,45 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const scope = localScope(rootArg);
     const translateText = root => {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      // EC 详情标题将“Ceremonial Scouting”与“Set”拆成两个 span。
-      // 前一 span 只翻译套装名字，避免“仪仗游击套装 套装”。
-      const splitSet = root.tagName === 'H1'
-        && [...(root.querySelectorAll?.('span') || [])]
-          .some(el => /^(?:Set|套装)$/i.test((el.textContent || '').trim()));
-      while (walker.nextNode()) {
-        const node = walker.currentNode;
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      // Observed EC h1: <span>Phantom Vision Fending<span>Set</span></span>.
+      // Also cover <b>Hempen ...</b> Set (Set is a direct H1 text node).
+      // Check actual text nodes, not spans: the outer span includes both strings.
+      const setNodes = nodes.filter(n => /^(?:Set|套装)$/iu.test((n.nodeValue || '').trim()));
+      for (const node of nodes) {
         const raw = node.nodeValue || '';
         const zh = ecGearsetDisplayName(raw);
         if (!zh) continue;
-        const trimmed = raw.trim();
-        const display = splitSet && !trimmed.endsWith(' Set') && zh.endsWith('套装')
-          ? zh.slice(0, -2) : zh;
-        node.nodeValue = raw.replace(trimmed, display);
+        const title = raw.trim();
+        if (setNodes.length && !title.endsWith(' Set') && zh.endsWith('套装')) {
+          // Keep the original accent styling on the website's own Set suffix.
+          node.nodeValue = raw.replace(title, zh.slice(0, -2));
+        } else {
+          node.nodeValue = raw.replace(title, zh);
+          // "...装束" already denotes an outfit; do not append another 套装.
+          if (setNodes.length && zh.endsWith('装束')) {
+            for (const suffix of setNodes) suffix.nodeValue = '';
+          }
+        }
+      }
+      // The generic text scan can later localize these independent labels;
+      // doing it here also covers incremental observer updates inside the H1.
+      if (root.tagName === 'H1') {
+        for (const suffix of setNodes) {
+          if (suffix.nodeValue?.trim() === 'Set') suffix.nodeValue = suffix.nodeValue.replace('Set', '套装');
+        }
       }
     };
-    for (const a of queryIn(scope, 'a[href*="/gearset/"]')) translateText(a);
+    const roots = selector => {
+      const found = queryIn(scope, selector);
+      const parent = scope?.closest?.(selector);
+      if (parent && !found.includes(parent)) found.unshift(parent);
+      return found;
+    };
+    for (const a of roots('a[href*="/gearset/"]')) translateText(a);
     if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')) {
-      for (const h1 of queryIn(scope, 'h1')) translateText(h1);
+      for (const h1 of roots('h1')) translateText(h1);
     }
   }
 
@@ -380,6 +425,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
+    // Gearset H1 has split name/Set nodes: generic trEC would append 套装 to
+    // known series BEFORE the dedicated structure-aware pass can inspect it.
+    // Only the Gearsets title translator is allowed to touch this H1.
+    if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')
+        && p?.closest?.('h1')) return;
     const next = trEC(raw);
     if (next !== raw) {
       // Keep the original for diagnostics, not as an untranslated English hover tooltip.
@@ -438,11 +488,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       });
       const batch = [];
       while (w.nextNode()) batch.push(w.currentNode);
+      translateECGearsetNames(rootArg);
       for (const n of batch) {
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
-      translateECGearsetNames(rootArg);
     } finally {
       ecBusy = false;
     }
