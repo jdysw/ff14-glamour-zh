@@ -1,0 +1,74 @@
+name: Finalize v1.4.3 EC Gearsets hotfix release (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-v143-ec-hotfix.yml'
+permissions:
+  contents: write
+concurrency:
+  group: finalize-v143-ec-hotfix
+  cancel-in-progress: false
+jobs:
+  finalize:
+    if: github.repository == 'jdysw/ff14-glamour-zh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rebuild final verified 1.4.3 source
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "1.4.3"
+          git merge-base --is-ancestor 1132dbdde8d4ec8ca206c5fa0cfea45892ccb7d2 HEAD
+          git merge-base --is-ancestor 7d8c22acac13169d80818f5114a1de6b2260046c HEAD
+          npm ci
+          bash build.sh
+          npm run version:check
+          npm run check:dist
+          git diff --exit-code
+          grep -Eq '^// @version[[:space:]]+1\.4\.3$' dist/ff14-glamour-zh.greasyfork.user.js
+          sha256sum dist/ff14-glamour-zh.greasyfork.user.js
+      - name: Append quality fix to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v1.4.3 --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > "$RUNNER_TEMP/notes.md"
+          for pr in 34 39 40; do grep -Fq "PR #$pr" "$RUNNER_TEMP/notes.md"; done
+          if ! grep -Fq 'PR #41' "$RUNNER_TEMP/notes.md"; then
+            cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+
+          ### 1.4.3 质量门禁修复（PR #41）
+          - 将 EC Gearsets 表单搜索提交分离为专用函数，保留 PR #40 的原生 URL 检索、筛选保留及页面隔离语义。
+          - 降低搜索提交函数的认知复杂度，SonarQube Quality Gate 通过，0 个新问题；构建、单元测试及全部集成测试通过。
+          - 继续使用同一个 **v1.4.3** 安装包版本号，覆盖下载可获取最终修复；同版本安装仍需手动覆盖。
+
+          [PR #41](https://github.com/jdysw/ff14-glamour-zh/pull/41)
+          NOTES
+          fi
+      - name: Replace v1.4.3 attachment with final code and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload v1.4.3 dist/ff14-glamour-zh.greasyfork.user.js --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit v1.4.3 --notes-file "$RUNNER_TEMP/notes.md" --repo "$GITHUB_REPOSITORY"
+      - name: Verify byte-for-byte download and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/asset"
+          gh release download v1.4.3 --pattern ff14-glamour-zh.greasyfork.user.js --dir "$RUNNER_TEMP/asset" --repo "$GITHUB_REPOSITORY"
+          cmp -s dist/ff14-glamour-zh.greasyfork.user.js "$RUNNER_TEMP/asset/ff14-glamour-zh.greasyfork.user.js"
+          gh release view v1.4.3 --json body --jq .body --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/actual.md"
+          for pr in 34 39 40 41; do grep -Fq "PR #$pr" "$RUNNER_TEMP/actual.md"; done
+          echo 'Final 1.4.3 attachment and description verified'
