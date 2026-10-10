@@ -1,7 +1,8 @@
-/* FF14 manual browser audit v1.1.1. Bundled after audit-core.js. */
+/* FF14 manual browser audit v1.2.0. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
+const S=globalThis.ZHXSearchAudit;
 const site=C.siteFor(location.href);
 if(!site)return;
 const KEY='zhx.audit.manual.v2',OLD='zhx.audit.manual.v1';
@@ -11,6 +12,7 @@ const CAP=6000,MAX_SNAPSHOTS=320,MAX_BASELINES=320;
 const BAD=new Set(['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','IFRAME','SVG']);
 const ATTRS=['title','alt','aria-label','placeholder'];
 let busy=false,box,status,stats,modePick,autoCheck,roundInput,labelInput,privateCheck;
+let searchStatus,searchButton;
 let lastMut=performance.now(),afterReady=false;
 // A document-start observer records pre-mutation values where possible. These are
 // *inferred* evidence, never a verified before snapshot: userscripts may execute
@@ -33,6 +35,8 @@ function watchMutations(){
   window.addEventListener('zhx:translation-ready',()=>{afterReady=true;},{passive:true});
 }
 watchMutations();
+// Restore an opt-in diagnostic session early across page navigations.
+void S?.init?.();
 async function readyForCapture(){
   const t0=performance.now();
   while(performance.now()-t0<15000){
@@ -101,7 +105,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.1.1',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.2.0',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -154,24 +158,27 @@ async function capture(automatic=false){
   }catch(e){say('采集失败：'+String(e.message||e),true);console.error('[FF14 audit v1.1]',e)}
   finally{busy=false}
 }
-async function count(d){const x=d||await load();if(stats)stats.textContent=`原文状态 ${Object.keys(x.baselines).length} / 译后快照 ${Object.keys(x.pages).length}`}
+async function count(d){const x=d||await load();if(stats)stats.textContent=`原文状态 ${Object.keys(x.baselines).length} / 译后快照 ${Object.keys(x.pages).length} / 搜索事件 ${S?.getSummary?.().events||0}`}
 function download(data,name){const blob=new Blob([data],{type:'application/json;charset=utf-8'});
   const uri=URL.createObjectURL(blob),a=document.createElement('a');a.href=uri;a.download=name;document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(uri),2000);
 }
 async function exportJSON(){
-  const d=await load();if(!Object.keys(d.pages).length&&!Object.keys(d.baselines).length){say('尚无数据。',true);return}
+  const d=await load(),search=await S?.exportState?.();
+  const searchEvents=(search?.sessions||[]).reduce((n,s)=>n+(s.events?.length||0),0);
+  if(!Object.keys(d.pages).length&&!Object.keys(d.baselines).length&&!searchEvents){say('尚无数据。',true);return}
   // Never leak parentText. Player content and unverified names are redacted by default.
   const out=JSON.parse(JSON.stringify(d)),includeUser=!!privateCheck?.checked;
+  if(searchEvents)out.searchAudit=search;
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
   out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
-  download(JSON.stringify(out,null,2),'ff14-audit-v1.1-'+clock().replace(/[:.]/g,'-')+'.json');
-  say('已导出 '+Object.keys(out.pages).length+' 个快照；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
+  download(JSON.stringify(out,null,2),'ff14-audit-v1.2-'+clock().replace(/[:.]/g,'-')+'.json');
+  say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
-async function clear(){if(!confirm('清空所有审计记录（包含 V1.0 导入数据）？请先导出备份。'))return;
-  await set(KEY,JSON.stringify(blank()));await set(OLD,'');await count();say('已清空。')}
+async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
+  await set(KEY,JSON.stringify(blank()));await set(OLD,'');await S?.clear?.();await count();say('已清空。')}
 function btn(text,fn){const x=document.createElement('button');x.type='button';x.textContent=text;x.addEventListener('click',fn);return x}
 async function init(){
   if(!document.body){await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}))}
@@ -185,7 +192,7 @@ async function init(){
   input[type=text]{width:100%;min-width:60px}button{cursor:pointer}button:hover{background:#35517b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .hint{font-size:11px;color:#c6d1e2}.bad{color:#ffb9b9}.closed .body{display:none}#status{max-height:85px;overflow:auto;overflow-wrap:anywhere}#status[data-error=true]{color:#ffb9b9}`;
   box.append(style);const panel=document.createElement('div');panel.className='panel';
-  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.1'));
+  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.2'));
   head.append(btn('−',()=>{panel.classList.toggle('closed');head.lastChild.textContent=panel.classList.contains('closed')?'+':'−'}));panel.append(head);
   const body=document.createElement('div');body.className='body';
   const hint=document.createElement('div');hint.className='hint';hint.textContent='只读采集；同一网址可保留不同状态和版本。自动推断的原文不等同于完整基线。';body.append(hint);
@@ -202,6 +209,26 @@ async function init(){
   const priv=document.createElement('label');privateCheck=document.createElement('input');privateCheck.type='checkbox';
   priv.append(privateCheck,document.createTextNode('导出玩家内容 / 物品名（默认隐藏）'));body.append(priv);
   body.append(btn('采集当前页面／状态',()=>capture(false)));
+  const searchTitle=document.createElement('div');searchTitle.className='hint';
+  searchTitle.textContent='中文搜索诊断：手动开始后记录搜索框、候选、提交与请求元数据；不修改网页、不上传数据，也不抓取请求正文。';
+  body.append(searchTitle);
+  const searchActions=document.createElement('div');searchActions.className='grid';
+  searchButton=btn('开始搜索诊断',async()=>{
+    if(S?.getSummary?.().enabled){await S.stop();say('搜索诊断已停止，现在可以导出 JSON。')}
+    else if(await S.start()){say('搜索诊断已开始。请尝试中文输入、选择候选并检索，再导出 JSON。')}
+    else say('此页不允许搜索诊断。',true);
+    await count();
+  });
+  searchActions.append(searchButton,btn('记录搜索状态',()=>{
+    S?.snapshot?.();say('已记录当前搜索状态。');void count();
+  }));
+  body.append(searchActions);
+  searchStatus=document.createElement('div');searchStatus.className='hint';body.append(searchStatus);
+  S?.onUpdate?.(summary=>{
+    if(searchStatus)searchStatus.textContent='搜索诊断：'+(summary.enabled?'记录中':'已停止')
+      +' · 当前会话 '+summary.events+' 条 / 累计 '+summary.sessions+' 次';
+    if(searchButton)searchButton.textContent=summary.enabled?'停止搜索诊断':'开始搜索诊断';
+  });
   const actions=document.createElement('div');actions.className='grid';actions.append(btn('导出 JSON',()=>exportJSON()),btn('清空记录',()=>clear()));body.append(actions);
   stats=document.createElement('div');stats.className='hint';body.append(stats);
   status=document.createElement('div');status.id='status';status.className='hint';
@@ -209,6 +236,7 @@ async function init(){
   panel.append(body);box.append(panel);await count();
   if(autoCheck.checked&&C.allowedRoute(location.href))void capture(true);
 }
-try{GM_registerMenuCommand('FF14 V1.1：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.1：导出 JSON',()=>exportJSON());}catch{}
+try{GM_registerMenuCommand('FF14 V1.2：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.2：导出 JSON',()=>exportJSON());
+  GM_registerMenuCommand('FF14 V1.2：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
 void init().catch(err=>console.error('[FF14 manual audit init]',err));
 })();

@@ -16,7 +16,10 @@ const old=ci>=0&&argv[ci+1]?path.resolve(argv[ci+1]):null;
 function read(file){const d=JSON.parse(fs.readFileSync(file,'utf8'));return C.migrate(d)}
 const data=read(input);
 const rows=Object.values(data.pages||{});
-if(!rows.length)throw Error('没有汉化后页面记录');
+const searchSessions=data.searchAudit?.format==='zhx-search-audit-v1'
+  ? (data.searchAudit.sessions||[]) : [];
+const searchEvents=searchSessions.flatMap(s=>s.events||[]);
+if(!rows.length&&!searchEvents.length)throw Error('没有汉化后页面记录或中文搜索诊断事件');
 const summary={format:data.format,source:path.basename(input),createdAt:data.createdAt,
   totalSnapshots:rows.length,ok:0,failed:0,baselineVerified:0,baselineInferred:0,
   categories:{},perSite:{},generatedAt:new Date().toISOString()};
@@ -62,6 +65,22 @@ const lines=['# FF14 七站汉化覆盖审计 V1.1','',`生成时间：${summary
 for(const [site,s] of Object.entries(summary.perSite))lines.push(`|${site}|${s.ok}|${s.failed}|${s.candidates}|`);
 lines.push('','## 高频候选（前 80 条）','', '|站点|类型|原文 / 译后|次数|','|---|---|---|---:|');
 for(const g of suspects.slice(0,80)){lines.push(`|${g.site}|${g.category}|${String(g.text).replaceAll('|','\\|').slice(0,100)}|${g.occurrences}|`)}
+summary.searchDiagnostics={sessions:searchSessions.length,events:searchEvents.length,
+  eventTypes:Object.fromEntries([...new Set(searchEvents.map(e=>e.type))].sort()
+    .map(type=>[type,searchEvents.filter(e=>e.type===type).length]))};
+if(searchEvents.length){
+  lines.push('','## 中文搜索诊断（自愿开启）','',
+    '会话：'+searchSessions.length+'；记录事件：'+searchEvents.length,
+    '此部分为浏览器观察结果，未出现网络记录不表示浏览器没有发送请求。','','|时间|事件|路径|搜索输入|候选数|套装链接数|',
+    '|---|---|---|---|---:|---:|');
+  const cell=x=>String(x??'').replaceAll('|','\\|').replace(/[\r\n]+/g,' ').slice(0,110);
+  for(const event of searchEvents.slice(-120)){
+    const st=event.state||{};
+    lines.push('|'+[event.at,event.type,event.page,st.input?.value,
+      st.candidates?.rendered,st.gearsetLinks].map(cell).join('|')+'|');
+  }
+  lines.push('','搜索查询的参数与请求耗时、候选前几项可在 JSON 的 searchAudit.sessions[].events 中检查；导出前请核对隐私。');
+}
 let diff=null;
 if(old){
   diff=C.compareRuns(Object.values(read(old).pages||{}),rows);
