@@ -41,6 +41,41 @@ function isECGearsetsPage() {
     && /(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '');
 }
 
+function ecSlotFromHint(hint) {
+  const patterns = [
+    /\b(?:head|headpiece|headwear|headgear|helmet)\b|头部|头饰|头盔/iu,
+    /\b(?:body|bodypiece|chest|chestpiece)\b|身体|躯干|上衣/iu,
+    /\b(?:hands?|handpiece|gloves?)\b|手部|手套/iu,
+    /\b(?:legs?|legpiece|pants|trousers)\b|腿部|裤子/iu,
+    /\b(?:feet|foot|footpiece|boots?|shoes?)\b|脚部|足部|靴子/iu,
+  ];
+  const matches = patterns.flatMap((pattern, index) => pattern.test(hint) ? [index] : []);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function ecSlotFromInput(input) {
+  const hint = [
+    input?.getAttribute?.('placeholder'),
+    input?.getAttribute?.('aria-label'),
+    input?.getAttribute?.('data-slot'),
+    input?.getAttribute?.('name'),
+    input?.closest?.('[data-slot]')?.getAttribute?.('data-slot'),
+  ].filter(Boolean).join(' ');
+  const explicit = ecSlotFromHint(hint);
+  if (explicit !== null) return explicit;
+  // EC occasionally supplies only a generic placeholder. Read the nearest
+  // compact field label, never a full form containing multiple slot names.
+  let node = input?.parentElement;
+  for (let depth = 0; node && depth < 4; depth++, node = node.parentElement) {
+    const label = String(node.textContent || '').trim();
+    if (label.length > 0 && label.length < 50) {
+      const slot = ecSlotFromHint(label);
+      if (slot !== null) return slot;
+    }
+  }
+  return null;
+}
+
 // EC intelligent inputs are scoped by page purpose or explicit equipment slot.
 // The specialty lists come from official ItemAction and Glasses game data.
 function ecSearchContext(input) {
@@ -51,22 +86,8 @@ function ecSearchContext(input) {
   if (/^\/facewear(?:\/|$)/i.test(path)) return { kind: 'facewear' };
   // Slot-scoped Vue selects, not the free-text Gearsets search box.
   if (!/\bvs__search\b/.test(String(input?.className || ''))) return null;
-  const hint = [
-    input?.getAttribute?.('placeholder'),
-    input?.getAttribute?.('aria-label'),
-    input?.getAttribute?.('data-slot'),
-    input?.getAttribute?.('name'),
-    input?.closest?.('[data-slot]')?.getAttribute?.('data-slot'),
-  ].filter(Boolean).join(' ');
-  const slots = [
-    /\b(?:head|headwear|headgear|helmet)\b/i,
-    /\b(?:body|chest|chestpiece)\b/i,
-    /\b(?:hands?|gloves?)\b/i,
-    /\b(?:legs?|pants|trousers)\b/i,
-    /\b(?:feet|foot|boots?|shoes?)\b/i,
-  ];
-  const slot = slots.findIndex(pattern => pattern.test(hint));
-  return slot < 0 ? null : { kind: 'slot', slot };
+  const slot = ecSlotFromInput(input);
+  return slot === null ? null : { kind: 'slot', slot };
 }
 
 function ecScopedSuggestions(query, input) {
@@ -802,6 +823,12 @@ function handleECGearsetsFormSubmit(event, siteId, input, query, selected) {
   return true;
 }
 
+function nativeForSubmittedSearch(query, siteId, input, selected) {
+  if (selected?.zh === query && selected.native) return selected.native;
+  if (siteId === 'ec' && ecSearchContext(input)) return ecScopedNative(query, input, true);
+  return resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+}
+
 function handleChineseSearchSubmit(event, siteId) {
   if (!SEARCH_SITES[siteId]) return;
   const form = event.target;
@@ -814,11 +841,7 @@ function handleChineseSearchSubmit(event, siteId) {
 
   const selected = _selectedSearchRows.get(input);
   if (handleECGearsetsFormSubmit(event, siteId, input, query, selected)) return;
-  const context = siteId === 'ec' ? ecSearchContext(input) : null;
-  const native = selected?.zh === query && selected.native
-    ? selected.native
-    : context ? ecScopedNative(query, input, true)
-      : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+  const native = nativeForSubmittedSearch(query, siteId, input, selected);
   _selectedSearchRows.delete(input);
   // 套装页优先系列/职能片段映射；其余站点仍以物品总表 + 公共子串兜底。
   if (!native || native === query) return;
