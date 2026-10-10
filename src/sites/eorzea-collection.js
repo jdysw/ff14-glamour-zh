@@ -3,6 +3,7 @@
 import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
+import { dataGetIndex } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
@@ -153,12 +154,62 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return EC_GEARSET_NAME_EXTRAS[en] || DICT_EC[en] || null;
   }
 
+  // 自动推导仅使用 V3 已有的官方英中装备映射，不维护逐套名单：
+  // 如 3 件 Ceremonial ... of Scouting 同时映射至「仪仗游击...」，
+  // 则推断 Ceremonial Scouting → 仪仗游击套装。
+  // 依赖“多件独立装备 + 共同中文前缀 + 与英文职能一致”三重校验；
+  // 达不到阈值时保留原英文，防止猜造非官方的套装名称。
+  function ecGearsetCommonZhPrefix(names) {
+    if (names.length < 3) return '';
+    let prefix = names[0];
+    for (const name of names.slice(1)) {
+      while (prefix && !name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+      if (!prefix) break;
+    }
+    return prefix;
+  }
+
+  function inferECGearsetsFromItems(nameIndex) {
+    const grouped = new Map();
+    const rolePattern = /^(.+?) of (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing)$/;
+    for (const [native, zh] of Object.entries(nameIndex || {})) {
+      const hit = rolePattern.exec(native);
+      if (!hit || !/^[\u3400-\u9fff]/u.test(zh)) continue;
+      const roleZh = DICT_EC[hit[2]];
+      if (!roleZh || !zh.includes(roleZh)) continue;
+      const words = hit[1].split(' ');
+      for (let n = 1; n < words.length && n <= 4; n++) {
+        const title = words.slice(0, n).join(' ') + ' ' + hit[2];
+        if (!grouped.has(title)) grouped.set(title, new Map());
+        grouped.get(title).set(native, zh);
+      }
+    }
+    const derived = [];
+    for (const [native, items] of grouped) {
+      if (items.size < 3) continue;
+      const names = [...new Set(items.values())];
+      if (names.length < 3) continue;
+      const prefix = ecGearsetCommonZhPrefix(names);
+      const role = native.slice(native.lastIndexOf(' ') + 1);
+      const roleZh = DICT_EC[role];
+      if (prefix.length < roleZh.length + 2 || !prefix.endsWith(roleZh)
+          || prefix.length > 22) continue;
+      derived.push({ native, zh: prefix + '套装' });
+    }
+    return derived;
+  }
+
   // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
   let _ecGearsetRows = null;
+  let _ecGearsetHadItemIndex = false;
   let _ecGearsetRevision = -1;
   function ecGearsetCatalog() {
     const revision = dictGetRevision();
-    if (_ecGearsetRows && _ecGearsetRevision === revision) return _ecGearsetRows;
+    const nameIndex = dataGetIndex('nameMap');
+    const hasItems = !!nameIndex && Object.keys(nameIndex).length > 0;
+    if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
+      return _ecGearsetRows;
+    }
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
       const zhSeries = ecGearsetSeriesZh(series);
@@ -172,8 +223,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       const zh = ecGearsetSeriesZh(native);
       if (zh) rows.push({ native, zh });
     }
+    if (hasItems) {
+      const seen = new Set(rows.map(row => row.native));
+      for (const row of inferECGearsetsFromItems(nameIndex)) {
+        if (!seen.has(row.native)) { rows.push(row); seen.add(row.native); }
+      }
+    }
     _ecGearsetRows = rows;
     _ecGearsetRevision = revision;
+    _ecGearsetHadItemIndex = hasItems;
     return rows;
   }
 
@@ -249,13 +307,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const scope = localScope(rootArg);
     const translateText = root => {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      // EC 详情标题将“Ceremonial Scouting”与“Set”拆成两个 span。
+      // 前一 span 只翻译套装名字，避免“仪仗游击套装 套装”。
+      const splitSet = root.tagName === 'H1'
+        && [...(root.querySelectorAll?.('span') || [])]
+          .some(el => /^(?:Set|套装)$/i.test((el.textContent || '').trim()));
       while (walker.nextNode()) {
         const node = walker.currentNode;
         const raw = node.nodeValue || '';
         const zh = ecGearsetDisplayName(raw);
         if (!zh) continue;
         const trimmed = raw.trim();
-        node.nodeValue = raw.replace(trimmed, zh);
+        const display = splitSet && !/ Set$/.test(trimmed) && zh.endsWith('套装')
+          ? zh.slice(0, -2) : zh;
+        node.nodeValue = raw.replace(trimmed, display);
       }
     };
     for (const a of queryIn(scope, 'a[href*="/gearset/"]')) translateText(a);
