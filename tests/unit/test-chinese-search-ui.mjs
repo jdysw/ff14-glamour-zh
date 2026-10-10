@@ -186,6 +186,8 @@ function buildSearchHarness(suggestionsOverride) {
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
     'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
+    'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
+    'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
     seg,
     'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput };',
   ].join('\n');
@@ -696,6 +698,115 @@ try {
       else globalThis.visualViewport = previousView;
     }
   }
+  console.log('\n── M：EC Gearsets 必须提交到原站 GET search，兼容无表单、表单与候选 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const originalLocation = globalThis.location;
+    const navigations = [];
+    globalThis.location = {
+      hostname: 'ffxiv.eorzeacollection.com',
+      pathname: '/gearsets',
+      href: 'https://ffxiv.eorzeacollection.com/gearsets?filter%5Bjob%5D=PLD&page=8',
+      assign(url) { navigations.push(url); },
+    };
+    try {
+      const harness = buildSearchHarness();
+      harness.api.startChineseSearch('ec');
+      const form = new FakeElement('form');
+      const input = new FakeElement('input');
+      input.form = form;
+      input.name = 'search';
+      input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Search...');
+      form.appendChild(input);
+      const ignored = new FakeElement('input');
+      ignored.form = form;
+      ignored.setAttribute('placeholder', 'Filter by head');
+      form.appendChild(ignored);
+      ok('M1 主搜索框在 gearsets 页面识别成功',
+        harness.api.findSearchInput(form) === input);
+      // 站点翻译会把 Search... 改写成 搜索…；主搜索字段必须继续能识别。
+      input.setAttribute('placeholder', '搜索…');
+
+      // 不手动触发 onTablesReady：套装词典不应被 V3 物品数据就绪状态阻塞。
+      input.value = '幻境';
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      eq('M2 V3 未就绪也出现套装中文候选', box?.hidden, false);
+      eq('M3 套装候选显示英文搜索关键词',
+        box?.querySelectorAll('button[data-zhx-index]')[0]?.children[1]?.textContent,
+        'Phantom Vision Fending');
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0],
+        preventDefault() {},
+      });
+      eq('M4 候选点击只导航一次', navigations.length, 1);
+      const selectedUrl = new URL(navigations[0]);
+      eq('M5 用原站 search 参数查询真实英文套装',
+        selectedUrl.searchParams.get('search'), 'Phantom Vision Fending');
+      eq('M6 原有职业筛选保留', selectedUrl.searchParams.get('filter[job]'), 'PLD');
+      eq('M7 换关键词回到第一页', selectedUrl.searchParams.has('page'), false);
+
+      input.value = '御敌';
+      const submit = {
+        target: form, prevented: false, stopped: false,
+        preventDefault() { this.prevented = true; },
+        stopPropagation() { this.stopped = true; },
+      };
+      document.dispatch('submit', submit);
+      eq('M8 表单提交转换中文职能并导航', new URL(navigations[1]).searchParams.get('search'), 'Fending');
+      eq('M9 表单提交阻止原生重复提交', submit.prevented && submit.stopped, true);
+
+      input.value = '幻境';
+      const enter = {
+        target: input, key: 'Enter', prevented: false, stopped: false,
+        preventDefault() { this.prevented = true; },
+        stopPropagation() { this.stopped = true; },
+      };
+      document.dispatch('keydown', enter);
+      eq('M10 回车导航使用原站 search 参数', new URL(navigations[2]).searchParams.get('search'), 'Phantom Vision');
+      eq('M11 回车阻止重复提交', enter.prevented && enter.stopped, true);
+
+      ignored.value = '幻境';
+      document.dispatch('keydown', { target: ignored, key: 'Enter', preventDefault() {} });
+      eq('M12 其他过滤框不能触发套装搜索', navigations.length, 3);
+      input.value = '未知套装';
+      const unknown = { target: input, key: 'Enter', prevented: false, preventDefault() { this.prevented = true; } };
+      document.dispatch('keydown', unknown);
+      eq('M13 未知中文套装不乱转换', navigations.length, 3);
+      eq('M14 未知关键词保留原站处理', unknown.prevented, false);
+
+      // 套装页还可能使用无 form 的动态搜索框，必须同样可靠提交。
+      const independent = new FakeElement('input');
+      independent.setAttribute('type', 'search');
+      independent.setAttribute('placeholder', '搜索…');
+      independent.value = '幻境';
+      const independentEnter = { target: independent, key: 'Enter', preventDefault() {}, stopPropagation() {} };
+      document.dispatch('keydown', independentEnter);
+      eq('M15 无表单搜索框回车也导航', new URL(navigations[3]).searchParams.get('search'), 'Phantom Vision');
+
+      globalThis.location.pathname = '/gearsets/casters';
+      globalThis.location.href = 'https://ffxiv.eorzeacollection.com/gearsets/casters?page=3';
+      independent.value = '幻境';
+      document.dispatch('keydown', independentEnter);
+      eq('M16 职业分类套装页也支持中文搜索', new URL(navigations[4]).pathname, '/gearsets/casters');
+      eq('M17 职业分类搜索参数正确', new URL(navigations[4]).searchParams.get('search'), 'Phantom Vision');
+      globalThis.location.pathname = '/gearset/phantom-vision-fending';
+      independent.value = '幻境';
+      document.dispatch('keydown', independentEnter);
+      eq('M18 单件套装详情页不接管搜索', navigations.length, 5);
+      globalThis.location.pathname = '/glamours';
+      independent.value = '幻境';
+      document.dispatch('keydown', independentEnter);
+      eq('M19 EC 其他页面不走 Gearsets 专用导航', navigations.length, 5);
+    } finally {
+      if (originalLocation === undefined) delete globalThis.location;
+      else globalThis.location = originalLocation;
+    }
+  }
+
   console.log('\n── L：六站输入框隔离 / 搜索能力矩阵 ──');
   for (const site of ['mirapri', 'fc', 'ronka', 'collection', 'ec', 'endcloset']) {
     installDocument();
