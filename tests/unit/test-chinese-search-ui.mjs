@@ -822,7 +822,7 @@ try {
       { zh: '装备靴子', native: 'Official Feet', slot: 4 },
       { zh: '饰品耳环', native: 'Abyssos Earrings of Fending', slot: 9 },
       { zh: '饰品戒指', native: 'Abyssos Ring of Fending', slot: 12 },
-      { zh: '饰品头盔', native: 'Official Head', slot: 0 },
+      { zh: '饰品头盔', native: 'Unrelated Headgear', slot: 0 },
     ];
     try {
       const harness = buildSearchHarness(suggestions);
