@@ -185,11 +185,11 @@ function buildSearchHarness(suggestionsOverride) {
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
-    'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
+    'const suggestByZh = (v,_limit,scope) => {const rows = v === "炎灵" || v === "鸟甲" || v === "装备" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []); if(scope instanceof Set) return rows.filter(r=>scope.has(r.native)); if(typeof scope==="number") return rows.filter(r=>r.slot===scope); return rows;};',
     'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
     'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
     seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput };',
+    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput, ecSearchContext, ecScopedSuggestions, ecScopedNative };',
   ].join('\n');
   try {
     const fn = new Function('__ready', '__suggestions', body);
@@ -804,6 +804,80 @@ try {
     } finally {
       if (originalLocation === undefined) delete globalThis.location;
       else globalThis.location = originalLocation;
+    }
+  }
+
+  console.log('\n── N：EC 鸟甲 / 独立面饰表 / 五大装备部位，智能输入端到端分类 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const oldLocation = globalThis.location;
+    const suggestions = [
+      { zh: '鸟甲飞行', native: 'Flyer Shaffron', slot: 5 },
+      { zh: '鸟甲护具', native: 'Some Non-Barding Headgear', slot: 0 },
+      { zh: '装备头盔', native: 'Official Head', slot: 0 },
+      { zh: '装备长袍', native: 'Official Body', slot: 1 },
+      { zh: '装备手套', native: 'Official Hands', slot: 2 },
+      { zh: '装备长裤', native: 'Official Legs', slot: 3 },
+      { zh: '装备靴子', native: 'Official Feet', slot: 4 },
+    ];
+    try {
+      const harness = buildSearchHarness(suggestions);
+      harness.api.startChineseSearch('ec');
+      for (const cb of harness.ready) cb();
+      const input = new FakeElement('input');
+      input.className = 'vs__search';
+      input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Any head');
+      globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/companion-glamours' };
+      eq('N1 鸟甲页面分类不是通用物品', harness.api.ecSearchContext(input)?.kind, 'barding');
+      eq('N2 候选使用官方 ItemAction 鸟甲集合，排除误含鸟甲二字的头盔',
+        harness.api.ecScopedSuggestions('鸟甲',input).map(r=>r.native).join('|'),'Flyer Shaffron');
+      eq('N3 只输入一个完整鸟甲中文名可得到对应英文名称',
+        harness.api.ecScopedNative('鸟甲飞行',input,false),'Flyer Shaffron');
+      input.value = '鸟甲';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      let box = findSuggestBox(document);
+      eq('N4 鸟甲页输入联想只渲染鸟甲',
+        box?.querySelectorAll('button[data-zhx-index]').map(btn=>btn.children[1]?.textContent).join('|'),
+        'Flyer Shaffron');
+      document.dispatch('pointerdown',{target:box.querySelectorAll('button[data-zhx-index]')[0],preventDefault(){}});
+      eq('N5 选择鸟甲候选派发站点原生 input 事件',input.dispatched.includes('input'),true);
+      globalThis.location.pathname = '/facewear';
+      input.value = '椭圆眼镜';
+      eq('N6 面饰路由强制对应游戏独立 Glasses 表',harness.api.ecSearchContext(input)?.kind,'facewear');
+      const faces=harness.api.ecScopedSuggestions('眼镜',input);
+      ok('N7 中文面饰数据来自 Glasses Sheet',faces.some(row=>row.native==='Oval Spectacles'&&row.zh==='椭圆眼镜'));
+      ok('N8 不会误含头部装备/鸟甲',faces.every(row=>row.zh.includes('眼镜')&&row.native!=='Flyer Shaffron'));
+      eq('N9 面饰精确中文名解析为正确的 EC 原生英文',
+        harness.api.ecScopedNative('椭圆眼镜',input,false),'Oval Spectacles');
+      eq('N10 不把头盔当成面饰候选',harness.api.ecScopedSuggestions('鸟甲',input).length,0);
+      input.value = '椭圆眼镜';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      box=findSuggestBox(document);
+      ok('N11 面饰弹出候选只有独立面饰项目',
+        box?.querySelectorAll('button[data-zhx-index]').every(btn=>btn.children[1]?.textContent.includes('Spectacles')));
+      globalThis.location.pathname = '/gearsets';
+      for (const [enSlot,expectedSlot,expectedName] of [
+        ['head',0,'Official Head'],['body',1,'Official Body'],
+        ['hands',2,'Official Hands'],['legs',3,'Official Legs'],['feet',4,'Official Feet'],
+      ]) {
+        input.setAttribute('placeholder','Any '+enSlot);
+        eq('N 识别 EC '+enSlot+' 的官方装备部位',harness.api.ecSearchContext(input)?.slot,expectedSlot);
+        eq('N EC '+enSlot+' 只保留同部位候选',harness.api.ecScopedSuggestions('装备',input).map(r=>r.native).join('|'),expectedName);
+      }
+      const main = new FakeElement('input');
+      main.setAttribute('placeholder','搜索');
+      eq('N12 Gearsets 普通主搜索不误判为头部槽位',harness.api.ecSearchContext(main),null);
+      eq('N13 Gearsets 主搜索继续使用套装专用中文索引',
+        harness.api.ecScopedSuggestions('幻境',main)[0]?.native,'Phantom Vision Fending');
+      globalThis.location.hostname = 'ff14-fc.com';
+      eq('N14 非 EC 页面不启用分类路由',harness.api.ecSearchContext(input),null);
+    } finally {
+      if (oldLocation === undefined) delete globalThis.location;
+      else globalThis.location = oldLocation;
     }
   }
 
