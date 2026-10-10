@@ -235,6 +235,17 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return rows;
   }
 
+  function ecGearsetDescriptiveName(native) {
+    // 站点的 Hempen <种族> <性别> 是服装搭配组合而非单条官方物品名。
+    // 仅当页面确实出现该英文标题时，用固定语法生成【描述性】译名；
+    // 不为未见过的种族变体创建搜索候选，也不宣称它是国服官方套装名。
+    const match = /^Hempen (Au Ra|Hyur|Elezen|Miqo'te|Lalafell|Roegadyn|Viera|Hrothgar|Auri|Midlander|Highlander|Lalafellin) (Male|Female)$/.exec(native);
+    if (!match) return null;
+    const race = DICT_EC[match[1]];
+    const gender = DICT_EC[match[2]];
+    return race && gender ? race + gender + '贴身衣套装' : null;
+  }
+
   function ecGearsetDisplayName(raw) {
     const text = String(raw || '').trim();
     if (!text || text.length > 110) return null;
@@ -242,8 +253,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const title = source ? text.slice(0, -(source.length + 1)) : text;
     const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
     const row = ecGearsetCatalog().find(r => r.native === bare);
-    if (!row) return null;
-    return row.zh + (source ? ' ' + (DICT_EC[source] || source) : '');
+    const zh = row?.zh || ecGearsetDescriptiveName(bare);
+    return zh ? zh + (source ? ' ' + (DICT_EC[source] || source) : '') : null;
   }
 
   // 经 EC Gearsets 页面/套装详情页核验的搜索别名，不把单件装备译名
