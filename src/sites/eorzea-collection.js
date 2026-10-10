@@ -206,7 +206,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetCatalog() {
     const revision = dictGetRevision();
     const nameIndex = dataGetIndex('nameMap');
-    const hasItems = !!nameIndex && Object.keys(nameIndex).length > 0;
+    const hasItems = !!nameIndex;
     if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
       return _ecGearsetRows;
     }
