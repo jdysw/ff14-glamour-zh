@@ -727,6 +727,19 @@ function bindChineseSearchUi() {
   globalThis.visualViewport?.addEventListener?.('scroll', () => syncSuggestionsOnScroll());
 }
 
+// EC Gearsets 原生路由提交单独处理，避免与其它站点的 GET/POST 表单分支
+// 交叉嵌套；成功时消费事件，失败时由既有站点提交链处理。
+function handleECGearsetsFormSubmit(event, siteId, input, query, selected) {
+  if (siteId !== 'ec') return false;
+  const native = selected?.zh === query ? selected.native : null;
+  if (!submitECGearsetsSearch(input, native)) return false;
+  _selectedSearchRows.delete(input);
+  event.preventDefault();
+  event.stopPropagation();
+  hideSuggestions(true);
+  return true;
+}
+
 function handleChineseSearchSubmit(event, siteId) {
   if (!SEARCH_SITES[siteId]) return;
   const form = event.target;
@@ -738,14 +751,7 @@ function handleChineseSearchSubmit(event, siteId) {
   if (!isChineseSearchQuery(query)) return;
 
   const selected = _selectedSearchRows.get(input);
-  if (siteId === 'ec' && submitECGearsetsSearch(input,
-    selected?.zh === query ? selected.native : null)) {
-    _selectedSearchRows.delete(input);
-    event.preventDefault();
-    event.stopPropagation();
-    hideSuggestions(true);
-    return;
-  }
+  if (handleECGearsetsFormSubmit(event, siteId, input, query, selected)) return;
   const native = selected?.zh === query && selected.native
     ? selected.native
     : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
