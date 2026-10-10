@@ -285,10 +285,18 @@ try {
 // series name appears with or without "Accessories" on cards and detail H1.
 // Use multiple distinct localized jewelry item parts as automatic evidence.
 Object.assign(itemIndex, {
-  'Sea-folk Earrings': '海民耳环',
-  'Sea-folk Necklace': '海民项链',
-  'Sea-folk Bracelet': '海民手镯',
-  'Sea-folk Ring': '海民戒指',
+  'Earrings of the Sea-folk': '海族耳坠',
+  'Collar of the Sea-folk': '海族假领',
+  'Bracelets of the Sea-folk': '海族手环',
+  'Ring of the Sea-folk': '海族戒指',
+  'Occult Earrings of Blood': '力之新月魔耳饰',
+  'Occult Necklace of Blood': '力之新月魔项链',
+  'Occult Bracelet of Blood': '力之新月魔手镯',
+  'Occult Ring of Blood': '力之新月魔戒指',
+  'Occult Earrings of Magic': '魔之新月魔耳饰',
+  'Occult Necklace of Magic': '魔之新月魔项链',
+  'Occult Bracelet of Magic': '魔之新月魔手镯',
+  'Occult Ring of Magic': '魔之新月魔戒指',
   "Courtly Lover's Earrings of Fending": '华美恋人御敌耳坠',
   "Courtly Lover's Choker of Fending": '华美恋人御敌项环',
   "Courtly Lover's Wristlet of Fending": '华美恋人御敌腕饰',
@@ -311,7 +319,7 @@ assert.equal(accessories('Praemagitek Accessories'), '前魔导饰品',
   '已确认系列通过现有词典为 /accessories 详情标题汉化');
 assert.equal(accessories('Alpha Wolf Accessories'), '头狼饰品',
   '已有 Gearsets 专用「头狼套装」译名需改用饰品后缀');
-assert.equal(accessories('Sea-folk Accessories'), '海民饰品',
+assert.equal(accessories('Sea-folk Accessories'), '海族饰品',
   '新饰品系列自动由多件官方饰品中文前缀推导');
 assert.equal(accessories("Courtly Lover's Accessories"), '华美恋人饰品',
   '单个职能的四类饰品可剥离职能结尾，不误当作「御敌饰品」');
@@ -323,10 +331,14 @@ assert.equal(accessories('Arena Accessories'), '斗技饰品',
   'Slaying 强攻饰品应推导中文系列名');
 assert.equal(accessories('Clip-only Accessories'), null,
   '三种耳饰形态不能冒充两个独立的饰品部位');
+assert.equal(accessories('Occult Accessories'), '新月魔饰品',
+  'Blood/Magic 属性型饰品应按验证过的国服前缀推导共用系列');
+assert.equal(accessories('Occult Deep Accessories'), null,
+  '只有两件同部位物品的深层系列不可强行推导未核实名称');
 assert.equal(accessories('Accessories'), null,
   '网站导航的 Accessories 词不能识别为套装系列');
 const inferredAccessories = api.inferECAccessorySeriesFromItems(itemIndex);
-assert.ok(inferredAccessories.some(x => x.native === 'Sea-folk' && x.zh === '海民'),
+assert.ok(inferredAccessories.some(x => x.native === 'Sea-folk' && x.zh === '海族'),
   '多件不同饰品支持系列中文提取');
 assert.ok(!inferredAccessories.some(x => x.native === 'Other'),
   '四件互不相关的中文前缀必须拒绝');
@@ -347,7 +359,7 @@ try {
   api.translateECGearsetNames();
   assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
     'H1 分离的 Accessories 不能重复叠加「饰品饰品」');
-  assert.equal(accessoryLink.nodes[0].nodeValue, '海民饰品 ' + DICT_EC['Dungeon Drop'],
+  assert.equal(accessoryLink.nodes[0].nodeValue, '海族饰品 ' + DICT_EC['Dungeon Drop'],
     '饰品列表及相关套装卡片的链接正文汉化，不改动 href');
   assert.equal(accessoryLink.href, '/accessories/sea-folk');
   api.translateECGearsetNames();
@@ -401,6 +413,13 @@ try {
 // Page existence still requires a matching EC /accessories link.
 const officialAccessories = Object.fromEntries(officialRows);
 const realAccessories = api.inferECAccessorySeriesFromItems(officialAccessories);
+for (const [native, zh] of [
+  ['Sea-folk', '海族'], ['Occult', '新月魔'],
+  ['Bygone Brass', '王国黄铜'], ['Heavyweight', '重量级'],
+]) {
+  assert.equal(realAccessories.find(row => row.native === native)?.zh, zh,
+    native + ' 必须基于仓库真实国服物品表推导，不得仅用虚构数据通过测试');
+}
 assert.ok(realAccessories.length >= 20,
   '国服真实物品库必须支持至少二十个独立饰品系列的高置信推导');
 for (const series of realAccessories.slice(0, 100)) {

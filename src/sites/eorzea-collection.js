@@ -383,12 +383,17 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // Infer a shared game-localized series prefix from independent earrings,
   // neckpieces, bracelets and rings rather than hardcoding every new release.
   const EC_ACCESSORY_ITEM_NAME =
-    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Slaying|Crafting|Gathering))?$/;
+    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Slaying|Crafting|Gathering|Blood|Magic))?$/;
+  // Sea-folk and similar sets put the series after the piece: "Ring of the Sea-folk".
+  const EC_ACCESSORY_INVERTED_NAME =
+    /^(Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Collars?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?) of the (.{2,80})$/;
+  // Only strip prefixes confirmed by the game's localized stat-specific names.
+  const EC_ACCESSORY_STAT_PREFIX = Object.freeze({ Blood: '力之', Magic: '魔之' });
 
   // Multiple earring forms count as ONE real slot, not separate accessories.
   function ecAccessoryItemSlot(part) {
     if (/^(?:Earrings?|Ear Cuffs?|Ear Clips?)$/.test(part)) return 'ears';
-    if (/^(?:Necklaces?|Chokers?|Neckbands?|Necklets?)$/.test(part)) return 'neck';
+    if (/^(?:Necklaces?|Chokers?|Collars?|Neckbands?|Necklets?)$/.test(part)) return 'neck';
     if (/^(?:Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?)$/.test(part)) return 'wrists';
     if (/^Rings?$/.test(part)) return 'rings';
     return null;
@@ -398,12 +403,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const groups = new Map();
     for (const [native, zh] of Object.entries(nameIndex || {})) {
       const match = EC_ACCESSORY_ITEM_NAME.exec(native);
-      if (!match || !/^[\u3400-\u9fff]/u.test(zh)) continue;
-      const slot = ecAccessoryItemSlot(match[2]);
+      const inverted = match ? null : EC_ACCESSORY_INVERTED_NAME.exec(native);
+      if ((!match && !inverted) || !/^[\u3400-\u9fff]/u.test(zh)) continue;
+      const series = match ? match[1] : inverted[2];
+      const slot = ecAccessoryItemSlot(match ? match[2] : inverted[1]);
       if (!slot) continue;
-      let entries = groups.get(match[1]);
-      if (!entries) { entries = new Map(); groups.set(match[1], entries); }
-      entries.set(native, { zh, slot });
+      const stat = match && / of (Blood|Magic)$/.exec(native);
+      const prefix = stat && EC_ACCESSORY_STAT_PREFIX[stat[1]];
+      // "Occult Earrings of Blood" -> "力之新月魔耳饰":
+      // after verifying the stat prefix, compare "新月魔..." across slots.
+      if (stat && !zh.startsWith(prefix)) continue;
+      const localized = stat ? zh.slice(prefix.length) : zh;
+      let entries = groups.get(series);
+      if (!entries) { entries = new Map(); groups.set(series, entries); }
+      entries.set(native, { zh: localized, slot });
     }
     const roleEndings = ['御敌', '制敌', '强袭', '强攻', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
     const rows = [];
