@@ -225,7 +225,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const pattern = /^(.+?) (?:Attire|Armor|Set|Outfit) (\([^()]{1,60}\)|\[[^\]]{1,40}\])$/;
     for (const [item, zh] of Object.entries(nameIndex || {})) {
       const match = pattern.exec(item);
-      if (!match || !/^[\u3400-\u9fff]/u.test(zh)
+      if (!match || !/[\u3400-\u9fff]/u.test(zh)
           || !/(?:套装|装束)$/u.test(zh)) continue;
       const native = match[1] + ' ' + match[2];
       if (!grouped.has(match[1])) grouped.set(match[1], new Map());
@@ -248,7 +248,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const pattern = /^(.+?) (?:Attire|Armor)(?: (\([^()]{1,60}\)|\[[^\]]{1,40}\]))?$/;
     for (const [item, zh] of Object.entries(nameIndex || {})) {
       const match = pattern.exec(item);
-      if (!match || !/^[\u3400-\u9fff]/u.test(zh)
+      if (!match || !/[\u3400-\u9fff]/u.test(zh)
           || !/(?:套装|装束)$/u.test(zh)) continue;
       const native = match[1] + (match[2] ? ' ' + match[2] : '');
       rows.push({ native, zh, provisional: true });
