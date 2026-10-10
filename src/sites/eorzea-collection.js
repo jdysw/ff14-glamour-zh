@@ -188,6 +188,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return row.zh + (source ? ' ' + (DICT_EC[source] || source) : '');
   }
 
+  // 经 EC Gearsets 页面/套装详情页核验的搜索别名，不把单件装备译名
+  // 冒充套装标题。特别是「东方」对应多个套装，用英文公共关键词
+  // Eastern 搜索，不能随机选择一套或把它当成单一套装的正式译名。
+  const EC_GEARSET_SEARCH_ALIASES = Object.freeze([
+    { native: "Loyal Housemaid's", zh: '女仆套装', terms: ['女仆', '女僕', '女佣', '女傭'] },
+    { native: "Beastmaster's", zh: '兽王（兽主）套装', terms: ['兽王', '獸王'] },
+    { native: 'Eastern', zh: '东方系列套装（全部）', terms: ['东方', '東方'] },
+  ]);
+
   function ecGearsetNormalizedZh(raw) {
     return String(raw || '').normalize('NFKC')
       .replace(/[\s·・.,，、'’"（）()[\]【】_-]/gu, '').toLowerCase();
@@ -196,7 +205,17 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetMatchesZh(query) {
     const key = ecGearsetNormalizedZh(query);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
-    return ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    const rows = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    // 已核实的 EC 英文套装名/公共关键词，兼容用户实际输入的俗称与简繁体。
+    // 去重使用英文原生名，避免常见别名与现有国服译名重复展示。
+    for (const alias of EC_GEARSET_SEARCH_ALIASES) {
+      const matches = [alias.zh, ...alias.terms]
+        .some(term => ecGearsetNormalizedZh(term).includes(key));
+      if (matches && !rows.some(row => row.native === alias.native)) {
+        rows.push({ native: alias.native, zh: alias.zh });
+      }
+    }
+    return rows;
   }
 
   // 搜索实际发送的是英文子串：一个中文词若对应多个套装，应寻找所有
