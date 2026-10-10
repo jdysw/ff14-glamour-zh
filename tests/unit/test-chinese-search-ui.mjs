@@ -820,6 +820,9 @@ try {
       { zh: '装备手套', native: 'Official Hands', slot: 2 },
       { zh: '装备长裤', native: 'Official Legs', slot: 3 },
       { zh: '装备靴子', native: 'Official Feet', slot: 4 },
+      { zh: '饰品耳环', native: 'Abyssos Earrings of Fending', slot: 9 },
+      { zh: '饰品戒指', native: 'Abyssos Ring of Fending', slot: 12 },
+      { zh: '饰品头盔', native: 'Official Head', slot: 0 },
     ];
     try {
       const harness = buildSearchHarness(suggestions);
@@ -892,6 +895,23 @@ try {
       eq('N12 Gearsets 普通主搜索不误判为头部槽位',harness.api.ecSearchContext(main),null);
       eq('N13 Gearsets 主搜索继续使用套装专用中文索引',
         harness.api.ecScopedSuggestions('幻境',main)[0]?.native,'Phantom Vision Fending');
+      globalThis.location.pathname = '/accessories';
+      input.setAttribute('placeholder','Search for option');
+      eq('N15 未绑定具体部位的饰品搜索框也只能显示饰品',
+        harness.api.ecSearchContext(input)?.kind, 'accessories');
+      eq('N16 饰品列表使用官方耳颈腕指部位的并集，不会显示普通头盔',
+        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        'Abyssos Earrings of Fending|Abyssos Ring of Fending');
+      input.setAttribute('placeholder','Any earrings');
+      eq('N17 饰品页已绑定耳部的 Vue 输入优先限定耳部',
+        harness.api.ecSearchContext(input)?.kind, 'accessory-slot');
+      eq('N18 饰品耳部候选排除同系列戒指',
+        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        'Abyssos Earrings of Fending');
+      globalThis.location.pathname = '/accessories/mistic-memory';
+      main.value = '饰品';
+      eq('N19 饰品详情页无具体部位的输入也保持饰品范围',
+        harness.api.ecScopedSuggestions('饰品',main).length, 2);
       globalThis.location.hostname = 'ff14-fc.com';
       eq('N14 非 EC 页面不启用分类路由',harness.api.ecSearchContext(input),null);
     } finally {
