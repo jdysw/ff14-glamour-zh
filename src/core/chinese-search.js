@@ -56,8 +56,9 @@ function isECGearsetsSearchInput(input) {
   const meta = [input.getAttribute?.('name'), input.getAttribute?.('id'),
     input.getAttribute?.('placeholder'), input.getAttribute?.('aria-label')]
     .filter(Boolean).join(' ');
-  if (/search by (title|player)|author|username|creator|filter by/i.test(meta)) return false;
-  return /\b(search|keyword)\b/i.test(meta);
+  if (/search by (title|player)|author|username|creator|filter by|作者|玩家|标题|標題/i.test(meta)) return false;
+  // translateECAttrs 会将 "Search..." 翻译为 "搜索…"，识别不能只依赖英文占位符。
+  return /\b(search|keyword)\b/i.test(meta) || /搜索|搜尋|检索|檢索/.test(meta);
 }
 
 function ecGearsetsSearchUrl(native, href) {
