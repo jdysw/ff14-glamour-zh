@@ -26,7 +26,8 @@ function normalizeSearchQuery(value) {
 // （如 /glamours、装备部位 vue-select）继续使用单件装备索引。
 function isECGearsetsPage() {
   const loc = globalThis.location;
-  return /^\/gearsets\/?$/.test(loc?.pathname || '')
+  // 除 /gearsets 外，职业子目录（如 /gearsets/casters）同样是可检索的套装列表。
+  return /^\/gearsets(?:\/[a-z-]+)?\/?$/i.test(loc?.pathname || '')
     && /(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '');
 }
 
