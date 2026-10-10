@@ -273,7 +273,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
     const row = ecGearsetCatalog().find(r => r.native === bare);
     const zh = row?.zh || ecGearsetDescriptiveName(bare);
-    return zh ? zh + (source ? ' ' + (DICT_EC[source] || source) : '') : null;
+    if (!zh) return null;
+    const suffix = source ? ' ' + (DICT_EC[source] || source) : '';
+    return zh + suffix;
   }
 
   // 经 EC Gearsets 页面/套装详情页核验的搜索别名，不把单件装备译名
