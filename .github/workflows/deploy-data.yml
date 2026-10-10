@@ -36,7 +36,16 @@ jobs:
       - name: 数据文件校验（结构完整性）
         run: python3 build/validate-data.py
 
+      - name: 获取权威装备部位数据（FFXIV Item.csv）
+        run: |
+          mkdir -p build/.cache/datamining
+          curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
+            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/en/Item.csv" \
+            --output build/.cache/datamining/en-Item.csv
+
       - name: Assemble site
+        env:
+          FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
         run: python3 .github/deploy/prepare.py
 
       - name: Deploy to Cloudflare Pages
