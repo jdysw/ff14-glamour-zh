@@ -9,7 +9,7 @@
 
 输出（默认 data/v3/——自动生成）：
     manifest.json          schema / version / generated / shared / sites（url+sha256+bytes）
-    <site>/names.tsv       该站语言的名称键 → zh → 候选允许标记 glam（1/0；含染剂回退展开）
+    <site>/names.tsv       该站语言名称键 → zh → 候选 glam(1/0) → 装备部位组(0头/1身/2手/3腿/4脚/5其余)
     <site>/hash.tsv        hash → zh（mirapri/ec/fc）
     <site>/alias.tsv       alias → zh 多值（全角分号拆分；中文键，全站一致）
     <site>/dup.tsv         歧义键 → zh 多值（同键多译；按站语言）
@@ -33,9 +33,11 @@
     python3 build/make-runtime-data.py                 # 输出到 data/v3/
     python3 build/make-runtime-data.py --out site/ff14/v3
 """
+import csv
 import datetime
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -70,6 +72,50 @@ SITE_LANGS = {
     'endcloset': ['ko', 'en', 'ja'],
     'wiki': [],
 }
+
+
+# EquipSlotCategory: 3 Head, 4 Body, 5 Gloves, 7 Legs, 8 Feet。
+# 带头/手/腿一体的连体服（15/16/19/20/21/22/23）按 Body 归类。
+SLOT_GROUP = {3: '0', 4: '1', 5: '2', 7: '3', 8: '4',
+              15: '1', 16: '1', 19: '1', 20: '1', 21: '1', 22: '1', 23: '1'}
+OTHER_SLOT = '5'
+
+
+def load_equipment_slots(csv_file: str):
+    """从权威 en-Item.csv 读取 key → 部位组；文件缺失/损坏时拒绝发布错误分类。"""
+    if not csv_file:
+        return {}
+    if not Path(csv_file).is_file():
+        raise FileNotFoundError(f'装备部位源 CSV 不存在: {csv_file}')
+    result = {}
+    with open(csv_file, encoding='utf-8-sig', newline='') as source:
+        reader = csv.DictReader(source)
+        if not reader.fieldnames or not {'#', 'EquipSlotCategory'}.issubset(reader.fieldnames):
+            raise ValueError('装备部位源 CSV 缺少 # 或 EquipSlotCategory 列')
+        for row in reader:
+            key = row.get('#', '')
+            slot = row.get('EquipSlotCategory', '')
+            if key.isdigit() and slot.isdigit():
+                result[key] = SLOT_GROUP.get(int(slot), OTHER_SLOT)
+    if not result:
+        raise ValueError('装备部位源 CSV 没有有效记录')
+    return result
+
+
+def equipment_slots_by_name(items_text: str, item_slots):
+    """以 canonical 行序匹配原站名称（同键首条胜），无匹配的一律归入「其余」。
+    刻意不对中文/日文装备名称做模糊猜测。
+    """
+    names = {lang: {} for lang in LANGS}
+    for line in items_text.split('\n'):
+        p = _row_parts(line)
+        if not p or len(p) < 5:
+            continue
+        slot = item_slots.get(p[0], OTHER_SLOT)
+        for lang, native in zip(LANGS, (p[2], p[3], p[4])):
+            if native and native not in names[lang]:
+                names[lang][native] = slot
+    return names
 
 
 def sha256_hex(b: bytes) -> str:
@@ -205,14 +251,14 @@ def _join_pairs(pairs):
 
 
 def _join_triples(pairs):
-    return ''.join(f'{k}\t{v}\t{g}\n' for k, v, g in pairs)
+    return ''.join(f'{k}\t{v}\t{g}\t{slot}\n' for k, v, g, slot in pairs)
 
 
 def _join_multi(pairs):
     return ''.join(f'{k}\t' + '\t'.join(v) + '\n' for k, v in pairs)
 
 
-def _mirapri_dye_pairs(names, glams):
+def _mirapri_dye_pairs(names, glams, slot_names):
     """Mirapri 的共享染剂标签使用英文，补齐染剂及其去掉 Dye 的色名。"""
     keys = set()
     for key in names['en']:
@@ -220,28 +266,29 @@ def _mirapri_dye_pairs(names, glams):
             keys.add(key)
             if key[:-4] in names['en']:
                 keys.add(key[:-4])
-    return [(key, names['en'][key], glams['en'].get(key, ''))
+    return [(key, names['en'][key], glams['en'].get(key, ''), slot_names['en'].get(key, OTHER_SLOT))
             for key in names['en'] if key in keys]
 
 
-def _site_name_pairs(site, langs, names, glams):
-    pairs = [(key, value, glams[lang].get(key, ''))
+def _site_name_pairs(site, langs, names, glams, slot_names):
+    pairs = [(key, value, glams[lang].get(key, ''), slot_names[lang].get(key, OTHER_SLOT))
              for lang in langs for key, value in names[lang].items()]
     if site == 'mirapri':
-        seen = {key for key, _, _ in pairs}
-        pairs.extend(row for row in _mirapri_dye_pairs(names, glams) if row[0] not in seen)
+        seen = {row[0] for row in pairs}
+        pairs.extend(row for row in _mirapri_dye_pairs(names, glams, slot_names) if row[0] not in seen)
     return pairs
 
 
-def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text):
+def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names=None):
     """生成 {(site, 文件名): bytes}——含按站语言裁剪。"""
     out = {}
+    slot_names = slot_names or {lang: {} for lang in LANGS}
 
     for site, want in SITE_FILES.items():
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                pairs = _site_name_pairs(site, langs, names, glams)
+                pairs = _site_name_pairs(site, langs, names, glams, slot_names)
                 out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
             elif name == 'dup':
                 pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]
@@ -315,14 +362,23 @@ def main() -> int:
             return 1
 
     print('→ 解析 canonical 数据 ...')
-    names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh = parse_items(CANON_ITEMS.read_text(encoding='utf-8'))
+    items_text = CANON_ITEMS.read_text(encoding='utf-8')
+    names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh = parse_items(items_text)
+    equip_csv = os.environ.get('FF14_EQUIP_SLOTS_CSV', '')
+    try:
+        item_slots = load_equipment_slots(equip_csv)
+    except (OSError, ValueError) as error:
+        print(f'✗ 装备部位数据不可用: {error}')
+        return 1
+    slot_names = equipment_slots_by_name(items_text, item_slots)
+    print(f'  装备部位源 CSV: {len(item_slots):,} 条；未提供时默认为「其余」')
     series_text = CANON_SERIES.read_text(encoding='utf-8')
     acl_text = CANON_ACL.read_text(encoding='utf-8')
     dup_total = sum(len(dup_by_lang[l]) for l in LANGS)
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text)
+    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names)
 
     dict_bytes = _gen_dict_bytes(out_dir)
     if dict_bytes is None:

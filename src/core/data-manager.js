@@ -122,6 +122,19 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return requireFlags && !sawRow ? null : m;
   }
 
+  // names 第四列为 EquipSlotCategory 派生的展示组（0头 1身 2手 3腿 4脚 5其余）。
+  // 旧 V3 文件只有前三列，全部归入其余，绝不从译名猜测分类。
+  function _v3SearchSlots(txt) {
+    const slots = Object.create(null);
+    for (const ln of String(txt || '').split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (p.length < 4 || !p[0] || slots[p[0]] !== undefined) continue;
+      if (/^[0-4]$/.test(p[3])) slots[p[0]] = Number(p[3]);
+    }
+    return slots;
+  }
+
   // V3 数据直接映射为运行时索引；模块内状态由本 IIFE 共享。
   function _applyV3(files) {
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
@@ -147,6 +160,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       _irAliasMap = ali;
       _irDupMap = dup;
       _irGlamMap = glam || Object.create(null);
+      _irSearchSlotByNative = _v3SearchSlots(files.names);
       _irCandidatePolicy = files.candidatePolicy === 1 ? 1 : 0;
       SERIES_TEXT = files.series ? '\n' + files.series : '';
       ACL_CFC_TEXT = files.acl ? '\n' + files.acl : '';
@@ -567,7 +581,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     DATA_VER = '';
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);
-    _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irCandidatePolicy = 0;
+    _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irSearchSlotByNative = null; _irCandidatePolicy = 0;
     _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
   }
@@ -594,6 +608,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
   let _irGlamMap = null;
+  let _irSearchSlotByNative = null; // 源自 V3 names 可选第四列；旧缓存默认其余
   let _irCandidatePolicy = 0;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
@@ -682,6 +697,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
+  // 除前缀外也支持中文装备名中间连续片段；保持允许名单、按站语言映射不变。
+  function _irSearchCollectContains(keys, target, limit, out, excluded) {
+    for (const candidate of keys) {
+      if (out.length >= limit) break;
+      if (candidate !== excluded && !candidate.startsWith(target) && candidate.includes(target)) out.push(candidate);
+    }
+  }
+
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
   const _irStats = { hit: 0, miss: 0 };
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
@@ -756,8 +779,42 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
-  // 智能输入候选：默认（未传 / <= 0）返回全部匹配——「显示所有含输入字的装备」；
-  // 显式传正数 limit 时按上限截断（保留给调用方按需限流的语义）。
+  // 匹配度在每个装备部位内计算：精确 / 正式名前缀 / 正式名包含 /
+  // 别名前缀 / 别名包含；非匹配项返回 -1。
+  function _irSuggestionScore(name, query, kind) {
+    if (name === query) return 0;
+    if (name.startsWith(query)) return kind === 0 ? 1 : 3;
+    if (name.includes(query)) return kind === 0 ? 2 : 4;
+    return -1;
+  }
+
+  // 每个部位设五个有序匹配桶；先采集完整匹配，再进行最终限流，
+  // 否则高优先级部位可能被词典顺序和 limit 提前截断。
+  function _irSuggestionCollect(buckets, query, kind, limit, map) {
+    for (const name of _getIrSearchKeysByKind(kind)) {
+      const score = _irSuggestionScore(name, query, kind);
+      if (score < 0) continue;
+      const native = map[name];
+      if (!native) continue;
+      const group = _irSearchSlotByNative?.[native] ?? 5;
+      const bucket = buckets[group][score];
+      if (bucket.length < limit) bucket.push({ zh: name, native });
+    }
+  }
+
+  function _irSuggestionFlatten(buckets, limit) {
+    const rows = [];
+    for (const bucket of buckets.flat()) {
+      for (const row of bucket) {
+        rows.push(row);
+        if (rows.length >= limit) return rows;
+      }
+    }
+    return rows;
+  }
+
+  // 先按头、身、手、腿、脚、其余；组内按匹配度排序，保持已存在的
+  // 正式名、别名、limit、旧 V3 缓存及六站原生名行为。
   function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
@@ -765,19 +822,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!map) return [];
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
-    const out = [];
-    const exact = map[key];
-    if (exact) out.push({ zh: key, native: exact });
-
-    const canonical = [];
-    _irSearchCollectPrefix(_getIrSearchKeysByKind(0), key, max, canonical, exact ? key : '');
-    for (const candidate of canonical) out.push({ zh: candidate, native: map[candidate] });
-    if (out.length < max) {
-      const aliases = [];
-      _irSearchCollectPrefix(_getIrSearchKeysByKind(1), key, max - out.length, aliases, exact ? key : '');
-      for (const candidate of aliases) out.push({ zh: candidate, native: map[candidate] });
-    }
-    return out.slice(0, max);
+    const buckets = Array.from({ length: 6 }, () => Array.from({ length: 5 }, () => []));
+    _irSuggestionCollect(buckets, key, 0, max, map);
+    _irSuggestionCollect(buckets, key, 1, max, map);
+    return _irSuggestionFlatten(buckets, max);
   }
 
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
