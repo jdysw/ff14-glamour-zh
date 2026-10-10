@@ -145,6 +145,66 @@ for (const [en, zh] of [
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }
 
+// EC often elides "Attire" / "Set" before parenthesized variants.
+// Audit all official Chinese outfit packages from the real TSV, not hardcoded
+// one-off translations. These are runtime data fixtures, not new manual entries.
+const variants = [...officialRows.entries()]
+  .map(([native, zh]) => ({
+    native, zh,
+    hit: /^(.+?) (Attire|Armor|Set|Outfit) (\\([^)]{1,60}\\)|\\[[^\\]]{1,40}\\])$/.exec(native),
+  }))
+  .filter(row => row.hit && /(?:套装|装束)$/u.test(row.zh));
+assert.ok(variants.length >= 50, '国服 TSV 必须包含足够多的括号变体套装测试样本');
+for (const { native, zh, hit } of variants) {
+  itemIndex[native] = zh;
+  const ec = hit[1] + ' ' + hit[3];
+  assert.equal(tr(ec), zh, 'EC 省略套装物品类型后也要使用国服准确名称：' + ec);
+  assert.equal(tr(ec + ' Set'), zh, '括号变体附带 Set 后缀：' + ec);
+}
+for (const [ec, native, expected] of [
+  ['Wintertide (Culottes)', 'Wintertide Attire (Culottes)', '冬季宽松直筒裤套装'],
+  ['Wintertide (Sheath Skirt)', 'Wintertide Attire (Sheath Skirt)', '冬季紧身短裙套装'],
+  ['Collegiate (Slacks)', 'Collegiate Attire (Slacks)', '学院长裤套装'],
+  ['Yakaku (Koshita)', 'Yakaku Attire (Koshita)', '夜鹤装束'],
+  ['Rainbow (Justaucorps)', 'Rainbow Set (Justaucorps)', '虹布紧身上衣套装'],
+  ['Valentione Rose (Dress)', 'Valentione Rose Attire (Dress)', '玫瑰花恋人礼服套装'],
+]) {
+  assert.equal(officialRows.get(native), expected, '独立官方数据检查：' + native);
+  assert.equal(tr(ec), expected, '必须命中官方译名而不是机械拼接：' + ec);
+  assert.equal(tr(ec + ' Crafted Glamour'), expected + ' 制作幻化',
+    '套装目录卡片附带来源文本：' + ec);
+}
+assert.equal(tr('Wintertide (Unknown Variant)'), null,
+  '没有国服套装物品的变体不应凭空生成');
+assert.equal(tr('Completely New (Culottes)'), null, '不能按括号关键词猜造不存在的套装');
+assert.equal(api.suggestECGearsetsByZh('冬季宽松直筒裤').length, 0,
+  '官方物品记录不等于 EC 已存在的套装链接，不预生成无证据搜索候选');
+
+const variantH1 = {
+  tagName: 'H1', nodes: [
+    { nodeValue: 'Wintertide (Culottes)' }, { nodeValue: '套装' },
+  ],
+};
+const variantLink = { nodes: [{ nodeValue: 'Wintertide (Sheath Skirt)' }] };
+const variantOldLocation = globalThis.location;
+try {
+  globalThis.location = { pathname: '/gearset/wintertide', hostname: 'ffxiv.eorzeacollection.com' };
+  scope.anchors = [variantLink];
+  scope.headings = [variantH1];
+  api.translateECGearsetNames();
+  assert.equal(variantH1.nodes.map(n => n.nodeValue).join(''), '冬季宽松直筒裤套装',
+    '套装详情页独立 Set 标记不重复');
+  assert.equal(variantLink.nodes[0].nodeValue, '冬季紧身短裙套装',
+    'Related Sets 卡片翻译不能遗漏另一种括号变体');
+  api.translateECGearsetNames();
+  assert.equal(variantH1.nodes.map(n => n.nodeValue).join(''), '冬季宽松直筒裤套装',
+    '反复 DOM 更新保持幂等');
+} finally {
+  scope.anchors = [];
+  scope.headings = [];
+  globalThis.location = variantOldLocation;
+}
+
 // 2026-10 用户实测的生产／采集漏译。数据直接取仓库真实国服 TSV，
 // 不在测试里伪造国服译名，也不手动登记套装目录来绕开自动推导。
 for (const [title, names, prefix, expected] of [
