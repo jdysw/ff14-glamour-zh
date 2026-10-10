@@ -216,6 +216,29 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return derived;
   }
 
+  // Game outfit packages use "Attire (Variant)" while EC shows "(Variant)"
+  // with the package type removed. Two distinct officially named variants of
+  // the same series give strong evidence for a shared native series search.
+  // Suggestions are site searches, never invented direct /gearset links.
+  function ecGearsetOfficialVariantRows(nameIndex) {
+    const grouped = new Map();
+    const pattern = /^(.+?) (?:Attire|Armor|Set|Outfit) (\([^()]{1,60}\)|\[[^\[\]]{1,40}\])$/;
+    for (const [item, zh] of Object.entries(nameIndex || {})) {
+      const match = pattern.exec(item);
+      if (!match || !/^[\u3400-\u9fff]/u.test(zh)
+          || !/(?:套装|装束)$/u.test(zh)) continue;
+      const native = match[1] + ' ' + match[2];
+      if (!grouped.has(match[1])) grouped.set(match[1], new Map());
+      grouped.get(match[1]).set(native, zh);
+    }
+    const rows = [];
+    for (const variants of grouped.values()) {
+      if (variants.size < 2) continue;
+      for (const [native, zh] of variants) rows.push({ native, zh });
+    }
+    return rows;
+  }
+
   function ecGearsetKnownRows() {
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
@@ -236,7 +259,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetAppendInferredRows(rows, nameIndex) {
     if (!nameIndex) return;
     const seen = new Set(rows.map(row => row.native));
-    for (const row of inferECGearsetsFromItems(nameIndex)) {
+    const derived = [...inferECGearsetsFromItems(nameIndex), ...ecGearsetOfficialVariantRows(nameIndex)];
+    for (const row of derived) {
       if (seen.has(row.native)) continue;
       rows.push(row);
       seen.add(row.native);
