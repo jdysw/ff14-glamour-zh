@@ -378,6 +378,67 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return zh + suffix;
   }
 
+  // EC /accessories is a *series* catalogue, separate from /gearsets.
+  // Its titles omit the slot and often omit "Accessories" on the cards.
+  // Infer a shared game-localized series prefix from independent earrings,
+  // neckpieces, bracelets and rings rather than hardcoding every new release.
+  const EC_ACCESSORY_ITEM_NAME =
+    /^(.+?) (Earrings?|Ear Cuffs?|Ear Clips?|Necklaces?|Chokers?|Neckbands?|Necklets?|Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?|Rings?)(?: of (?:Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering))?$/;
+
+  function inferECAccessorySeriesFromItems(nameIndex) {
+    const groups = new Map();
+    for (const [native, zh] of Object.entries(nameIndex || {})) {
+      const match = EC_ACCESSORY_ITEM_NAME.exec(native);
+      if (!match || !/^[\u3400-\u9fff]/u.test(zh)) continue;
+      let entries = groups.get(match[1]);
+      if (!entries) { entries = new Map(); groups.set(match[1], entries); }
+      entries.set(native, { zh, part: match[2] });
+    }
+    const roleEndings = ['御敌', '制敌', '强袭', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
+    const rows = [];
+    for (const [native, entries] of groups) {
+      if (entries.size < 3 || new Set([...entries.values()].map(x => x.part)).size < 2) continue;
+      const names = [...new Set([...entries.values()].map(x => x.zh))];
+      const prefix = ecGearsetCommonZhPrefix(names);
+      const role = roleEndings.find(x => prefix.endsWith(x));
+      const base = role ? prefix.slice(0, -role.length) : prefix;
+      if (base.length < 2 || base.length > 18 || /(?:套装|装束)$/u.test(base)) continue;
+      rows.push({ native, zh: base });
+    }
+    return rows;
+  }
+
+  let _ecAccessoryRows = null;
+  let _ecAccessoryRevision = -1;
+  let _ecAccessoryHasData = false;
+  function ecAccessorySeriesZh(native) {
+    const known = ecGearsetSeriesZh(native);
+    if (known && /[\u3400-\u9fff]/u.test(known)) {
+      return known.replace(/(?:装备)?(?:套装|装束)$/u, '') || known;
+    }
+    const revision = dictGetRevision();
+    const nameIndex = dataGetIndex('nameMap');
+    const hasData = !!nameIndex;
+    if (!_ecAccessoryRows || revision !== _ecAccessoryRevision || hasData !== _ecAccessoryHasData) {
+      _ecAccessoryRows = new Map(inferECAccessorySeriesFromItems(nameIndex)
+        .map(row => [row.native, row.zh]));
+      _ecAccessoryRevision = revision;
+      _ecAccessoryHasData = hasData;
+    }
+    return _ecAccessoryRows.get(native) || null;
+  }
+
+  function ecAccessoryDisplayName(raw) {
+    const text = String(raw || '').trim();
+    if (!text || text.length > 110) return null;
+    const source = EC_GEARSET_SOURCES.find(value => text.endsWith(' ' + value));
+    const title = source ? text.slice(0, -source.length - 1) : text;
+    const native = title.endsWith(' Accessories') ? title.slice(0, -12) : title;
+    const series = ecAccessorySeriesZh(native);
+    if (!series) return null;
+    return series + '饰品' + (source ? ' ' + (DICT_EC[source] || source) : '');
+  }
+
   // 经 EC Gearsets 页面/套装详情页核验的搜索别名，不把单件装备译名
   // 冒充套装标题。特别是「东方」对应多个套装，用英文公共关键词
   // Eastern 搜索，不能随机选择一套或把它当成单一套装的正式译名。
@@ -436,38 +497,39 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return ecGearsetMatchesZh(query);
   }
 
-  function ecGearsetTranslateTitleNode(node, setNodes) {
+  function ecGearsetTranslateTitleNode(node, suffixNodes, type) {
     const raw = node.nodeValue || '';
-    const zh = ecGearsetDisplayName(raw);
+    const zh = type === 'accessories' ? ecAccessoryDisplayName(raw) : ecGearsetDisplayName(raw);
     if (!zh) return;
     const title = raw.trim();
-    if (setNodes.length && !title.endsWith(' Set') && zh.endsWith('套装')) {
-      // Keep the website's original accent styling on the separate Set suffix.
-      node.nodeValue = raw.replace(title, zh.slice(0, -2));
+    const suffix = type === 'accessories' ? '饰品' : '套装';
+    const hasInlineSuffix = type === 'accessories'
+      ? title.endsWith(' Accessories') : title.endsWith(' Set');
+    if (suffixNodes.length && !hasInlineSuffix && zh.endsWith(suffix)) {
+      node.nodeValue = raw.replace(title, zh.slice(0, -suffix.length));
       return;
     }
     node.nodeValue = raw.replace(title, zh);
-    // "...装束" already denotes an outfit; an extra "Set" is redundant.
-    if (setNodes.length && zh.endsWith('装束')) {
-      for (const suffix of setNodes) suffix.nodeValue = '';
+    if (suffixNodes.length && zh.endsWith('装束')) {
+      for (const trailing of suffixNodes) trailing.nodeValue = '';
     }
   }
 
-  function ecGearsetTranslateTitleRoot(root) {
+  function ecGearsetTranslateTitleRoot(root, type = 'gearset') {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
-    // Real EC h1: <span>Phantom Vision Fending<span>Set</span></span>,
-    // plus legacy <b>Hempen ...</b> Set. Match actual text nodes, not span text.
-    const setNodes = nodes.filter(n => /^(?:Set|套装)$/iu.test((n.nodeValue || '').trim()));
+    const suffixPattern = type === 'accessories' ? /^(?:Accessories|饰品)$/iu : /^(?:Set|套装)$/iu;
+    const suffixNodes = nodes.filter(n => suffixPattern.test((n.nodeValue || '').trim()));
     for (const node of nodes) {
-      // "Set" is a UI suffix, not another gearset title.
-      if (!setNodes.includes(node)) ecGearsetTranslateTitleNode(node, setNodes);
+      if (!suffixNodes.includes(node)) ecGearsetTranslateTitleNode(node, suffixNodes, type);
     }
-    // Also process partial h1 updates that generic trimECNode deliberately skips.
+    // Preserve separate nested suffix styling and idempotence on repeated scans.
     if (root.tagName === 'H1') {
-      for (const suffix of setNodes) {
-        if (suffix.nodeValue?.trim() === 'Set') suffix.nodeValue = suffix.nodeValue.replace('Set', '套装');
+      const en = type === 'accessories' ? 'Accessories' : 'Set';
+      const zh = type === 'accessories' ? '饰品' : '套装';
+      for (const trailing of suffixNodes) {
+        if (trailing.nodeValue?.trim() === en) trailing.nodeValue = trailing.nodeValue.replace(en, zh);
       }
     }
   }
@@ -484,8 +546,14 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function translateECGearsetNames(rootArg) {
     const scope = localScope(rootArg);
     for (const a of ecGearsetTitleRoots(scope, 'a[href*="/gearset/"]')) ecGearsetTranslateTitleRoot(a);
-    if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')) {
+    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/accessories/"]')) {
+      ecGearsetTranslateTitleRoot(a, 'accessories');
+    }
+    const path = globalThis.location?.pathname || '';
+    if (/^\/gearset\/[^/]+\/?$/.test(path)) {
       for (const h1 of ecGearsetTitleRoots(scope, 'h1')) ecGearsetTranslateTitleRoot(h1);
+    } else if (/^\/accessories\/[^/]+\/?$/.test(path)) {
+      for (const h1 of ecGearsetTitleRoots(scope, 'h1')) ecGearsetTranslateTitleRoot(h1, 'accessories');
     }
   }
 
@@ -511,7 +579,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     // Gearset H1 has split name/Set nodes: generic trEC would append 套装 to
     // known series BEFORE the dedicated structure-aware pass can inspect it.
     // Only the Gearsets title translator is allowed to touch this H1.
-    if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')
+    if (/^\/(?:gearset|accessories)\/[^/]+\/?$/.test(globalThis.location?.pathname || '')
         && p?.closest?.('h1')) return;
     const next = trEC(raw);
     if (next !== raw) {
@@ -546,7 +614,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const old = document.title;
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
-    const translated = parts.map((part) => ecGearsetDisplayName(part) || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    const translated = parts.map((part) => ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
+      || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }
 
