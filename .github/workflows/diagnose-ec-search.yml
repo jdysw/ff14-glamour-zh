@@ -1,0 +1,41 @@
+name: Diagnose EC Gearsets search markup (temporary)
+on:
+  push:
+    branches: [fix/ec-gearsets-search-143]
+    paths:
+      - '.github/workflows/diagnose-ec-search.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect public Eorzea Collection Gearsets search form
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request,html,re
+          from html.parser import HTMLParser
+          url="https://ffxiv.eorzeacollection.com/gearsets"
+          try:
+              req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"})
+              with urllib.request.urlopen(req,timeout=25) as rsp:
+                  page=rsp.read(3_000_000).decode("utf-8","replace")
+                  print("STATUS",rsp.status,"BYTES",len(page),"URL",rsp.url)
+              class Inspector(HTMLParser):
+                  def handle_starttag(self,tag,attrs):
+                      if tag in ("form","input","button","script"):
+                          d=dict(attrs)
+                          if tag=="script":
+                              if d.get("src"):print("JS",repr(d.get("src")[:170]))
+                              return
+                          if tag=="input" or tag=="form" or "search" in str(d).lower() or "filter" in str(d).lower():
+                              print("MARKUP",tag,{k:v for k,v in d.items() if k not in ["value"]})
+              Inspector().feed(page)
+              for token in ["Search...", "gearsets", "search", "filter", "applyFilters"]:
+                  idx=page.lower().find(token.lower())
+                  if idx!=-1: print("SNIPPET",token,repr(page[max(0,idx-350):idx+480]))
+          except Exception as e:
+              print("FETCH_ERROR",repr(e))
+          PY
