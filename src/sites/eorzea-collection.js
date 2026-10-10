@@ -1,6 +1,6 @@
 /* @phase15-module-order:sites/eorzea-collection */
 /* @phase15-order-link:sites/eorzea-collection<-core/dictionary */
-import { DICT_EC } from '../core/dictionary.js';
+import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
 import { createObserver } from '../core/observer.js';
@@ -84,86 +84,144 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // EC /gearsets 标题不是单件物品：按系列 + 职能合成，不能交给 resolveByName
   // 的装备卡片链（否则找不到译名，还可能将套装链接改写到灰机物品页）。
   // 系列译名取自 dict-ec.json，只有经确认的系列参与转换，未知名称保留英文。
+  // Gearsets 的英文标题不是单件物品名。只收录在 EC Gearsets 页面确认存在、
+  // 且译名可由国服物品表核验的系列；未知套装仍保留英文，避免猜译。
+  // 为避免把不存在的角色套装列为搜索候选，每个系列单独声明实际职能。
   const EC_GEARSET_ROLES = ['Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting', 'Healing'];
-  const EC_GEARSET_ROLE_SERIES = new Set(['Phantom Vision', "Vana'dielian", 'Praemagitek']);
+  const EC_GEARSET_ROLE_SERIES = [
+    ['Phantom Vision', EC_GEARSET_ROLES],
+    ["Vana'dielian", EC_GEARSET_ROLES],
+    ['Praemagitek', EC_GEARSET_ROLES],
+    ['Mistwake', EC_GEARSET_ROLES],
+    ['Mistic Memory', EC_GEARSET_ROLES],
+    ["War Cloud's", ['Fending', 'Maiming']],
+    ["Prishe's", ['Striking']],
+    ['Mayakov', ['Scouting', 'Aiming']],
+    ['Orastery', ['Casting', 'Healing']],
+  ];
   const EC_GEARSET_SINGLE_SERIES = new Set([
     "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
     'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
     'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
     'Graffiti Neotunic',
+    "Fallen's", "En Fortune-teller's", "Realm-roamer's", "Vibran Princess's",
+    'Galatea', 'Fuath', 'Hope [F]', 'Hope [M]', "Gaffgarion's", "Ovelia's",
+    "Ramza's", 'Star Captain', 'Star Pilot', 'Alternative', 'Maritime',
+    'Alpha Wolf', 'Eagleclaw', 'Star Tech Crafting', 'Star Tech Gathering',
   ]);
-  // 此站新增系列尚无物品总表对应名称；使用明确的套装展示译名，不混入装备词典。
-  const EC_GEARSET_NAME_EXTRAS = { 'Graffiti Neotunic': '涂鸦新式上衣套装' };
+  // 这些译名核对自 data/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
+  // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
+  const EC_GEARSET_NAME_EXTRAS = Object.freeze({
+    'Graffiti Neotunic': '涂鸦新式上衣套装',
+    'Mistwake': '雾迹',
+    'Mistic Memory': '雾忆',
+    "War Cloud's": '沃·克劳德',
+    "Prishe's": '普利修',
+    'Mayakov': '马雅科夫',
+    'Orastery': '口之院',
+    "Fallen's": '堕落套装',
+    "En Fortune-teller's": '恩城预言师套装',
+    "Realm-roamer's": '维度漫游者套装',
+    "Vibran Princess's": '威布拉公主套装',
+    'Galatea': '伽拉忒亚装备套装',
+    'Fuath': '水妖装束',
+    'Hope [F]': '希望套装【女】',
+    'Hope [M]': '希望套装【男】',
+    "Gaffgarion's": '加夫加利昂装备套装',
+    "Ovelia's": '奥薇莉亚装备套装',
+    "Ramza's": '拉姆萨装备套装',
+    'Star Captain': '宇宙舰长套装',
+    'Star Pilot': '宇宙驾驶员套装',
+    'Alternative': '另类装备套装',
+    'Maritime': '滨海套装',
+    'Alpha Wolf': '头狼套装',
+    'Eagleclaw': '雕爪套装',
+    'Star Tech Crafting': '星际科技巧匠套装',
+    'Star Tech Gathering': '星际科技大地套装',
+  });
+  // 分类后缀仅用于解析卡片同节点文本；不允许把来源名误识别为套装名。
   const EC_GEARSET_SOURCES = [
-    'Battle Content Gear', 'Raid Gear', 'Dungeon Drop', 'Quest Reward',
-    'Mogstation Set', 'Token Exchange', 'Crafted Glamour',
+    'Battle Content Gear', 'Other Content Gear', 'Grand Company Gear',
+    'Seasonal Event Gear', 'Job Artifact Armor', 'Tomestones Exchange',
+    'Scrips Exchange', 'Achievement Reward', 'Gold Saucer Prize',
+    'Crafted Glamour', 'Crafted Sets', 'Dungeon Drop', 'Trial Drop',
+    'Raid Gear', 'Token Exchange', 'Quest Reward', 'Mogstation Set',
+    'Promotional Set', 'PVP Gear', 'Bought in Shop',
   ];
 
   function ecGearsetSeriesZh(en) {
     return EC_GEARSET_NAME_EXTRAS[en] || DICT_EC[en] || null;
   }
 
-  function ecGearsetDisplayName(raw) {
-    const text = String(raw || '').trim();
-    if (!text || text.length > 110) return null;
-    // 部分页面在同一文本节点拼接了来源标签，先剥离以便系列解析。
-    const source = EC_GEARSET_SOURCES.find(s => text.endsWith(' ' + s));
-    const title = source ? text.slice(0, -(source.length + 1)) : text;
-    const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
-    let zh = null;
-    for (const en of EC_GEARSET_ROLE_SERIES) {
-      if (!bare.startsWith(en + ' ')) continue;
-      const role = bare.slice(en.length + 1);
-      if (EC_GEARSET_ROLES.includes(role)) {
-        zh = ecGearsetSeriesZh(en) + DICT_EC[role] + '套装';
-        break;
-      }
-    }
-    if (!zh && EC_GEARSET_SINGLE_SERIES.has(bare)) zh = ecGearsetSeriesZh(bare);
-    if (!zh) return null;
-    const translatedSource = source ? ' ' + (DICT_EC[source] || source) : '';
-    return zh + translatedSource;
-  }
-
-  // 将套装的中文展示名解析为站内英文搜索词；仅在 /gearsets 使用。
-  // 单词片段（「御敌」「幻境」）、组合片段（「幻境意象御敌」）与完整套装名皆可解析。
-  // 优先系列 / 职能词边界，不以字符级 LCS 拼出英文词中碎片。
-  function resolveECGearsetSearch(query) {
-    const q = String(query || '').trim().replace(/[ \t\u00a0]+/g, ' ');
-    if (q.length < 2 || !/[\u3400-\u9fff]/u.test(q)) return null;
-    const key = q.replace(/套装$/u, '').trim();
-    const role = EC_GEARSET_ROLES.find(en => key.includes(DICT_EC[en]));
-    const rest = role ? key.replace(DICT_EC[role], '').trim() : key;
-    if (!rest && role) return role;
-    const allSeries = [...EC_GEARSET_ROLE_SERIES, ...EC_GEARSET_SINGLE_SERIES];
-    const hits = allSeries.filter(en => {
-      const zh = ecGearsetSeriesZh(en);
-      if (!zh) return false;
-      const base = zh.replace(/套装$/u, '');
-      return base.includes(rest);
-    });
-    if (hits.length !== 1) return null; // 多个不同系列不能随意选一个英文名
-    const en = hits[0];
-    if (role && !EC_GEARSET_ROLE_SERIES.has(en)) return null;
-    return en + (role ? ' ' + role : '');
-  }
-
-  function suggestECGearsetsByZh(query) {
-    const q = String(query || '').trim();
-    if (q.length < 2 || !/[\u3400-\u9fff]/u.test(q)) return [];
+  // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
+  let _ecGearsetRows = null;
+  let _ecGearsetRevision = -1;
+  function ecGearsetCatalog() {
+    const revision = dictGetRevision();
+    if (_ecGearsetRows && _ecGearsetRevision === revision) return _ecGearsetRows;
     const rows = [];
-    for (const en of EC_GEARSET_ROLE_SERIES) {
-      for (const role of EC_GEARSET_ROLES) {
-        const native = en + ' ' + role;
-        const zh = ecGearsetDisplayName(native);
-        if (zh?.includes(q)) rows.push({ zh, native });
+    for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
+      const zhSeries = ecGearsetSeriesZh(series);
+      if (!zhSeries) continue;
+      for (const role of roles) {
+        const zhRole = DICT_EC[role];
+        if (zhRole) rows.push({ native: series + ' ' + role, zh: zhSeries + zhRole + '套装' });
       }
     }
     for (const native of EC_GEARSET_SINGLE_SERIES) {
-      const zh = ecGearsetDisplayName(native);
-      if (zh?.includes(q)) rows.push({ zh, native });
+      const zh = ecGearsetSeriesZh(native);
+      if (zh) rows.push({ native, zh });
     }
+    _ecGearsetRows = rows;
+    _ecGearsetRevision = revision;
     return rows;
+  }
+
+  function ecGearsetDisplayName(raw) {
+    const text = String(raw || '').trim();
+    if (!text || text.length > 110) return null;
+    const source = EC_GEARSET_SOURCES.find(s => text.endsWith(' ' + s));
+    const title = source ? text.slice(0, -(source.length + 1)) : text;
+    const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
+    const row = ecGearsetCatalog().find(r => r.native === bare);
+    if (!row) return null;
+    return row.zh + (source ? ' ' + (DICT_EC[source] || source) : '');
+  }
+
+  function ecGearsetNormalizedZh(raw) {
+    return String(raw || '').normalize('NFKC')
+      .replace(/[\s·・.,，、'’"（）()[\]【】_-]/gu, '').toLowerCase();
+  }
+
+  function ecGearsetMatchesZh(query) {
+    const key = ecGearsetNormalizedZh(query);
+    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
+    return ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+  }
+
+  // 搜索实际发送的是英文子串：一个中文词若对应多个套装，应寻找所有
+  // 英文标题共同的「完整词序列」，而不是随机选一个套装或拼接单词碎片。
+  function ecGearsetCommonNative(rows) {
+    if (!rows.length) return null;
+    if (rows.length === 1) return rows[0].native;
+    const tokens = rows[0].native.split(' ');
+    let best = '';
+    for (let len = tokens.length; len >= 1; len--) {
+      for (let i = 0; i + len <= tokens.length; i++) {
+        const candidate = tokens.slice(i, i + len).join(' ');
+        const isCommon = rows.every(row => (' ' + row.native + ' ').includes(' ' + candidate + ' '));
+        if (isCommon && candidate.length > best.length) best = candidate;
+      }
+    }
+    return best || null;
+  }
+
+  function resolveECGearsetSearch(query) {
+    return ecGearsetCommonNative(ecGearsetMatchesZh(query));
+  }
+
+  function suggestECGearsetsByZh(query) {
+    return ecGearsetMatchesZh(query);
   }
 
   // Gearsets 与 Related Sets 卡片的链接必须继续指向 /gearset/<slug>；

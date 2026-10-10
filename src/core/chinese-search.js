@@ -34,6 +34,9 @@ function resolveSearchNative(query, gearsets = false) {
   if (gearsets) {
     const gearset = resolveECGearsetSearch(query);
     if (gearset) return gearset;
+    // 多个套装命中却没有安全的英文公共词时，交给候选列表选择；
+    // 不能回退到无关的单件物品索引，随意改写用户的套装查询。
+    if (suggestECGearsetsByZh(query).length > 0) return null;
   }
   return resolveByZh(query) || resolvePartialByZh(query);
 }
@@ -393,7 +396,7 @@ function showSuggestions(input) {
   if (!rows.length) {
     const message = document.createElement('div');
     message.className = 'zhx-suggest-empty';
-    message.textContent = '未找到对应装备';
+    message.textContent = isECGearsetsPage() ? '未找到对应套装' : '未找到对应装备';
     message.setAttribute('role', 'status');
     _suggestBox.setAttribute('role', 'status');
     _suggestBox.appendChild(message);
