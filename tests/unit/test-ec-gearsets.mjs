@@ -35,7 +35,7 @@ const itemIndex = Object.create(null);
 const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
   '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
-  doc, { SHOW_TEXT: 4 }, () => scope, mockQuery);
+  doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery);
 
 const tr = api.ecGearsetDisplayName;
 assert.equal(tr('Phantom Vision Fending'), '幻境意象御敌套装');
