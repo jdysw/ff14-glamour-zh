@@ -354,7 +354,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     // Some EC titles add possessive 's (Royal Seneschal's) while the
     // official game package omits it (Royal Seneschal Attire).
     if (native.endsWith("'s")) {
-      return ecGearsetOfficialPackageZh(native.slice(0, -2), nameIndex);
+      const withoutPossessive = ecGearsetOfficialPackageZh(native.slice(0, -2), nameIndex);
+      if (withoutPossessive) return withoutPossessive;
     }
     // The site may elide "Far" (Eastern Socialite's vs Far Eastern
     // Socialite's); only apply this to an already observed Gearsets title.
