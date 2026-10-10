@@ -32,7 +32,7 @@ const doc = {
 const mockQuery = (_root, selector) => selector.includes('/accessories/') ? scope.accessoryAnchors
   : selector.startsWith('a[href') ? scope.anchors : selector === 'h1' ? scope.headings : [];
 let dictRevision = 0;
-const itemIndex = Object.create(null);
+let itemIndex = Object.create(null);
 const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
   '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, ecAccessoryDeepStatSeriesZh, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
@@ -430,18 +430,27 @@ assert.ok(realAccessories.length >= 20,
   '国服真实物品库必须支持至少二十个独立饰品系列的高置信推导');
 assert.equal(api.ecAccessoryDeepStatSeriesZh('Occult Deep', officialAccessories), '超新月魔',
   'Deep 描述性名称必须由真实国服物品表中的两个属性版本共同支持');
-// 2026-10 EC 饰品首页实页系列名；对全页而非某个用户案例做汉化覆盖回归。
-for (const [en, zh] of [
-  ["Beastmaster's", '兽主'], ['Praemagitek', '前魔导'],
-  ['Sea-folk', '海族'], ['Bygone Brass', '王国黄铜'],
-  ["Courtly Lover's", '宫廷爱人'], ['Heavyweight', '重量级'],
-  ['Mistwake', '雾迹'], ['Star Tech', '星际科技'],
-  ['Occult', '新月魔'], ['Occult Deep', '超新月魔'],
-  ['Alpha Wolf', '头狼'], ["En Fortune-teller's", '恩城预言师'],
-  ["Realm-roamer's", '维度漫游者'], ['Mistic Memory', '雾忆'],
-]) {
-  assert.equal(api.ecAccessoryDisplayName(en + ' Accessories'), zh + '饰品',
-    'EC 饰品首页已出现系列必须能在完整国服物品表加载后汉化：' + en);
+// 2026-10 EC 饰品首页实页系列名：用完整国服数据模拟 V3 数据就绪。
+// 先前的轻量 itemIndex 仅包含精心构造的单测夹具，不能用它冒充正式数据。
+const accessoryFixtureIndex = itemIndex;
+itemIndex = officialAccessories;
+dictRevision++;
+try {
+  for (const [en, zh] of [
+    ["Beastmaster's", '兽主'], ['Praemagitek', '前魔导'],
+    ['Sea-folk', '海族'], ['Bygone Brass', '王国黄铜'],
+    ["Courtly Lover's", '宫廷爱人'], ['Heavyweight', '重量级'],
+    ['Mistwake', '雾迹'], ['Star Tech', '星际科技'],
+    ['Occult', '新月魔'], ['Occult Deep', '超新月魔'],
+    ['Alpha Wolf', '头狼'], ["En Fortune-teller's", '恩城预言师'],
+    ["Realm-roamer's", '维度漫游者'], ['Mistic Memory', '雾忆'],
+  ]) {
+    assert.equal(api.ecAccessoryDisplayName(en + ' Accessories'), zh + '饰品',
+      'EC 饰品首页已出现系列必须能在完整国服物品表加载后汉化：' + en);
+  }
+} finally {
+  itemIndex = accessoryFixtureIndex;
+  dictRevision++;
 }
 for (const series of realAccessories.slice(0, 100)) {
   assert.ok(series.zh.length >= 2 && !/(?:套装|装束)$/u.test(series.zh),
