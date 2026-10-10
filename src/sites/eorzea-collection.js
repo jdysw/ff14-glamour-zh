@@ -371,6 +371,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       // Check actual text nodes, not spans: the outer span includes both strings.
       const setNodes = nodes.filter(n => /^(?:Set|套装)$/iu.test((n.nodeValue || '').trim()));
       for (const node of nodes) {
+        // "Set" is a separate UI suffix, never another gearset title.
+        // Otherwise its dictionary translation "套装" would itself be stripped.
+        if (setNodes.includes(node)) continue;
         const raw = node.nodeValue || '';
         const zh = ecGearsetDisplayName(raw);
         if (!zh) continue;
