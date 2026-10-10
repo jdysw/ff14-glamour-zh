@@ -14,7 +14,7 @@ const start = source.indexOf('  const EC_GEARSET_ROLES =');
 const end = source.indexOf('  // 用户产出的内容：绝不翻译', start);
 assert.ok(start >= 0 && end > start, 'EC Gearsets 源区段必须存在');
 
-const scope = { anchors: [], headings: [] };
+const scope = { anchors: [], accessoryAnchors: [], headings: [] };
 const doc = {
   createTreeWalker(element) {
     const nodes = element.nodes || (element.textNode ? [element.textNode] : []);
@@ -29,11 +29,12 @@ const doc = {
     };
   },
 };
-const mockQuery = (_root, selector) => selector.startsWith('a[href') ? scope.anchors : selector === 'h1' ? scope.headings : [];
+const mockQuery = (_root, selector) => selector.includes('/accessories/') ? scope.accessoryAnchors
+  : selector.startsWith('a[href') ? scope.anchors : selector === 'h1' ? scope.headings : [];
 let dictRevision = 0;
 const itemIndex = Object.create(null);
 const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
-  '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
+  '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
   doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery);
 
@@ -278,6 +279,107 @@ try {
   scope.anchors = [];
   scope.headings = [];
   globalThis.location = variantOldLocation;
+}
+
+// The EC /accessories catalogue is separate from Gearsets. The English
+// series name appears with or without "Accessories" on cards and detail H1.
+// Use multiple distinct localized jewelry item parts as automatic evidence.
+Object.assign(itemIndex, {
+  'Sea-folk Earrings': '海民耳环',
+  'Sea-folk Necklace': '海民项链',
+  'Sea-folk Bracelet': '海民手镯',
+  'Sea-folk Ring': '海民戒指',
+  "Courtly Lover's Earrings of Fending": '华美恋人御敌耳坠',
+  "Courtly Lover's Choker of Fending": '华美恋人御敌项环',
+  "Courtly Lover's Wristlet of Fending": '华美恋人御敌腕饰',
+  "Courtly Lover's Ring of Fending": '华美恋人御敌戒指',
+  'Other Earrings of Fending': '不同主题御敌耳环',
+  'Other Necklace of Fending': '无关款式御敌项链',
+  'Other Bracelet of Fending': '不一致御敌手镯',
+  'Other Ring of Fending': '杂项御敌戒指',
+});
+dictRevision++;
+const accessories = api.ecAccessoryDisplayName;
+assert.equal(accessories('Praemagitek Accessories'), '前魔导饰品',
+  '已确认系列通过现有词典为 /accessories 详情标题汉化');
+assert.equal(accessories('Alpha Wolf Accessories'), '头狼饰品',
+  '已有 Gearsets 专用「头狼套装」译名需改用饰品后缀');
+assert.equal(accessories('Sea-folk Accessories'), '海民饰品',
+  '新饰品系列自动由多件官方饰品中文前缀推导');
+assert.equal(accessories("Courtly Lover's Accessories"), '华美恋人饰品',
+  '单个职能的四类饰品可剥离职能结尾，不误当作「御敌饰品」');
+assert.equal(accessories("Courtly Lover's Crafted Sets"), '华美恋人饰品 制作套装',
+  '系列卡片名称与获取方式同节点也能译');
+assert.equal(accessories('Other Accessories'), null,
+  '不同系列装备没有中文共同前缀时不应猜造译名');
+assert.equal(accessories('Accessories'), null,
+  '网站导航的 Accessories 词不能识别为套装系列');
+const inferredAccessories = api.inferECAccessorySeriesFromItems(itemIndex);
+assert.ok(inferredAccessories.some(x => x.native === 'Sea-folk' && x.zh === '海民'),
+  '多件不同饰品支持系列中文提取');
+assert.ok(!inferredAccessories.some(x => x.native === 'Other'),
+  '四件互不相关的中文前缀必须拒绝');
+
+const oldAccLocation = globalThis.location;
+try {
+  globalThis.location = { pathname: '/accessories/praemagitek', hostname: 'ffxiv.eorzeacollection.com' };
+  const accessoryH1 = {
+    tagName: 'H1',
+    nodes: [{ nodeValue: 'Praemagitek' }, { nodeValue: 'Accessories' }],
+  };
+  const accessoryLink = {
+    href: '/accessories/sea-folk',
+    nodes: [{ nodeValue: 'Sea-folk Dungeon Drop' }],
+  };
+  scope.headings = [accessoryH1];
+  scope.accessoryAnchors = [accessoryLink];
+  api.translateECGearsetNames();
+  assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
+    'H1 分离的 Accessories 不能重复叠加「饰品饰品」');
+  assert.equal(accessoryLink.nodes[0].nodeValue, '海民饰品 地下城掉落',
+    '饰品列表及相关套装卡片的链接正文汉化，不改动 href');
+  assert.equal(accessoryLink.href, '/accessories/sea-folk');
+  api.translateECGearsetNames();
+  assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
+    '饰品 H1 多次 DOM 扫描后保持幂等');
+  const nested = {
+    nodeType: 1,
+    closest: selector => selector === 'h1' ? accessoryH1 : null,
+  };
+  scope.headings = [];
+  api.translateECGearsetNames(nested);
+  assert.equal(accessoryH1.nodes.map(n => n.nodeValue).join(''), '前魔导饰品',
+    '饰品 H1 局部更新可回溯标题祖先');
+
+  globalThis.location.pathname = '/accessories';
+  const list = { href: '/accessories/courtly-lovers', nodes: [{ nodeValue: "Courtly Lover's Crafted Sets" }] };
+  scope.accessoryAnchors = [list];
+  api.translateECGearsetNames();
+  assert.equal(list.nodes[0].nodeValue, '华美恋人饰品 制作套装',
+    '饰品首页卡片自动显示国服系列中文');
+  globalThis.location.pathname = '/gearsets';
+  const unrelated = { nodes: [{ nodeValue: "Courtly Lover's Crafted Sets" }] };
+  scope.accessoryAnchors = [];
+  scope.anchors = [unrelated];
+  api.translateECGearsetNames();
+  assert.equal(unrelated.nodes[0].nodeValue, "Courtly Lover's Crafted Sets",
+    '不可把饰品系列错译成 Gearsets 装备套装');
+} finally {
+  scope.anchors = [];
+  scope.accessoryAnchors = [];
+  scope.headings = [];
+  globalThis.location = oldAccLocation;
+}
+
+// Check inference against the actual official dataset, not just synthetic rows.
+// Page existence still requires a matching EC /accessories link.
+const officialAccessories = Object.fromEntries(officialRows);
+const realAccessories = api.inferECAccessorySeriesFromItems(officialAccessories);
+assert.ok(realAccessories.length >= 20,
+  '国服真实物品库必须支持至少二十个独立饰品系列的高置信推导');
+for (const series of realAccessories.slice(0, 100)) {
+  assert.ok(series.zh.length >= 2 && !/(?:套装|装束)$/u.test(series.zh),
+    '真实饰品系列使用中文基础系列名，而非既有 Gearsets 套装名');
 }
 
 // 2026-10 用户实测的生产／采集漏译。数据直接取仓库真实国服 TSV，
