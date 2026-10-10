@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const source = fs.readFileSync(new URL('../../tools/manual-coverage-audit/search-diagnostics.js', import.meta.url), 'utf8');
@@ -134,6 +137,23 @@ const serialized = JSON.stringify(await next.api.exportState());
 assert.ok(!serialized.includes('super-secret'));
 await next.api.clear();
 assert.equal(next.api.getSummary().sessions, 0, 'user can wipe all search records');
+
+// Search-only exports are valid input to the existing offline report generator.
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ff14-search-audit-'));
+try {
+  const inputPath = path.join(temp, 'search-only.json');
+  fs.writeFileSync(inputPath, JSON.stringify({
+    format: 'zhx-manual-audit-v2', createdAt: new Date().toISOString(),
+    pages: {}, baselines: {}, settings: {}, searchAudit: await api.exportState(),
+  }));
+  execFileSync(process.execPath, [fileURLToPath(new URL('../../tools/manual-coverage-audit/generate-report.mjs', import.meta.url)), inputPath, temp], { stdio: 'pipe' });
+  const report = fs.readFileSync(path.join(temp, 'ff14-审计报告-v1.1.md'), 'utf8');
+  assert.ok(report.includes('## 中文搜索诊断'), 'search-only report renders diagnostic timeline');
+  const summary = JSON.parse(fs.readFileSync(path.join(temp, 'ff14-审计汇总-v1.1.json'), 'utf8'));
+  assert.ok(summary.searchDiagnostics.events > 0, 'search-only summary reports recorded events');
+} finally {
+  fs.rmSync(temp, { recursive: true, force: true });
+}
 
 assert.ok(installer.includes('zhx-search-audit-v1'), 'installer bundles search diagnostics');
 assert.ok(installer.includes('@version      1.2.0'), 'installer metadata upgraded');
