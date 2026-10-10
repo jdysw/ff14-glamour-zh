@@ -412,7 +412,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   let _ecAccessoryRevision = -1;
   let _ecAccessoryHasData = false;
   function ecAccessorySeriesZh(native) {
-    const known = ecGearsetSeriesZh(native);
+    // DICT_EC also contains UI labels like "Other" and "Browse All"; they
+    // must never be mistaken for verified accessory series names.
+    const verified = EC_GEARSET_SINGLE_SERIES.has(native)
+      || EC_GEARSET_ROLE_SERIES.some(([series]) => series === native);
+    const known = verified ? ecGearsetSeriesZh(native) : null;
     if (known && /[\u3400-\u9fff]/u.test(known)) {
       return known.replace(/(?:装备)?(?:套装|装束)$/u, '') || known;
     }
