@@ -33,7 +33,7 @@ const mockQuery = (_root, selector) => selector.startsWith('a[href') ? scope.anc
 let dictRevision = 0;
 const itemIndex = Object.create(null);
 const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
-  '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems };')(
+  '\nreturn { ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
   doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery);
 
@@ -144,6 +144,48 @@ for (const [en, zh] of [
 ]) {
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }
+
+// Full-source category audit: do not validate a tiny handpicked set while
+// omitting the hundreds of official outfit packages. The English-to-Chinese
+// fixtures below are copied from the actual 50k-row game dataset at runtime.
+const allOutfits = [...officialRows.entries()].filter(([native, zh]) =>
+  /^.+? (?:Attire|Armor)(?: (?:\([^()]{1,60}\)|\[[^\]]{1,40}\]))?$/.test(native)
+  && /(?:套装|装束)$/u.test(zh));
+assert.ok(allOutfits.length > 450,
+  '国服物品表至少应有 450 个可作为套装搜索候选的英文衣装/防具包');
+for (const [native, zh] of allOutfits) itemIndex[native] = zh;
+dictRevision++;
+const officialOutfitRows = api.ecGearsetOfficialOutfitRows(itemIndex);
+assert.ok(officialOutfitRows.length >= allOutfits.length,
+  '通用分类算法覆盖所有与国服官方数据匹配的 Attire/Armor 物品');
+for (const [name, zh] of [
+  ["Antecedent's Attire", '血盟女士套装'],
+  ["Head Engineer's Attire", '首席机械师套装'],
+  ["Scion Striker's Attire", '血盟拳手套装'],
+  ["Gaia's Attire", '盖娅服装套装'],
+  ['Uraeus Attire (Coat)', '圣蜥蜴革外套套装'],
+  ['Wool Attire (Suspenders)', '呢绒背带衬衫套装'],
+]) {
+  assert.equal(officialRows.get(name), zh, '国服原始记录必须支持例证：' + name);
+  const native = name.replace(/ (?:Attire|Armor)(?= |$)/, '');
+  assert.ok(officialOutfitRows.some(row => row.native === native && row.zh === zh
+    && row.provisional === true), '单款／单套衣装可以提供标明待确认的候选：' + native);
+  assert.equal(tr(native), zh, '实际 EC 标题如果与官方包名一致应正确汉化：' + native);
+}
+assert.ok(!officialOutfitRows.some(row => row.native === 'Sake'),
+  'Sake Set 等家具物品不能假冒可穿戴 Gearset 候选');
+assert.ok(!officialOutfitRows.some(row => row.native === 'Toy Cooking'),
+  '非服装类 Set 必须被排除');
+assert.ok(!officialOutfitRows.some(row => row.native === 'Heavy Iron'),
+  '无套装／装束中文后缀的普通防具不能进入搜索');
+assert.equal(api.resolveECGearsetSearch('首席机械师'), "Head Engineer's",
+  '单款国服套装名输入后可直接转换为英文系列搜索');
+assert.ok(api.suggestECGearsetsByZh('血盟女士').some(row => row.native === "Antecedent's"
+  && row.provisional), '宽泛官方目录标识未核验 EC 页面');
+assert.equal(tr("Royal Seneschal's"), officialRows.get('Royal Seneschal Attire') || null,
+  'EC 添加所有格的套装标题可以对照不含所有格的官方 Attire 名称');
+assert.equal(api.resolveECGearsetSearch('女仆'), "Loyal Housemaid's",
+  '广义官方包候选不能挤掉已在 EC 实测的女仆专用别名');
 
 // EC often elides "Attire" / "Set" before parenthesized variants.
 // Audit all official Chinese outfit packages from the real TSV, not hardcoded
