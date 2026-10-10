@@ -322,12 +322,12 @@ const manText = JSON.stringify(man);
 {
   const world = makeWorld();
   const dm = buildDM(world);
-  const items = { candidatePolicy: 1, names: '日文头盔\\t中文头盔\\t1\\t0\\n日文长袍\\t中文长袍\\t1\\t1\\n日文戒指\\t中文戒指\\t1\\t5\\n' };
+  const items = { candidatePolicy: 1, names: '日文头盔\t中文头盔\t1\t0\n日文长袍\t中文长袍\t1\t1\n日文戒指\t中文戒指\t1\t5\n' };
   eq('B1b 带装备分类列的 V3 正常应用', dm._applyV3(items), true);
   eq('B1c 能识别头部类别', dm._peek().slots['日文头盔'], 0);
   eq('B1d 能识别身体类别', dm._peek().slots['日文长袍'], 1);
   eq('B1e 其余装备不需要存额外映射', dm._peek().slots['日文戒指'], undefined);
-  eq('B1f 旧 V3 无分类列仍可应用', dm._applyV3({candidatePolicy: 1, names: '旧装备\\t中文旧装备\\t1\\n'}), true);
+  eq('B1f 旧 V3 无分类列仍可应用', dm._applyV3({candidatePolicy: 1, names: '旧装备\t中文旧装备\t1\n'}), true);
   eq('B1g 旧缓存不继承前一次部位数据', dm._peek().slots['日文头盔'], undefined);
 }
 
