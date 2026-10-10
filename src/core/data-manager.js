@@ -581,7 +581,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     DATA_VER = '';
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);
-    _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irCandidatePolicy = 0;
+    _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irSearchSlotByNative = null; _irCandidatePolicy = 0;
     _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
   }
