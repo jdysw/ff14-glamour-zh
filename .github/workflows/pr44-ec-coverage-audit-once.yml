@@ -1,0 +1,30 @@
+name: PR44 EC Gearsets source coverage audit (one-time)
+on:
+  push:
+    branches:
+      - feat/ec-gearsets-auto-translate-143
+    paths:
+      - .github/workflows/pr44-ec-coverage-audit-once.yml
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run TSV-based coverage audit
+        run: |
+          set -euo pipefail
+          python3 tools/audit-ec-gearsets.py --report docs/ec-gearsets-coverage-report.md
+          test -s docs/ec-gearsets-coverage-report.md
+          sed -n '1,100p' docs/ec-gearsets-coverage-report.md
+      - name: Save report on PR branch and remove this workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/pr44-ec-coverage-audit-once.yml
+          git add docs/ec-gearsets-coverage-report.md
+          git commit -m "docs(ec): publish official item naming coverage audit"
+          git push origin HEAD:refs/heads/feat/ec-gearsets-auto-translate-143
