@@ -824,12 +824,19 @@ try {
     try {
       const harness = buildSearchHarness(suggestions);
       harness.api.startChineseSearch('ec');
-      for (const cb of harness.ready) cb();
       const input = new FakeElement('input');
       input.className = 'vs__search';
       input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Search for option');
+      globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/facewear' };
+      input.value = '椭圆眼镜';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      eq('N0 面饰独立 Glasses 数据不依赖 V3 网络成功也可以出现中文候选',
+        findSuggestBox(document)?.hidden, false);
+      for (const cb of harness.ready) cb();
       input.setAttribute('placeholder', 'Any head');
-      globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/companion-glamours' };
+      globalThis.location.pathname = '/companion-glamours';
       eq('N1 鸟甲页面分类不是通用物品', harness.api.ecSearchContext(input)?.kind, 'barding');
       eq('N2 候选使用官方 ItemAction 鸟甲集合，排除误含鸟甲二字的头盔',
         harness.api.ecScopedSuggestions('鸟甲',input).map(r=>r.native).join('|'),'Flyer Shaffron');
