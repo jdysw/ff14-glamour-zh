@@ -222,7 +222,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   // Suggestions are site searches, never invented direct /gearset links.
   function ecGearsetOfficialVariantRows(nameIndex) {
     const grouped = new Map();
-    const pattern = /^(.+?) (?:Attire|Armor|Set|Outfit) (\([^()]{1,60}\)|\[[^\[\]]{1,40}\])$/;
+    const pattern = /^(.+?) (?:Attire|Armor|Set|Outfit) (\([^()]{1,60}\)|\[[^\]]{1,40}\])$/;
     for (const [item, zh] of Object.entries(nameIndex || {})) {
       const match = pattern.exec(item);
       if (!match || !/^[\u3400-\u9fff]/u.test(zh)
