@@ -185,7 +185,7 @@ function buildSearchHarness(suggestionsOverride) {
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
-    'const suggestByZh = (v,_limit,scope) => {const rows = v === "炎灵" || v === "鸟甲" || v === "装备" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []); if(scope instanceof Set) return rows.filter(r=>scope.has(r.native)); if(typeof scope==="number") return rows.filter(r=>r.slot===scope); return rows;};',
+    'const suggestByZh = (v,_limit,scope) => {const rows = v === "炎灵" || v === "鸟甲" || v === "装备" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : __suggestions.filter(r => r.zh.includes(v))); if(scope instanceof Set) return rows.filter(r=>scope.has(r.native)); if(typeof scope==="number") return rows.filter(r=>r.slot===scope); return rows;};',
     'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
     'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
     seg,
@@ -862,7 +862,7 @@ try {
           harness.api.facewearNatives.has(btn.children[1]?.textContent)));
       globalThis.location.pathname = '/gearsets';
       for (const [enSlot,expectedSlot,expectedName] of [
-        ['head',0,'Official Head'],['body',1,'Official Body'],
+        ['head',0,'Some Non-Barding Headgear|Official Head'],['body',1,'Official Body'],
         ['hands',2,'Official Hands'],['legs',3,'Official Legs'],['feet',4,'Official Feet'],
       ]) {
         input.setAttribute('placeholder','Any '+enSlot);
