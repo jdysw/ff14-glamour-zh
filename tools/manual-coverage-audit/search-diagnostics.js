@@ -213,9 +213,9 @@
       ['compositionstart', onComposition], ['compositionend', onComposition],
       ['submit', onSubmit], ['pointerdown', onSelect], ['click', onSelect],
     ]) document.addEventListener(type, fn, true);
-    window.addEventListener('pagehide', () => { logEvent('pagehide'); enqueueSave(true); }, true);
-    window.addEventListener('pageshow', () => { logEvent('pageshow'); }, true);
-    window.addEventListener('popstate', () => logEvent('popstate'), true);
+    window.addEventListener('pagehide', () => { logEvent('pagehide', { url: queryInfo(location.href) }); enqueueSave(true); }, true);
+    window.addEventListener('pageshow', () => { logEvent('pageshow', { url: queryInfo(location.href) }); }, true);
+    window.addEventListener('popstate', () => logEvent('popstate', { url: queryInfo(location.href) }), true);
     try {
       resourceWatcher = new PerformanceObserver(list => {
         for (const item of list.getEntries()) onResource(item);
@@ -240,7 +240,7 @@
       } catch { state = empty(); }
       if (state.enabled && allowed()) {
         if (!activeSession()) state.sessions.unshift({ startedAt: now(), endedAt: null, events: [] });
-        bind(); logEvent('page-load', { resumed: true });
+        bind(); logEvent('page-load', { resumed: true, url: queryInfo(location.href) });
       }
       notify();
     })();
@@ -254,7 +254,7 @@
       state.sessions.unshift({ startedAt: now(), endedAt: null, events: [] });
       state.sessions = state.sessions.slice(0, MAX_SESSIONS);
     }
-    bind(); logEvent('start', { path: currentPath() });
+    bind(); logEvent('start', { url: queryInfo(location.href) });
     enqueueSave(true); notify();
     return true;
   }
