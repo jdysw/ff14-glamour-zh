@@ -38,6 +38,52 @@ function isECGearsetsPage() {
     && /(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '');
 }
 
+// EC intelligent inputs are scoped by page purpose or explicit equipment slot.
+// The specialty lists come from official ItemAction and Glasses game data.
+function ecSearchContext(input) {
+  const loc = globalThis.location;
+  if (!/(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '')) return null;
+  const path = loc?.pathname || '';
+  if (/^\/companion-glamours(?:\/|$)/i.test(path)) return { kind: 'barding' };
+  if (/^\/facewear(?:\/|$)/i.test(path)) return { kind: 'facewear' };
+  // Slot-scoped Vue selects, not the free-text Gearsets search box.
+  if (!/\bvs__search\b/.test(String(input?.className || ''))) return null;
+  const hint = [
+    input?.getAttribute?.('placeholder'),
+    input?.getAttribute?.('aria-label'),
+    input?.getAttribute?.('data-slot'),
+    input?.getAttribute?.('name'),
+    input?.closest?.('[data-slot]')?.getAttribute?.('data-slot'),
+  ].filter(Boolean).join(' ');
+  const slots = [
+    /\b(?:head|headwear|headgear|helmet)\b/i,
+    /\b(?:body|chest|chestpiece)\b/i,
+    /\b(?:hands?|gloves?)\b/i,
+    /\b(?:legs?|pants|trousers)\b/i,
+    /\b(?:feet|foot|boots?|shoes?)\b/i,
+  ];
+  const slot = slots.findIndex(pattern => pattern.test(hint));
+  return slot < 0 ? null : { kind: 'slot', slot };
+}
+
+function ecScopedSuggestions(query, input) {
+  const context = ecSearchContext(input);
+  if (context?.kind === 'facewear') return EC_FACEWEAR_ROWS.filter(row => row.zh.includes(query));
+  if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
+  if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot);
+  return isECGearsetsPage() && !/\bvs__search\b/.test(String(input?.className || ''))
+    ? suggestECGearsetsByZh(query) : suggestByZh(query);
+}
+
+// Only an exact or a single unambiguous in-category name can be converted
+// without choosing the explicit suggestion.
+function ecScopedNative(query, input, allowPartial) {
+  const rows = ecScopedSuggestions(query, input);
+  const exact = rows.filter(row => row.zh === query);
+  if (exact.length === 1) return exact[0].native;
+  return allowPartial && rows.length === 1 ? rows[0].native : null;
+}
+
 function resolveSearchNative(query, gearsets = false) {
   if (gearsets) {
     const gearset = resolveECGearsetSearch(query);
@@ -428,7 +474,7 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = isECGearsetsPage() ? suggestECGearsetsByZh(query) : suggestByZh(query);
+  const rows = ecScopedSuggestions(query, input);
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -628,9 +674,12 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
     const shown = input.value;
     const query = normalizeSearchQuery(shown);
     if (query.length < 2 || !isChineseSearchQuery(query)) return false;
+    const context = ecSearchContext(input);
     const native = selectedNative
-      || (isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
-      || resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
+      || (context ? ecScopedNative(query, input, allowPartial) : null)
+      || (!context && isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
+      || (!context ? resolveByZh(query) : null)
+      || (!context && allowPartial ? resolvePartialByZh(query) : null);
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
     restoreStandaloneDisplay(input, shown, native);
@@ -762,9 +811,11 @@ function handleChineseSearchSubmit(event, siteId) {
 
   const selected = _selectedSearchRows.get(input);
   if (handleECGearsetsFormSubmit(event, siteId, input, query, selected)) return;
+  const context = siteId === 'ec' ? ecSearchContext(input) : null;
   const native = selected?.zh === query && selected.native
     ? selected.native
-    : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
+    : context ? ecScopedNative(query, input, true)
+      : resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
   _selectedSearchRows.delete(input);
   // 套装页优先系列/职能片段映射；其余站点仍以物品总表 + 公共子串兜底。
   if (!native || native === query) return;
