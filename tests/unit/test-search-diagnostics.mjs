@@ -126,6 +126,8 @@ const beforeNavigation = api.getSummary().events;
 const next = harness('/gearsets?search=Phantom%20Vision');
 await next.api.init();
 assert.equal(next.api.getSummary().enabled, true, 'opt-in recording resumes after navigation');
+assert.equal((await next.api.exportState()).sessions[0].events.find(e => e.type === 'page-load')?.url?.query?.search,
+  'Phantom Vision', 'resumed page load captures actual native search URL');
 assert.ok(next.api.getSummary().events >= beforeNavigation, 'records preserved across navigation');
 assert.equal(next.api.getSummary().sessions, 2, 'new session kept, old session retained');
 const serialized = JSON.stringify(await next.api.exportState());
