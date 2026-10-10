@@ -122,6 +122,19 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return requireFlags && !sawRow ? null : m;
   }
 
+  // names 第四列为 EquipSlotCategory 派生的展示组（0头 1身 2手 3腿 4脚 5其余）。
+  // 旧 V3 文件只有前三列，全部归入其余，绝不从译名猜测分类。
+  function _v3SearchSlots(txt) {
+    const slots = Object.create(null);
+    for (const ln of String(txt || '').split('\n')) {
+      if (!ln) continue;
+      const p = ln.split('\t');
+      if (p.length < 4 || !p[0] || slots[p[0]] !== undefined) continue;
+      if (/^[0-4]$/.test(p[3])) slots[p[0]] = Number(p[3]);
+    }
+    return slots;
+  }
+
   // V3 数据直接映射为运行时索引；模块内状态由本 IIFE 共享。
   function _applyV3(files) {
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
@@ -147,6 +160,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       _irAliasMap = ali;
       _irDupMap = dup;
       _irGlamMap = glam || Object.create(null);
+      _irSearchSlotByNative = _v3SearchSlots(files.names);
       _irCandidatePolicy = files.candidatePolicy === 1 ? 1 : 0;
       SERIES_TEXT = files.series ? '\n' + files.series : '';
       ACL_CFC_TEXT = files.acl ? '\n' + files.acl : '';
@@ -594,6 +608,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   let _irDupMap = null;     // 重名键（同键多译）: key → zh[]（含首行=nameMap 现值，按行序） // NOSONAR
   let _irGlamMap = null;
+  let _irSearchSlotByNative = null; // 源自 V3 names 可选第四列；旧缓存默认其余
   let _irCandidatePolicy = 0;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
@@ -764,8 +779,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
-  // 统一候选排序：精确 → 正式名前缀 → 正式名包含 → 别名前缀 → 别名包含。
-  // V3 索引继续延迟生成；同时限制最终行数，避免大词条无限增长。
+  // 先按头、身、手、腿、脚、其余；分类内沿用精确、正式名前缀、
+  // 正式名包含、别名前缀、别名包含的匹配优先级。
+  // 完整扫描后再截断 limit，避免候选过多时高优先级装备被提前丢弃。
   function suggestByZh(zh, limit = 0) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
@@ -773,18 +789,35 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!map) return [];
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
-    const matches = [];
-    const exact = map[key];
-    if (exact) matches.push(key);
-    const canonical = _getIrSearchKeysByKind(0);
-    const aliases = _getIrSearchKeysByKind(1);
-    _irSearchCollectPrefix(canonical, key, max, matches, key);
-    _irSearchCollectContains(canonical, key, max, matches, key);
-    if (matches.length < max) {
-      _irSearchCollectPrefix(aliases, key, max, matches, key);
-      _irSearchCollectContains(aliases, key, max, matches, key);
+    const buckets = Array.from({ length: 6 }, () => Array.from({ length: 5 }, () => []));
+    const add = (name, score) => {
+      const native = map[name];
+      if (!native) return;
+      const group = _irSearchSlotByNative?.[native] ?? 5;
+      const bucket = buckets[group][score];
+      if (bucket.length < max) bucket.push({ zh: name, native });
+    };
+    if (map[key]) add(key, 0);
+    for (const name of _getIrSearchKeysByKind(0)) {
+      if (name === key) continue;
+      if (name.startsWith(key)) add(name, 1);
+      else if (name.includes(key)) add(name, 2);
     }
-    return matches.slice(0, max).map(name => ({ zh: name, native: map[name] }));
+    for (const name of _getIrSearchKeysByKind(1)) {
+      if (name === key) continue;
+      if (name.startsWith(key)) add(name, 3);
+      else if (name.includes(key)) add(name, 4);
+    }
+    const rows = [];
+    for (const group of buckets) {
+      for (const bucket of group) {
+        for (const row of bucket) {
+          rows.push(row);
+          if (rows.length >= max) return rows;
+        }
+      }
+    }
+    return rows;
   }
 
   function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
