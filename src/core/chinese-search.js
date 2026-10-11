@@ -500,7 +500,7 @@ function appendSuggestionBatch() {
     zh.textContent = row.zh;
     const native = document.createElement('span');
     native.className = 'zhx-suggest-native';
-    native.textContent = row.native + (row.provisional ? ' · EC 结果待确认' : '');
+    native.textContent = row.native + (row.provisional ? ' · EC 结果待确认' : row.descriptive ? ' · 描述性译名' : '');
     button.append(zh, native);
     _suggestBox.appendChild(button);
   }
