@@ -50,7 +50,7 @@ ok('A1 策略与站点适配器各自拥有唯一锚点', nStart === 1 && nEnd =
 // Phase 9：适配器 boot/pageshow 会触达站点函数与 safe——全部以桩注入（记录调用）
 const STUB_NAMES = [
   'startMirapri', 'startItems', 'startEC', 'startWiki', 'startFC', 'startRonka', 'startACL',
-  'translatePage', 'applyItemZh', 'translateECPage', 'bindECPieceTiles', 'translateFCPage',
+  'translatePage', 'applyItemZh', 'translateECPage', 'translateECTitle', 'bindECPieceTiles', 'translateFCPage',
   'translateFCTitle', 'fixFCMenu', 'bindFCBanners', 'translateRonkaPage', 'translateRonkaTitle',
   'translateACLPage', 'translateACLTitle', 'injectWikiButton',
   'startEndCloset', 'translateEndClosetPage', 'translateEndClosetTitle',
