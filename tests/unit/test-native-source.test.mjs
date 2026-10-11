@@ -366,6 +366,14 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     assert.equal(events.at(-1).origin, 'network');
     assert.ok(requests > afterFirst);
 
+    const beforeWarmLoad = requests;
+    dataInvalidate();
+    await ensureTables();
+    assert.equal(dataGetStatus().state, 'ready');
+    assert.equal(dataGetStatus().origin, 'cache', '相同版本优先复用已验证的 GM 文件缓存');
+    assert.equal(requests, beforeWarmLoad + 1,
+      '手动刷新只检查 manifest，不应重新下载相同散列的四个站点文件与词典');
+
     invalidManifest = true;
     dataInvalidate();
     await ensureTables();
