@@ -322,6 +322,70 @@ const _convertedInputs = new WeakMap();
 const _programmaticInputs = new WeakSet();
 const _selectedSearchRows = new WeakMap();
 
+// EC vue-select is a two-stage control: typing filters remote options, but
+// only a native option mousedown commits the selection to Vue's model.
+const EC_NATIVE_PICK_TIMEOUT_MS = 4000;
+let _ecPendingNativePick = null;
+
+function cancelECNativePick() {
+  const pending = _ecPendingNativePick;
+  if (!pending) return;
+  _ecPendingNativePick = null;
+  pending.observer?.disconnect();
+  clearTimeout(pending.timer);
+}
+
+// Use the exact original name when possible. EC's normal text translator may
+// have already localized the native dropdown label; only an unambiguous
+// Chinese-label fallback is allowed, never a partial match or a guessed index.
+function ecNativeOptionMatch(option, row) {
+  const clean = text => String(text || '').normalize('NFKC').replace(/\s+/gu, ' ').trim();
+  const source = option.getAttribute?.('data-zhixia-source-text');
+  if (source) return clean(source) === clean(row.native) ? 'native' : null;
+  if (clean(option.textContent) === clean(row.native)) return 'native';
+  return clean(option.textContent) === clean(row.zh) ? 'zh' : null;
+}
+
+function armECNativePick(input, row) {
+  cancelECNativePick();
+  const root = input.closest?.('.v-select');
+  if (!root?.querySelectorAll) return false;
+  const pending = { input, root, row, observer: null, timer: null };
+  _ecPendingNativePick = pending;
+  const attempt = () => {
+    if (_ecPendingNativePick !== pending) return;
+    // Abort on user edits, navigation, or Vue removing the original field.
+    if (input.isConnected === false || input.value !== row.native) {
+      cancelECNativePick();
+      return;
+    }
+    const options = [...root.querySelectorAll('.vs__dropdown-option')].filter(option =>
+      option.isConnected !== false
+      && option.getAttribute?.('aria-disabled') !== 'true'
+      && !option.classList?.contains('vs__dropdown-option--disabled'));
+    const exact = options.filter(option => ecNativeOptionMatch(option, row) === 'native');
+    const matches = exact.length ? exact : options.filter(option =>
+      ecNativeOptionMatch(option, row) === 'zh');
+    if (matches.length !== 1) return;
+    const target = matches[0];
+    cancelECNativePick();
+    // vue-select handles mousedown on its option (not a click on the search
+    // input). Let the native component update v-model and selected chips.
+    if (typeof MouseEvent === 'function') {
+      target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    }
+  };
+  pending.timer = setTimeout(() => {
+    if (_ecPendingNativePick === pending) cancelECNativePick();
+  }, EC_NATIVE_PICK_TIMEOUT_MS);
+  if (typeof MutationObserver === 'function') {
+    pending.observer = new MutationObserver(attempt);
+    pending.observer.observe(root, { childList: true, subtree: true, characterData: true });
+  }
+  // Also support synchronously rendered dropdown options.
+  return attempt;
+}
+
 function isSearchInput(input) {
   const form = input?.form;
   if (!form) return false;
@@ -476,6 +540,14 @@ function selectSuggestion(index) {
   // EC Gearsets 候选点击必须使用原站 GET 检索，不能仅派发 input 事件；
   // 站点的动态组件可能在事件后重新写入中文，导致结果恒为空。
   if (submitECGearsetsSearch(input, row.native)) return;
+  // EC vue-select needs an actual native-option selection, not merely an
+  // input event that leaves the dropdown waiting for a second click.
+  if (isECVueSearchInput(input)) {
+    const attempt = armECNativePick(input, row);
+    if (!convertStandaloneForSearch(input, false, row.native)) cancelECNativePick();
+    else attempt?.();
+    return;
+  }
   // 原站表单必须经过 requestSubmit（触发现有校验及捕获监听），不能调用 form.submit()。
   if (isStandaloneSearchInput(input)) convertStandaloneForSearch(input, false, row.native);
   else if (isSearchInput(input) && typeof input.form?.requestSubmit === 'function') {
@@ -592,6 +664,11 @@ function showSuggestions(input) {
 
 function handleSearchInput(event) {
   const input = event.target;
+  // Programmatic native-name input is part of the pending EC selection;
+  // a real subsequent keystroke cancels it before a late XHR response.
+  if (_ecPendingNativePick?.input === input && !_programmaticInputs.has(input)) {
+    cancelECNativePick();
+  }
   if (!_programmaticInputs.has(input)) {
     _convertedInputs.delete(input);
     _selectedSearchRows.delete(input);
@@ -608,6 +685,7 @@ function handleSearchInput(event) {
 
 function handleSearchFocus(event) {
   const input = event.target;
+  if (_ecPendingNativePick && _ecPendingNativePick.input !== input) cancelECNativePick();
   if (!isSuggestibleInput(input) || _composingInputs.has(input)) return;
   scheduleSuggestions(input);
 }
@@ -667,6 +745,8 @@ function handleSearchKeydown(event) {
 // without canceling any site-native pointer handlers (including EC vue-select).
 function handleSuggestionPointerDown(event) {
   const target = event.target;
+  if (_ecPendingNativePick && target
+      && !_ecPendingNativePick.root.contains(target)) cancelECNativePick();
   if (!target || !_suggestInput) return;
   if (_suggestBox?.contains(target)) {
     const button = target.closest?.('button[data-zhx-index]');
