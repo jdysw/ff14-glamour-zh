@@ -1,12 +1,17 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
-import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
+// 沿用历史模块执行顺序，但查找缓存不再反向导入解析器状态。
+import './item-resolver.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
 import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
 import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+export { _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
 
+
+  // 名称解析器的命中与负缓存由缓存层统一拥有；清理时不反向依赖解析器。
+  const _en2zhCache = new Map();
+  const _jp2zhCache = new Map();
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
   let _seriesMap = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
