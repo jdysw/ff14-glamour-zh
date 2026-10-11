@@ -38,8 +38,8 @@ export { _obsStats, createObserver, observeLocal };
     let floodRescheduled = false;
     let stopped = false;
 
-    // Beyond the hard cap, a root rescan subsumes all queued mutations.
-    // Keep at most one root instead of accumulating unbounded SPA updates.
+    // 超出队列容量上限时，重新扫描观察根即可覆盖所有待处理变更。
+    // 只保留一个观察根，避免 SPA 持续更新导致队列无限增长。
     const collapse = () => {
       pending = [root];
       pendingCD = [];
@@ -83,8 +83,8 @@ export { _obsStats, createObserver, observeLocal };
       if (stopped) return;
       const hitCD = collectMuts(muts);
       const flood = collapsed || pending.length + pendingCD.length > floodLimit;
-      // One reschedule is enough; repeatedly restarting under sustained load
-      // would starve the handler even though the queue has a size cap.
+      // 洪峰期间最多重新计时一次；若持续重置计时器，
+      // 即使队列有大小限制，也会导致处理器长期无法执行。
       if (flood && timer !== null && !floodRescheduled) {
         clearTimeout(timer);
         timer = null;
