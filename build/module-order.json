@@ -5,6 +5,7 @@
   "comment4": "维护约束：每个模块源码的首个 import 必须指向其前驱模块（链式边，配套 @phase15-order-link 标记）；删除或挪位链式边会导致 Rollup 重排产物顺序、破坏测试提取窗口。",
   "entry": "main",
   "order": [
+    "core/site-policy",
     "core/runtime",
     "core/dictionary",
     "sites/eorzea-collection",
