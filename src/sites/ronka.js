@@ -1,7 +1,7 @@
 /* @phase15-module-order:sites/ronka */
 /* @phase15-order-link:sites/ronka<-sites/ffxiv-collection */
 import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
-import { ronkaItemLookup } from '../core/cache.js';
+import { RONKA_ITEM_CACHE, ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/dictionary.js';
 import { _markScan, localScope, queryIn } from '../core/dom.js';
@@ -23,7 +23,7 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
   const RONKA_KR = /[\uac00-\ud7a3]/;
 
   // 装备名单条查找（缓存 + 名称索引直查）；_ronkaCacheN = 条目计数（容量防线用）
-  const RONKA_ITEM_CACHE = Object.create(null);
+  // 缓存实际存储与容量防线统一由核心缓存模块维护。
 
   // 逐条翻译：UI/染剂精确 → "N-染剂" → 装备名 → "X아이콘" → 版本前缀 → 空白归一化
   // v1.2.x：子步骤拆出（降认知复杂度）——② 染剂 "N-名称"
