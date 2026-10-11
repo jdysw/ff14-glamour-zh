@@ -63,11 +63,43 @@ check('已应用筛选：单击重置恢复当前分类的无参数 URL', () => 
   x.settle();
   assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/glamours/tanks']);
 });
-check('无 URL 参数：仍刷新，清除尚未应用的 Vue 筛选状态', () => {
-  const x = harness('https://ffxiv.eorzeacollection.com/glamours/head/28453');
+check('回归：用户实际页面 /glamours/head/27832 必须退出物品筛选，而非刷新原 URL', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/glamours/head/27832');
+  x.click();
+  assert.equal(x.event.defaultPrevented, false, '原站点击事件不能被拦截');
+  x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/glamours']);
+  assert.equal(x.location.reloads, 0, '不能刷新含 /head/27832 的旧筛选 URL');
+});
+check('物品路径即使带其他筛选参数，也要连物品条件一起清除', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/glamours/head/27832?filter%5Bjob%5D=PLD&search=cat&page=9');
   x.click();
   x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/glamours']);
+});
+check('已是默认幻化列表且没有 URL 筛选时，才允许刷新清除 Vue 暂存值', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/glamours');
+  x.click();
+  x.settle();
+  assert.equal(x.location.assigned.length, 0);
   assert.equal(x.location.reloads, 1);
+});
+check('其他已确认装备筛选路由同样回到无筛选幻化列表', () => {
+  for (const route of [
+    'weapon/14675', 'head/77', 'body/200', 'hands/2555', 'legs/2676',
+    'feet/27832', 'ear/9876', 'neck/123', 'wrist/9', 'ring/22',
+  ]) {
+    const x = harness('https://ffxiv.eorzeacollection.com/glamours/' + route + '/?page=2');
+    x.click();
+    x.settle();
+    assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/glamours'], route);
+  }
+});
+check('不是装备物品路径的职业子分类仍保留', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/glamours/tanks?filterjob=PLD');
+  x.click();
+  x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/glamours/tanks']);
 });
 check('站点已跳转时不再执行兜底，避免重复导航', () => {
   const x = harness('https://ffxiv.eorzeacollection.com/glamours?filtergender=Female');
