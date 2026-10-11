@@ -42,7 +42,8 @@ for (const file of ['tests/unit/test-site-registry.mjs', 'tests/unit/test-observ
   'tests/unit/test-storage.mjs', 'tests/unit/test-targets.mjs']) {
   const body = read(file);
   assert.doesNotMatch(body, /\breadDist\s*\(/, file + ' 不应再提取构建产物');
-  assert.match(body, /src\/core\//, file + ' 应直接加载源码');
+  // 允许直接文件路径 src/core/name.js 或 path.join(root, 'src/core', name)，两者均读取真实源码。
+  assert.match(body, /src\/core(?:\/|['"])/, file + ' 应直接加载源码');
 }
 
 // 解析器区段必须闭合在其所属模块内，不得跨越多个无关模块。
