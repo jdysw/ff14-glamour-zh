@@ -14,6 +14,7 @@
     "core/http",
     "core/site-policy",
     "core/storage",
+    "core/v3-contract",
     "core/data-manager",
     "core/targets",
     "core/cache",
