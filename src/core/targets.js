@@ -25,6 +25,17 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
   }
 
+  // The Wiki lookup is only for equipment links. EC's Reset/Apply filters,
+  // search, form labels and toggles are app-owned controls: intercepting
+  // their click in document capture prevents the site's own handlers.
+  function isECNativeControl(el) {
+    return !!el?.closest?.(
+      'button, input, select, textarea, label, [role="button"], ' +
+      '[role="checkbox"], [role="radio"], [role="switch"], ' +
+      '[role="combobox"], [role="option"], [role="slider"]'
+    );
+  }
+
   // 统一采集：root 内（含自身）按类型收集候选，输出标准 target：
   //   { type, element, text, context }
   // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
@@ -239,7 +250,7 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     window.__zhixiaWikiJumpBound = true;
     document.addEventListener('click', (e) => {
       const el0 = e.target;
-      if (!el0?.closest || isECSearchOption(el0)) return;
+      if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)) return;
       const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
       let probe = a || el0;
       let guard = 0;
