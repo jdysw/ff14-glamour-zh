@@ -4,10 +4,17 @@
 import './item-resolver.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
-import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
-import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
 
+
+  // 翻译共用的职能词和 Ronka 查询缓存由基础缓存层维护，
+  // 站点层只能依赖这里，不允许缓存层反向引入站点启动模块。
+  const FC_ROLE_ZH = {
+    'ディフェンダー': '御敌', 'スレイヤー': '制敌', 'ストライカー': '强袭',
+    'スカウト': '游击', 'ヒーラー': '治愈', 'キャスター': '咏咒',
+    'レンジャー': '精准', 'ファイター': '战斗', 'ソーサラー': '法系',
+  };
+  const RONKA_ITEM_CACHE = Object.create(null);
 
   // 名称解析器的命中与负缓存由缓存层统一拥有；清理时不反向依赖解析器。
   const _en2zhCache = new Map();
