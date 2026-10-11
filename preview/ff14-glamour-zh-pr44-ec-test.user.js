@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.13
+// @version      1.4.3.44.15
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 66ca6b6b3bbd2e42f4bffd80d7c9e1ba899f4e12
+// PR44 source commit: 73283df4b430d8d829e12b0cc047c3addbf2e410
 
 
 (function () {
@@ -4321,6 +4321,12 @@
       "Ramza's", 'Star Captain', 'Star Pilot', 'Alternative', 'Maritime',
       'Alpha Wolf', 'Eagleclaw', 'Star Tech Crafting', 'Star Tech Gathering',
     ]);
+    // Only verified EC Hoodie variants; never combine unknown set names or fits.
+    const EC_GEARSET_HOODED_BASES = ['Plain Hooded', 'Festival Hooded', 'Succubus Hooded'];
+    const EC_GEARSET_HOODED_FITS = Object.freeze({
+      'Form-fitting': '修身',
+      'Oversized': '大码',
+    });
     // 这些译名核对自 data/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
     // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
     const EC_GEARSET_NAME_EXTRAS = Object.freeze({
@@ -4467,7 +4473,27 @@
       return rows;
     }
 
-    function ecGearsetKnownRows() {
+    // Existing localized base + observed fit = descriptive label, not an
+    // invented official CN item name. Official outfit package always wins.
+    function ecGearsetHoodedVariantRows(nameIndex) {
+      const rows = [];
+      for (const base of EC_GEARSET_HOODED_BASES) {
+        if (!EC_GEARSET_SINGLE_SERIES.has(base)) continue;
+        const baseZh = ecGearsetSeriesZh(base);
+        if (!baseZh?.endsWith('套装')) continue;
+        for (const [fit, zhFit] of Object.entries(EC_GEARSET_HOODED_FITS)) {
+          const native = fit + ' ' + base;
+          const official = ecGearsetOfficialPackageZh(native, nameIndex);
+          rows.push({
+            native, zh: official || zhFit + baseZh,
+            ...(official ? {} : { descriptive: true }),
+          });
+        }
+      }
+      return rows;
+    }
+
+    function ecGearsetKnownRows(nameIndex) {
       const rows = [];
       for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
         const zhSeries = ecGearsetSeriesZh(series);
@@ -4480,6 +4506,10 @@
       for (const native of EC_GEARSET_SINGLE_SERIES) {
         const zh = ecGearsetSeriesZh(native);
         if (zh) rows.push({ native, zh });
+      }
+      const seen = new Set(rows.map(row => row.native));
+      for (const row of ecGearsetHoodedVariantRows(nameIndex)) {
+        if (!seen.has(row.native)) rows.push(row);
       }
       return rows;
     }
@@ -4510,7 +4540,7 @@
       if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
         return _ecGearsetRows;
       }
-      const rows = ecGearsetKnownRows();
+      const rows = ecGearsetKnownRows(nameIndex);
       ecGearsetAppendInferredRows(rows, nameIndex);
       _ecGearsetRows = rows;
       _ecGearsetRevision = revision;
@@ -8270,7 +8300,7 @@
       zh.textContent = row.zh;
       const native = document.createElement('span');
       native.className = 'zhx-suggest-native';
-      native.textContent = row.native + (row.provisional ? ' · EC 结果待确认' : '');
+      native.textContent = row.native + (row.provisional ? ' · EC 结果待确认' : row.descriptive ? ' · 描述性译名' : '');
       button.append(zh, native);
       _suggestBox.appendChild(button);
     }
