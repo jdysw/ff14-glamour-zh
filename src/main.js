@@ -1,5 +1,4 @@
 /* @phase15-module-order:main */
-/* @phase15-order-link:main<-core/probe */
 import './core/probe.js';
 import { DATA_REMOTE } from './core/constants.js';
 import { ensureTables } from './core/data-manager.js';
