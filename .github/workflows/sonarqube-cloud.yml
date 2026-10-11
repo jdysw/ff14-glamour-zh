@@ -23,6 +23,19 @@ jobs:
         with:
           fetch-depth: 0 # 完整历史：新代码判定与逐行归属需要
 
+      # 仅汇报真正导入并执行过的生产 ESM 模块；不得人为填写覆盖率。
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 生成真实源码覆盖率（LCOV）
+        run: npm run test:coverage
+
       # 官方扫描 action（v6：使用当前受支持版本）
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarqube-scan-action@v6

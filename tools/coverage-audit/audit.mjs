@@ -76,7 +76,7 @@ export const SITES = {
     channel: 'local', // 本机可达
     pages: [
       { id: 'home', url: 'https://lookbook.ronkacloset.com/', type: 'home' },
-      { id: 'list', url: 'https://lookbook.ronkacloset.com/lookbook', type: 'list' },
+      // 首页本身就是 GALLERY；站点没有单独的 /lookbook 路由（该地址返回 404）。
     ],
   },
   collection: {

@@ -7,7 +7,7 @@
 //   - 容量防线 cacheGuard（Map 型 / 对象型 + 计数器 / for-in 回落）
 //   - 异常安全（单个 reset 抛错不阻断其余）与同名覆盖语义
 //
-// 机制：从构建产物（dist）提取 @zhixia:core-cache-registry 区段，以桩装配运行——
+// 机制：从规范源模块提取 @zhixia:core-cache-registry 区段，以桩装配运行——
 //       8 个缓存实体以最小桩（Map / 对象 / null）替代；不依赖 Chrome / 外网。
 //
 // 说明：真实调用链（_fireTablesReady 按类清 / dictInvalidate → translate 类 /
@@ -15,7 +15,9 @@
 //       integration 覆盖；本文件冻结注册表机制本身的契约。
 //
 // 运行：node tests/unit/test-cache.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -26,7 +28,9 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 从缓存注册及基础缓存所属源码提取原逻辑，避免依赖 dist 的布局。
+const CACHE_SOURCE = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
+const PRIMITIVE_SOURCE = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
@@ -45,8 +49,8 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');
-const PRIMITIVE_SEG = sliceAll(DIST_TEXT, 'core-cache-primitives');
+const REG_SEG = sliceAll(CACHE_SOURCE, 'core-cache-registry');
+const PRIMITIVE_SEG = sliceAll(PRIMITIVE_SOURCE, 'core-cache-primitives');
 
 // ── 桩：8 个缓存实体（最小可断言形态；必须先于区段：值捕获纪律）──
 const STUB_LINES = [

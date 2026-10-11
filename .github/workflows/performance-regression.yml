@@ -1,0 +1,49 @@
+name: Reproducible EC performance benchmarks
+
+# 仅在基准夹具或基准工作流变化时运行；真实站点访问由独立在线审计负责。
+on:
+  pull_request:
+    paths:
+      - 'tests/benchmark/**'
+      - '.github/workflows/performance-regression.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ec-performance-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  chrome-benchmark:
+    name: Chrome CPU throttling 1x/4x/8x
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 安装依赖
+        run: npm ci
+      - name: 编译规范用户脚本
+        run: npm run build
+      - name: 收集五轮模拟移动端 P50/P95 和 JS 堆占用
+        env:
+          CI: 'true'
+          ZHX_BENCH_ROUNDS: '5'
+          ZHX_BENCH_CPU_RATE: '4'
+          ZHX_TEST_TIMEOUT_MS: '900000'
+        run: npm run test:bench
+      - name: 上传原始性能样本和统计报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ec-chrome-performance-reports
+          path: tests/.cache/bench/
+          retention-days: 14
+          if-no-files-found: error

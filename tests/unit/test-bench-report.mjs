@@ -1,6 +1,6 @@
 // test-bench-report.mjs — 基准报告工具单测（v1.4 Phase 19）
 // 覆盖：schema / flattenNumbers 展开 / diffMetrics 计算 / formatRows 标记 / overThreshold 判定
-import { SCHEMA, flattenNumbers, diffMetrics, formatRows, overThreshold } from '../benchmark/report.mjs';
+import { SCHEMA, flattenNumbers, diffMetrics, formatRows, overThreshold, samplePercentiles } from '../benchmark/report.mjs';
 
 let pass = 0, fail = 0;
 const eq = (name, got, want) => {
@@ -18,6 +18,12 @@ eq('schema 版本', SCHEMA, 'zhx-bench/1');
 eq('嵌套展开', flattenNumbers({ a: 1, b: { c: 2.5, d: 'x' }, e: [1, 2] }), { a: 1, 'b.c': 2.5, 'e[0]': 1, 'e[1]': 2 });
 eq('跳过非有限与字符串', flattenNumbers({ a: NaN, b: Infinity, c: 'y', d: 3 }), { d: 3 });
 eq('空对象', flattenNumbers({}), {});
+
+console.log('\n── A2：性能样本 P50/P95 ──');
+eq('过滤非数值样本并求最近秩', samplePercentiles([50, 10, 20, 40, 30, NaN, Infinity]),
+  { count: 5, p50: 30, p95: 50, min: 10, max: 50 });
+eq('空样本不会伪造零耗时', samplePercentiles([NaN, Infinity]),
+  { count: 0, p50: null, p95: null, min: null, max: null });
 
 console.log('\n── B：diffMetrics ──');
 {

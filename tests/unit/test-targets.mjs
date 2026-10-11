@@ -3,7 +3,7 @@
 // 目的：把 collectTargets / dispatchTargets / processRoot 的当前行为用断言钉死。
 //       后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
-// 机制：从构建产物（dist）提取 @zhixia:core-targets 区段装配运行。
+// 机制：从规范目标模块提取 @zhixia:core-targets 区段装配运行。
 //       resolveByName / EC_CARD_SEL 以桩注入（值捕获）；document 桩按选择器分发候选。
 //
 // 覆盖（计划书 Phase 8 验收）：
@@ -14,7 +14,9 @@
 //   - 过滤规则：长度 / URL / 未命中。
 //
 // 运行：node tests/unit/test-targets.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -25,7 +27,8 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 使用规范目标模块源码，保留原生筛选和 Wiki 全局监听器的同一组断言。
+const TARGETS_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/targets.js'), 'utf8');
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
@@ -77,7 +80,7 @@ const KNOWN = {
 const resolveByName = (n) => KNOWN[n] || null;
 
 function buildTargets(doc) {
-  const parts = sliceAll(DIST_TEXT, 'core-targets');
+  const parts = sliceAll(TARGETS_TEXT, 'core-targets');
   const ret = 'return { collectTargets, dispatchTargets, processRoot, __domStats: () => ({ ..._domStats }) };';
   try {
     const fn = new Function('document', 'resolveByName', 'EC_CARD_SEL', '_perfNow',
@@ -282,11 +285,11 @@ console.log('\n── G：EC 原生筛选候选绝不跳 Wiki / 不包装链接 
 {
   // Freeze the production global click listener, not an independent mock
   // of its behavior. Search options are always owned by vue-select.
-  const constantsStart = DIST_TEXT.indexOf("  const EC_SEARCH_OPTION_SEL =");
-  const constantsEnd = DIST_TEXT.indexOf("  // 统一采集：root 内", constantsStart);
-  const handlerStart = DIST_TEXT.indexOf("  function bindGlobalWikiJump() {", constantsEnd);
-  const handlerEnd = DIST_TEXT.indexOf("  // EC 物品链统一分派映射", handlerStart);
-  ok('正式构建产物存在原生交互避让规则和 Wiki 监听器',
+  const constantsStart = TARGETS_TEXT.indexOf("  const EC_SEARCH_OPTION_SEL =");
+  const constantsEnd = TARGETS_TEXT.indexOf("  // 统一采集：root 内", constantsStart);
+  const handlerStart = TARGETS_TEXT.indexOf("  function bindGlobalWikiJump() {", constantsEnd);
+  const handlerEnd = TARGETS_TEXT.indexOf("  // EC 物品链统一分派映射", handlerStart);
+  ok('规范目标模块存在原生交互避让规则和 Wiki 监听器',
     constantsStart >= 0 && constantsEnd > constantsStart &&
     handlerStart > constantsEnd && handlerEnd > handlerStart);
   if (handlerEnd > handlerStart && constantsStart >= 0) {
@@ -301,8 +304,8 @@ console.log('\n── G：EC 原生筛选候选绝不跳 Wiki / 不包装链接 
       },
     };
     const buildWiki = new Function('document', 'window', 'lookupZh', 'WIKI_ITEM',
-      DIST_TEXT.slice(constantsStart, constantsEnd) +
-      DIST_TEXT.slice(handlerStart, handlerEnd) +
+      TARGETS_TEXT.slice(constantsStart, constantsEnd) +
+      TARGETS_TEXT.slice(handlerStart, handlerEnd) +
       'return bindGlobalWikiJump;');
     const register = buildWiki(fakeDocument, fakeWindow,
       (_anchor, name) => name === 'Example Equipment' ? '测试装备' : null,

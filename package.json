@@ -11,6 +11,7 @@
     "build": "bash build.sh",
     "test": "node tests/run.mjs --suite=unit,integration",
     "test:unit": "node tests/run.mjs --suite=unit",
+    "test:coverage": "node tools/coverage/run-native-coverage.mjs",
     "test:integration": "node tests/run.mjs --suite=integration",
     "test:live": "node tests/run.mjs --suite=live",
     "test:all": "node tests/run.mjs --suite=all",
