@@ -81,8 +81,8 @@ console.log('\n── B：搜索框识别 ──');
   eq('vue-select 搜索框被排除（EC）', api.searchInputScore(vsSearch), -Infinity);
   const vsForm = { querySelectorAll: () => [vsSearch, keyword] };
   eq('含 vue-select 时仍优先识别关键词框', api.findSearchInput(vsForm), keyword);
-  // Excluded fields must never become the fallback merely because a form
-  // contains only one text input. A neutral single text field may still work.
+  // 表单只含一个输入框时，被排除的字段仍不能成为兜底候选；
+  // 但未标记的普通单字段搜索框应维持兼容。
   eq('仅有玩家字段时不接管搜索', api.findSearchInput({ querySelectorAll: () => [player] }), null);
   eq('仅有标题字段时不接管搜索', api.findSearchInput({ querySelectorAll: () => [title] }), null);
   eq('玩家与标题混合时不接管搜索', api.findSearchInput({ querySelectorAll: () => [player, title] }), null);
