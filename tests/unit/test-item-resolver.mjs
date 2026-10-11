@@ -1,6 +1,5 @@
 // Item Resolver contract tests against the V3 runtime indexes.
 import fs from 'node:fs';
-import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot, itemsTsvPath } from '../helpers/paths.mjs';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
