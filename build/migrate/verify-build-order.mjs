@@ -1,6 +1,6 @@
 // build/migrate/verify-build-order.mjs —— Phase 15：验证最终 Rollup 产物的模块顺序
 // 用法: node build/migrate/verify-build-order.mjs [dist文件] [顺序表]
-// 依赖 order-modules.mjs 写入的稳定模块标记，不依赖具体业务锚点数量。
+// 读取规范源码保留的模块标记并对照自然 Rollup 输出顺序，不再通过额外 import 强制排序。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
