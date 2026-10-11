@@ -210,6 +210,59 @@ console.log('\n── E：flood 洪峰保护（超阈值重置计时器）──
   eq('flood：洪峰节点全部被处理（802 个）', seen.at(-1).length, 802);
 }
 
+console.log('\n── E2：持续洪峰最多重排一次，队列溢出折叠为根补扫 ──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  const seen = [];
+  api.createObserver({ handler: (nodes) => seen.push(nodes), debounce: 100 });
+  const mo = FakeMO.last;
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  mo.trigger([{ type: 'childList', addedNodes: Array.from({ length: 801 }, () => mkNode()) }]);
+  eq('首个洪峰只重排一次 timer', timers.filter((t) => t.cleared).length, 1);
+  mo.trigger([{ type: 'childList', addedNodes: Array.from({ length: 250 }, () => mkNode()) }]);
+  eq('后续洪峰不再次推迟同批处理', timers.filter((t) => t.cleared).length, 1);
+  mo.trigger([{ type: 'childList', addedNodes: Array.from({ length: 2000 }, () => mkNode()) }]);
+  runTimer();
+  eq('超量变更折叠为观察根', seen.length === 1 && seen[0].length === 1 && seen[0][0] === mo.root, true);
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  runTimer();
+  eq('洪峰之后恢复正常局部调度', seen[1].length, 1);
+}
+
+console.log('\n── E3：独立 characterData 队列同样受上限约束 ──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  const seen = [];
+  api.createObserver({ characterData: true, floodLimit: 2,
+    handler: (nodes, cds) => seen.push({ nodes, cds }) });
+  const mo = FakeMO.last;
+  const muts = Array.from({ length: 6 }, () => ({
+    type: 'characterData', target: { nodeType: 3, nodeValue: '韩文' },
+  }));
+  mo.trigger(muts);
+  runTimer();
+  eq('仅 characterData 也折叠为根补扫',
+    seen[0].nodes.length === 1 && seen[0].nodes[0] === mo.root && seen[0].cds.length === 0, true);
+}
+
+console.log('\n── E4：disconnect 后取消已经排队的回调 ──');
+{
+  const env = makeEnv();
+  const api = buildObs(env);
+  let calls = 0;
+  const ctl = api.createObserver({ handler: () => { calls++; } });
+  const mo = FakeMO.last;
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  ctl.disconnect();
+  eq('disconnect 关闭原生观察器', mo.disconnected, true);
+  eq('disconnect 清除待执行 timer', activeTimers().length, 0);
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  eq('disconnect 后不再重新排队', activeTimers().length, 0);
+  eq('disconnect 后不会执行 handler', calls, 0);
+}
+
 console.log('\n── F：Ronka characterData（显式开启 + filter）──');
 {
   const env = makeEnv();
