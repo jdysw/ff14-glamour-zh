@@ -1,15 +1,27 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE_V3 } from './constants.js';
-import { DAY_MS, _lcs90, cacheReset } from './cache.js';
+import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
-import { tryEnToZh } from './item-resolver.js';
 import { __zhxMark } from './probe.js';
 import { _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+
+
+  // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
+  // 装备名/染剂名等短英文串（如 Tule Tunic、Charcoal Grey）。
+  function tryEnToZh(en) {
+    if (!en) return null;
+    if (_en2zhCache.has(en)) return _en2zhCache.get(en);
+    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 V3 names 文件展开）
+    const out = resolveByName(en);
+    cacheGuard(_en2zhCache, CACHE_CAP_LOOKUP);
+    _en2zhCache.set(en, out);
+    return out;
+  }
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
