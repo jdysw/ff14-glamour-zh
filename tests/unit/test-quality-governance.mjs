@@ -34,4 +34,14 @@ const release = fs.readFileSync(at('.github/workflows/release.yml'), 'utf8');
 assert.match(release, /workflow_dispatch:/, '发行版仍需维护者手动触发');
 assert.doesNotMatch(release, /^\s+push:\s*$/m, '合并 main 不允许自动发布版本');
 
-console.log('✅ 旧预览删除、真实源码覆盖率与手动发布门禁验证通过');
+const deployment = fs.readFileSync(at('.github/workflows/deploy-data.yml'), 'utf8');
+assert.match(deployment, /DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3/,
+  '上游提交必须固定');
+assert.match(deployment, /EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229/,
+  '上游 Item.csv 必须固定为权威提交树中的原始文件');
+assert.match(deployment, /git hash-object build\/\.cache\/datamining\/en-Item\.csv/,
+  '部署前必须校验完整下载内容');
+assert.ok(deployment.indexOf('git hash-object') < deployment.indexOf('- name: Assemble site'),
+  '文件完整性验证必须早于数据站组装');
+
+console.log('✅ 旧预览删除、真实源码覆盖率、上游校验和手动发布门禁验证通过');
