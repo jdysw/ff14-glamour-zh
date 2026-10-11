@@ -26,7 +26,7 @@ function makeBundle(version) {
     candidatePolicy: 1,
     version: 'unit-v' + version,
     sites: { mirapri: { files: Object.fromEntries(Object.entries(files)
-      .map(([name, value]) => [name, { url: 'mirapri/' + name + '.tsv', sha256: sha(value) }])) } },
+      .map(([name, value]) => [name, { url: 'mirapri/' + name + '.tsv', sha256: sha(value), bytes: Buffer.byteLength(value) }])) } },
   };
   return { manifest, files };
 }
@@ -61,7 +61,7 @@ function buildHarness(download) {
   };
   const bindings = Object.keys(deps).join(', ');
   const factory = new Function('deps', 'const { ' + bindings + ' } = deps;\n' +
-    implementation + '\nreturn { dataInvalidate, dataGetIndex, ensureTables, onTablesReady, resolveByName };');
+    implementation + '\nreturn { dataInvalidate, dataGetIndex, dataGetStatus, ensureTables, onTablesReady, resolveByName };');
   return { api: factory(deps), store, marks, errors };
 }
 
@@ -81,17 +81,34 @@ function network(getVersion) {
   let version = 1;
   const { api, errors } = buildHarness(network(() => version));
   let readyCount = 0;
-  api.onTablesReady(() => { readyCount++; });
+  const statuses = [];
+  api.onTablesReady(status => { readyCount++; statuses.push(status); });
+  assert.deepEqual(api.dataGetStatus(), {
+    site: 'mirapri', state: 'idle', origin: 'none', version: null, generation: 0, ready: false,
+  }, '脚本层首轮应能获取明确的未启动状态');
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), '中文甲');
   assert.equal(readyCount, 1);
+  assert.deepEqual(statuses[0], {
+    site: 'mirapri', state: 'ready', origin: 'network', version: 'unit-v1', generation: 0, ready: true,
+  }, '首次网络加载向脚本层发布不可变数据状态');
+  assert.equal(Object.isFrozen(statuses[0]), true);
+  const late = [];
+  api.onTablesReady(status => late.push(status));
+  assert.equal(late.length, 1, '迟到订阅者立即得到现存数据状态');
+  assert.equal(late[0].version, 'unit-v1');
   version = 2;
   api.dataInvalidate();
+  assert.equal(api.dataGetStatus().state, 'idle', '数据失效时同步撤销成功状态');
+  assert.equal(api.dataGetStatus().generation, 1, '失效必须切换加载代际');
   assert.equal(api.dataGetIndex('nameMap'), null, 'invalidate immediately hides stale indexes');
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), null, 'obsolete translations must disappear');
   assert.equal(api.resolveByName('English Two'), '中文乙');
   assert.equal(readyCount, 2, 'ready subscribers must survive a refresh');
+  assert.equal(statuses[1].version, 'unit-v2');
+  assert.equal(statuses[1].generation, 1);
+  assert.equal(statuses[1].origin, 'network');
   assert.deepEqual(errors, []);
 }
 
@@ -128,6 +145,36 @@ function network(getVersion) {
   assert.equal(api.resolveByName('English Two'), '中文乙');
   assert.equal(readyCount, 1, 'only the latest generation may announce readiness');
   assert.deepEqual(errors, []);
+}
+
+// 网络失败仍广播结束，以免翻译等待永远悬挂；但状态必须区分失败与有效索引。
+{
+  const { api, errors } = buildHarness(async () => { throw new Error('offline'); });
+  const observations = [];
+  api.onTablesReady(status => observations.push(status));
+  await api.ensureTables();
+  assert.equal(observations.length, 1);
+  assert.equal(observations[0].state, 'degraded');
+  assert.equal(observations[0].ready, true);
+  assert.equal(observations[0].origin, 'none');
+  assert.equal(observations[0].version, null);
+  assert.equal(api.resolveByName('English One'), null);
+  assert.deepEqual(errors, [], '正常离线降级不属于脚本异常');
+}
+
+// 生成器提供字节数后，同 SHA 的缓存和下载体仍必须逐字节匹配。
+{
+  const { manifest, files } = makeBundle(1);
+  manifest.sites.mirapri.files.names.bytes += 1;
+  const { api } = buildHarness(async url => {
+    if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
+    const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
+    assert.ok(match, '只允许请求选定站点的预期文件');
+    return files[match[1]];
+  });
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English One'), null, '字节长度冲突不得发布错误索引');
+  assert.equal(api.dataGetStatus().state, 'degraded');
 }
 
 console.log('✅ V3 refresh readiness, cache invalidation and in-flight generation regressions passed');
