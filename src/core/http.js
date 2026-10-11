@@ -49,14 +49,14 @@ export { httpGet };
       } catch (e) { /* 忽略：GM 通道不可用——按序尝试 fetch 兜底 */ }
       try {
         if (typeof fetch === 'function') {
-          // Cover both fetch() and response.text(): headers may arrive while the body stalls.
+          // 超时同时覆盖 fetch() 和 response.text()：收到响应头后，响应体仍可能卡住。
           const ms = Number.isFinite(Number(timeout)) && Number(timeout) > 0 ? Number(timeout) : 20000;
           const ctl = typeof AbortController === 'function' ? new AbortController() : null;
           const fetchOptions = ctl ? { signal: ctl.signal } : {};
           if (fresh) fetchOptions.cache = 'no-store';
           timeoutTimer = setTimeout(() => {
             try { ctl?.abort(); } catch (e) { /* Abort is best-effort. */ }
-            bad(new Error('timeout')); // Also settle if AbortController is unavailable.
+            bad(new Error('timeout')); // 即使缺少 AbortController，也必须结束超时请求。
           }, ms);
           Promise.resolve().then(() => fetch(requestUrl, fetchOptions))
             .then((r) => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
