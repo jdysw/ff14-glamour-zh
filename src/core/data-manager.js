@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/data-manager */
 /* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE_V3 } from './constants.js';
-import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache.js';
+import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache-primitives.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
 import { __zhxMark, _zhxErr } from './runtime.js';
