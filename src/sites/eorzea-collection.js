@@ -794,7 +794,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
     globalThis.__zhxECResetBound = true;
     document.addEventListener('click', (event) => {
-      const path = globalThis.location?.pathname || '';
+      // This existing test hook permits the offline EC fixture to exercise
+      // the *same* reset path without accessing a live website.
+      const path = globalThis.__zhxTestSite === 'ec'
+        ? (globalThis.__zhxTestECResetPath || globalThis.location?.pathname || '')
+        : (globalThis.location?.pathname || '');
       if (!/^\/glamours(?:\/|$)/iu.test(path)) return;
       const button = event.target?.closest?.('button, [role="button"]');
       if (!button || button.disabled) return;
