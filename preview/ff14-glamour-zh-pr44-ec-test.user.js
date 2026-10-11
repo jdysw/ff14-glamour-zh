@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
-// @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44/ec
-// @version      1.4.3.44.23
+// @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
+// @version      1.4.3.44.26
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: dcce3c183926bc956167152c850f1cc5f28d4c96
+// PR44 source commit: 8554ab848aec4f051ac54f75ac586869694c2772
 
 
 (function () {
