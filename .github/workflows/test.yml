@@ -54,6 +54,35 @@ jobs:
       - name: 构建后工作区一致性
         run: git diff --exit-code
 
+  coverage:
+    name: Native Source Coverage
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 生成真实 V8 / LCOV 源码覆盖率
+        run: npm run test:coverage
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-source-lcov
+          path: tests/.cache/coverage/lcov.info
+          retention-days: 14
+          if-no-files-found: error
+
   unit:
     name: Unit Tests
     needs: build
