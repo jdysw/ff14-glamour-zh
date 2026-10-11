@@ -619,6 +619,10 @@ function handleSearchBlur(event) {
 }
 
 function handleSuggestionKeydown(event) {
+  // EC vue-select already implements its own keyboard list navigation.
+  // Hijacking Up/Down/Escape/Enter in document capture breaks that native
+  // dropdown; our Chinese suggestions remain pointer-selectable.
+  if (isECVueSearchInput(event.target)) return false;
   if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return false;
   if (event.key === 'ArrowDown') {
     event.preventDefault();

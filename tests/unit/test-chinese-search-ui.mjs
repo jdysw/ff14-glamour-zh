@@ -877,6 +877,12 @@ try {
       eq('N5c 不应拦截中文按键事件',blockedCharacters,0);
       await sleep(125);
       eq('N5d 候选重新出现后不得覆写正在输入的中文',input.value,'鸟甲飞行');
+      const vueKeys = ['ArrowDown', 'ArrowUp', 'Escape'];
+      for (const key of vueKeys) document.dispatch('keydown',{
+        target:input,key,preventDefault(){blockedCharacters++;},
+        stopPropagation(){blockedCharacters++;},
+      });
+      eq('N5d1 EC Vue 原站下拉键盘导航应被保留，不受候选层抢占',blockedCharacters,0);
       document.dispatch('compositionstart',{target:input});
       input.value = '新候选';
       document.dispatch('input',{target:input});
