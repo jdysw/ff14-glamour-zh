@@ -38,8 +38,10 @@ jobs:
 
       - name: 获取固定版本的权威装备部位数据（FFXIV Item.csv）
         env:
-          # 固定上游提交，避免 master 更新后相同输入生成不同分类数据。
+          # 固定上游提交及该提交树中 Item.csv 的 Git blob ID。
+          # 提交、文件校验值必须一起更新，避免 CDN 返回未经审查的新数据。
           DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
+          EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229
         run: |
           set -euo pipefail
           mkdir -p build/.cache/datamining
@@ -47,7 +49,14 @@ jobs:
             "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
             --output build/.cache/datamining/en-Item.csv
           test -s build/.cache/datamining/en-Item.csv
-          echo "使用 xivapi/ffxiv-datamining 提交 ${DATAMINING_COMMIT}"
+          # Git blob ID 校验文件完整字节，与上述固定提交树中的对象一致。
+          actual_blob="$(git hash-object build/.cache/datamining/en-Item.csv)"
+          if [ "$actual_blob" != "$EXPECTED_ITEM_BLOB" ]; then
+            echo "::error::官方 Item.csv 校验失败：预期 $EXPECTED_ITEM_BLOB，实际 $actual_blob" >&2
+            exit 1
+          fi
+          echo "权威数据完整性校验通过：${DATAMINING_COMMIT} / ${EXPECTED_ITEM_BLOB}"
+          sha256sum build/.cache/datamining/en-Item.csv
 
       - name: Assemble site
         env:
