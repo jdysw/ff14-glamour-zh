@@ -801,7 +801,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
         ? (globalThis.__zhxTestECResetPath || globalThis.location?.pathname || '')
         : (globalThis.location?.pathname || '');
       if (!/^\/(?:glamours|gearsets|accessories)(?:\/|$)/iu.test(path)) return;
-      const button = event.target?.closest?.('button, a[href], [role="button"]');
+      // Gearsets/Accessories display Reset as a plain text control in some
+      // layouts, not necessarily a semantic <button> or an <a href>.
+      const button = event.target?.closest?.('button, a, [role="button"]') || event.target;
       if (!button || button.disabled) return;
       const label = String(button.textContent || '').replace(/\s+/gu, ' ').trim();
       const shortReset = /^\/(?:gearsets|accessories)(?:\/|$)/iu.test(path)
