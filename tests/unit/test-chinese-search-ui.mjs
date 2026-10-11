@@ -328,6 +328,62 @@ try {
     eq('pointerdown 后关闭候选框', freshBox.hidden, true);
   }
 
+  console.log('\n── C2：跨站外点击关闭、原生控件、异步重开回归 ──');
+  for (const site of ['mirapri', 'fc', 'ronka', 'collection', 'ec', 'endcloset']) {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    harness.api.startChineseSearch(site);
+    const input = new FakeElement('input');
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '搜索装备名');
+    if (site === 'ec') input.className = 'vs__search';
+    input.value = '炎灵';
+    harness.ready[0]();
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    const box = findSuggestBox(document);
+    eq(site + ' 候选初始可见', box?.hidden, false);
+
+    let blocked = false;
+    document.dispatch('pointerdown', {
+      target: new FakeElement('button'), preventDefault() { blocked = true; },
+    });
+    eq(site + ' 点击站点控件立即关闭', box.hidden, true);
+    eq(site + ' 不阻断站点原生事件', blocked, false);
+    harness.ready[0]();
+    eq(site + ' 数据就绪不再弹出已关闭候选', box.hidden, true);
+
+    document.dispatch('input', { target: input });
+    await sleep();
+    eq(site + ' 后续输入可重新打开候选', box.hidden, false);
+    document.dispatch('pointerdown', { target: input });
+    eq(site + ' 点击当前搜索框不关闭', box.hidden, false);
+    document.dispatch('pointerdown', { target: box });
+    eq(site + ' 点击面板空白处不关闭', box.hidden, false);
+
+    const label = box.querySelectorAll('button[data-zhx-index]')[0].children[0];
+    let picked = false;
+    document.dispatch('pointerdown', {
+      target: label, preventDefault() { picked = true; },
+    });
+    eq(site + ' 点击候选文本立即关闭', box.hidden, true);
+    eq(site + ' 仅拦截自身候选按钮', picked, true);
+
+    input.value = '炎灵';
+    document.dispatch('input', { target: input });
+    await sleep();
+    const second = new FakeElement('input');
+    second.setAttribute('type', 'search');
+    second.setAttribute('placeholder', '搜索装备名');
+    second.value = '炎灵';
+    document.dispatch('pointerdown', { target: second });
+    eq(site + ' 切换输入框先关闭旧候选', box.hidden, true);
+    document.dispatch('focusin', { target: second });
+    await sleep();
+    eq(site + ' 新输入框能重新显示候选', box.hidden, false);
+  }
+
   console.log('\n── D：IME / Esc / 未命中提示 ──');
   {
     installDocument();
@@ -368,7 +424,7 @@ try {
       preventDefault() { this.prevented = true; },
     };
     document.dispatch('keydown', esc);
-    eq('Escape 阻止默认行为', esc.prevented, true);
+    eq('Escape 保留站点默认行为', esc.prevented, false);
     eq('Escape 关闭候选', box.hidden, true);
 
     input.value = '不存在装备';
