@@ -11,7 +11,7 @@
 // 机制：从规范模块源码提取区段以桩装配，不依赖构建变量名、Chrome 或外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
-import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -28,6 +28,7 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
 import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
+import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
@@ -69,6 +70,24 @@ for (const site of SITE_NAMES) {
 }
 ok(`A7 逐文件 sha256 校验（${fileCount} 个文件）`, badSha === 0, `不一致 ${badSha}`);
 ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
+
+// 生成器真实产物与客户端共享契约必须全量相符；一旦文件字节遭破坏，部署必须拒绝。
+const publishInfo = verifyV3Publish(tmp);
+eq('A8a 发布前七站文件清单与客户端配置契合', publishInfo.sites, 7);
+ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publishInfo.bytes > 100000);
+{
+  const targetFile = new URL('mirapri/names.tsv', V3_DIR);
+  const original = readFileSync(targetFile);
+  let rejected = false;
+  try {
+    writeFileSync(targetFile, Buffer.concat([original, Buffer.from('\\n额外损坏行')]));
+    try { verifyV3Publish(tmp); } catch (_error) { rejected = true; }
+  } finally {
+    writeFileSync(targetFile, original);
+  }
+  ok('A8c 生成后文件被篡改必须阻止发布', rejected);
+}
+
 
 // shared dict 校验
 {
