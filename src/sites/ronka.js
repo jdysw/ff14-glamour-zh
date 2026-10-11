@@ -1,5 +1,4 @@
 /* @phase15-module-order:sites/ronka */
-/* @phase15-order-link:sites/ronka<-sites/ffxiv-collection */
 import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
 import { RONKA_ITEM_CACHE, ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
