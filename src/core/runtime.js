@@ -17,14 +17,19 @@ export { ERR_LOG_CAP, __zhxBootAt, __zhxMark, registerProbeMark, _errLog, _perfN
   /* ── Core Runtime（段2/2）：错误边界——包住关键函数，单点出错不拖垮整批
        翻译；Phase 18 起统一经 _zhxErr 记录（降低静默失败；Probe 开启时同时
        保留到 __zhxErrs 供诊断）。Phase 15 随段1 一同抽出为 src/core/runtime.js。 */
-  // 错误记录：有界缓冲（常驻、极小）+ console.warn；Probe 开启后同时镜像 __zhxErrs
+  // 有界滚动日志保留最新 20 条错误，持续故障不会被早期信息淹没。
+  // 镜像诊断数组同样限长，且沿用原数组引用供 Probe 界面查看。
   const ERR_LOG_CAP = 20;
   const _errLog = [];
+  function _appendRecentError(list, message) {
+    list.push(message);
+    if (list.length > ERR_LOG_CAP) list.splice(0, list.length - ERR_LOG_CAP);
+  }
   function _zhxErr(where, e) {
     try {
       const msg = String(where || 'safe') + '：' + String((e && (e.message || e)) || 'e').slice(0, 100);
-      if (_errLog.length < ERR_LOG_CAP) _errLog.push(msg);
-      if (Array.isArray(window.__zhxErrs) && window.__zhxErrs.length < ERR_LOG_CAP) window.__zhxErrs.push(msg);
+      _appendRecentError(_errLog, msg);
+      if (Array.isArray(window.__zhxErrs)) _appendRecentError(window.__zhxErrs, msg);
     } catch (_e) { /* 忽略：记录缓冲失败不影响警告输出 */ }
     try { console.warn((where || 'safe') + '：', e); } catch (_e) { /* 忽略：控制台不可用时静默 */ }
   }
