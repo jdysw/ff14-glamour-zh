@@ -658,9 +658,13 @@ try {
     ];
     const harness = buildSearchHarness(rows);
     harness.api.startChineseSearch('mirapri');
+    const form = new FakeElement('form');
     const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
     input.setAttribute('type', 'search');
     input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
     input.value = '炎灵';
     harness.ready[0]();
     document.dispatch('focusin', { target: input });
