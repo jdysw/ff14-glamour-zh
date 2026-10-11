@@ -14,6 +14,9 @@ mkdirSync(directory, { recursive: true });
 const result = spawnSync(process.execPath, [
   '--test',
   '--experimental-test-coverage',
+  // 同时展示原生 test/spec 失败详情，LCOV 仍写入独立报告，不再隐藏错误堆栈。
+  '--test-reporter=spec',
+  '--test-reporter-destination=stdout',
   '--test-reporter=lcov',
   '--test-reporter-destination=' + report,
   'tests/unit/test-native-source.test.mjs',
