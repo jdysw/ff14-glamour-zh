@@ -23,15 +23,16 @@
                    └── 订阅 data-manager 的就绪通知
 ```
 
-这样移除的是 **data-manager → site-registry 的直接反向依赖**，不是声称全部 ESM 环已经消失。项目原有 Rollup 顺序契约、站点模块互相引用、缓存层与数据层互相引用仍存在，需要后续继续拆分。
+首先解除 **data-manager → site-registry** 反向依赖；随后在本阶段新增的缓存基础层、诊断钩子与 EC 翻译归属调整中，进一步拆除剩余的业务循环。
 
 ### 2. 其余循环引用拆解
 
 - `core/runtime.js` 不再导入 `data-manager.js`；装备链接查询 `lookupZh` 移到真实调用方 `core/targets.js`，保留 hash 优先及原生名称兜底行为。
-- `core/cache.js` 统一拥有英文/日文名称缓存、FC 职能名称表与 Ronka 装备缓存；站点和解析器只能依赖缓存层，不再由缓存层反向导入这些对象。
+- 新增无业务导入的 `core/cache-primitives.js`，持有英文查找缓存、缓存注册与失效操作、容量限制、日常时间常量和公共子串算法；数据管理器与词典直接引用基础层，派生缓存层则可单向读取数据与词典。FC 职能名称、日文查找缓存和 Ronka 缓存仍由 `core/cache.js` 统一管理，不再从站点反向导入。
 - `trEC` 与 `PATTERNS_EC` 统一留在 `sites/eorzea-collection.js`；通用 `item-resolver.js` 不再导入 EC 站点文案，实现 EC → 核心解析器的单向依赖，原 EC 翻译金标准仍逐条验证。
-- 缓存层仍存在注明 `@phase15-order-link` 的纯副作用顺序导入，这属于旧版 Rollup 输出排序约束，而非业务数据依赖；独立图分析按标记排除。
-- 缓存与数据管理器、数据管理器与解析器等其他业务耦合仍存在，不声称全部 ESM 环已消除。
+- 英文名称兜底查找由数据层直接实现，物品解析器只单向读取该接口；数据管理器不再反向导入 `item-resolver.js`。
+- 数据加载时的 `__zhxMark` 改为基础运行时提供的轻量回调，Probe 在模块加载时注册原有探测函数；数据管理器不再导入完整诊断模块与 Wiki 页面逻辑。
+- 移除全部 `@phase15-order-link` 人为顺序依赖；旧 `build/migrate/order-modules.mjs` 不再可重新制造依赖环。当前生产源码 ESM 导入图由测试强制检查**零循环依赖**。
 
 ### 3. 移除未使用的兼容接口
 
@@ -41,19 +42,19 @@
 
 ### 4. 构建契约可观察性
 
-在 `build/module-order.json` 登记新模块，确保其先于数据管理器求值。顺序校验失败时现在打印预期、实际顺序及首个不一致位置，减少远端构建问题的定位成本。
+`build/module-order.json` 改为记录正常 ESM 依赖驱动的 Rollup 实际输出顺序，而不是要求每个模块额外导入前驱。`verify-build-order.mjs` 继续执行独立快照校验，发生差异时打印实际/期望顺序和首个差异，便于审查构建重排。
 
 ### 5. 测试与生产模块解耦
 
-`test-site-registry.mjs`、`test-observer.mjs`、`test-dictionary.mjs` 和 `test-item-resolver.mjs` 改为直接读取规范模块的标记区段，注入最小桩环境并执行相同业务断言。它们不再依赖 Rollup 打包产物的模块拼接位置。仍保留现有从构建产物验证最终 IIFE 的集成检查。
+`test-site-registry.mjs`、`test-observer.mjs`、`test-dictionary.mjs` 和 `test-item-resolver.mjs` 改为直接读取规范模块的标记区段，注入最小桩环境并执行相同业务断言。它们不再依赖 Rollup 打包产物的模块拼接位置。V3 生命周期及缓存基础测试同样调整为真实模块来源；仍保留从构建产物验证最终 IIFE 的集成检查。
 
-新增 `test-architecture.mjs` 和 `test-dependency-direction.mjs`，分别守护架构约束、解析真实业务 import 与 Tarjan 强连通分量。后者不计入人为的构建顺序导入，并如实报告尚存的业务循环。
+新增 `test-architecture.mjs` 和 `test-dependency-direction.mjs`，分别守护架构约束、解析真实业务 import 与 Tarjan 强连通分量。后者借助 AST 与 Tarjan 强连通分量分析全部规范业务 import，明确禁止恢复 `@phase15-order-link` 人工边，并要求**循环强连通分量为零**。
 
 ## 兼容性与留待后续处理的问题
 
 - 维持七站站点顺序、完整宿主匹配、表和索引配置、数据就绪回调以及所有已冻结的翻译、搜索行为。
 - 对退役的内部接口改用真实站点调用链和直接生命周期方法进行回归验证；没有放宽现存业务断言。
-- 现有 Rollup 强制模块顺序链尚未取消；其他未迁移的文本提取测试与依赖环需继续逐步处理，不能通过调整测试预期规避行为变化。
+- 强制副作用顺序链已取消。历史迁移文档与少量仍以 dist 文本提取的金标准测试属于后续可整理项目，但不会让它们重新引入运行时循环依赖。
 
 ## 验证
 
