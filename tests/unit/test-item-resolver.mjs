@@ -38,7 +38,7 @@ function buildResolver(env = {}) {
     '_irAliasMap = __env.aliasMap || null;',
     '_irGlamMap = __env.glamMap || null;',
     '_irCandidatePolicy = __env.candidatePolicy ?? 1;',
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, _irBuildSearchFromNames, __setSlots: (slots) => { _irSearchSlotByNative = slots; }, __stats: () => ({ ..._irStats }) };',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, _irBuildSearchFromNames, __setSlots: (slots) => { _irSearchSlotByNative = slots; }, __stats: () => ({ ..._irStats }), __indexedCandidates: (q, kind) => { _ensureIrSearch(); return _irSearchContainsCandidates(q, kind); }, __allKeys: (kind) => { _ensureIrSearch(); return _getIrSearchKeysByKind(kind); } };',
   ].join('\n');
   return new Function('__env', body)(env);
 }
@@ -125,6 +125,43 @@ console.log('\n── B2：按真实装备部位优先，组内再按匹配度�
  eq('未授权的原生名不混入白名单候选',api.suggestByZh('装备',0,new Set(['Missing'])).length,0);
  api.__setSlots(null);
  eq('无旧部位元数据时安全退回原匹配排序',api.suggestByZh('装备')[0].zh,'装备');
+}
+
+console.log('\n── B3：倒排索引保持匹配、排序和局部词提取契约 ──');
+{
+ const entries = {};
+ const glam = {};
+ for (let i = 0; i < 4000; i++) {
+   const native = 'native-' + i;
+   entries[native] = '装备' + String(i).padStart(4, '0') + '常规款';
+   glam[native] = '1';
+ }
+ entries['rare-head'] = '幻华长袍';
+ entries['rare-middle'] = '金色幻华发带';
+ entries['rare-tail'] = '典藏幻华';
+ entries['rare-unrelated'] = '魔法之光';
+ for (const native of ['rare-head', 'rare-middle', 'rare-tail', 'rare-unrelated']) glam[native] = '1';
+ const aliasMap = { '幻华披肩': ['幻华长袍'], '高阶幻华长袍': ['幻华长袍'], '与幻华无关': ['魔法之光'] };
+ const api = buildResolver(mkEnv({ nameMap: entries, glamMap: glam, aliasMap }));
+ for (const kind of [0, 1]) {
+   const keys = api.__allKeys(kind);
+   for (const query of ['幻华', '幻华长袍', '金色幻华', '典藏幻华', '无此关键字', '装备00', '幻华无关']) {
+     const actual = api.__indexedCandidates(query, kind).filter(k => k.includes(query));
+     const baseline = keys.filter(k => k.includes(query));
+     eq('双字倒排结果与全量扫描严格等价 ' + kind + ':' + query,
+       JSON.stringify(actual), JSON.stringify(baseline));
+   }
+ }
+ eq('稀有中文片段候选扫描范围显著缩小',
+   api.__indexedCandidates('幻华', 0).length < api.__allKeys(0).length / 100, true);
+ const rows = api.suggestByZh('幻华');
+ const expected = ['幻华长袍', '金色幻华发带', '典藏幻华', '幻华披肩',
+   '高阶幻华长袍', '与幻华无关'];
+ const ranked = rows.map(x => x.zh);
+ eq('索引不影响正式名与别名的优先级',
+   JSON.stringify(ranked), JSON.stringify(expected));
+ eq('命中限制仍在排序后执行', api.suggestByZh('幻华', 2).length, 2);
+ eq('不存在的片段无候选', api.suggestByZh('九千幻华').length, 0);
 }
 
 console.log('\n── C：候选安全策略 ──');
