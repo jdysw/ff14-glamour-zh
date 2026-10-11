@@ -1,18 +1,9 @@
 name: Release
 
-# Main-only release. Verify Test, CodeQL and Sonar checks for this exact
-# push commit before publishing. Avoid privileged workflow_run checkout.
+# Release is a deliberate, manual operation. Merging development changes into
+# main must never publish a release or re-use an already published version.
+# The version is changed separately only when a release is intentionally planned.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'build/**'
-      - 'dict/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/test.yml'
   workflow_dispatch:
 
 permissions:
