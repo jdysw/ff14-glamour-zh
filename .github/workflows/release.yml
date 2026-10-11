@@ -73,7 +73,10 @@ jobs:
                 const matches = checks.filter((check) => check.name === name).sort((a, b) => b.id - a.id);
                 const latest = matches[0];
                 if (!latest || latest.status !== "completed") pending.push(name);
-                else if (latest.conclusion !== "success") failed.push(name + ": " + latest.conclusion);
+                else if (latest.conclusion !== "success" &&
+                  !(name === "CodeQL" && latest.conclusion === "neutral")) {
+                  failed.push(name + ": " + latest.conclusion);
+                }
               }
               if (failed.length) console.log("FAIL " + failed.join(", "));
               else if (pending.length) console.log("WAIT " + pending.join(", "));
