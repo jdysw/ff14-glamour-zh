@@ -3,9 +3,7 @@
 import '../sites/huiji-wiki.js';
 import { CACHE_CAP_LOOKUP, _en2zhCache, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
 import { resolveByName } from './data-manager.js';
-import { DICT_EC } from './dictionary.js';
-import { PATTERNS_EC } from '../sites/eorzea-collection.js';
-export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries, trEC, tryEnToZh };
+export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries, tryEnToZh };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -19,31 +17,6 @@ export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, 
     _en2zhCache.set(en, out);
     return out;
   }
-
-  function trEC(text) {
-    if (!text) return text;
-    const t = text.trim();
-    if (!t) return text;
-    if (t.length > 90) return text;          // 长句多为用户描述，不动
-    if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
-    const hit = DICT_EC[t];
-    if (hit) {
-      const i = text.indexOf(t);
-      return text.slice(0, i) + hit + text.slice(i + t.length);
-    }
-    // 纯英文短串（字母开头，含有限符号）→ 查主表/染剂表拿国服中文名
-    if (/^[A-Za-z]/.test(t) && /^[A-Za-z0-9'\-.,:&!? ()（）]+$/.test(t)) {
-      const zhName = tryEnToZh(t);
-      if (zhName && zhName !== t) {
-        const i2 = text.indexOf(t);
-        return text.slice(0, i2) + zhName + text.slice(i2 + t.length);
-      }
-    }
-    let out = text;
-    for (const [re, to] of PATTERNS_EC) out = out.replace(re, to);
-    return out;
-  }
-
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
   function lookupJp2Zh(jp) {
