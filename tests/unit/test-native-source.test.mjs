@@ -13,7 +13,6 @@ import {
   ERR_LOG_CAP, _errLog, _zhxErr, safe, registerProbeMark, __zhxMark,
 } from '../../src/core/runtime.js';
 import { httpGet } from '../../src/core/http.js';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
 import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady } from '../../src/core/data-manager.js';
 import {
