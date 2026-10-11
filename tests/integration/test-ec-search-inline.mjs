@@ -70,6 +70,50 @@ await c.eval(`(() => {
   }, true);
   return 1;
 })()`);
+// Simulate the actual two-stage vue-select on EC. Remote search arrives
+// asynchronously; selecting a native li via mousedown commits its option.
+await c.eval(`(() => {
+  const input = document.getElementById('vs-head');
+  const toggle = input.parentElement;
+  const host = document.createElement('div');
+  host.className = 'v-select';
+  toggle.parentNode.insertBefore(host, toggle);
+  host.appendChild(toggle);
+  const selected = document.createElement('span');
+  selected.className = 'vs__selected';
+  toggle.prepend(selected);
+  const menu = document.createElement('ul');
+  menu.className = 'vs__dropdown-menu';
+  host.appendChild(menu);
+  window.__nativePickCount = 0;
+  window.__nativePickWrong = 0;
+  const original = ${JSON.stringify(expectEn)};
+  input.addEventListener('input', () => {
+    if (input.value !== original) return;
+    // Deliberately do not cancel a delayed response when user input changes:
+    // the custom code must reject stale options from a racing XHR.
+    setTimeout(() => {
+      menu.replaceChildren();
+      const decoy = document.createElement('li');
+      decoy.className = 'vs__dropdown-option';
+      decoy.textContent = '女仆腕带';
+      decoy.dataset.zhixiaSourceText = 'Incorrect Native Equipment';
+      decoy.addEventListener('mousedown', () => { window.__nativePickWrong++; });
+      const option = document.createElement('li');
+      option.className = 'vs__dropdown-option';
+      option.textContent = '女仆腕带'; // EC may have translated the visible native label.
+      option.dataset.zhixiaSourceText = original;
+      option.addEventListener('mousedown', event => {
+        event.preventDefault();
+        window.__nativePickCount++;
+        selected.textContent = original;
+        input.value = '';
+        menu.replaceChildren();
+      });
+      menu.append(decoy, option);
+    }, 220);
+  });
+})()`);
 await c.eval(wrap(GF));
 await sleep(1500);
 
@@ -118,12 +162,42 @@ await sleep(800);
 const v3 = await readVs('vs-head');
 const closedAfterPick = await c.eval("document.querySelector('#zhx-chinese-suggest-list')?.hidden === true");
 ok('③a EC 候选选中后中文浮层关闭，不遮住原生下拉', closedAfterPick === true);
-ok('③ EC Vue 候选选中后保留原生英文名，防止 v-model 竞争',
-  picked !== null && v3 === expectEn, JSON.stringify({ picked, v3, expectEn }));
+const nativeSelected = await c.eval(`(() => ({
+  name: document.querySelector('#vs-head').closest('.v-select')
+    .querySelector('.vs__selected')?.textContent,
+  pickCount: window.__nativePickCount,
+  wrongCount: window.__nativePickWrong,
+}))()`);
+ok('③ EC 点击中文候选一次即选中真正的原生装备（而非只搜索），并清空 Vue 搜索框',
+  picked !== null && v3 === '' && nativeSelected?.name === expectEn
+    && nativeSelected.pickCount === 1 && nativeSelected.wrongCount === 0,
+  JSON.stringify({ picked, v3, nativeSelected, expectEn }));
 const seenVals = await c.eval('window.__inputVals').catch(() => null);
 const convHit = Array.isArray(seenVals) && picked && picked.nativeText
   && seenVals.some((v) => v && v.length >= 2 && (v === picked.nativeText || v.includes(picked.nativeText) || picked.nativeText.includes(v)));
 ok('③b 转换式搜索派发原生名 input（站内搜索生效）', convHit === true, JSON.stringify({ picked, seenVals: (seenVals || []).slice(-4) }));
+
+// Late search responses must not select an old item after the user starts
+// typing a different query.
+await setVs('vs-head', EXPECT_ZH);
+await sleep(500);
+const beforeStale = await c.eval('window.__nativePickCount');
+const initiated = await c.eval(`(() => {
+  const b = document.querySelector('#zhx-chinese-suggest-list');
+  const btn = b && !b.hidden ? b.querySelector('button[data-zhx-index]') : null;
+  if (!btn) return false;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  const input = document.getElementById('vs-head');
+  input.value = '新的检索项';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+})()`);
+await sleep(650);
+const afterStale = await c.eval('window.__nativePickCount');
+ok('③f 新输入使旧原生选择失效，即使旧 XHR 较晚返回',
+  initiated && beforeStale === afterStale
+    && await readVs('vs-head') === '新的检索项',
+  JSON.stringify({ initiated, beforeStale, afterStale }));
 
 // 检查已选择过中文候选的真实浏览器输入框仍可输入新词。
 await setVs('vs-head', '新的检索项');
