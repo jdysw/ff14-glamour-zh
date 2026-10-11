@@ -1,16 +1,17 @@
 // bench-read-path.mjs — V3 缓存读取路径细分基准（ec：V3 site files + shared dict）
 // 记录可用的 V3 诊断点、GM 存储读取耗时、缓存命中数和数据索引规模。
 // 预置生成器产出的真实 V3 manifest 与内容寻址文件缓存；网络请求由 stub 拒绝。
-// CPU 节流 1x/4x/8x；每档默认 3 轮
+// CPU 节流 1x/4x/8x；每档收集原始轮次与 P50/P95（仅模拟，不代表真机）。
 // 用内建诊断记录，不从 dist 文本提取或改写运行时代码。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { distFile, fixtureUrl } from '../helpers/paths.mjs';
 import { seedV3Browser } from '../helpers/v3-cache.mjs';
-import { writeReport } from './report.mjs';
+import { samplePercentiles, writeReport } from './report.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const ROUNDS = Number(process.env.ZHX_BENCH_ROUNDS || 3);
+if (!Number.isInteger(ROUNDS) || ROUNDS < 1) throw new Error('基准轮次必须为正整数');
 const FIXTURE = fixtureUrl('ec-page.html');
 const DIST = distFile;
 
@@ -56,6 +57,11 @@ const runOne = async (rate, round) => {
     }
     const z = await c.eval(`(() => { const d = window.__zhxDiagRecord(); return { boot: d.boot, ...(d.marks || {}), gmAcc: window.__gmAcc || 0, gmReq: window.__gmReq || 0, data: d.data, dl: d.dl, dict: d.dict }; })()`);
     if (!ok || !z.fireDone || z.gmReq !== 0 || !z.dl || z.dl.cache < 5) throw new Error('未就绪或没有完整 V3 缓存命中: ' + JSON.stringify(z));
+    // 在加载完成后采集 V8 实际堆使用量；单位 MiB，缺少 CDP 接口时明确记为 null。
+    try {
+      const heap = await c.send('Runtime.getHeapUsage');
+      z.heapUsedMiB = Number.isFinite(heap?.usedSize) ? heap.usedSize / 1048576 : null;
+    } catch (_error) { z.heapUsedMiB = null; }
     console.log('  [' + rate + 'x #' + round + '] boot=' + z.boot + 'ms finalize=' + z.finalize + ' ready=' + z.ready + ' fireDone=' + z.fireDone + ' | localStorage=' + z.gmAcc.toFixed(1) + 'ms cache=' + z.dl.cache + ' net=' + z.dl.net + ' names=' + z.data.names + ' dict=' + z.dict.chars);
     return z;
   } finally {
@@ -94,8 +100,23 @@ for (const rate of rates) {
     nameKeys: med(runs.map((z) => z.data.names)),
     dictChars: med(runs.map((z) => z.dict.chars)),
     runs: runs.length,
+    // 保留旧 summary 字段，同时新增可审计的原始轮次、P50/P95、堆内存采样。
+    percentiles: {
+      readyMs: samplePercentiles(runs.map(z => z.ready)),
+      fireDoneMs: samplePercentiles(runs.map(z => z.fireDone)),
+      cacheReadMs: samplePercentiles(runs.map(z => z.gmAcc)),
+      heapUsedMiB: samplePercentiles(runs.map(z => z.heapUsedMiB)),
+    },
+    samples: runs.map(z => ({
+      boot: z.boot, ready: z.ready, fireDone: z.fireDone,
+      cacheReadMs: z.gmAcc, heapUsedMiB: z.heapUsedMiB,
+    })),
   };
   report.rates[rate] = row;
+  console.log('  统计：ready P50=' + f(row.percentiles.readyMs.p50) +
+    ' P95=' + f(row.percentiles.readyMs.p95) +
+    ' | ready heap(MiB) P50=' + f(row.percentiles.heapUsedMiB.p50) +
+    ' P95=' + f(row.percentiles.heapUsedMiB.p95));
   console.log(rate + 'x | ' + f(row.boot) + ' | ' + f(row.finalize) + ' | ' + f(row.ready) + ' | ' + f(row.fireDone)
     + ' | ' + f(row.localStorageMs) + ' | ' + f(row.cacheHits) + ' | ' + f(row.networkRequests)
     + ' | ' + f(row.nameKeys) + ' | ' + f(row.dictChars));
