@@ -8,6 +8,10 @@ on:
       - '.github/workflows/performance-regression.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ec-performance-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
