@@ -789,6 +789,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // handler receives the click. Allow the handler to run first, then fall
   // back to a clean reload only if it did not navigate itself.
   const EC_RESET_FILTER_LABEL = /^(?:reset filters|重置筛选|清空筛选)$/iu;
+  const EC_RESET_SHORT_LABEL = /^(?:reset|重置)$/iu;
 
   function bindECResetFilters() {
     if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
@@ -799,11 +800,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       const path = globalThis.__zhxTestSite === 'ec'
         ? (globalThis.__zhxTestECResetPath || globalThis.location?.pathname || '')
         : (globalThis.location?.pathname || '');
-      if (!/^\/glamours(?:\/|$)/iu.test(path)) return;
-      const button = event.target?.closest?.('button, [role="button"]');
+      if (!/^\/(?:glamours|gearsets|accessories)(?:\/|$)/iu.test(path)) return;
+      const button = event.target?.closest?.('button, a[href], [role="button"]');
       if (!button || button.disabled) return;
       const label = String(button.textContent || '').replace(/\s+/gu, ' ').trim();
-      if (!EC_RESET_FILTER_LABEL.test(label)) return;
+      const shortReset = /^\/(?:gearsets|accessories)(?:\/|$)/iu.test(path)
+        && EC_RESET_SHORT_LABEL.test(label);
+      if (!EC_RESET_FILTER_LABEL.test(label) && !shortReset) return;
 
       const before = globalThis.location?.href;
       if (!before) return;
