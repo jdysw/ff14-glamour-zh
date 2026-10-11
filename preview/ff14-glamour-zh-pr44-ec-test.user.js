@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.27
+// @version      1.4.3.44.28
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 7a30639ed3414910a23874dd774cf2511a087b02
+// PR44 source commit: 21e306c8d5df5670052d8cf6dc67e5176f66f62d
 
 
 (function () {
@@ -4995,7 +4995,39 @@
       return changed;
     }
 
+    // EC's Reset filters action should always return to an unfiltered view.
+    // Some live-page layouts retain reactive filter state even when the native
+    // handler receives the click. Allow the handler to run first, then fall
+    // back to a clean reload only if it did not navigate itself.
+    const EC_RESET_FILTER_LABEL = /^(?:reset filters|重置筛选|清空筛选)$/iu;
+
+    function bindECResetFilters() {
+      if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
+      globalThis.__zhxECResetBound = true;
+      document.addEventListener('click', (event) => {
+        const path = globalThis.location?.pathname || '';
+        if (!/^\/glamours(?:\/|$)/iu.test(path)) return;
+        const button = event.target?.closest?.('button, [role="button"]');
+        if (!button || button.disabled) return;
+        const label = String(button.textContent || '').replace(/\s+/gu, ' ').trim();
+        if (!EC_RESET_FILTER_LABEL.test(label)) return;
+
+        const before = globalThis.location?.href;
+        if (!before) return;
+        const clean = new URL(before);
+        clean.search = '';
+        // Do not block EC's click/default handlers. A prior page navigation
+        // wins; only a still-current page needs the deterministic fallback.
+        setTimeout(() => {
+          if (globalThis.location?.href !== before) return;
+          if (clean.href !== before) globalThis.location.assign(clean.href);
+          else globalThis.location.reload?.();
+        }, 250);
+      }, true);
+    }
+
     function startEC() {
+      safe(bindECResetFilters, 'EC 重置筛选')();
       safe(translateECPage, 'EC 全扫')();
       safe(translateECTitle, 'EC 页面标题')();
       safe(bindECPieceTiles, 'EC 部位图')();
