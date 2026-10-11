@@ -63,6 +63,14 @@ jobs:
           FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
         run: python3 .github/deploy/prepare.py
 
+      - name: Node 22（数据与脚本端统一契约）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 发布前校验完整 V3 数据包和七站文件需求
+        run: node tools/data/verify-publish-contract.mjs --dir site/ff14/v3
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
