@@ -6,6 +6,10 @@ on:
       - '.github/workflows/live-coverage-audit.yml'
       - 'tools/coverage-audit/**'
   workflow_dispatch:
+concurrency:
+  group: seven-site-live-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 jobs:
