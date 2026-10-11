@@ -646,6 +646,38 @@ try {
     }
   }
 
+  console.log('\n── F3：候选原生名标记文本与 Sonar S3358 语义回归 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const rows = [
+      { zh: '炎灵第一件', native: 'Base Gear' },
+      { zh: '炎灵第二件', native: 'Pending Gear', provisional: true },
+      { zh: '炎灵第三件', native: 'Descriptive Gear', descriptive: true },
+      { zh: '炎灵第四件', native: 'Pending Priority', provisional: true, descriptive: true },
+    ];
+    const harness = buildSearchHarness(rows);
+    harness.api.startChineseSearch('mirapri');
+    const form = new FakeElement('form');
+    const input = new FakeElement('input');
+    input.form = form;
+    input.name = 'keyword';
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '装備品名等を入力');
+    form.appendChild(input);
+    input.value = '炎灵';
+    harness.ready[0]();
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    const options = findSuggestBox(document)?.querySelectorAll('button[data-zhx-index]') || [];
+    eq('四种标记状态均有候选', options.length, 4);
+    const labels = options.map(button => button.children[1]?.textContent);
+    eq('正式候选原生名无后缀', labels[0], 'Base Gear');
+    eq('暂定 EC 搜索结果添加待确认标记', labels[1], 'Pending Gear · EC 结果待确认');
+    eq('描述性套装译名添加专属标记', labels[2], 'Descriptive Gear · 描述性译名');
+    eq('两个标记同时存在时保持待确认优先级', labels[3], 'Pending Priority · EC 结果待确认');
+  }
+
   console.log('\n── G：候选列表体验（全量数据 / 可视 8 行 / 滚动不关闭）──');
   {
     installDocument();

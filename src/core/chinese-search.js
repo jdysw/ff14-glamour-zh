@@ -578,7 +578,10 @@ function appendSuggestionBatch() {
     zh.textContent = row.zh;
     const native = document.createElement('span');
     native.className = 'zhx-suggest-native';
-    native.textContent = row.native + (row.provisional ? ' · EC 结果待确认' : row.descriptive ? ' · 描述性译名' : '');
+    let statusSuffix = '';
+    if (row.provisional) statusSuffix = ' · EC 结果待确认';
+    else if (row.descriptive) statusSuffix = ' · 描述性译名';
+    native.textContent = row.native + statusSuffix;
     button.append(zh, native);
     _suggestBox.appendChild(button);
   }
