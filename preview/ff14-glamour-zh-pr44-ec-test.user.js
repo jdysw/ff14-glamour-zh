@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.19
+// @version      1.4.3.44.20
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 3f509029ff200eaf87d717848ff58a629c4d81f2
+// PR44 source commit: 185a1cfa4888cb642bacfbf46165ed95ac0d5df4
 
 
 (function () {
@@ -9326,7 +9326,7 @@
       const pushItems = () => {
         // item：装备链接（两站均用 eorzeadb_link 标记）
         for (const a of scan('a.eorzeadb_link')) {
-          if (a.classList.contains('zhixia-item-zh')) continue;
+          if (isECSearchOption(a) || a.classList.contains('zhixia-item-zh')) continue;
           const el = a.querySelector('span') || a;
           const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
           if (!name || name.length < 2 || name.length > 48) continue;
@@ -9337,7 +9337,7 @@
       const pushPlainItems = () => {
         // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
         for (const sp of scan('span[class*="has-text-rarity-"]')) {
-          if (sp.classList.contains('zhixia-item-zh')) continue;
+          if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')) continue;
           const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
           if (!name || name.length < 3 || name.length > 48) continue;
           if (!resolveByName(name)) continue;
@@ -9347,7 +9347,7 @@
       const pushCards = () => {
         // card：EC 列表页卡片标题（外层 <a> 指向站内页）
         for (const el of scan(EC_CARD_SEL)) {
-          if (el.dataset.zhixiaCard) continue;
+          if (isECSearchOption(el) || el.dataset.zhixiaCard) continue;
           const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
           if (!name || name.length < 3 || name.length > 48) continue;
           if (!resolveByName(name)) continue;
@@ -9419,6 +9419,16 @@
     // 拿不到原文而跳过（历史缺陷：EC 站装备链接点击不跳 wiki）。注意本常量引用
     // EC_CARD_SEL，只能在 4053 行（其定义）之后使用——调用均发生在脚本分发阶段，安全。
     const EC_ITEM_SKIP_SEL = 'a.eorzeadb_link, span[class*="has-text-rarity-"], ' + EC_CARD_SEL;
+
+    // EC vue-select uses clickable LI options to commit a search selection.
+    // Neither these options nor our suggestion list are navigable gear cards:
+    // wrapping an option as a wiki link or hijacking its click breaks v-model.
+    const EC_SEARCH_OPTION_SEL = '.v-select, .vs__dropdown-menu, .vs__dropdown-option, ' +
+      '[data-zhx-chinese-suggest]';
+
+    function isECSearchOption(el) {
+      return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
+    }
 
     function zhApplyCards(targets) {
       targets.forEach((t) => {
@@ -9519,7 +9529,7 @@
       window.__zhixiaWikiJumpBound = true;
       document.addEventListener('click', (e) => {
         const el0 = e.target;
-        if (!el0?.closest) return;
+        if (!el0?.closest || isECSearchOption(el0)) return;
         const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
         let probe = a || el0;
         let guard = 0;
