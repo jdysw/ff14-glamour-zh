@@ -8,6 +8,16 @@ import { repoRoot, distFile } from '../helpers/paths.mjs';
 
 export const SCHEMA = 'zhx-bench/1';
 
+// 样本先过滤非有限值，P50/P95 使用最近秩；少量样本时 P95 接近最坏轮次。
+// 不把模拟 CPU 节流环境的数字标记为真实手机实测。
+export function samplePercentiles(values) {
+  const sorted = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
+  if (!sorted.length) return { count: 0, p50: null, p95: null, min: null, max: null };
+  const at = (ratio) => sorted[Math.max(0, Math.ceil(ratio * sorted.length) - 1)];
+  return { count: sorted.length, p50: at(0.5), p95: at(0.95), min: sorted[0], max: sorted.at(-1) };
+}
+
+
 /** 当前构建产物摘要（sha256 前 12 位；产物缺失返回 'n/a'） */
 export function distSha12() {
   try {
