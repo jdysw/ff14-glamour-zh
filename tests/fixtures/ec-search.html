@@ -10,6 +10,13 @@
   <form name="filter" method="get">
     <input type="text" name="search" placeholder="Search by title">
     <input type="text" name="author" placeholder="Search by player">
+    <!-- EC Reset filters is a native app button, not a Wiki equipment link.
+         Changing its label to Chinese must not cancel the original click. -->
+    <input type="text" name="filterjob" id="ec-filter-job" value="PLD">
+    <div id="ec-filter-actions">
+      <button type="button" id="ec-reset-filters">Reset filters</button>
+      <button type="button" id="ec-apply-filters">Apply filters</button>
+    </div>
     <div class="vs__dropdown-toggle"><input type="search" class="vs__search" id="vs-head" placeholder="Any head"></div>
     <div class="vs__dropdown-toggle"><input type="search" class="vs__search" id="vs-hands" placeholder="Any hands"></div>
   </form>
@@ -20,5 +27,16 @@
     </form>
   </div>
   <div id="results"><p>content</p></div>
+  <script>
+    window.__ecResetClicks = 0;
+    window.__ecApplyClicks = 0;
+    document.querySelector('#ec-reset-filters').addEventListener('click', () => {
+      window.__ecResetClicks++;
+      document.querySelector('#ec-filter-job').value = '';
+    });
+    document.querySelector('#ec-apply-filters').addEventListener('click', () => {
+      window.__ecApplyClicks++;
+    });
+  </script>
 </body>
 </html>
