@@ -342,6 +342,24 @@ console.log('\n── G：EC 原生筛选候选绝不跳 Wiki / 不包装链接 
     clickHandler(evt);
     eq('中文搜索候选不会触发 Wiki 跳转', opened.length, 0);
 
+    // EC filter actions are normal buttons. Even if an equipment name
+    // appears on the filter panel's ancestor, a global fallback must not
+    // hijack Reset/Apply or other native button clicks.
+    const gearAncestor = { textContent: 'Example Equipment', parentElement: null };
+    for (const label of ['Reset filters', '重置筛选', 'Apply filters']) {
+      const control = { textContent: label, parentElement: gearAncestor };
+      const resetButton = fakeEl({
+        text: label,
+        closest: selector => selector.startsWith('button, input,') ? control : null,
+      });
+      resetButton.parentElement = gearAncestor;
+      const nativeClick = makeClick(resetButton);
+      clickHandler(nativeClick);
+      ok('EC ' + label + ' 按钮不取消点击，React 可执行原生操作',
+        !nativeClick.prevented && !nativeClick.stopped);
+      eq('EC ' + label + ' 不错误跳转灰机 Wiki', opened.length, 0);
+    }
+
     // Existing wiki behavior for real equipment links remains unchanged.
     const realAnchor = fakeEl({ text: 'Example Equipment', closest: () => null });
     const realLink = fakeEl({
