@@ -26,8 +26,15 @@ export { httpGet };
     const headers = fresh ? { 'Cache-Control': 'no-cache, no-store', Pragma: 'no-cache' } : undefined;
     return new Promise((resolve, reject) => {
       let done = false;
-      const ok = (t) => { if (!done) { done = true; resolve(t); } };
-      const bad = (e) => { if (!done) { done = true; reject(e instanceof Error ? e : new Error(String(e))); } };
+      let timeoutTimer = null;
+      const finish = (fn, value) => {
+        if (done) return;
+        done = true;
+        if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+        fn(value);
+      };
+      const ok = (t) => finish(resolve, t);
+      const bad = (e) => finish(reject, e instanceof Error ? e : new Error(String(e)));
       try {
         if (typeof GM_xmlhttpRequest === 'function') {
           GM_xmlhttpRequest({
@@ -47,14 +54,13 @@ export { httpGet };
           const ctl = typeof AbortController === 'function' ? new AbortController() : null;
           const fetchOptions = ctl ? { signal: ctl.signal } : {};
           if (fresh) fetchOptions.cache = 'no-store';
-          const tm = setTimeout(() => {
+          timeoutTimer = setTimeout(() => {
             try { ctl?.abort(); } catch (e) { /* Abort is best-effort. */ }
             bad(new Error('timeout')); // Also settle if AbortController is unavailable.
           }, ms);
           Promise.resolve().then(() => fetch(requestUrl, fetchOptions))
             .then((r) => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
-            .then(ok, bad)
-            .finally(() => clearTimeout(tm));
+            .then(ok, bad);
           return;
         }
       } catch (e) { /* 忽略：fetch 不可用——走最后兜底 */ }
