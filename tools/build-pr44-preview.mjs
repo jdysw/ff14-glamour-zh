@@ -34,7 +34,8 @@ header = replaceLine(header, 'version', version);
 header = replaceLine(header, 'description',
   'PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。');
 const matches = header.match(/^\/\/ @match[ \\t]+.*$/gm) || [];
-assert.ok(matches.some(line => line.includes('ffxiv.eorzeacollection.com')), 'Original bundle is missing EC @match');
+assert.ok(matches.some(line => /^\/\/ @match[ \t]+https:\/\/ffxiv\.eorzeacollection\.com\/\*$/.test(line)),
+  'Original bundle must explicitly match the exact EC hostname and path');
 header = header.replace(/^\/\/ @match[ \\t]+.*(?:\n|$)/gm, '');
 header = header.replace('// @run-at', [
   '// @match        https://ffxiv.eorzeacollection.com/*',

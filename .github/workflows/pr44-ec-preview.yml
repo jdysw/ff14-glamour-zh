@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pr44-ec-preview
@@ -29,7 +29,7 @@ jobs:
       - name: Checkout PR44 head
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: false
       - name: Node 22
         uses: actions/setup-node@v4
         with:
@@ -62,7 +62,26 @@ jobs:
           path: preview/ff14-glamour-zh-pr44-ec-test.user.js
           retention-days: 30
           if-no-files-found: error
-      - name: Publish preview to PR44 branch
+  # Build dependencies and generated scripts run without write credentials.
+  # Only the separate publication job can write, and it does not execute
+  # downloaded/generated code.
+  publish-preview:
+    needs: build-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout PR44 for publication
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download verified preview artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ff14-glamour-zh-pr44-ec-test
+          path: preview
+      - name: Commit generated userscript (no code execution)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
