@@ -349,7 +349,7 @@ function ecNativeOptionMatch(option, row) {
 function armECNativePick(input, row) {
   cancelECNativePick();
   const root = input.closest?.('.v-select');
-  if (!root?.querySelectorAll) return false;
+  if (!root?.querySelectorAll) return null;
   const pending = { input, root, row, observer: null, timer: null };
   _ecPendingNativePick = pending;
   const attempt = () => {
