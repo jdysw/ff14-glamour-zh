@@ -17,13 +17,11 @@ export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables,
 
 
   /* @zhixia:site-registry-start */
-  /* ── Site Registry（v1.4 Phase 3）：六站唯一配置源 ─────────────────────
-     一处维护：新增站点 = 本表加一条（并同步 userscript @match 头）；为某站
-     新增索引 = 站内 indexes 加一项；调整所需数据表 = 站内 tables。hosts 用
-     onHost 精确匹配（含子域）；boot = 页面加载即启动；pageshow = bfcache
-     恢复补跑（各函数幂等，safe 包裹）。Phase 15 模块化构建时，本区段将
-     原样抽出为 src/core/site-registry.js。 */
-  // 统一站点适配器工厂（v1.4 Phase 9）：六站标准接口——
+  /* ── Site Registry：站点启动行为与 DOM 适配器 ──────────────────
+     域名、数据表、索引需求统一由 site-policy.js 提供，禁止在此重复维护。
+     本模块只绑定七站启动函数和页面生命周期回调；启动与数据策略分层后，
+     数据管理器不需要加载站点启动适配器。 */
+  // 统一站点适配器工厂：七站标准接口——
   //   id / hosts / tables / indexes   配置面（Phase 3 约定）
   //   start()        页面加载即启动（原 boot 的站点入口）
   //   processRoot()  统一处理入口（root 缺省 = 全页；元素 = 局部）
@@ -56,7 +54,7 @@ export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables,
   }
 
   const SITE_REGISTRY = [
-    // ── 站点拆分顺序（计划书 9.2）：① ronka ② ec ③ mirapri ④ fc ⑤ collection ⑥ wiki ──
+    // 站点顺序须与 site-policy.js 的配置一致。
     // （注册顺序 = 匹配优先级，保持 Phase 3 金标准不变）
     createSiteAdapter({
       id: 'mirapri',
