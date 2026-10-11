@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.31
+// @version      1.4.3.44.32
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 7c2e702a6eca7d37c5bab3b46731c55656081d31
+// PR44 source commit: 0d6fef6c8bec660d07bb21739d5173c4dde3befe
 
 
 (function () {
@@ -5001,6 +5001,19 @@
     // back to a clean reload only if it did not navigate itself.
     const EC_RESET_FILTER_LABEL = /^(?:reset filters|重置筛选|清空筛选)$/iu;
     const EC_RESET_SHORT_LABEL = /^(?:reset|重置)$/iu;
+    // /glamours/head/27832 is itself a gear filter, not a permanent
+    // category. Removing only ?query (or reloading this URL) re-applies
+    // the same selected item. Canonical reset must leave the item route.
+    const EC_GLAMOUR_ITEM_FILTER_PATH =
+      /^\/glamours\/(?:weapon|head|body|hands|legs|feet|ear|ears|neck|wrist|ring)\/\d+\/?$/iu;
+
+    function ecResetFiltersUrl(href) {
+      const url = new URL(href);
+      if (EC_GLAMOUR_ITEM_FILTER_PATH.test(url.pathname)) url.pathname = '/glamours';
+      url.search = '';
+      url.hash = '';
+      return url.href;
+    }
 
     function bindECResetFilters() {
       if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
@@ -5023,13 +5036,13 @@
 
         const before = globalThis.location?.href;
         if (!before) return;
-        const clean = new URL(before);
-        clean.search = '';
-        // Do not block EC's click/default handlers. A prior page navigation
-        // wins; only a still-current page needs the deterministic fallback.
+        const cleanUrl = ecResetFiltersUrl(before);
+        // The site's own click handler still runs. If it does not navigate,
+        // follow the canonical clean route; reloading an item-filter URL would
+        // simply apply the unwanted filter all over again.
         setTimeout(() => {
           if (globalThis.location?.href !== before) return;
-          if (clean.href !== before) globalThis.location.assign(clean.href);
+          if (cleanUrl !== before) globalThis.location.assign(cleanUrl);
           else globalThis.location.reload?.();
         }, 250);
       }, true);
