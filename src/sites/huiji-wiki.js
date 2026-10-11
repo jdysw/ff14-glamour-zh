@@ -1,6 +1,4 @@
 /* @phase15-module-order:sites/huiji-wiki */
-/* @phase15-order-link:sites/huiji-wiki<-sites/mirapri */
-import './mirapri.js';
 import { resolveEcId, resolveKo } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
