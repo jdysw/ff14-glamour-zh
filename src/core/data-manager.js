@@ -6,6 +6,7 @@ import { httpGet } from './http.js';
 import { __zhxMark, _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
+import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
 export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
@@ -198,15 +199,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
-  async function _v3VerifyFile(text, fingerprint) {
-    if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle || typeof TextEncoder !== 'function') return true;
+  async function _v3VerifyFile(text, fingerprint, expectedBytes) {
+    // 两端共享 SHA-256 + UTF-8 字节长度契约；禁止字节数不同的数据污染缓存。
+    if (typeof TextEncoder !== 'function') return false;
+    let encoded;
     try {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      encoded = new TextEncoder().encode(text);
+      if (expectedBytes !== undefined && encoded.byteLength !== expectedBytes) return false;
+      if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle) return true;
+      const buf = await crypto.subtle.digest('SHA-256', encoded);
       const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
       return actual === fingerprint;
     } catch (e) {
       _zhxErr('v3verify', e);
-      return false; // A failed SHA-256 operation must never count as a verified download.
+      return false;
     }
   }
 
@@ -220,18 +226,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return ok;
   }
 
-  async function _v3FindCachedFile(baseKey, fingerprint) {
+  async function _v3FindCachedFile(baseKey, fingerprint, expectedBytes) {
     let cached = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
     if (cached === null) cached = await _v3ReadCachedFile(baseKey, fingerprint);
-    return cached !== null && await _v3VerifyFile(cached, fingerprint) ? cached : null;
+    return cached !== null && await _v3VerifyFile(cached, fingerprint, expectedBytes) ? cached : null;
   }
 
   // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
-    if (!meta?.url || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return null;
+    const expectedUrl = name === 'dict' ? 'dict.json'
+      : siteId + '/' + name + (name === 'series' || name === 'acl' ? '.txt' : '.tsv');
+    if (!validV3FileMeta(meta, expectedUrl)) return null;
     const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
     const key = baseKey + '.' + meta.sha256;
-    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256);
+    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256, meta.bytes);
     if (cached !== null) {
       _dlStats.cache++;
       if (staged) staged.set(key, meta.sha256 + '\n' + cached);
@@ -242,7 +250,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); }
     catch (e) { text = null; /* 请求失败返回 null，由更新流程选择重试或其他数据通道 */ }
     if (typeof text !== 'string' || !text) return null;
-    if (!await _v3VerifyFile(text, meta.sha256)) return null;
+    if (!await _v3VerifyFile(text, meta.sha256, meta.bytes)) return null;
     _dlStats.net++;
     if (staged) staged.set(key, meta.sha256 + '\n' + text);
     else await _v3WriteFileCache(key, meta.sha256 + '\n' + text, force);
@@ -265,14 +273,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
   function _validV3Manifest(man) {
-    if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy) || !man.sites || typeof man.sites !== 'object') return false;
-    const validFile = (meta) => typeof meta?.url === 'string' && /^[a-f0-9]{64}$/i.test(meta?.sha256 || '');
-    for (const site of Object.values(man.sites)) {
-      if (!site?.files || typeof site.files !== 'object') return false;
-      for (const meta of Object.values(site.files)) if (!validFile(meta)) return false;
-    }
-    if (man.shared?.dict && !validFile(man.shared.dict)) return false;
-    return true;
+    return validV3Manifest(man);
   }
 
   async function fetchManifest(force = false) {
@@ -323,14 +324,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   function _requiredV3Files(site) {
-    const required = [];
-    if (site.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
-    if (site.indexes?.includes('itemHash')) required.push('hash');
-    if (site.indexes?.includes('ecidMap')) required.push('ecid');
-    if (site.indexes?.includes('koByZh')) required.push('ko');
-    if (site.tables?.includes('series')) required.push('series');
-    if (site.tables?.includes('acl')) required.push('acl');
-    return required;
+    return requiredV3Files(site);
   }
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
