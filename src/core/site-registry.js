@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/site-registry */
 import { DATA_REMOTE } from './constants.js';
 import { onTablesReady } from './data-manager.js';
-import { SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost } from './site-policy.js';
+import { SITE_POLICIES, findSitePolicy } from './site-policy.js';
 import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, startItems } from './targets.js';
 import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
@@ -11,7 +11,9 @@ import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
 import { startMirapri, translatePage } from '../sites/mirapri.js';
 import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ronka.js';
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
-export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables, onHost };
+// 转发站点策略公共接口，同时继续由本模块负责七站启动。
+export { _siteIndexes, neededTables, onHost } from './site-policy.js';
+export { SITE_REGISTRY, createSiteAdapter, findSite };
 
 
   /* @zhixia:site-registry-start */
