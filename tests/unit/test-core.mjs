@@ -95,8 +95,8 @@ function makeEnv(over = {}) {
     GM_xmlhttpRequest: (opt) => { rec.xhrCalls.push(opt); },
     fetch: undefined,
     AbortController: undefined,
-    // Real timers never fire synchronously inside setTimeout(). Keep a virtual
-    // clock and explicitly advance it in timeout tests.
+    // 真实计时器不会在 setTimeout() 调用内同步执行；使用虚拟时钟，
+    // 并在超时测试中显式推进。
     setTimeout: (fn, ms) => {
       const task = { id: rec.timers.length + 1, fn, ms, cleared: false };
       rec.timers.push(task);
