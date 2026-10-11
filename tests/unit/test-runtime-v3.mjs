@@ -270,7 +270,8 @@ function makeWorld(over = {}) {
 }
 
 function buildDM(world) {
-  const body = [...CACHE_SEGS, ...DM_SEGS].join('\n');
+  // 规范模块把 findSitePolicy 作为 findSite 导入；隔离装配时保留同一别名绑定。
+  const body = 'const findSite = findSitePolicy;\n' + [...CACHE_SEGS, ...DM_SEGS].join('\n');
   const ret = [
     'return {',
     '  ensureTables, itemDbReady,',
