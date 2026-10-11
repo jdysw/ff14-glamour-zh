@@ -40,7 +40,7 @@ function harness(href, { path, disabled = false, text = '重置筛选' } = {}) {
   assert.equal(listeners.length, 1, 'Handler must be installed only once');
   const button = { textContent: text, disabled };
   const event = {
-    target: { closest: selector => selector === 'button, [role="button"]' ? button : null },
+    target: { closest: selector => selector === 'button, a[href], [role="button"]' ? button : null },
     defaultPrevented: false,
     propagationStopped: false,
     preventDefault() { this.defaultPrevented = true; },
@@ -75,6 +75,18 @@ check('站点已跳转时不再执行兜底，避免重复导航', () => {
   assert.equal(x.location.assigned.length, 0);
   assert.equal(x.location.reloads, 0);
 });
+check('gearsets 列表：Reset 清除筛选与中文检索，保留套装类别', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/gearsets/casters?search=hooded&filterjob=BLM&page=3', { text: 'Reset' });
+  x.click();
+  x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/gearsets/casters']);
+});
+check('accessories 列表：Reset 清除首饰筛选，保留当前列表路径', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/accessories?search=memory&filterjob=AST', { text: 'Reset' });
+  x.click();
+  x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/accessories']);
+});
 check('非重置按钮（应用筛选）不会触发页面刷新', () => {
   const x = harness('https://ffxiv.eorzeacollection.com/glamours?filterjob=PLD', { text: '应用筛选' });
   x.click();
@@ -85,8 +97,8 @@ check('页面未激活的按钮不执行重置', () => {
   x.click();
   assert.equal(x.timers.length, 0);
 });
-check('gearsets、其他 EC 内容页不受重置兜底影响', () => {
-  const x = harness('https://ffxiv.eorzeacollection.com/gearsets?search=abc');
+check('非筛选栏目如 facewear 不受兜底影响', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/facewear?search=abc');
   x.click();
   assert.equal(x.timers.length, 0);
 });
