@@ -7,7 +7,7 @@ import { __zhxMark, _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -43,7 +43,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
     if (!_readyCbs.includes(fn)) _readyCbs.push(fn);
-    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } }
+    if (_tablesReady) { try { fn(dataGetStatus()); } catch (e) { _zhxErr('readyCb', e); } }
   }
   function _fireTablesReady() {
     if (_tablesReady) return;
@@ -54,7 +54,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.slice(); // 保留订阅，确保数据失效并重新加载后再次通知。
-    for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
+    const status = dataGetStatus();
+    for (const f of cbs) { try { f(status); } catch (e) { _zhxErr('readyCb', e); } }
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
@@ -82,11 +83,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
   let _activeEnsure = null; // 请求进行中触发刷新时，串行执行前后两代加载。
   let _ensureGeneration = 0; // 过期加载不能应用数据表，也不能触发就绪通知。
+  let _dataLoadState = 'idle'; // idle/loading/ready/degraded 与“广播已完成”分离。
+  let _dataLoadOrigin = 'none'; // cache/network/fallback/none，用于调用方诊断。
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureFinalize(generation = _ensureGeneration) {
     if (generation !== _ensureGeneration) return Promise.resolve();
     __zhxMark('finalize');
+    if (_dataLoadState === 'loading') _dataLoadState = 'degraded';
     try { _fireTablesReady(); } catch (e) { _zhxErr('fireReady', e); }
     __zhxMark('ready');
     return Promise.resolve();
@@ -450,6 +454,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
     const site = findSite();
     if (!site?.id) return false;
+    const sourceBefore = { ..._dlStats };
     try {
       const snapshots = await _readPreviousV3Manifest(site.id);
       const manifest = await _selectV3Manifest(force, refreshManifest, snapshots);
@@ -459,6 +464,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (!result.loaded || generation !== _ensureGeneration) return false;
       if (result.manifest === manifest) await _commitV3Selection(site.id, manifest, snapshots, force, staged);
       if (result.manifest.version) DATA_VER = String(result.manifest.version);
+      _dataLoadOrigin = _dlStats.fallback > sourceBefore.fallback ? 'fallback'
+        : _dlStats.net > sourceBefore.net ? 'network' : 'cache';
+      _dataLoadState = 'ready';
       return true;
     } catch (e) {
       _zhxErr('v3', e);
@@ -553,12 +561,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _manifestRefreshRequested = false;
     const loaded = await _ensureTryV3(force, refreshManifest, generation);
     if (generation !== _ensureGeneration) return;
+    _dataLoadState = loaded ? 'ready' : 'degraded';
     if (loaded && force && _irCandidatePolicy === 1) await _completeDataRefresh();
   }
 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
     const generation = _ensureGeneration;
+    _dataLoadState = 'loading';
     // 加载过程中触发刷新时，先等待旧请求完成，
     // 再通过代际校验防止过期请求发布结果。
     const previous = _activeEnsure;
@@ -587,6 +597,18 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       default: return null;
     }
   }
+  // 脚本层可观察的只读数据状态，不直接暴露持久缓存或可变索引对象。
+  // 已通知回调不代表下载成功：加载失败时 state=degraded，但仍触发兼容的就绪广播。
+  function dataGetStatus() {
+    return Object.freeze({
+      site: findSite()?.id || null,
+      state: _dataLoadState,
+      origin: _dataLoadOrigin,
+      version: DATA_VER || null,
+      generation: _ensureGeneration,
+      ready: _tablesReady,
+    });
+  }
   function dataGetIndex(name) {
     // 索引引用（数据层与核心模块内部/调试用途；业务侧查询一律走 Item Resolver）
     switch (name) {
@@ -602,6 +624,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _ensureGeneration++;
     _tablesReady = false;
     _ensurePromise = null;
+    _dataLoadState = 'idle';
+    _dataLoadOrigin = 'none';
     DATA_VER = '';
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);
