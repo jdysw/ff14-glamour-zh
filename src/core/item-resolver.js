@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/item-resolver */
 /* @phase15-order-link:core/item-resolver<-sites/huiji-wiki */
 import '../sites/huiji-wiki.js';
-import { CACHE_CAP_LOOKUP, _getSeriesMap, cacheGuard } from './cache.js';
+import { CACHE_CAP_LOOKUP, _en2zhCache, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
 import { resolveByName } from './data-manager.js';
 import { DICT_EC } from './dictionary.js';
 import { PATTERNS_EC } from '../sites/eorzea-collection.js';
@@ -10,7 +10,6 @@ export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
   // 装备名/染剂名等短英文串（如 Tule Tunic、Charcoal Grey）。
-  const _en2zhCache = new Map();
   function tryEnToZh(en) {
     if (!en) return null;
     if (_en2zhCache.has(en)) return _en2zhCache.get(en);
@@ -47,7 +46,6 @@ export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, 
 
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
-  const _jp2zhCache = new Map();
   function lookupJp2Zh(jp) {
     if (!jp || jp.length > 80) return null;   // v1.12.0 放宽
     if (_jp2zhCache.has(jp)) return _jp2zhCache.get(jp);
