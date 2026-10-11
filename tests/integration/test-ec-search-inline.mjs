@@ -116,6 +116,8 @@ const picked = await c.eval(`(() => {
 })()`);
 await sleep(800);
 const v3 = await readVs('vs-head');
+const closedAfterPick = await c.eval("document.querySelector('#zhx-chinese-suggest-list')?.hidden === true");
+ok('③a EC 候选选中后中文浮层关闭，不遮住原生下拉', closedAfterPick === true);
 ok('③ EC Vue 候选选中后保留原生英文名，防止 v-model 竞争',
   picked !== null && v3 === expectEn, JSON.stringify({ picked, v3, expectEn }));
 const seenVals = await c.eval('window.__inputVals').catch(() => null);
@@ -128,6 +130,27 @@ await setVs('vs-head', '新的检索项');
 await sleep(800);
 ok('③c 选中中文候选后重新键入不被旧值覆盖',
   await readVs('vs-head') === '新的检索项');
+
+// Outside pointer events must close the overlay without canceling the
+// native target's pointerdown, and subsequent typing should reopen it.
+await setVs('vs-head', '女仆');
+await sleep(500);
+const outsideState = await c.eval(`(() => {
+  const box = document.querySelector('#zhx-chinese-suggest-list');
+  const nativeInput = document.querySelector('#legacy-search input[name="keyword"]');
+  if (!box || !nativeInput || box.hidden) return null;
+  let reached = false;
+  nativeInput.addEventListener('pointerdown', () => { reached = true; }, { once: true });
+  const allowed = nativeInput.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+  return { hidden: box.hidden, allowed, reached };
+})()`);
+ok('③d 点击原生控件关闭中文候选且不拦截 pointerdown',
+  outsideState?.hidden === true && outsideState.allowed === true && outsideState.reached === true,
+  JSON.stringify(outsideState));
+await setVs('vs-head', '女仆');
+await sleep(500);
+ok('③e 外部关闭后继续输入可以再次弹出候选',
+  (await c.eval(suggestState))?.hidden === false);
 
 // ── ④ 未知中文名不转换 ──
 await setVs('vs-head', '不存在的装备名称xyz');
