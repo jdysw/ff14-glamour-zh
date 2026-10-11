@@ -1,6 +1,6 @@
 // 直接加载生产 ESM 模块执行测试，由 Node V8 生成真实源码 LCOV 覆盖率。
 import test from 'node:test';
-import { createHash, webcrypto } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import {
   SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost,
@@ -292,7 +292,7 @@ test('原生 V3 契约：站点表一致、固定路径和异常元数据不得�
 });
 
 test('真实数据层及脚本事件桥：网络加载、内容校验、刷新和异常降级', async () => {
-  const names = ['window', 'location', 'crypto', 'GM_xmlhttpRequest', 'GM_getValue',
+  const names = ['window', 'location', 'GM_xmlhttpRequest', 'GM_getValue',
     'GM_setValue', 'GM_listValues', 'GM_deleteValue'];
   const original = Object.fromEntries(names.map(name => [name, globalThis[name]]));
   const gm = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
@@ -325,7 +325,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'mirapri.com' };
-    globalThis.crypto = webcrypto;
+    assert.ok(globalThis.crypto?.subtle, 'Node 22 应提供真实 WebCrypto 校验');
     globalThis.GM_getValue = (k, fallback) => gm.get(k) ?? fallback;
     globalThis.GM_setValue = (k, val) => { gm.set(k, val); };
     globalThis.GM_listValues = () => [...gm.keys()];
