@@ -208,7 +208,7 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const CACHE_SEGS = sliceAll(DIST_TEXT, 'core-cache');
+const CACHE_SEGS = [...sliceAll(DIST_TEXT, 'core-cache-primitives'), ...sliceAll(DIST_TEXT, 'core-cache')];
 const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 const NAMES = [
