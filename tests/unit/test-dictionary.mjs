@@ -4,7 +4,7 @@
 //       与翻译统一接口层（按 profile 分发）的当前行为用断言钉死。
 //       后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
-// 机制：从构建产物（dist）提取 @zhixia:core-dictionary 与 @zhixia:core-translator
+// 机制：从规范模块源码提取 @zhixia:core-dictionary 与 @zhixia:core-translator
 //       区段，以桩装配运行——六层词表起始为空对象；tr/trEC/… 以带标记的前缀桩
 //       替代；修正扫描用 mock TreeWalker 观测（节点对象可断言 nodeValue）。
 //       不依赖 Chrome / 外网。
@@ -17,7 +17,9 @@
 //   - 提取锚随 src 结构变化会失配并明确报错——届时按新结构更新锚点即可（有意的哨兵）。
 //
 // 运行：node tests/unit/test-dictionary.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -28,7 +30,10 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 从三个规范模块提取对应代码段，避免依赖打包产物的文本顺序。
+const DICT_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/dictionary.js'), 'utf8');
+const TR_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/translator.js'), 'utf8');
+const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
 
 // ─────────────────────────────────────────────────────────────
 // 提取装置：按 @zhixia:<tag> 标记切出区段（同名多段按顺序全部取出）
@@ -50,9 +55,9 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const DICT_SEG = sliceAll(DIST_TEXT, 'core-dictionary');
-const TR_SEG = sliceAll(DIST_TEXT, 'core-translator');
-const CACHE_REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
+const DICT_SEG = sliceAll(DICT_TEXT, 'core-dictionary');
+const TR_SEG = sliceAll(TR_TEXT, 'core-translator');
+const CACHE_REG_SEG = sliceAll(CACHE_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
 
 const STUB_LINES = [
   // ── 桩（必须先于区段：值捕获纪律；七层词表从空开始）──
