@@ -6,7 +6,7 @@ import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from
 import { DICT_LAYERS } from './dictionary.js';
 import { _scanStats } from './dom.js';
 import { _obsStats } from './observer.js';
-import { __zhxBootAt, _errLog, _perfNow } from './runtime.js';
+import { __zhxBootAt, _errLog, _perfNow, registerProbeMark } from './runtime.js';
 import { blockByTitle, getItemId, getItemZhName, getJapaneseName, getSlot, wikiReverseItems } from '../sites/huiji-wiki.js';
 export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProbeCopy, __zhxProbeData, __zhxProbeEnv, __zhxProbeFallbackCopy, __zhxProbeOn, __zhxProbePanel, __zhxProbeSetup, __zhxProbeText, __zhxProbeToast, __zhxProbeWiki, _bootProbeTail };
 
@@ -253,3 +253,6 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
   }
   _bootProbeTail();
   /* @zhixia:core-probe-end */
+
+  // 诊断函数保持原实现，数据层则经基础运行时钩子调用，避免形成完整模块环。
+  registerProbeMark(__zhxMark);
