@@ -221,7 +221,7 @@ function searchInputScore(input) {
     input.getAttribute?.('aria-label'),
     input.getAttribute?.('title'),
   ].filter(Boolean).join(' ');
-  if (SEARCH_EXCLUDE_RE.test(meta)) return -Infinity; // Never treat excluded fields as fallback search inputs.
+  if (SEARCH_EXCLUDE_RE.test(meta)) return -Infinity; // 已排除字段不能进入兜底搜索框候选。
   let score = 0;
   if (/装備名(?:の一部)?を入力して検索|装備名.*検索|検索.*装備名/u.test(meta)) score += 120;
   if (/keyword/i.test(meta)) score += 100;
