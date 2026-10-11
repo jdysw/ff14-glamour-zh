@@ -3,10 +3,12 @@
 // 背景：ffxiv.eorzeacollection.com（英文站）的部位筛选器是 vue-select 组件（class="vs__search"），
 //       输入即触发站点装备检索（云真站实测 2026-10-08：POST /gear/<slot>/search，body {"search":"输入值"}）。
 //       b 方案（2026-10-08）：输入停顿不再自动转换（禁止输入即搜索）；vue-select 与独立搜索框统一——
-//       挂候选面板，点选候选才做「转换式搜索」（英文名触发站内检索），随后输入框显示恢复为中文。
+//       挂候选面板，点选候选才做「转换式搜索」（英文名触发站内检索）。
+//       EC 的 Vue 受控框必须保持英文原生名和 v-model 同步；不可定时回写中文。
 // 本测试：用同构夹具（form 内 vue-select 框 + 有 name 的对照框）冻结契约：
 //   ① 独立搜索框出现智能候选面板（数据就绪门）；② 输入中文不自动转换；
-//   ③ 点选候选：转换式搜索（派发原生名）且输入框保留中文；
+//   ③ 点选候选：转换式搜索（派发原生名），输入框与 Vue 保持原生查询值；
+//      验证之后可输入新词且不会被恢复定时器覆盖；
 //   ④ 未知中文名保持原样；⑤ form 内有 name 的搜索框不触发独立转换（回归保护）。
 import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
@@ -97,7 +99,7 @@ await sleep(1200);
 const v2 = await readVs('vs-head');
 ok('② 输入中文全名后值保持原样（不自动转换）', v2 === EXPECT_ZH, JSON.stringify(v2));
 
-// ── ③ 点选候选：转换式搜索（派发原生名）+ 输入框保留中文（b 方案）──
+// ── ③ 点选候选：派发原生名并与 EC Vue 的 v-model 保持同步 ──
 await setVs('vs-head', EXPECT_ZH);
 await sleep(700);
 const picked = await c.eval(`(() => {
@@ -114,11 +116,18 @@ const picked = await c.eval(`(() => {
 })()`);
 await sleep(800);
 const v3 = await readVs('vs-head');
-ok('③ 点选候选后输入框保留中文（显示恢复）', picked !== null && v3 === picked.zhText, JSON.stringify({ picked, v3 }));
+ok('③ EC Vue 候选选中后保留原生英文名，防止 v-model 竞争',
+  picked !== null && v3 === expectEn, JSON.stringify({ picked, v3, expectEn }));
 const seenVals = await c.eval('window.__inputVals').catch(() => null);
 const convHit = Array.isArray(seenVals) && picked && picked.nativeText
   && seenVals.some((v) => v && v.length >= 2 && (v === picked.nativeText || v.includes(picked.nativeText) || picked.nativeText.includes(v)));
 ok('③b 转换式搜索派发原生名 input（站内搜索生效）', convHit === true, JSON.stringify({ picked, seenVals: (seenVals || []).slice(-4) }));
+
+// 检查已选择过中文候选的真实浏览器输入框仍可输入新词。
+await setVs('vs-head', '新的检索项');
+await sleep(800);
+ok('③c 选中中文候选后重新键入不被旧值覆盖',
+  await readVs('vs-head') === '新的检索项');
 
 // ── ④ 未知中文名不转换 ──
 await setVs('vs-head', '不存在的装备名称xyz');
