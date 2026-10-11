@@ -1,5 +1,4 @@
 /* @phase15-module-order:core/dictionary */
-/* @phase15-order-link:core/dictionary<-core/runtime */
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache-primitives.js';
 export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
