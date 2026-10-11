@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.20
+// @version      1.4.3.44.21
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 185a1cfa4888cb642bacfbf46165ed95ac0d5df4
+// PR44 source commit: ade3e71e640d18cacf4d5f9cb92a7ae92df799e2
 
 
 (function () {
@@ -9305,6 +9305,16 @@
        两条路径经同一采集 / 判定逻辑，行为与旧版逐项一致（golden 冻结）。
        Phase 15 模块化构建时原样抽出为 src/core/targets.js。 */
 
+    // EC vue-select uses clickable LI options to commit a search selection.
+    // Neither these options nor our suggestion list are navigable gear cards:
+    // wrapping an option as a wiki link or hijacking its click breaks v-model.
+    const EC_SEARCH_OPTION_SEL = '.v-select, .vs__dropdown-menu, .vs__dropdown-option, ' +
+      '[data-zhx-chinese-suggest]';
+
+    function isECSearchOption(el) {
+      return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
+    }
+
     // 统一采集：root 内（含自身）按类型收集候选，输出标准 target：
     //   { type, element, text, context }
     // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
@@ -9419,16 +9429,6 @@
     // 拿不到原文而跳过（历史缺陷：EC 站装备链接点击不跳 wiki）。注意本常量引用
     // EC_CARD_SEL，只能在 4053 行（其定义）之后使用——调用均发生在脚本分发阶段，安全。
     const EC_ITEM_SKIP_SEL = 'a.eorzeadb_link, span[class*="has-text-rarity-"], ' + EC_CARD_SEL;
-
-    // EC vue-select uses clickable LI options to commit a search selection.
-    // Neither these options nor our suggestion list are navigable gear cards:
-    // wrapping an option as a wiki link or hijacking its click breaks v-model.
-    const EC_SEARCH_OPTION_SEL = '.v-select, .vs__dropdown-menu, .vs__dropdown-option, ' +
-      '[data-zhx-chinese-suggest]';
-
-    function isECSearchOption(el) {
-      return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
-    }
 
     function zhApplyCards(targets) {
       targets.forEach((t) => {
