@@ -26,7 +26,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _manifestNeedsCommit = false;
   let _manifestRejected = false;
 
-  // Observers remain subscribed across explicit data refreshes.
+  // 显式刷新数据后仍保留已注册的就绪回调。
   const _readyCbs = [];
   let _tablesReady = false; // NOSONAR — ready 状态由数据完成生命周期更新
   function onTablesReady(fn) {
@@ -42,7 +42,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { cacheReset('lookup'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
-    const cbs = _readyCbs.slice(); // Keep subscriptions for subsequent invalidate → reload cycles.
+    const cbs = _readyCbs.slice(); // 保留订阅，确保数据失效并重新加载后再次通知。
     for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
@@ -69,8 +69,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   /* @zhixia:core-data-manager-start */
   /* V3 manifest、缓存、ready 广播与 dataManager API。 */
   let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
-  let _activeEnsure = null; // Serialize old and new loads when invalidated mid-request.
-  let _ensureGeneration = 0; // Stale loads must neither apply tables nor signal ready.
+  let _activeEnsure = null; // 请求进行中触发刷新时，串行执行前后两代加载。
+  let _ensureGeneration = 0; // 过期加载不能应用数据表，也不能触发就绪通知。
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureFinalize(generation = _ensureGeneration) {
@@ -555,8 +555,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
     const generation = _ensureGeneration;
-    // A refresh requested during an in-flight load waits for it to settle,
-    // while a generation guard prevents stale work from publishing results.
+    // 加载过程中触发刷新时，先等待旧请求完成，
+    // 再通过代际校验防止过期请求发布结果。
     const previous = _activeEnsure;
     const promise = Promise.resolve(previous)
       .catch(() => {})
