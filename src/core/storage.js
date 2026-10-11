@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/storage */
-/* @phase15-order-link:core/storage<-core/data-manager */
-import './data-manager.js';
 export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, storeSetAsync };
 
 
