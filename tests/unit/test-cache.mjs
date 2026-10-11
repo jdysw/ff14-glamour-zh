@@ -46,10 +46,11 @@ function sliceAll(s, tag) {
 }
 
 const REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');
+const PRIMITIVE_SEG = sliceAll(DIST_TEXT, 'core-cache-primitives');
 
 // ── 桩：8 个缓存实体（最小可断言形态；必须先于区段：值捕获纪律）──
 const STUB_LINES = [
-  'let _en2zhCache = new Map(), _jp2zhCache = new Map();',
+  'let _jp2zhCache = new Map();',
   'const RONKA_ITEM_CACHE = Object.create(null);',
   'let _ronkaCacheN = 0;',
   'let _seriesMap = null, _seriesPfxCache = null, _itemPfxCache = null;',
@@ -74,7 +75,7 @@ const RETURN_STMT = [
 ].join('\n');
 
 function buildReg() {
-  const body = [...STUB_LINES, ...REG_SEG, RETURN_STMT].join('\n');
+  const body = [...STUB_LINES, ...PRIMITIVE_SEG, ...REG_SEG, RETURN_STMT].join('\n');
   try {
     const fn = new Function(body);
     return fn();
