@@ -1,5 +1,4 @@
 /* @phase15-module-order:core/targets */
-/* @phase15-order-link:core/targets<-core/observer */
 import { observeLocal } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { itemDbReady, resolve, resolveByName } from './data-manager.js';
