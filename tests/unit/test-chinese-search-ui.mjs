@@ -574,12 +574,12 @@ try {
       nativeOption.className = 'vs__dropdown-option';
       nativeOption.textContent = '原生选项已被汉化';
       nativeOption.setAttribute('data-zhixia-source-text', 'Official Native Name');
-      nativeOption.dispatchEvent = event => { picked.push(event.type); return true; };
+      nativeOption.click = () => { picked.push('click'); };
       const decoy = new FakeElement('li');
       decoy.className = 'vs__dropdown-option';
       decoy.textContent = '炎灵'; // 不能用中文匹配覆盖另一个英文源
       decoy.setAttribute('data-zhixia-source-text', 'Different Equipment');
-      decoy.dispatchEvent = event => { picked.push('wrong:' + event.type); return true; };
+      decoy.click = () => { picked.push('wrong:click'); };
 
       input.value = '炎灵';
       document.dispatch('focusin', { target: input });
@@ -598,7 +598,7 @@ try {
       options.push(decoy, nativeOption);
       observers.at(-1).callback();
       eq('英文数据字段精准确认真实原生候选（即使可见文字已汉化）',
-        picked.join('|'), 'mousedown');
+        picked.join('|'), 'click');
       observers.at(-1).callback();
       eq('异步二次 DOM 更新不重复选中', picked.length, 1);
 
@@ -633,7 +633,7 @@ try {
       for (const option of ambiguous) {
         option.textContent = '炎灵';
         option.className = 'vs__dropdown-option';
-        option.dispatchEvent = event => { picked.push('ambiguous:' + event.type); return true; };
+        option.click = () => { picked.push('ambiguous:click'); };
       }
       options.push(...ambiguous);
       observers.at(-1).callback();
