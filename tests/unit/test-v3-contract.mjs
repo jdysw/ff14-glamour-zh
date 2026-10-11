@@ -7,9 +7,10 @@ import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/cor
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const python = [
-  'import sys,json',
-  "sys.path.insert(0, 'build')",
-  'import make_runtime_data as generator',
+  'import json,importlib.util',
+  "spec=importlib.util.spec_from_file_location('v3gen', 'build/make-runtime-data.py')",
+  'generator=importlib.util.module_from_spec(spec)',
+  'spec.loader.exec_module(generator)',
   'print(json.dumps(generator.SITE_FILES, ensure_ascii=False))',
 ].join(';');
 const published = JSON.parse(execFileSync('python3', ['-c', python], { cwd: root, encoding: 'utf8' }));
