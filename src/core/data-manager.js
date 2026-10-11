@@ -238,8 +238,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
-    const expectedUrl = name === 'dict' ? 'dict.json'
-      : siteId + '/' + name + (name === 'series' || name === 'acl' ? '.txt' : '.tsv');
+    const extension = name === 'series' || name === 'acl' ? '.txt' : '.tsv';
+    const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + name + extension;
     if (!validV3FileMeta(meta, expectedUrl)) return null;
     const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
     const key = baseKey + '.' + meta.sha256;
@@ -464,8 +464,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (!result.loaded || generation !== _ensureGeneration) return false;
       if (result.manifest === manifest) await _commitV3Selection(site.id, manifest, snapshots, force, staged);
       if (result.manifest.version) DATA_VER = String(result.manifest.version);
-      _dataLoadOrigin = _dlStats.fallback > sourceBefore.fallback ? 'fallback'
-        : _dlStats.net > sourceBefore.net ? 'network' : 'cache';
+      if (_dlStats.fallback > sourceBefore.fallback) _dataLoadOrigin = 'fallback';
+      else if (_dlStats.net > sourceBefore.net) _dataLoadOrigin = 'network';
+      else _dataLoadOrigin = 'cache';
       _dataLoadState = 'ready';
       return true;
     } catch (e) {
