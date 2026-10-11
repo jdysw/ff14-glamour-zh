@@ -1,5 +1,4 @@
 /* @phase15-module-order:core/cache */
-// 此副作用导入仅用于旧版构建顺序；缓存对象不再从解析器导入。
 import { CACHE_CAP_LOOKUP, DAY_MS, _cacheReg, _en2zhCache, _countIncludes, _lcs90, _shortestStr, cacheGuard, cacheRegister, cacheReset } from './cache-primitives.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
