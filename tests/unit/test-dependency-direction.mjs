@@ -42,6 +42,10 @@ assert.deepEqual(graph.get('core/site-policy.js'), [], '站点纯配置不能引
 const cache = graph.get('core/cache.js');
 assert.ok(!cache.includes('core/item-resolver.js'), '缓存层不能依赖名称解析器');
 assert.ok(!cache.some(dep => dep.startsWith('sites/')), '核心缓存不得反向依赖站点模块');
+assert.ok(!graph.get('core/item-resolver.js').some(dep => dep.startsWith('sites/')),
+  '通用物品解析器不能反向依赖 EC 等站点的文案处理代码');
+assert.ok(graph.get('sites/eorzea-collection.js').includes('core/item-resolver.js'),
+  'EC 站点仍须通过核心解析器执行装备名查询');
 assert.ok(!graph.get('core/data-manager.js').includes('core/site-registry.js'),
   '数据管理器不可再依赖含七站启动行为的注册表');
 assert.ok(!graph.has('core/translator.js'), '无人调用的过渡翻译分发器已退役');
