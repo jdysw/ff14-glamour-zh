@@ -239,6 +239,36 @@ await sleep(500);
 ok('③e 外部关闭后继续输入可以再次弹出候选',
   (await c.eval(suggestState))?.hidden === false);
 
+// ── ③h EC 站点“重置筛选”按钮必须由原生逻辑执行 ──
+// Verify against the injected userscript AND the fixture's existing handlers,
+// rather than accepting a simulated reset performed by the translation script.
+const nativeReset = await c.eval(`(() => {
+  const reset = document.getElementById('ec-reset-filters');
+  const apply = document.getElementById('ec-apply-filters');
+  const job = document.getElementById('ec-filter-job');
+  if (!reset || !apply || !job) return null;
+  job.value = 'PLD';
+  const beforeWiki = window.__wikiOpenAttempts.length;
+  const resetClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+  const allowed = reset.dispatchEvent(resetClick);
+  const applyClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+  const applyAllowed = apply.dispatchEvent(applyClick);
+  return {
+    label: reset.textContent.trim(),
+    resetCount: window.__ecResetClicks, applyCount: window.__ecApplyClicks,
+    value: job.value, allowed, applyAllowed,
+    resetBlocked: resetClick.defaultPrevented, applyBlocked: applyClick.defaultPrevented,
+    wikiCalls: window.__wikiOpenAttempts.length - beforeWiki,
+  };
+})()`);
+ok('③h EC 重置筛选一次点击执行站点原生逻辑并清空当前筛选', nativeReset !== null
+  && nativeReset.resetCount === 1 && nativeReset.value === ''
+  && nativeReset.allowed && !nativeReset.resetBlocked && nativeReset.wikiCalls === 0,
+  JSON.stringify(nativeReset));
+ok('③i EC 应用筛选保持原生 click 与状态处理，不被 Wiki 跳转拦截',
+  nativeReset?.applyCount === 1 && nativeReset.applyAllowed && !nativeReset.applyBlocked,
+  JSON.stringify(nativeReset));
+
 // ── ④ 未知中文名不转换 ──
 await setVs('vs-head', '不存在的装备名称xyz');
 await sleep(1300);
