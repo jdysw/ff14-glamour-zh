@@ -1,5 +1,7 @@
 // Storage wrappers cover classic synchronous GM APIs and Promise-based GM APIs.
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -28,7 +30,7 @@ function slices(source, tag) {
 
 const names = ['GM_getValue', 'GM_setValue', 'GM_listValues', 'GM_deleteValue', 'GM'];
 function makeWorld(values) {
-  const body = slices(readDist(), 'core-storage').join('\n');
+  const body = slices(fs.readFileSync(path.join(repoRoot, 'src/core/storage.js'), 'utf8'), 'core-storage').join('\n');
   const ret = 'return { storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync, storeSet };';
   return new Function(...names, body + '\n' + ret)(...names.map((n) => values[n]));
 }
