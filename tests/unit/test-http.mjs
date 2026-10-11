@@ -61,7 +61,7 @@ function build(fetchImpl, timer, AbortCtor = AbortController, gmRequest = undefi
 // Browsers without AbortController still need a bounded promise.
 {
   const timer = clock();
-  const httpGet = build(() => new Promise(() => {}), timer, undefined);
+  const httpGet = build(() => new Promise(() => {}), timer, null);
   const request = httpGet('https://example.test/hang', 100);
   await new Promise((resolve) => setImmediate(resolve));
   timer.fire(1);
