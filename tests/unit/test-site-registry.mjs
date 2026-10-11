@@ -53,6 +53,7 @@ const STUB_NAMES = [
   'translatePage', 'applyItemZh', 'translateECPage', 'bindECPieceTiles', 'translateFCPage',
   'translateFCTitle', 'fixFCMenu', 'bindFCBanners', 'translateRonkaPage', 'translateRonkaTitle',
   'translateACLPage', 'translateACLTitle', 'injectWikiButton',
+  'startEndCloset', 'translateEndClosetPage', 'translateEndClosetTitle',
 ];
 
 function buildDevice(dataRemote, opts = {}) {
@@ -236,6 +237,74 @@ section('H：适配器错误边界（Phase 18）');
   try { ronka.pageshow(); } catch (e) { threw = true; }
   ok('H4 onPageShow 抛错：pageshow() 不抛出', !threw);
   ok('H5 错误被记录（pageshow:ronka）', g.stubs.errs.some(([w]) => w === 'pageshow:ronka'), JSON.stringify(g.stubs.errs));
+}
+
+// ─────────────────────────────────────────────────────────────
+// I. 运行时真正使用的站点适配器翻译入口（替代未使用的 translator 兼容分发层）
+// ─────────────────────────────────────────────────────────────
+section('I：七站启动、翻译与数据就绪路由');
+{
+  // 基线来自七站原始适配器实际调用顺序；不按测试实现自动推断预期。
+  const routes = {
+    mirapri: {
+      start: ['startMirapri', 'startItems'],
+      process: ['translatePage'],
+      ready: [],
+      pageshow: ['translatePage', 'applyItemZh'],
+    },
+    ec: {
+      start: ['startEC', 'startItems'],
+      process: ['translateECPage', 'applyItemZh'],
+      ready: ['translateECPage', 'translateECTitle'],
+      pageshow: ['translateECPage', 'translateECTitle', 'bindECPieceTiles', 'applyItemZh'],
+    },
+    wiki: {
+      start: ['startWiki'],
+      process: [],
+      ready: ['injectWikiButton'],
+      pageshow: ['injectWikiButton'],
+    },
+    fc: {
+      start: ['startFC'],
+      process: ['translateFCPage'],
+      ready: ['translateFCPage', 'translateFCTitle', 'fixFCMenu', 'bindFCBanners'],
+      pageshow: ['translateFCPage'],
+    },
+    ronka: {
+      start: ['startRonka'],
+      process: ['translateRonkaPage'],
+      ready: ['translateRonkaPage', 'translateRonkaTitle'],
+      pageshow: ['translateRonkaPage', 'translateRonkaTitle'],
+    },
+    collection: {
+      start: ['startACL'],
+      process: ['translateACLPage'],
+      ready: ['translateACLPage', 'translateACLTitle'],
+      pageshow: ['translateACLPage'],
+    },
+    endcloset: {
+      start: ['startEndCloset'],
+      process: ['translateEndClosetPage'],
+      ready: ['translateEndClosetPage', 'translateEndClosetTitle'],
+      pageshow: ['translateEndClosetPage', 'translateEndClosetTitle'],
+    },
+  };
+  for (const [siteId, expected] of Object.entries(routes)) {
+    const g = buildDevice(true);
+    const adapter = g.SITE_REGISTRY.find(item => item.id === siteId);
+    adapter.boot();
+    eq('I ' + siteId + ' 启动调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.start));
+    g.stubs.calls.length = 0;
+    adapter.processRoot({});
+    eq('I ' + siteId + ' 翻译处理调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.process));
+    g.stubs.calls.length = 0;
+    eq('I ' + siteId + ' 订阅数据就绪', g.stubs.ready.length, expected.ready.length ? 1 : 0);
+    for (const fn of g.stubs.ready) fn();
+    eq('I ' + siteId + ' 数据就绪翻译调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.ready));
+    g.stubs.calls.length = 0;
+    adapter.pageshow();
+    eq('I ' + siteId + ' 页面恢复翻译调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.pageshow));
+  }
 }
 
 console.log('\n════════ 汇总 ════════');
