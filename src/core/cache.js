@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/cache */
 /* @phase15-order-link:core/cache<-core/item-resolver */
-// 沿用历史模块执行顺序，但查找缓存不再反向导入解析器状态。
 import './item-resolver.js';
+// 此副作用导入仅用于旧版构建顺序；缓存对象不再从解析器导入。
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
 export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
