@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, webcrypto } from 'node:crypto';
 import { repoRoot } from '../helpers/paths.mjs';
+import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
 
 const source = fs.readFileSync(path.join(repoRoot, 'src/core/data-manager.js'), 'utf8');
 const implementation = source.split('\n')
@@ -41,6 +42,7 @@ function buildHarness(download) {
   const deps = {
     DATA_BASE_V3: 'https://unit.test/ff14/v3/',
     DAY_MS: 86400000,
+    validV3Manifest, validV3FileMeta, requiredV3Files,
     cacheReset: () => {},
     _lcs90: () => null,
     applyRuntimeDict: () => {},
