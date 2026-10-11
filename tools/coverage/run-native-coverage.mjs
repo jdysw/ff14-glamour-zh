@@ -28,6 +28,9 @@ const required = [
   'src/core/site-policy.js',
   'src/core/cache-primitives.js',
   'src/core/runtime.js',
+  'src/core/http.js',
+  'src/core/storage.js',
+  'src/core/dom.js',
 ];
 for (const source of required) {
   const section = records.find(part => part.split('\n').some(line => line.replaceAll('\\', '/').trim() === 'SF:' + source));
