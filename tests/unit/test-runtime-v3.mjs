@@ -8,10 +8,9 @@
 //      离线快路径、manifest/schema/hash 失败时安全空索引且无旧数据请求，
 //      强制迁移、每站 manifest 快照、ready 广播与内容寻址缓存。
 //
-// 机制：同 test-data-manager.mjs——从 dist 提取区段以桩装配，不依赖 Chrome / 外网。
+// 机制：从规范模块源码提取区段以桩装配，不依赖构建变量名、Chrome 或外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
-import { readDist } from '../helpers/paths.mjs';
 import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -189,7 +188,12 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
 // ══════════ B. 运行时 v3 加载（桩装配）══════════
 console.log('\n── B. 运行时 v3 加载 ──');
 
-const DIST_TEXT = readDist();
+// 直接使用规范模块源，避免 Rollup 对同名探测钩子的变量重命名影响测试装配。
+const DIST_TEXT = [
+  'src/core/cache-primitives.js',
+  'src/core/cache.js',
+  'src/core/data-manager.js',
+].map(file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8')).join('\n');
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
