@@ -243,6 +243,38 @@ console.log('\n── G：处理统计（v1.4 Phase 19）──');
   eq('累计 ≥ 峰值 ≥ 首次（毫秒口径）', z2.ms >= z2.maxMs && z2.maxMs >= z2.firstMs, true);
 }
 
+
+console.log('\n── H：EC 站内选择控件排除自动装备链接包装 ──');
+{
+  const excluded = () => ({});
+  const vueAnchor = fakeEl({
+    text: 'Ao Dai',
+    closest: selector => selector.includes('.v-select') ? excluded() : null,
+  });
+  const vuePlain = fakeEl({
+    text: '纯文本名',
+    closest: selector => selector.includes('.vs__dropdown-option') ? excluded() : null,
+  });
+  const vueCard = fakeEl({
+    text: 'Card Name',
+    closest: selector => selector.includes('.vs__dropdown-menu') ? excluded() : null,
+  });
+  const searchOption = fakeEl({
+    text: 'Ao Dai',
+    closest: selector => selector.includes('[data-zhx-chinese-suggest]') ? excluded() : null,
+  });
+  const doc = {
+    querySelectorAll: selector => {
+      if (selector === SEL) return [vueAnchor, searchOption];
+      if (selector === PLAIN) return [vuePlain];
+      if (selector === CARD) return [vueCard];
+      return [];
+    },
+  };
+  const api = buildTargets(doc);
+  eq('EC 原生 vue-select 和中文候选不进入装备链接改写链', api.collectTargets().length, 0);
+}
+
 console.log(`\n════════ 汇总 ════════`);
 console.log(`通过 ${pass} / 失败 ${fail}`);
 
