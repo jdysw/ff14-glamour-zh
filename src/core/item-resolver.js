@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/item-resolver */
-/* @phase15-order-link:core/item-resolver<-sites/huiji-wiki */
-import '../sites/huiji-wiki.js';
 import { CACHE_CAP_LOOKUP, _en2zhCache, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
 import { resolveByName, tryEnToZh } from './data-manager.js';
 export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries, tryEnToZh };
