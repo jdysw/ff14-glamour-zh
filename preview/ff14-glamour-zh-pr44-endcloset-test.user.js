@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 End Closet 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44/endcloset
-// @version      1.4.3.44.32
+// @version      1.4.3.44.35
 // @description  PR44 End Closet 独立测试版：汉化、中文搜索与筛选按钮原生交互保护；在该站须禁用正式版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 0d6fef6c8bec660d07bb21739d5173c4dde3befe
+// PR44 source commit: 2557b6a1803c16362e11f8a661446b7f3997a068
 
 
 (function () {
