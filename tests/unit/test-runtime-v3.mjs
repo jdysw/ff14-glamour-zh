@@ -217,7 +217,7 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
   'neededTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
+  'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
@@ -242,7 +242,8 @@ function makeWorld(over = {}) {
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
     neededTables: () => over.need || ['items', 'dict'],
     _fireTablesReady: () => { rec.fires.push(1); },
-    findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
+    // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。
+    findSitePolicy: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
     _irAliasMap: null, _irDupMap: null, _irSearchSlotByNative: null, _irCandidatePolicy: 0,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
