@@ -251,7 +251,7 @@ console.log('\n── G：EC 原生筛选候选绝不跳 Wiki / 不包装链接 
   // Freeze the production global click listener, not an independent mock
   // of its behavior. Search options are always owned by vue-select.
   const constantsStart = DIST_TEXT.indexOf("  const EC_SEARCH_OPTION_SEL =");
-  const constantsEnd = DIST_TEXT.indexOf("  function zhApplyCards(", constantsStart);
+  const constantsEnd = DIST_TEXT.indexOf("  // 统一采集：root 内", constantsStart);
   const handlerStart = DIST_TEXT.indexOf("  function bindGlobalWikiJump() {", constantsEnd);
   const handlerEnd = DIST_TEXT.indexOf("  // EC 物品链统一分派映射", handlerStart);
   ok('正式构建产物存在原生交互避让规则和 Wiki 监听器',
