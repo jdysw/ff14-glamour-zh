@@ -1,21 +1,17 @@
 name: Release
 
-# 版本发布自动化（v1.4 Phase 17：版本单一源 = package.json）。
-# 触发：src/、build/ 或 package.json 推送到 main → 读取 package.json 版本 → 幂等检查 →
-#       构建（build.sh 全链，含版本同步与词典三方核验）→ 一致性校验（package ≡ src ≡ header ≡ dist）
-#       → 创建 v<版本> tag + Release（附发布件）。
-# 版本号已有 Release 则自动跳过（幂等）；也可在 Actions 页手动触发（补发/演练）。
+# Publish the exact main-branch commit that passed the complete Test workflow.
+# Separate security scans may finish later; their checks are polled before
+# minting a tag. Neither PR test results nor stale main commits may publish.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'build/**'
-      - 'package.json'
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release
@@ -23,56 +19,123 @@ concurrency:
 
 jobs:
   release:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout verified commit
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
 
-      - name: 读取版本号（单一源：package.json）
-        id: v
-        run: |
-          V=$(node -p "require('./package.json').version")
-          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "package.json version 非法：$V"; exit 1; }
-          echo "ver=$V" >> "$GITHUB_OUTPUT"
-          echo "版本号：$V"
-
-      - name: 检查是否已发布（幂等跳过）
-        id: chk
+      - name: Confirm the commit is still main HEAD
+        id: current
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          if gh release view "v${{ steps.v.outputs.ver }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$main_sha" != "$TARGET_SHA" ]; then
             echo "skip=1" >> "$GITHUB_OUTPUT"
-            echo "v${{ steps.v.outputs.ver }} 已存在，跳过发布"
+            echo "Main advanced to $main_sha; skipping stale release candidate $TARGET_SHA."
           else
             echo "skip=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 安装依赖（锁文件）
-        if: steps.chk.outputs.skip == '0'
-        run: npm ci
-
-      - name: 构建（build.sh 全链）
-        if: steps.chk.outputs.skip == '0'
-        run: bash build.sh
-
-      - name: 版本一致性校验（package ≡ src ≡ header ≡ dist）
-        if: steps.chk.outputs.skip == '0'
-        run: npm run version:check
-
-      - name: 创建 Release
-        if: steps.chk.outputs.skip == '0'
+      - name: Require CodeQL and Sonar successful on the exact commit
+        if: steps.current.outputs.skip == '0'
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TARGET_SHA/check-runs?per_page=100")"
+            result="$(printf '%s' "$checks_json" | node -e '
+              const checks = JSON.parse(require("fs").readFileSync(0, "utf8")).check_runs || [];
+              const names = [
+                "Analyze (javascript-typescript)", "Analyze (python)", "Analyze (actions)",
+                "SonarQube Cloud Scan", "SonarCloud Code Analysis"
+              ];
+              const pending = [], failed = [];
+              for (const name of names) {
+                const matches = checks.filter((check) => check.name === name).sort((a, b) => b.id - a.id);
+                const latest = matches[0];
+                if (!latest || latest.status !== "completed") pending.push(name);
+                else if (latest.conclusion !== "success") failed.push(name + ": " + latest.conclusion);
+              }
+              if (failed.length) console.log("FAIL " + failed.join(", "));
+              else if (pending.length) console.log("WAIT " + pending.join(", "));
+              else console.log("OK");
+            ')"
+            echo "Quality gates: $result"
+            case "$result" in
+              OK) exit 0 ;;
+              FAIL*) exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Required security and quality checks timed out." >&2
+          exit 1
+
+      - name: Read validated version
+        if: steps.current.outputs.skip == '0'
+        id: v
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Invalid package version: $V"; exit 1; }
+          echo "ver=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Prevent unpublished changes under an existing version
+        if: steps.current.outputs.skip == '0'
+        id: chk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          tag="v${{ steps.v.outputs.ver }}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')"
+            if [ "$tag_sha" != "$TARGET_SHA" ]; then
+              echo "$tag already points to $tag_sha; increment package.json version before releasing $TARGET_SHA." >&2
+              exit 1
+            fi
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "$tag already represents this exact commit; no duplicate release."
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install pinned dependencies
+        if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0'
+        run: npm ci
+
+      - name: Build and verify reproducible userscript
+        if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0'
+        run: |
+          npm run validate:data
+          npm run build
+          npm run check:dist
+          npm run version:check
+          git diff --exit-code
+
+      - name: Create tagged release for verified SHA
+        if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           gh release create "v${{ steps.v.outputs.ver }}" \
             "dist/ff14-glamour-zh.greasyfork.user.js#FF14 幻化站中文化 v${{ steps.v.outputs.ver }}（Greasy Fork 发布件）" \
+            --target "$TARGET_SHA" \
             --title "v${{ steps.v.outputs.ver }}" \
             --generate-notes \
             --repo "$GITHUB_REPOSITORY"
