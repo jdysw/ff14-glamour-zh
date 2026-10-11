@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.16
+// @version      1.4.3.44.17
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: e00ae05ec87cd8276a74b5dce68f07560fc4ae06
+// PR44 source commit: fc048bd60c1908eee5032894e655dd9f38ae2e80
 
 
 (function () {
@@ -8149,7 +8149,7 @@
   function armECNativePick(input, row) {
     cancelECNativePick();
     const root = input.closest?.('.v-select');
-    if (!root?.querySelectorAll) return false;
+    if (!root?.querySelectorAll) return null;
     const pending = { input, root, row, observer: null, timer: null };
     _ecPendingNativePick = pending;
     const attempt = () => {
