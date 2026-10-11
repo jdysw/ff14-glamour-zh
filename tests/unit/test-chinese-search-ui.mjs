@@ -539,6 +539,113 @@ try {
     eq('非 vue-select 的表单内框不转换（回归保护）', plain.value, '炎灵');
   }
 
+
+  console.log('\n── F2：EC vue-select 第一次点击即完成站点原生选择 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const originalObserver = globalThis.MutationObserver;
+    const originalMouse = globalThis.MouseEvent;
+    const observers = [];
+    globalThis.MutationObserver = class {
+      constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
+      observe() {}
+      disconnect() { this.disconnected = true; }
+    };
+    globalThis.MouseEvent = class {
+      constructor(type, opts) { this.type = type; this.bubbles = opts.bubbles; this.cancelable = opts.cancelable; }
+    };
+    try {
+      const { api, ready } = buildSearchHarness([{ zh: '炎灵', native: 'Official Native Name' }]);
+      api.startChineseSearch('ec');
+      ready[0]();
+      const root = new FakeElement('div');
+      root.className = 'v-select';
+      const input = new FakeElement('input');
+      input.className = 'vs__search';
+      input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Search for option');
+      input.closest = selector => selector === '.v-select' ? root : null;
+      root.appendChild(input);
+      const options = [];
+      root.querySelectorAll = selector => selector === '.vs__dropdown-option' ? options : [];
+      const picked = [];
+      const nativeOption = new FakeElement('li');
+      nativeOption.className = 'vs__dropdown-option';
+      nativeOption.textContent = '原生选项已被汉化';
+      nativeOption.setAttribute('data-zhixia-source-text', 'Official Native Name');
+      nativeOption.dispatchEvent = event => { picked.push(event.type); return true; };
+      const decoy = new FakeElement('li');
+      decoy.className = 'vs__dropdown-option';
+      decoy.textContent = '炎灵'; // 不能用中文匹配覆盖另一个英文源
+      decoy.setAttribute('data-zhixia-source-text', 'Different Equipment');
+      decoy.dispatchEvent = event => { picked.push('wrong:' + event.type); return true; };
+
+      input.value = '炎灵';
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      ok('EC 原生选择测试中存在中文候选', box && !box.hidden);
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      eq('中文候选一次点击写入原生搜索词', input.value, 'Official Native Name');
+      eq('中文浮层同时隐藏', box.hidden, true);
+      eq('异步原生候选尚未出现时不提前误选', picked.length, 0);
+      ok('监视器已挂到站点 select 而非整个 document', observers.length > 0);
+
+      root.append(decoy, nativeOption);
+      options.push(decoy, nativeOption);
+      observers.at(-1).callback();
+      eq('英文数据字段精准确认真实原生候选（即使可见文字已汉化）',
+        picked.join('|'), 'mousedown');
+      observers.at(-1).callback();
+      eq('异步二次 DOM 更新不重复选中', picked.length, 1);
+
+      // A new user query invalidates the previous pending selection. Even
+      // if a remote search response arrives afterward, never pick old data.
+      input.value = '炎灵';
+      document.dispatch('input', { target: input });
+      await sleep();
+      options.length = 0;
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      eq('第二次测试已发起原生检索', input.value, 'Official Native Name');
+      const lateObserver = observers.at(-1);
+      input.value = '新关键词';
+      document.dispatch('input', { target: input });
+      options.push(nativeOption);
+      lateObserver.callback();
+      eq('用户修改查询后不再选择过期原生候选', picked.length, 1);
+      eq('过期原生选项不重写用户新输入', input.value, '新关键词');
+
+      // Two identical Chinese labels without the original native identity
+      // cannot be safely auto-selected by position.
+      input.value = '炎灵';
+      document.dispatch('input', { target: input });
+      await sleep();
+      options.length = 0;
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      const ambiguous = [new FakeElement('li'), new FakeElement('li')];
+      for (const option of ambiguous) {
+        option.textContent = '炎灵';
+        option.className = 'vs__dropdown-option';
+        option.dispatchEvent = event => { picked.push('ambiguous:' + event.type); return true; };
+      }
+      options.push(...ambiguous);
+      observers.at(-1).callback();
+      eq('相同中文名的多个候选不可按第一项猜选', picked.length, 1);
+    } finally {
+      if (originalObserver === undefined) delete globalThis.MutationObserver;
+      else globalThis.MutationObserver = originalObserver;
+      if (originalMouse === undefined) delete globalThis.MouseEvent;
+      else globalThis.MouseEvent = originalMouse;
+    }
+  }
+
   console.log('\n── G：候选列表体验（全量数据 / 可视 8 行 / 滚动不关闭）──');
   {
     installDocument();
