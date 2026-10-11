@@ -579,12 +579,16 @@ try {
     eq(site + ' 保留站点回车事件', prevented, false);
     ok(site + ' 通过 input 事件更新站点状态', searched.some(([type, value]) => type === 'input' && value === 'カ'));
     await sleep();
-    eq(site + ' 回车后保留中文显示', input.value, '炎灵');
+    // EC Vue's v-model owns the text field; unlike React standalone search,
+    // it must retain the native query it just received, without silent resets.
+    eq(site + ' 回车后输入值与站点受控状态一致',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '炎灵';
     document.dispatch('click', { target: button });
     eq(site + ' 搜索按钮转换使用相同原生名', input.value, 'カ');
     await sleep();
-    eq(site + ' 搜索按钮后保留中文显示', input.value, '炎灵');
+    eq(site + ' 搜索按钮后输入值与站点受控状态一致',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '丙丁';
     document.dispatch('keydown', { target: input, key: 'Enter' });
     eq(site + ' 显式搜索支持部分中文词', input.value, 'ウエ');
@@ -604,7 +608,8 @@ try {
     await sleep(150);
     input.value = 'カ'; // 模拟 React 在结果加载后回写受控值。
     await sleep(450);
-    eq(site + ' 受控框回写后再次恢复中文显示', input.value, '炎灵');
+    eq(site + ' 受控框更新遵循各框架原生语义',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '用户继续输入';
     document.dispatch('input', { target: input });
     await sleep(1000);
