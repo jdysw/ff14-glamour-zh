@@ -9,7 +9,7 @@ const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log('  ✅ 
 const eq = (name, actual, expected) => ok(name, actual === expected, '实际=' + JSON.stringify(actual) + ' 期望=' + JSON.stringify(expected));
 // 直接从所有者模块抽取解析器与纯缓存算法，不依赖打包后的跨模块文本区段。
 const RESOLVER_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/data-manager.js'), 'utf8');
-const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
+const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 function sliceAll(s, tag) {
   const a = '/* @zhixia:' + tag + '-start */', b = '/* @zhixia:' + tag + '-end */', out = [];
   let from = 0;
