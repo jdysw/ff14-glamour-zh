@@ -1,7 +1,10 @@
 /* @phase15-module-order:core/item-resolver */
-import { CACHE_CAP_LOOKUP, _en2zhCache, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
-import { resolveByName, tryEnToZh } from './data-manager.js';
-export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries, tryEnToZh };
+import { CACHE_CAP_LOOKUP, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
+import { resolveByName } from './data-manager.js';
+// 仅转发其他模块拥有的符号，避免在此建立多余的本地绑定。
+export { _en2zhCache } from './cache.js';
+export { tryEnToZh } from './data-manager.js';
+export { _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries };
 
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
