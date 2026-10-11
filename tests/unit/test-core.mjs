@@ -4,9 +4,9 @@
 //       当前行为用断言钉死。后续模块化（Phase 15）与任何重构必须保持这些行为不变，
 //       除非有明确的独立业务变更。
 //
-// 机制：从构建产物（dist）中按 @zhixia:core-* 标记区段"提取"代码，在 Node 里
+// 机制：从规范 src/core 模块按 @zhixia:core-* 标记区段"提取"代码，在 Node 里
 //       以假宿主环境（GM 存储 / GM XHR / fetch 桩）装配运行。不依赖 Chrome / 外网。
-//       runtime 与 cache 各含 2 处标记区段，按出现顺序全部提取。
+//       runtime 含 2 处标记，缓存注册和基础缓存从各自所属模块提取。
 //
 // 注意：
 //   - 存储键（zhx.meta / zhx.dt.*）与缓存序列化格式（指纹 + 换行 + 文本）是跨版本
@@ -18,7 +18,9 @@
 //     env 上的桩不会生效（曾致「unsettled top-level await」找不到原因）。
 //
 // 运行：node tests/unit/test-core.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -29,7 +31,8 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 每个源码文件只读取一次；原区段计数断言仍严格对照真实模块。
+const sourceOf = (name) => fs.readFileSync(path.join(repoRoot, 'src/core', name + '.js'), 'utf8');
 
 // ─────────────────────────────────────────────────────────────
 // 提取装置：按 @zhixia:core-* 标记切出区段（同名多段按顺序全部取出）
@@ -73,7 +76,10 @@ const RETURN_STMT = `return { _storeNorm, storeGetAsync, storeSet, httpGet,
 
 function buildCore(env) {
   const parts = [];
-  for (const [tag] of Object.values(SEG)) parts.push(...sliceAll(DIST_TEXT, tag));
+  for (const [name, [tag]] of Object.entries(SEG)) {
+    const owner = name === 'cacheReg' ? 'cache' : name === 'cachePrimitives' ? 'cache-primitives' : name;
+    parts.push(...sliceAll(sourceOf(owner), tag));
+  }
   try {
     const fn = new Function(...ARG_NAMES, parts.join('\n') + '\n' + RETURN_STMT);
     return fn(...ARG_NAMES.map((n) => env[n]));
@@ -119,14 +125,17 @@ function makeEnv(over = {}) {
 
 console.log('\n── 区段哨兵（标记与装配） ──');
 {
+  const owners = [...new Set(Object.keys(SEG).map(name =>
+    name === 'cacheReg' ? 'cache' : name === 'cachePrimitives' ? 'cache-primitives' : name))];
+  const sourceText = owners.map(sourceOf).join('\n');
   const counts = {};
   for (const [tag, n] of Object.values(SEG)) {
-    counts[tag] = DIST_TEXT.split(`/* @zhixia:${tag}-start */`).length - 1;
+    counts[tag] = sourceText.split(`/* @zhixia:${tag}-start */`).length - 1;
     eq(`${tag} 区段数（start）`, counts[tag], n);
-    eq(`${tag} 区段数（end）`, DIST_TEXT.split(`/* @zhixia:${tag}-end */`).length - 1, n);
+    eq(`${tag} 区段数（end）`, sourceText.split(`/* @zhixia:${tag}-end */`).length - 1, n);
   }
   // 本文件提取的 8 类共 10 对；其他段（dictionary / translator / item-resolver 等）由各自测试覆盖
-  const coreTot = DIST_TEXT.split('@zhixia:core-').length - 1;
+  const coreTot = sourceText.split('@zhixia:core-').length - 1;
   ok('core-* 标记成对且 ≥ 本文件提取的 10 对', coreTot % 2 === 0 && coreTot >= 20, `实际=${coreTot}`);
   const api = buildCore(makeEnv());
   for (const f of ['_storeNorm', 'storeGetAsync', 'storeSet', 'httpGet', 'safe', 'dedupeByAncestor', 'observeLocal']) {
