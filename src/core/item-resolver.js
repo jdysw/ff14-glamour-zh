@@ -2,21 +2,9 @@
 /* @phase15-order-link:core/item-resolver<-sites/huiji-wiki */
 import '../sites/huiji-wiki.js';
 import { CACHE_CAP_LOOKUP, _en2zhCache, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
-import { resolveByName } from './data-manager.js';
+import { resolveByName, tryEnToZh } from './data-manager.js';
 export { _en2zhCache, _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries, tryEnToZh };
 
-
-  // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
-  // 装备名/染剂名等短英文串（如 Tule Tunic、Charcoal Grey）。
-  function tryEnToZh(en) {
-    if (!en) return null;
-    if (_en2zhCache.has(en)) return _en2zhCache.get(en);
-    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 V3 names 文件展开）
-    const out = resolveByName(en);
-    cacheGuard(_en2zhCache, CACHE_CAP_LOOKUP);
-    _en2zhCache.set(en, out);
-    return out;
-  }
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
   function lookupJp2Zh(jp) {
