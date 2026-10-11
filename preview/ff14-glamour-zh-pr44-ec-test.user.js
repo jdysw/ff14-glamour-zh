@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.11
+// @version      1.4.3.44.13
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 1bd961639fdd0ebb013c913630ceb7c1ef4b1c4a
+// PR44 source commit: 66ca6b6b3bbd2e42f4bffd80d7c9e1ba899f4e12
 
 
 (function () {
@@ -8205,6 +8205,12 @@
     _suggestActive = -1;
   }
 
+  // Explicit dismissal prevents a pending V3 ready callback reopening stale UI.
+  function dismissSuggestions() {
+    hideSuggestions(true);
+    _suggestInput = null;
+  }
+
   function scheduleSuggestions(input) {
     if (_suggestTimer) clearTimeout(_suggestTimer);
     _suggestTimer = setTimeout(() => {
@@ -8228,7 +8234,7 @@
     // updates and make subsequent typing appear to be ignored/reset.
     if (!isECVueSearchInput(input)) input.value = row.zh;
     _selectedSearchRows.set(input, row);
-    hideSuggestions(true);
+    dismissSuggestions();
     try {
       input.setSelectionRange(input.value.length, input.value.length);
     } catch {
@@ -8384,7 +8390,7 @@
       _suggestHideTimer = null;
       // 1.4.2 后续修复：延迟内焦点可能已移到另一个搜索框（表单框 ↔ 独立框切换），
       // 仅当 _suggestInput 仍是被失焦的框时才隐藏，避免误藏新框的候选面板。
-      if (_suggestInput === blurred) hideSuggestions(true);
+      if (_suggestInput === blurred) dismissSuggestions();
     }, SUGGEST_HIDE_DELAY_MS);
   }
 
@@ -8401,8 +8407,8 @@
       event.preventDefault();
       updateSuggestionActive((_suggestActive + _suggestRows.length - 1) % _suggestRows.length);
     } else if (event.key === 'Escape') {
-      event.preventDefault();
-      hideSuggestions(true);
+      // Do not swallow native Escape handling.
+      dismissSuggestions();
     } else if (event.key === 'Enter' && _suggestActive >= 0) {
       event.preventDefault();
       event.stopPropagation();
@@ -8427,11 +8433,21 @@
     if (event.key === 'Enter' && isStandaloneSearchInput(input) && convertStandaloneForSearch(input, true)) hideSuggestions(true);
   }
 
+  // Only the custom option is intercepted; clicks elsewhere dismiss our UI
+  // without canceling any site-native pointer handlers (including EC vue-select).
   function handleSuggestionPointerDown(event) {
-    const button = event.target?.closest?.('button[data-zhx-index]');
-    if (!button || !_suggestBox?.contains(button)) return;
-    event.preventDefault();
-    selectSuggestion(Number(button.dataset.zhxIndex));
+    const target = event.target;
+    if (!target || !_suggestInput) return;
+    if (_suggestBox?.contains(target)) {
+      const button = target.closest?.('button[data-zhx-index]');
+      if (!button || !_suggestBox.contains(button)) return;
+      event.preventDefault();
+      selectSuggestion(Number(button.dataset.zhxIndex));
+      return;
+    }
+    if (target === _suggestInput || _suggestInput.contains?.(target)) return;
+    // Also cancel pending candidates before the V3 item table is ready.
+    dismissSuggestions();
   }
 
   function handleCompositionStart(event) {
