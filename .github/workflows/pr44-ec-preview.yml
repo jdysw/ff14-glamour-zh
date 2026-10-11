@@ -1,4 +1,4 @@
-name: Build PR44 EC userscript preview
+name: Build PR44 site userscript previews
 
 on:
   push:
@@ -39,27 +39,36 @@ jobs:
         run: npm ci
       - name: Build canonical userscript
         run: npm run build
-      - name: Build independent EC-only preview
-        run: node tools/build-pr44-preview.mjs
+      - name: Build independent site-only previews
+        run: |
+          node tools/build-pr44-preview.mjs
+          node tools/build-pr44-preview.mjs --site=endcloset
       - name: Verify preview syntax and metadata
         run: |
           node --check preview/ff14-glamour-zh-pr44-ec-test.user.js
+          node --check preview/ff14-glamour-zh-pr44-endcloset-test.user.js
           python3 - <<'PY'
           from pathlib import Path
-          text = Path('preview/ff14-glamour-zh-pr44-ec-test.user.js').read_text()
-          header, body = text.split('// ==/UserScript==', 1)
-          assert header.count('@match') == 1
-          assert 'https://ffxiv.eorzeacollection.com/*' in header
-          assert '/preview/pr44' in header
-          assert 'PR44-TEST-ONLY' in header
-          assert len(body) > 100000
-          print('PR44 metadata and body verified:', len(body), 'chars')
+          for site, host, tag in [
+              ('ec', 'ffxiv.eorzeacollection.com', 'PR44-TEST-ONLY'),
+              ('endcloset', 'end-closet.com', 'PR44-ENDCLOSET-TEST-ONLY'),
+          ]:
+              text = Path(f'preview/ff14-glamour-zh-pr44-{site}-test.user.js').read_text()
+              header, body = text.split('// ==/UserScript==', 1)
+              matches = [x.strip() for x in header.splitlines() if x.startswith('// @match')]
+              assert matches == [f'// @match        https://{host}/*']
+              assert f'/preview/pr44/{site}' in header
+              assert tag in header
+              assert len(body) > 100000
+              print('PR44', site, 'metadata and body verified:', len(body), 'chars')
           PY
       - name: Upload installable test script
         uses: actions/upload-artifact@v4
         with:
-          name: ff14-glamour-zh-pr44-ec-test
-          path: preview/ff14-glamour-zh-pr44-ec-test.user.js
+          name: ff14-glamour-zh-pr44-site-tests
+          path: |
+            preview/ff14-glamour-zh-pr44-ec-test.user.js
+            preview/ff14-glamour-zh-pr44-endcloset-test.user.js
           retention-days: 30
           if-no-files-found: error
   # Build dependencies and generated scripts run without write credentials.
@@ -79,15 +88,15 @@ jobs:
       - name: Download verified preview artifact
         uses: actions/download-artifact@v4
         with:
-          name: ff14-glamour-zh-pr44-ec-test
+          name: ff14-glamour-zh-pr44-site-tests
           path: preview
       - name: Commit generated userscript (no code execution)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f preview/ff14-glamour-zh-pr44-ec-test.user.js
+          git add -f preview/ff14-glamour-zh-pr44-ec-test.user.js preview/ff14-glamour-zh-pr44-endcloset-test.user.js
           if ! git diff --cached --quiet; then
-            git commit -m "build(pr44): publish latest isolated EC testing userscript"
+            git commit -m "build(pr44): publish latest isolated EC and End Closet previews"
             # Tests and independent review commits can advance this PR while
             # the preview is building. Rebase only the generated-file commit;
             # never force-push, discard, or overwrite concurrent source work.
