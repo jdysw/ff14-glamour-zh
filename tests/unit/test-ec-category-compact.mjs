@@ -60,4 +60,23 @@ const roundtrip = new Function(sample.code + '\nreturn { barding: [...EC_BARDING
 assert.deepEqual(roundtrip.barding, sample.names, 'Python 和 JS 的 UTF-16 前缀长度必须一致');
 assert.deepEqual(roundtrip.ears, sample.names);
 
+// 不依赖在线 CSV：将已验证的解码数据交回 Python 生成器，确保输出可复现。
+const verifyPython = [
+  'import importlib.util, json, sys',
+  'from pathlib import Path',
+  'spec = importlib.util.spec_from_file_location("ecgen", str(Path("tools/update-ec-search-categories.py")))',
+  'module = importlib.util.module_from_spec(spec)',
+  'spec.loader.exec_module(module)',
+  'source = json.load(sys.stdin)',
+  'print(module.render(source["barding"], source["facewear"], {kind:source[kind] for kind in ("ears", "neck", "wrists", "rings")}), end="")',
+].join('\n');
+const generated = spawnSync('python3', ['-c', verifyPython], {
+  cwd: repoRoot,
+  input: JSON.stringify(data),
+  encoding: 'utf8',
+  maxBuffer: 1024 * 1024,
+});
+assert.equal(generated.status, 0, generated.stderr || 'Python 快照生成器必须成功执行');
+assert.equal(generated.stdout, fragment, '仓库快照须与 Python 生成器产物逐字节一致');
+
 console.log('✅ EC 分类快照完整指纹、体积和 Python/JS 编码兼容性测试通过');
