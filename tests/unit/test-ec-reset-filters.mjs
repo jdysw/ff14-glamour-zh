@@ -17,7 +17,7 @@ function check(name, run) {
   passed++;
 }
 
-function harness(href, { path, disabled = false, text = '重置筛选' } = {}) {
+function harness(href, { path, disabled = false, text = '重置筛选', plainTarget = false } = {}) {
   const listeners = [];
   const timers = [];
   const location = {
@@ -40,7 +40,9 @@ function harness(href, { path, disabled = false, text = '重置筛选' } = {}) {
   assert.equal(listeners.length, 1, 'Handler must be installed only once');
   const button = { textContent: text, disabled };
   const event = {
-    target: { closest: selector => selector === 'button, a[href], [role="button"]' ? button : null },
+    target: plainTarget
+      ? { textContent: text, closest: () => null }
+      : { closest: selector => selector === 'button, a, [role="button"]' ? button : null },
     defaultPrevented: false,
     propagationStopped: false,
     preventDefault() { this.defaultPrevented = true; },
@@ -86,6 +88,12 @@ check('accessories 列表：Reset 清除首饰筛选，保留当前列表路径'
   x.click();
   x.settle();
   assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/accessories']);
+});
+check('gearsets Reset 文本控件（非 button/a）同样生效', () => {
+  const x = harness('https://ffxiv.eorzeacollection.com/gearsets?headPiece=22994', { text: 'Reset', plainTarget: true });
+  x.click();
+  x.settle();
+  assert.deepEqual(x.location.assigned, ['https://ffxiv.eorzeacollection.com/gearsets']);
 });
 check('非重置按钮（应用筛选）不会触发页面刷新', () => {
   const x = harness('https://ffxiv.eorzeacollection.com/glamours?filterjob=PLD', { text: '应用筛选' });
