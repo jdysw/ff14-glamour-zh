@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.21
+// @version      1.4.3.44.22
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: ade3e71e640d18cacf4d5f9cb92a7ae92df799e2
+// PR44 source commit: 12470bcf211414e0d2d37468214684ff6c123759
 
 
 (function () {
@@ -6405,6 +6405,14 @@
       document.addEventListener('click', (e) => {
         const el = e.target?.closest?.('[data-zhx-item]') ?? null;
         if (!el) return;
+        // Item names can be nested inside interactive controls, but a filter
+        // button nested inside an item-marked card is NOT an item-name click.
+        // Never steal reset/apply/clear or other native React control actions.
+        const control = e.target?.closest?.(
+          'button, input, select, textarea, a[href], [role="button"], ' +
+          '[role="checkbox"], [role="switch"], [role="combobox"]'
+        );
+        if (control && control !== el && !control.contains(el)) return;
         const zh = el.dataset.zhxItem;
         if (!zh) return;
         e.preventDefault();
