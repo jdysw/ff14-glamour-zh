@@ -42,19 +42,19 @@ export { httpGet };
       } catch (e) { /* 忽略：GM 通道不可用——按序尝试 fetch 兜底 */ }
       try {
         if (typeof fetch === 'function') {
-          let ctl = null, tm = null;
-          try {
-            if (typeof AbortController === 'function') {
-              ctl = new AbortController();
-              tm = setTimeout(() => { try { ctl.abort(); } catch (e) { /* 忽略：abort 清理调用失败无碍 */ } }, timeout || 20000);
-            }
-          } catch (e) { /* 忽略：无 AbortController——不设置取消 */ }
+          // Cover both fetch() and response.text(): headers may arrive while the body stalls.
+          const ms = Number.isFinite(Number(timeout)) && Number(timeout) > 0 ? Number(timeout) : 20000;
+          const ctl = typeof AbortController === 'function' ? new AbortController() : null;
           const fetchOptions = ctl ? { signal: ctl.signal } : {};
           if (fresh) fetchOptions.cache = 'no-store';
-          fetch(requestUrl, fetchOptions).then(
-            (r) => { if (tm) { clearTimeout(tm); } return r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)); },
-            (e) => { if (tm) { clearTimeout(tm); } throw e; }
-          ).then(ok, bad);
+          const tm = setTimeout(() => {
+            try { ctl?.abort(); } catch (e) { /* Abort is best-effort. */ }
+            bad(new Error('timeout')); // Also settle if AbortController is unavailable.
+          }, ms);
+          Promise.resolve().then(() => fetch(requestUrl, fetchOptions))
+            .then((r) => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+            .then(ok, bad)
+            .finally(() => clearTimeout(tm));
           return;
         }
       } catch (e) { /* 忽略：fetch 不可用——走最后兜底 */ }
