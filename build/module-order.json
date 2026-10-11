@@ -23,7 +23,6 @@
     "core/http",
     "sites/endcloset",
     "core/site-registry",
-    "core/translator",
     "core/observer",
     "core/targets",
     "core/probe"
