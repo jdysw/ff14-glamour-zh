@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/runtime */
-export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, safe };
+export { ERR_LOG_CAP, __zhxBootAt, __zhxMark, registerProbeMark, _errLog, _perfNow, _zhxErr, safe };
 
   /* @zhixia:core-runtime-start */
   /* ── Core Runtime（v1.4 Phase 4）：脚本注入时刻（运行探测用；未启用时零
@@ -37,3 +37,13 @@ export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, safe };
   }
 
   /* @zhixia:core-runtime-end */
+  
+  // 数据加载器只调用轻量探测钩子，不需要导入完整诊断面板及 Wiki 逻辑。
+  // Probe 模块求值时注册原有记录函数；未启用探测时记录器本身立即返回。
+  let _probeMarkHandler = null;
+  function registerProbeMark(handler) {
+    _probeMarkHandler = typeof handler === 'function' ? handler : null;
+  }
+  function __zhxMark(name) {
+    if (_probeMarkHandler) _probeMarkHandler(name);
+  }
