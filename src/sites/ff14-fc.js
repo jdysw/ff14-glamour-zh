@@ -1,6 +1,6 @@
 /* @phase15-module-order:sites/ff14-fc */
 /* @phase15-order-link:sites/ff14-fc<-core/cache */
-import { _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
+import { FC_ROLE_ZH, _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, resolveByHash } from '../core/data-manager.js';
 import { DICT_FC } from '../core/dictionary.js';
@@ -11,13 +11,6 @@ import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
 export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
-
-  // v1.12.3：职能/类别词（・复合名逐段翻译用）
-  const FC_ROLE_ZH = {
-    'ディフェンダー': '御敌', 'スレイヤー': '制敌', 'ストライカー': '强袭',
-    'スカウト': '游击', 'ヒーラー': '治愈', 'キャスター': '咏咒',
-    'レンジャー': '精准', 'ファイター': '战斗', 'ソーサラー': '法系',
-  };
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
   function trFCSegments(t) {
