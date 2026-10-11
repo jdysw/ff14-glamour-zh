@@ -10,11 +10,14 @@ import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
 import { distFile, fixtureUrl } from '../helpers/paths.mjs';
 import { seedV3Browser } from '../helpers/v3-cache.mjs';
-import { writeReport } from './report.mjs';
+import { samplePercentiles, writeReport } from './report.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 const SAVE = process.argv.includes('--save');
 const ROUNDS = Number(process.env.ZHX_BENCH_ROUNDS || 3);
+const CPU_RATE = Number(process.env.ZHX_BENCH_CPU_RATE || 1);
+if (!Number.isInteger(ROUNDS) || ROUNDS < 1) throw new Error('基准轮次必须为正整数');
+if (![1, 4, 8].includes(CPU_RATE)) throw new Error('CPU 节流必须是 1、4 或 8');
 const FIXTURE = fixtureUrl('ec-page.html');
 const GF = fs.readFileSync(distFile, 'utf8');
 
@@ -53,6 +56,7 @@ const runOne = async (round) => {
   const c = t.cdp;
   try {
     await sleep(400);
+    await c.send('Emulation.setCPUThrottlingRate', { rate: CPU_RATE });
     await c.eval(clear);
     await c.eval("window.__zhxTestSite = 'ec'; window.__zhxTestTables = ['items','dict']; window.__zhxTestIndexes = ['nameMap','itemHash']; window.__zhxDiagOn = true;");
     await seedV3Browser(c, 'ec');
@@ -69,12 +73,17 @@ const runOne = async (round) => {
     await c.eval(MUT_JS);
     await sleep(1500);
     const rec2 = await c.eval('window.__zhxDiagRecord()');
+    let heapUsedMiB = null;
+    try {
+      const heap = await c.send('Runtime.getHeapUsage');
+      if (Number.isFinite(heap?.usedSize)) heapUsedMiB = heap.usedSize / 1048576;
+    } catch (_error) { /* 浏览器不提供堆统计时不伪造数值。 */ }
     const m = rec1.marks || {};
     const o1 = rec1.obs || {};
     const o2 = rec2.obs || {};
     const mutMs = (o2.ms || 0) - (o1.ms || 0);
     console.log(`  [#${round}] boot=${rec1.boot}ms finalize=${m.finalize} ready=${m.ready} fireDone=${m.fireDone} | dom=${(rec1.dom || {}).calls}次 | 变异批=${(o2.ticks || 0) - (o1.ticks || 0)} 用 ${mutMs.toFixed(1)}ms`);
-    return { rec1, rec2 };
+    return { rec1, rec2, heapUsedMiB };
   } finally {
     try { await closePage(PORT, t.target.id); } catch (e) {}
   }
@@ -82,7 +91,7 @@ const runOne = async (round) => {
 
 const med = (arr) => { const a = [...arr].filter(Number.isFinite).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : NaN; };
 
-console.log('\n════ lifecycle @ ec（items+dict，缓存命中；锚点无关读取）════');
+console.log('\n════ lifecycle @ ec（items+dict，CPU 节流 '+CPU_RATE+'x，模拟环境）════');
 const runs = [];
 for (let r = 1; r <= ROUNDS; r++) {
   try { runs.push(await runOne(r)); } catch (e) { console.log(`  [#${r}] 失败: ${e.message}`); }
@@ -113,16 +122,25 @@ const sum = {
   nameKeys: pick((r) => (r.rec1.data || {}).names),
   dictChars: pick((r) => (r.rec1.dict || {}).chars),
   runs: good.length,
+  cpuThrottle: CPU_RATE,
+  percentiles: {
+    readyMs: samplePercentiles(good.map(r => (r.rec1.marks || {}).ready)),
+    fireDoneMs: samplePercentiles(good.map(r => (r.rec1.marks || {}).fireDone)),
+    mutationMs: samplePercentiles(good.map(r => (r.rec2.obs?.ms || 0) - (r.rec1.obs?.ms || 0))),
+    heapUsedMiB: samplePercentiles(good.map(r => r.heapUsedMiB)),
+  },
 };
 
 console.log('\n════════ lifecycle 汇总（中位数）════════');
 console.log('阶段 | boot | finalize | ready | fireDone');
 console.log('     | ' + [sum.boot, sum.finalize, sum.ready, sum.fireDone].map((x) => (Number.isFinite(x) ? x.toFixed(1) : '-').padStart(8)).join(' | '));
+console.log('ready P50/P95=' + sum.percentiles.readyMs.p50 + '/' + sum.percentiles.readyMs.p95 +
+  'ms | memory P50/P95=' + sum.percentiles.heapUsedMiB.p50 + '/' + sum.percentiles.heapUsedMiB.p95 + 'MiB');
 console.log('DOM=' + sum.domCalls + '次(首' + sum.domFirstMs + 'ms/计' + sum.domMs + 'ms) obs=' + sum.obsMs
   + 'ms 变异批=' + sum.mutTicks + '(用' + sum.mutMs + 'ms) | dl: cache=' + sum.dlCache + ' net=' + sum.dlNet
   + ' | resolver: hit=' + sum.resHit + ' miss=' + sum.resMiss + ' | nameKeys=' + sum.nameKeys + ' dict=' + sum.dictChars);
 
 writeReport('lifecycle-ec', {
   summary: sum,
-  runs: good.map((r, i) => ({ i: i + 1, marks: r.rec1.marks, dom: r.rec1.dom, obs1: r.rec1.obs, obs2: r.rec2.obs, dl: r.rec1.dl, res: r.rec1.res, cache: r.rec1.cache, data: r.rec1.data, dict: r.rec1.dict })),
-}, { save: SAVE, args: ['rounds=' + ROUNDS] });
+  runs: good.map((r, i) => ({ i: i + 1, marks: r.rec1.marks, dom: r.rec1.dom, obs1: r.rec1.obs, obs2: r.rec2.obs, dl: r.rec1.dl, res: r.rec1.res, cache: r.rec1.cache, data: r.rec1.data, dict: r.rec1.dict, heapUsedMiB: r.heapUsedMiB })), 
+}, { save: SAVE, args: ['rounds=' + ROUNDS, 'cpuThrottle=' + CPU_RATE] });
