@@ -16,6 +16,7 @@ const graph = new Map();
 
 for (const rel of files.sort()) {
   const text = fs.readFileSync(path.join(sourceRoot, rel), 'utf8');
+  assert.ok(!text.includes('@phase15-order-link:'), rel + ' 不得重新加入人为的构建顺序依赖');
   const lines = text.split('\n');
   const ast = parse(text, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
   const dependencies = [];
@@ -86,6 +87,8 @@ function visit(name) {
 }
 for (const file of graph.keys()) if (!order.has(file)) visit(file);
 const cycles = components.filter(c => c.length > 1 || graph.get(c[0]).includes(c[0]));
+assert.equal(cycles.length, 0,
+  '规范源码真实 ESM 依赖图必须无环；发现：' + JSON.stringify(cycles));
 console.log('✅ 生产依赖方向约束通过');
 console.log('模块数：' + files.length + '；有效业务依赖边数：' +
   [...graph.values()].reduce((total, deps) => total + deps.length, 0));
