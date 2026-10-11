@@ -3,6 +3,7 @@
 import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { trEC } from '../core/item-resolver.js';
+import { dataGetIndex } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
@@ -153,12 +154,109 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return EC_GEARSET_NAME_EXTRAS[en] || DICT_EC[en] || null;
   }
 
-  // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
-  let _ecGearsetRows = null;
-  let _ecGearsetRevision = -1;
-  function ecGearsetCatalog() {
-    const revision = dictGetRevision();
-    if (_ecGearsetRows && _ecGearsetRevision === revision) return _ecGearsetRows;
+  // EC Gearsets uses "Crafting/Gathering" as equipment roles; ordinary UI
+  // translation "Crafting → 制作" is not an official equipment-name suffix.
+  const EC_GEARSET_ITEM_ROLES = /^(.*?) of (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering)$/;
+  const EC_GEARSET_TITLE_ROLES = /^(.*?) (Fending|Maiming|Striking|Scouting|Aiming|Casting|Healing|Crafting|Gathering)$/;
+  const EC_GEARSET_NONCOMBAT_ROLE_ZH = Object.freeze({ Crafting: '巧匠', Gathering: '大地' });
+  function ecGearsetRoleZh(role) {
+    return EC_GEARSET_NONCOMBAT_ROLE_ZH[role] || DICT_EC[role] || null;
+  }
+
+  // 自动推导仅使用 V3 已有的官方英中装备映射，不维护逐套名单：
+  // 如 3 件 Ceremonial ... of Scouting 同时映射至「仪仗游击...」，
+  // 则推断 Ceremonial Scouting → 仪仗游击套装。
+  // 依赖“多件独立装备 + 共同中文前缀 + 与英文职能一致”三重校验；
+  // 达不到阈值时保留原英文，防止猜造非官方的套装名称。
+  function ecGearsetCommonZhPrefix(names) {
+    if (names.length < 3) return '';
+    let prefix = names[0];
+    for (const name of names.slice(1)) {
+      while (prefix && !name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+      if (!prefix) break;
+    }
+    return prefix;
+  }
+
+  function ecGearsetAddInferredGroups(grouped, native, zh, englishPart, role) {
+    const words = englishPart.split(' ');
+    for (let n = 1; n < words.length && n <= 4; n++) {
+      const title = words.slice(0, n).join(' ') + ' ' + role;
+      if (!grouped.has(title)) grouped.set(title, new Map());
+      grouped.get(title).set(native, zh);
+    }
+  }
+
+  function ecGearsetInferredRow(native, items) {
+    if (items.size < 3) return null;
+    const names = [...new Set(items.values())];
+    if (names.length < 3) return null;
+    const prefix = ecGearsetCommonZhPrefix(names);
+    const role = native.slice(native.lastIndexOf(' ') + 1);
+    const roleZh = ecGearsetRoleZh(role);
+    if (!roleZh || prefix.length < roleZh.length + 2 || !prefix.endsWith(roleZh)
+        || prefix.length > 22) return null;
+    return { native, zh: prefix + '套装' };
+  }
+
+  function inferECGearsetsFromItems(nameIndex) {
+    const grouped = new Map();
+    for (const [native, zh] of Object.entries(nameIndex || {})) {
+      const hit = EC_GEARSET_ITEM_ROLES.exec(native);
+      if (!hit || !/^[\u3400-\u9fff]/u.test(zh)) continue;
+      const roleZh = ecGearsetRoleZh(hit[2]);
+      if (!roleZh || !zh.includes(roleZh)) continue;
+      ecGearsetAddInferredGroups(grouped, native, zh, hit[1], hit[2]);
+    }
+    const derived = [];
+    for (const [native, items] of grouped) {
+      const row = ecGearsetInferredRow(native, items);
+      if (row) derived.push(row);
+    }
+    return derived;
+  }
+
+  // Game outfit packages use "Attire (Variant)" while EC shows "(Variant)"
+  // with the package type removed. Two distinct officially named variants of
+  // the same series give strong evidence for a shared native series search.
+  // Suggestions are site searches, never invented direct /gearset links.
+  function ecGearsetOfficialVariantRows(nameIndex) {
+    const grouped = new Map();
+    const pattern = /^(.+?) (?:Attire|Armor|Set|Outfit) (\([^()]{1,60}\)|\[[^\]]{1,40}\])$/;
+    for (const [item, zh] of Object.entries(nameIndex || {})) {
+      const match = pattern.exec(item);
+      if (!match || !/[\u3400-\u9fff]/u.test(zh)
+          || !/(?:套装|装束)$/u.test(zh)) continue;
+      const native = match[1] + ' ' + match[2];
+      if (!grouped.has(match[1])) grouped.set(match[1], new Map());
+      grouped.get(match[1]).set(native, zh);
+    }
+    const rows = [];
+    for (const variants of grouped.values()) {
+      if (variants.size < 2) continue;
+      for (const [native, zh] of variants) rows.push({ native, zh });
+    }
+    return rows;
+  }
+
+  // Official game outfit packages also cover standalone and single-variant
+  // sets. They do NOT prove the corresponding EC Gearset page exists, so rows
+  // from this broad catalogue are provisional search suggestions only.
+  // Never invent or navigate to a /gearset/<slug> link from these entries.
+  function ecGearsetOfficialOutfitRows(nameIndex) {
+    const rows = [];
+    const pattern = /^(.+?) (?:Attire|Armor)(?: (\([^()]{1,60}\)|\[[^\]]{1,40}\]))?$/;
+    for (const [item, zh] of Object.entries(nameIndex || {})) {
+      const match = pattern.exec(item);
+      if (!match || !/[\u3400-\u9fff]/u.test(zh)
+          || !/(?:套装|装束)$/u.test(zh)) continue;
+      const native = match[1] + (match[2] ? ' ' + match[2] : '');
+      rows.push({ native, zh, provisional: true });
+    }
+    return rows;
+  }
+
+  function ecGearsetKnownRows() {
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
       const zhSeries = ecGearsetSeriesZh(series);
@@ -172,9 +270,99 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       const zh = ecGearsetSeriesZh(native);
       if (zh) rows.push({ native, zh });
     }
+    return rows;
+  }
+
+  function ecGearsetAppendInferredRows(rows, nameIndex) {
+    if (!nameIndex) return;
+    const seen = new Set(rows.map(row => row.native));
+    const derived = [
+      ...inferECGearsetsFromItems(nameIndex),
+      ...ecGearsetOfficialVariantRows(nameIndex),
+      ...ecGearsetOfficialOutfitRows(nameIndex),
+    ];
+    for (const row of derived) {
+      if (seen.has(row.native)) continue;
+      rows.push(row);
+      seen.add(row.native);
+    }
+  }
+
+  // DOM 观察器可能频繁重扫，按词典修订号缓存，不在每次处理卡片时重建目录。
+  let _ecGearsetRows = null;
+  let _ecGearsetHadItemIndex = false;
+  let _ecGearsetRevision = -1;
+  function ecGearsetCatalog() {
+    const revision = dictGetRevision();
+    const nameIndex = dataGetIndex('nameMap');
+    const hasItems = !!nameIndex;
+    if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
+      return _ecGearsetRows;
+    }
+    const rows = ecGearsetKnownRows();
+    ecGearsetAppendInferredRows(rows, nameIndex);
     _ecGearsetRows = rows;
     _ecGearsetRevision = revision;
+    _ecGearsetHadItemIndex = hasItems;
     return rows;
+  }
+
+  function ecGearsetDescriptiveName(native) {
+    // 站点的 Hempen <种族> <性别> 是服装搭配组合而非单条官方物品名。
+    // 仅当页面确实出现该英文标题时，用固定语法生成【描述性】译名；
+    // 不为未见过的种族变体创建搜索候选，也不宣称它是国服官方套装名。
+    const match = /^Hempen (Au Ra|Hyur|Elezen|Miqo'te|Lalafell|Roegadyn|Viera|Hrothgar|Auri|Midlander|Highlander|Lalafellin) (Male|Female)$/.exec(native);
+    if (!match) return null;
+    const raceAliases = { Auri: 'Au Ra', Lalafellin: 'Lalafell' };
+    const race = DICT_EC[raceAliases[match[1]] || match[1]];
+    const gender = DICT_EC[match[2]];
+    return race && gender ? race + gender + '贴身衣套装' : null;
+  }
+
+  // EC drops the item-type word from many official outfit items:
+  // "Wintertide Attire (Culottes)" -> displayed "Wintertide (Culottes)".
+  // Keep the parenthesized / bracketed variant exactly; the variant distinguishes
+  // genuinely different official sets such as Culottes vs Sheath Skirt.
+  // Only a real official item with an outfit-style Chinese name is accepted.
+  function ecGearsetOfficialPackageZh(native, nameIndex) {
+    if (!nameIndex) return null;
+    const match = /^(.+?) (\([^)]{1,60}\)|\[[^\]]{1,40}\])$/.exec(native);
+    const base = match ? match[1] : native;
+    const variant = match ? ' ' + match[2] : '';
+    for (const type of [' Attire', ' Armor', ' Set', ' Outfit']) {
+      const official = nameIndex[base + type + variant];
+      if (official && /(?:套装|装束)$/u.test(official)) return official;
+    }
+    return null;
+  }
+
+  // A visible EC title is evidence that the set exists; official package
+  // lookups can translate it without adding speculative search suggestions.
+  function ecGearsetObservedTitleZh(native) {
+    const exact = DICT_EC[native];
+    if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
+    const parts = EC_GEARSET_TITLE_ROLES.exec(native);
+    if (parts) {
+      const series = DICT_EC[parts[1]];
+      const role = ecGearsetRoleZh(parts[2]);
+      if (series && role && /[\u3400-\u9fff]/u.test(series)
+          && !/(?:套装|装束)$/u.test(series)) return series + role + '套装';
+    }
+    const nameIndex = dataGetIndex('nameMap');
+    const official = ecGearsetOfficialPackageZh(native, nameIndex);
+    if (official) return official;
+    // Some EC titles add possessive 's (Royal Seneschal's) while the
+    // official game package omits it (Royal Seneschal Attire).
+    if (native.endsWith("'s")) {
+      const withoutPossessive = ecGearsetOfficialPackageZh(native.slice(0, -2), nameIndex);
+      if (withoutPossessive) return withoutPossessive;
+    }
+    // The site may elide "Far" (Eastern Socialite's vs Far Eastern
+    // Socialite's); only apply this to an already observed Gearsets title.
+    if (native.startsWith('Eastern ')) {
+      return ecGearsetOfficialPackageZh('Far ' + native, nameIndex);
+    }
+    return null;
   }
 
   function ecGearsetDisplayName(raw) {
@@ -184,8 +372,134 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const title = source ? text.slice(0, -(source.length + 1)) : text;
     const bare = title.endsWith(' Set') ? title.slice(0, -4) : title;
     const row = ecGearsetCatalog().find(r => r.native === bare);
-    if (!row) return null;
-    return row.zh + (source ? ' ' + (DICT_EC[source] || source) : '');
+    const zh = row?.zh || ecGearsetDescriptiveName(bare) || ecGearsetObservedTitleZh(bare);
+    if (!zh) return null;
+    const suffix = source ? ' ' + (DICT_EC[source] || source) : '';
+    return zh + suffix;
+  }
+
+  // EC /accessories is a *series* catalogue, separate from /gearsets.
+  // Its titles omit the slot and often omit "Accessories" on the cards.
+  // Infer a shared game-localized series prefix from independent earrings,
+  // neckpieces, bracelets and rings rather than hardcoding every new release.
+  // Parse native names using strict slot classification rather than a single
+  // highly complex alternation regex (Sonar S5843). Unsupported roles are
+  // rejected before item names can contribute to a translated series.
+  const EC_ACCESSORY_ROLE_SUFFIXES = new Set([
+    'Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting',
+    'Healing', 'Slaying', 'Crafting', 'Gathering', 'Blood', 'Magic',
+  ]);
+  // Only strip prefixes confirmed by the game's localized stat-specific names.
+  const EC_ACCESSORY_STAT_PREFIX = Object.freeze({ Blood: '力之', Magic: '魔之' });
+
+  // Multiple earring forms count as ONE real slot, not separate accessories.
+  function ecAccessoryItemSlot(part) {
+    if (/^(?:Earrings?|Ear Cuffs?|Ear Clips?)$/.test(part)) return 'ears';
+    if (/^(?:Necklaces?|Chokers?|Collars?|Neckbands?|Necklets?)$/.test(part)) return 'neck';
+    if (/^(?:Bracelets?|Wristlets?|Wristbands?|Armillae|Bangles?)$/.test(part)) return 'wrists';
+    if (/^Rings?$/.test(part)) return 'rings';
+    return null;
+  }
+
+  // EC sometimes reverses the order: "Ring of the Sea-folk".
+  function ecAccessoryItemDescriptor(native) {
+    const pivot = native.indexOf(' of the ');
+    if (pivot >= 0) {
+      const slot = ecAccessoryItemSlot(native.slice(0, pivot));
+      const series = native.slice(pivot + ' of the '.length);
+      return slot && series.length >= 2 && series.length <= 80 ? { series, slot } : null;
+    }
+    const role = / of ([A-Za-z]+)$/.exec(native);
+    if (role && !EC_ACCESSORY_ROLE_SUFFIXES.has(role[1])) return null;
+    const bare = role ? native.slice(0, -role[0].length) : native;
+    const words = bare.split(' ');
+    const twoWordPart = words.slice(-2).join(' ');
+    const part = ecAccessoryItemSlot(twoWordPart) ? twoWordPart : words.at(-1);
+    const slot = ecAccessoryItemSlot(part);
+    const series = bare.slice(0, -(part.length + 1));
+    if (!slot || !series) return null;
+    return { series, slot, stat: role?.[1] };
+  }
+
+  function ecAccessoryGroupEntry(groups, native, zh) {
+    if (!/^[\u3400-\u9fff]/u.test(zh)) return;
+    const item = ecAccessoryItemDescriptor(native);
+    if (!item) return;
+    const statPrefix = EC_ACCESSORY_STAT_PREFIX[item.stat];
+    // "Occult Earrings of Blood" -> "力之新月魔耳饰":
+    // only remove the stat label after it matches the official Chinese name.
+    if (statPrefix && !zh.startsWith(statPrefix)) return;
+    const localized = statPrefix ? zh.slice(statPrefix.length) : zh;
+    let entries = groups.get(item.series);
+    if (!entries) { entries = new Map(); groups.set(item.series, entries); }
+    entries.set(native, { zh: localized, slot: item.slot });
+  }
+
+  function ecAccessoryGroupRow(native, entries) {
+    if (entries.size < 3 || new Set([...entries.values()].map(x => x.slot)).size < 2) return null;
+    const names = [...new Set([...entries.values()].map(x => x.zh))];
+    const prefix = ecGearsetCommonZhPrefix(names);
+    const roleEndings = ['御敌', '制敌', '强袭', '强攻', '游击', '精准', '咏咒', '治愈', '巧匠', '大地'];
+    const role = roleEndings.find(x => prefix.endsWith(x));
+    const base = role ? prefix.slice(0, -role.length) : prefix;
+    if (base.length < 2 || base.length > 18 || /(?:套装|装束)$/u.test(base)) return null;
+    return { native, zh: base };
+  }
+
+  function inferECAccessorySeriesFromItems(nameIndex) {
+    const groups = new Map();
+    for (const [native, zh] of Object.entries(nameIndex || {})) {
+      ecAccessoryGroupEntry(groups, native, zh);
+    }
+    return [...groups].map(([native, entries]) => ecAccessoryGroupRow(native, entries))
+      .filter(Boolean);
+  }
+
+  // Rare EC variant catalogues have only one physical slot but two independent
+  // officially translated stat versions. Translate an OBSERVED title only when
+  // both names demonstrate the same localized series stem. This produces a
+  // descriptive display label, never a new speculative accessory link.
+  function ecAccessoryDeepStatSeriesZh(native, nameIndex) {
+    if (!nameIndex || !native.endsWith(' Deep')) return null;
+    const base = native.slice(0, -5);
+    const blood = /^超力之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Blood'] || '');
+    const magic = /^超魔之([\u3400-\u9fff]{2,18})戒指$/u.exec(nameIndex[base + ' Ring of Deep Magic'] || '');
+    return blood?.[1] && blood[1] === magic?.[1] ? '超' + blood[1] : null;
+  }
+
+  let _ecAccessoryRows = null;
+  let _ecAccessoryRevision = -1;
+  let _ecAccessoryHasData = false;
+  function ecAccessorySeriesZh(native) {
+    // DICT_EC also contains UI labels like "Other" and "Browse All"; they
+    // must never be mistaken for verified accessory series names.
+    const verified = EC_GEARSET_SINGLE_SERIES.has(native)
+      || EC_GEARSET_ROLE_SERIES.some(([series]) => series === native);
+    const known = verified ? ecGearsetSeriesZh(native) : null;
+    if (known && /[\u3400-\u9fff]/u.test(known)) {
+      return known.replace(/(?:装备)?(?:套装|装束)$/u, '') || known;
+    }
+    const revision = dictGetRevision();
+    const nameIndex = dataGetIndex('nameMap');
+    const hasData = !!nameIndex;
+    if (!_ecAccessoryRows || revision !== _ecAccessoryRevision || hasData !== _ecAccessoryHasData) {
+      _ecAccessoryRows = new Map(inferECAccessorySeriesFromItems(nameIndex)
+        .map(row => [row.native, row.zh]));
+      _ecAccessoryRevision = revision;
+      _ecAccessoryHasData = hasData;
+    }
+    return _ecAccessoryRows.get(native) || ecAccessoryDeepStatSeriesZh(native, nameIndex);
+  }
+
+  function ecAccessoryDisplayName(raw) {
+    const text = String(raw || '').trim();
+    if (!text || text.length > 110) return null;
+    const source = EC_GEARSET_SOURCES.find(value => text.endsWith(' ' + value));
+    const title = source ? text.slice(0, -source.length - 1) : text;
+    const native = title.endsWith(' Accessories') ? title.slice(0, -12) : title;
+    const series = ecAccessorySeriesZh(native);
+    if (!series) return null;
+    return series + '饰品' + (source ? ' ' + (DICT_EC[source] || source) : '');
   }
 
   // 经 EC Gearsets 页面/套装详情页核验的搜索别名，不把单件装备译名
@@ -205,7 +519,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
   function ecGearsetMatchesZh(query) {
     const key = ecGearsetNormalizedZh(query);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
-    const rows = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    const matching = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    // Stronger evidence always wins over provisional official game packages;
+    // include alias matches before choosing the fallback candidate tier.
+    const rows = matching.filter(row => !row.provisional);
     // 已核实的 EC 英文套装名/公共关键词，兼容用户实际输入的俗称与简繁体。
     // 去重使用英文原生名，避免常见别名与现有国服译名重复展示。
     for (const alias of EC_GEARSET_SEARCH_ALIASES) {
@@ -215,7 +532,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
         rows.push({ native: alias.native, zh: alias.zh });
       }
     }
-    return rows;
+    return rows.length ? rows : matching.filter(row => row.provisional);
   }
 
   // 搜索实际发送的是英文子串：一个中文词若对应多个套装，应寻找所有
@@ -243,24 +560,69 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return ecGearsetMatchesZh(query);
   }
 
-  // Gearsets 与 Related Sets 卡片的链接必须继续指向 /gearset/<slug>；
-  // 只替换已知标题文本节点，绝不绑定卡片点击事件或改写 href。
+  function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {
+    const splitSuffix = zh.endsWith(suffix) && !hasInlineSuffix;
+    node.nodeValue = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
+    // Split H1 labels must contribute the suffix exactly once, including when
+    // the title also contains an acquisition source (e.g. Dungeon Drop).
+    const redundant = hasInlineSuffix || zh.endsWith('装束') || zh.includes(suffix + ' ');
+    if (redundant) for (const trailing of suffixNodes) trailing.nodeValue = '';
+  }
+
+  function ecGearsetTranslateTitleNode(node, suffixNodes, type) {
+    const raw = node.nodeValue || '';
+    const zh = type === 'accessories' ? ecAccessoryDisplayName(raw) : ecGearsetDisplayName(raw);
+    if (!zh) return;
+    const title = raw.trim();
+    const suffix = type === 'accessories' ? '饰品' : '套装';
+    const hasInlineSuffix = type === 'accessories'
+      ? title.endsWith(' Accessories') : title.endsWith(' Set');
+    if (suffixNodes.length) {
+      ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes);
+    } else {
+      node.nodeValue = raw.replace(title, zh);
+    }
+  }
+
+  function ecGearsetTranslateTitleRoot(root, type = 'gearset') {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    const suffixPattern = type === 'accessories' ? /^(?:Accessories|饰品)$/iu : /^(?:Set|套装)$/iu;
+    const suffixNodes = nodes.filter(n => suffixPattern.test((n.nodeValue || '').trim()));
+    for (const node of nodes) {
+      if (!suffixNodes.includes(node)) ecGearsetTranslateTitleNode(node, suffixNodes, type);
+    }
+    // Preserve separate nested suffix styling and idempotence on repeated scans.
+    if (root.tagName === 'H1') {
+      const en = type === 'accessories' ? 'Accessories' : 'Set';
+      const zh = type === 'accessories' ? '饰品' : '套装';
+      for (const trailing of suffixNodes) {
+        if (trailing.nodeValue?.trim() === en) trailing.nodeValue = trailing.nodeValue.replace(en, zh);
+      }
+    }
+  }
+
+  function ecGearsetTitleRoots(scope, selector) {
+    const found = queryIn(scope, selector);
+    // MutationObserver may provide only a nested span, not its containing h1/a.
+    const parent = scope?.closest?.(selector);
+    if (parent && !found.includes(parent)) found.unshift(parent);
+    return found;
+  }
+
+  // Gearset link href is never touched; only the verified title text is changed.
   function translateECGearsetNames(rootArg) {
     const scope = localScope(rootArg);
-    const translateText = root => {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      while (walker.nextNode()) {
-        const node = walker.currentNode;
-        const raw = node.nodeValue || '';
-        const zh = ecGearsetDisplayName(raw);
-        if (!zh) continue;
-        const trimmed = raw.trim();
-        node.nodeValue = raw.replace(trimmed, zh);
-      }
-    };
-    for (const a of queryIn(scope, 'a[href*="/gearset/"]')) translateText(a);
-    if (/^\/gearset\/[^/]+\/?$/.test(globalThis.location?.pathname || '')) {
-      for (const h1 of queryIn(scope, 'h1')) translateText(h1);
+    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/gearset/"]')) ecGearsetTranslateTitleRoot(a);
+    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/accessories/"]')) {
+      ecGearsetTranslateTitleRoot(a, 'accessories');
+    }
+    const path = globalThis.location?.pathname || '';
+    if (/^\/gearset\/[^/]+\/?$/.test(path)) {
+      for (const h1 of ecGearsetTitleRoots(scope, 'h1')) ecGearsetTranslateTitleRoot(h1);
+    } else if (/^\/accessories\/[^/]+\/?$/.test(path)) {
+      for (const h1 of ecGearsetTitleRoots(scope, 'h1')) ecGearsetTranslateTitleRoot(h1, 'accessories');
     }
   }
 
@@ -283,6 +645,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
+    // Gearset H1 has split name/Set nodes: generic trEC would append 套装 to
+    // known series BEFORE the dedicated structure-aware pass can inspect it.
+    // Only the Gearsets title translator is allowed to touch this H1.
+    if (/^\/(?:gearset|accessories)\/[^/]+\/?$/.test(globalThis.location?.pathname || '')
+        && p?.closest?.('h1')) return;
     const next = trEC(raw);
     if (next !== raw) {
       // Keep the original for diagnostics, not as an untranslated English hover tooltip.
@@ -316,7 +683,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     const old = document.title;
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
-    const translated = parts.map((part) => ecGearsetDisplayName(part) || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    const translated = parts.map((part) => ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
+      || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }
 
@@ -341,11 +709,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
       });
       const batch = [];
       while (w.nextNode()) batch.push(w.currentNode);
+      translateECGearsetNames(rootArg);
       for (const n of batch) {
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
-      translateECGearsetNames(rootArg);
     } finally {
       ecBusy = false;
     }

@@ -28,10 +28,25 @@ function check(label, condition) {
   passed++;
   console.log('✅ ' + label);
 }
+const fixture = fixtureUrl('ec-page.html');
 for (const [site, indexes, languageColumn] of profiles) {
-  const tab = await newPage(PORT, fixtureUrl('ec-page.html'));
+  const tab = await newPage(PORT, fixture);
   const cdp = tab.cdp;
   try {
+    // /json/new starts a navigation asynchronously: CDP Runtime.enable can
+    // complete while Chrome is still on opaque-origin about:blank, where
+    // localStorage throws SecurityError. Wait for the actual fixture origin
+    // before seeding storage; never hide a real storage failure.
+    let readyOrigin = false;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const state = await cdp.eval(`(() => {
+        if (location.href !== ${JSON.stringify(fixture)} || document.readyState === 'loading') return false;
+        try { return typeof localStorage.length === 'number'; } catch { return false; }
+      })()`);
+      if (state) { readyOrigin = true; break; }
+      await sleep(100);
+    }
+    if (!readyOrigin) throw new Error('浏览器未进入允许使用 localStorage 的夹具源：' + site);
     await cdp.eval("localStorage.clear();");
     await seedV3Browser(cdp, site);
     await cdp.callFn(`function(site) {

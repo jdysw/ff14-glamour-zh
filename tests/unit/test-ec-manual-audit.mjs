@@ -15,7 +15,7 @@ const body = { items: [] };
 const document = { title: 'Glamour Collection | Eorzea Collection', documentElement: body, body };
 const captured = [];
 const stubs = {
-  DICT_EC, document, dictGetRevision: () => 0,
+  DICT_EC, document, dictGetRevision: () => 0, dataGetIndex: () => null,
   createObserver: opts => { captured.push(opts); return { disconnect() {} }; },
   queryIn: (scope, selector) => body.items.filter(node => node.hasAttribute(selector.slice(1, -1))),
   localScope: node => node || null, _zhixiaTitleKeep: titleKeep,
@@ -69,6 +69,13 @@ assert.equal(link.getAttribute('title'), null, 'do not synthesize English hover 
 assert.equal(link.dataset.zhixiaSourceText,'Glamours');
 api.translateECTitle();
 assert.equal(document.title, '幻化收藏 | Eorzea Collection');
+document.title = 'Praemagitek Accessories | Eorzea Collection';
+api.translateECTitle();
+assert.equal(document.title, '前魔导饰品 | Eorzea Collection',
+  'EC 饰品系列详情浏览器标题应汉化');
+api.translateECTitle();
+assert.equal(document.title, '前魔导饰品 | Eorzea Collection',
+  '浏览器标题补扫不能重复加饰品后缀');
 document.title = 'The Crafty Fox | Glams for Arkania | Eorzea Collection';
 api.translateECTitle();
 assert.equal(document.title, 'The Crafty Fox | Glams for Arkania | Eorzea Collection');

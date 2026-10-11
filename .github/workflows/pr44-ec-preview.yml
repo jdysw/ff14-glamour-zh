@@ -1,0 +1,92 @@
+name: Build PR44 EC userscript preview
+
+on:
+  push:
+    branches:
+      - feat/ec-gearsets-auto-translate-143
+    paths:
+      - .github/workflows/pr44-ec-preview.yml
+      - tools/build-pr44-preview.mjs
+      - src/**
+      - dict/**
+      - build/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr44-ec-preview
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR44 head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Build canonical userscript
+        run: npm run build
+      - name: Build independent EC-only preview
+        run: node tools/build-pr44-preview.mjs
+      - name: Verify preview syntax and metadata
+        run: |
+          node --check preview/ff14-glamour-zh-pr44-ec-test.user.js
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('preview/ff14-glamour-zh-pr44-ec-test.user.js').read_text()
+          header, body = text.split('// ==/UserScript==', 1)
+          assert header.count('@match') == 1
+          assert 'https://ffxiv.eorzeacollection.com/*' in header
+          assert '/preview/pr44' in header
+          assert 'PR44-TEST-ONLY' in header
+          assert len(body) > 100000
+          print('PR44 metadata and body verified:', len(body), 'chars')
+          PY
+      - name: Upload installable test script
+        uses: actions/upload-artifact@v4
+        with:
+          name: ff14-glamour-zh-pr44-ec-test
+          path: preview/ff14-glamour-zh-pr44-ec-test.user.js
+          retention-days: 30
+          if-no-files-found: error
+  # Build dependencies and generated scripts run without write credentials.
+  # Only the separate publication job can write, and it does not execute
+  # downloaded/generated code.
+  publish-preview:
+    needs: build-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout PR44 for publication
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download verified preview artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ff14-glamour-zh-pr44-ec-test
+          path: preview
+      - name: Commit generated userscript (no code execution)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f preview/ff14-glamour-zh-pr44-ec-test.user.js
+          if ! git diff --cached --quiet; then
+            git commit -m "build(pr44): publish latest isolated EC testing userscript"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi

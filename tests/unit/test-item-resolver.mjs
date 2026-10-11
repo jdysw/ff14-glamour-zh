@@ -113,6 +113,16 @@ console.log('\n── B2：按真实装备部位优先，组内再按匹配度�
  eq('部位排序优先于全词精确命中',rows[0].native,'ja-head');
  eq('limit 在所有部位排序完成后截断',api.suggestByZh('装备',3).map(r=>r.zh).join('|'),
    '装备头盔|装备|装备礼袍');
+ eq('EC 头部候选只列官方头部',api.suggestByZh('装备',0,0).map(r=>r.native).join('|'),'ja-head');
+ eq('EC 身体候选保留同部位正式名和别名',api.suggestByZh('装备',0,1).map(r=>r.native).join('|'),'ja-body|ja-body');
+ eq('EC 手部候选只列手部',api.suggestByZh('装备',0,2).map(r=>r.native).join('|'),'ja-gloves');
+ eq('EC 腿部候选只列腿部',api.suggestByZh('装备',0,3).map(r=>r.native).join('|'),'ja-legs');
+ eq('EC 脚部候选只列脚部',api.suggestByZh('装备',0,4).map(r=>r.native).join('|'),'ja-feet');
+ eq('只从官方英文原生名集合中返回结果（包括别名）',
+   api.suggestByZh('装备',0,new Set(['ja-gloves','ja-ring'])).map(r=>r.native).join('|'),
+   'ja-gloves|ja-ring');
+ eq('分类在 limit 前执行',api.suggestByZh('装备',1,5)[0]?.native,'ja-ring');
+ eq('未授权的原生名不混入白名单候选',api.suggestByZh('装备',0,new Set(['Missing'])).length,0);
  api.__setSlots(null);
  eq('无旧部位元数据时安全退回原匹配排序',api.suggestByZh('装备')[0].zh,'装备');
 }
