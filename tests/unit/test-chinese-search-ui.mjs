@@ -854,6 +854,32 @@ try {
         'Flyer Shaffron');
       document.dispatch('pointerdown',{target:box.querySelectorAll('button[data-zhx-index]')[0],preventDefault(){}});
       eq('N5 选择鸟甲候选派发站点原生 input 事件',input.dispatched.includes('input'),true);
+      eq('N5a EC Vue 候选选中后保留英文查询值，与站点 v-model 同步',
+        input.value, 'Flyer Shaffron');
+      // Simulate typing again in the same Vue-controlled search input.
+      // A previous implementation scheduled silent value restoration for
+      // 0/100/500/1500/3000 ms and could overwrite a new user query.
+      let blockedCharacters = 0;
+      input.value = '';
+      for (const ch of '鸟甲飞行') {
+        input.value += ch;
+        document.dispatch('input', { target: input });
+        document.dispatch('keydown', {
+          target: input, key: ch, preventDefault() { blockedCharacters++; },
+        });
+      }
+      eq('N5b EC Vue 选择候选后仍可逐字输入检索词',input.value,'鸟甲飞行');
+      eq('N5c 不应拦截中文按键事件',blockedCharacters,0);
+      await sleep(125);
+      eq('N5d 候选重新出现后不得覆写正在输入的中文',input.value,'鸟甲飞行');
+      document.dispatch('compositionstart',{target:input});
+      input.value = '新候选';
+      document.dispatch('input',{target:input});
+      document.dispatch('keydown',{target:input,key:'Enter',isComposing:true,preventDefault(){blockedCharacters++;}});
+      document.dispatch('compositionend',{target:input});
+      await sleep(125);
+      eq('N5e 输入法组合期间不阻断输入或回写旧结果',input.value,'新候选');
+      eq('N5f 输入法确认不应被脚本拦截',blockedCharacters,0);
       globalThis.location.pathname = '/facewear';
       input.value = '椭圆眼镜';
       eq('N6 面饰路由强制对应游戏独立 Glasses 表',harness.api.ecSearchContext(input)?.kind,'facewear');

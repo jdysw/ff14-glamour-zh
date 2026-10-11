@@ -443,12 +443,20 @@ function scheduleSuggestions(input) {
   }, SUGGEST_DEBOUNCE_MS);
 }
 
+function isECVueSearchInput(input) {
+  return _activeSearchSiteId === 'ec'
+    && /\bvs__search\b/.test(String(input?.className || ''));
+}
+
 function selectSuggestion(index) {
   const row = _suggestRows[index];
   if (!row || !_suggestInput) return;
   const input = _suggestInput;
   input.focus({ preventScroll: true });
-  input.value = row.zh;
+  // EC's vue-select owns the input's value. Never write a temporary Chinese
+  // label into this controlled field; it can race the component's own v-model
+  // updates and make subsequent typing appear to be ignored/reset.
+  if (!isECVueSearchInput(input)) input.value = row.zh;
   _selectedSearchRows.set(input, row);
   hideSuggestions(true);
   try {
@@ -741,7 +749,10 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
       || (!context && allowPartial ? resolvePartialByZh(query) : null);
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
-    restoreStandaloneDisplay(input, shown, native);
+    // The EC vue-select model must remain synchronized with the dispatched
+    // native search term. Silent delayed display restoration desynchronizes
+    // its DOM value from Vue state and can override later user keystrokes.
+    if (!isECVueSearchInput(input)) restoreStandaloneDisplay(input, shown, native);
     return true;
   } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
 }
