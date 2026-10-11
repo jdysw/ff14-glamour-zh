@@ -8,7 +8,7 @@ const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
 // Rollup 在拆环后可能重命名同名导入符号；只接受真实的 ready 探测调用，
 // 仍要求恰好命中一次，保留原有七站索引与离线数据断言。
 let script = readDist();
-const readyCalls = [...script.matchAll(/\\b__zhxMark(?:\\$\\d+)?\\('ready'\\);/g)];
+const readyCalls = [...script.matchAll(/\b__zhxMark(?:\$\d+)?\('ready'\);/g)];
 if (readyCalls.length !== 1) throw new Error('就绪锚点必须唯一，实际命中 ' + readyCalls.length);
 const marker = readyCalls[0][0];
 script = script.replace(marker, `window.__zhxDebug = Object.fromEntries(['nameMap', 'itemHash', 'ecidMap', 'koByZh'].map(k => [k, dataGetIndex(k)])); ${marker}`);
