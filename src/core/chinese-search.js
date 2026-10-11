@@ -369,11 +369,10 @@ function armECNativePick(input, row) {
     if (matches.length !== 1) return;
     const target = matches[0];
     cancelECNativePick();
-    // vue-select handles mousedown on its option (not a click on the search
-    // input). Let the native component update v-model and selected chips.
-    if (typeof MouseEvent === 'function') {
-      target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    }
+    // vue-select's native option is selected on CLICK; its parent UL handles
+    // mousedown only to preserve focus. Do not mistake mousedown for a choice.
+    // This uses the site's own click handler to update v-model and chips.
+    target.click?.();
   };
   pending.timer = setTimeout(() => {
     if (_ecPendingNativePick === pending) cancelECNativePick();
