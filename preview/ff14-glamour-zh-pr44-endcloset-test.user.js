@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 End Closet 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44/endcloset
-// @version      1.4.3.44.30
+// @version      1.4.3.44.31
 // @description  PR44 End Closet 独立测试版：汉化、中文搜索与筛选按钮原生交互保护；在该站须禁用正式版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 06ab33119e6d20f85b59ad4b01641f43797d9555
+// PR44 source commit: 7c2e702a6eca7d37c5bab3b46731c55656081d31
 
 
 (function () {
@@ -5012,7 +5012,9 @@
           ? (globalThis.__zhxTestECResetPath || globalThis.location?.pathname || '')
           : (globalThis.location?.pathname || '');
         if (!/^\/(?:glamours|gearsets|accessories)(?:\/|$)/iu.test(path)) return;
-        const button = event.target?.closest?.('button, a[href], [role="button"]');
+        // Gearsets/Accessories display Reset as a plain text control in some
+        // layouts, not necessarily a semantic <button> or an <a href>.
+        const button = event.target?.closest?.('button, a, [role="button"]') || event.target;
         if (!button || button.disabled) return;
         const label = String(button.textContent || '').replace(/\s+/gu, ' ').trim();
         const shortReset = /^\/(?:gearsets|accessories)(?:\/|$)/iu.test(path)
