@@ -41,26 +41,3 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      # 临时审计定位：只打印规则/行号/描述，不输出访问令牌。
-      - name: 诊断本 PR 的 Sonar 新增规则（临时）
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          python3 - <<'PY'
-          import base64
-          import json
-          import os
-          import urllib.request
-          token = os.environ['SONAR_TOKEN']
-          credentials = base64.b64encode((token + ':').encode()).decode()
-          url = 'https://sonarcloud.io/api/issues/search?componentKeys=jdysw_ff14-glamour-zh&pullRequest=50&ps=100'
-          request = urllib.request.Request(url, headers={'Authorization': 'Basic ' + credentials})
-          with urllib.request.urlopen(request, timeout=30) as response:
-              issues = json.load(response).get('issues', [])
-          print('PR Sonar 新增问题:', len(issues))
-          for issue in issues:
-              print(json.dumps({k: issue.get(k) for k in ('rule', 'severity', 'component', 'line', 'message', 'issueStatus')}, ensure_ascii=False))
-          PY
-
