@@ -17,6 +17,14 @@ const policy = 'src/core/site-policy.js';
 const data = 'src/core/data-manager.js';
 const site = 'src/core/site-registry.js';
 assert.deepEqual(imports(policy), [], '纯站点策略不能反向导入任何业务模块');
+const v3Contract = 'src/core/v3-contract.js';
+assert.deepEqual(imports(v3Contract), ['./site-policy.js'],
+  'V3 校验契约只允许读取站点配置，不能触达网络、存储或翻译模块');
+assert.ok(imports(data).includes('./v3-contract.js'),
+  '数据下载和缓存层必须使用同一个 V3 URL/摘要契约');
+assert.ok(!imports(site).includes('./v3-contract.js'),
+  '站点适配器仅通过数据层订阅，不能跨层解析 manifest');
+
 assert.ok(imports(data).includes('./site-policy.js'), '数据管理器必须依赖纯策略');
 assert.ok(!imports(data).includes('./site-registry.js'), '数据管理器不可依赖站点启动适配器');
 assert.ok(imports(site).includes('./site-policy.js'), '站点适配器应共享纯策略配置');
@@ -32,6 +40,10 @@ assert.doesNotMatch(registrySrc, /id:\s*'[^']+'\s*,\s*tables:/, '不能在适配
 
 const order = JSON.parse(read('build/module-order.json')).order;
 assert.ok(order.includes('core/site-policy'), '纯策略必须进入确定性构建顺序契约');
+assert.ok(order.includes('core/v3-contract'), '纯 V3 契约必须进入 ESM 构建');
+assert.ok(order.indexOf('core/site-policy') < order.indexOf('core/v3-contract'));
+assert.ok(order.indexOf('core/v3-contract') < order.indexOf('core/data-manager'));
+
 assert.ok(order.indexOf('core/site-policy') < order.indexOf('core/data-manager'));
 assert.ok(order.indexOf('core/site-policy') < order.indexOf('core/site-registry'));
 
