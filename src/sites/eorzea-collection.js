@@ -8,7 +8,7 @@ import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
+export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
@@ -784,7 +784,39 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return changed;
   }
 
+  // EC's Reset filters action should always return to an unfiltered view.
+  // Some live-page layouts retain reactive filter state even when the native
+  // handler receives the click. Allow the handler to run first, then fall
+  // back to a clean reload only if it did not navigate itself.
+  const EC_RESET_FILTER_LABEL = /^(?:reset filters|重置筛选|清空筛选)$/iu;
+
+  function bindECResetFilters() {
+    if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
+    globalThis.__zhxECResetBound = true;
+    document.addEventListener('click', (event) => {
+      const path = globalThis.location?.pathname || '';
+      if (!/^\/glamours(?:\/|$)/iu.test(path)) return;
+      const button = event.target?.closest?.('button, [role="button"]');
+      if (!button || button.disabled) return;
+      const label = String(button.textContent || '').replace(/\s+/gu, ' ').trim();
+      if (!EC_RESET_FILTER_LABEL.test(label)) return;
+
+      const before = globalThis.location?.href;
+      if (!before) return;
+      const clean = new URL(before);
+      clean.search = '';
+      // Do not block EC's click/default handlers. A prior page navigation
+      // wins; only a still-current page needs the deterministic fallback.
+      setTimeout(() => {
+        if (globalThis.location?.href !== before) return;
+        if (clean.href !== before) globalThis.location.assign(clean.href);
+        else globalThis.location.reload?.();
+      }, 250);
+    }, true);
+  }
+
   function startEC() {
+    safe(bindECResetFilters, 'EC 重置筛选')();
     safe(translateECPage, 'EC 全扫')();
     safe(translateECTitle, 'EC 页面标题')();
     safe(bindECPieceTiles, 'EC 部位图')();
