@@ -269,7 +269,7 @@ function buildDM(world) {
   const body = [...CACHE_SEGS, ...DM_SEGS].join('\n');
   const ret = [
     'return {',
-    '  dataManager, ensureTables, itemDbReady,',
+    '  ensureTables, itemDbReady,',
     '  _ensureTryV3, _applyV3, _v3Pairs, _prepareDataRefresh, _completeDataRefresh, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
 
     '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, slots: _irSearchSlotByNative, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
