@@ -95,8 +95,17 @@ function makeEnv(over = {}) {
     GM_xmlhttpRequest: (opt) => { rec.xhrCalls.push(opt); },
     fetch: undefined,
     AbortController: undefined,
-    setTimeout: (fn) => { rec.timers.push(fn); fn(); return rec.timers.length; },
-    clearTimeout: () => {},
+    // Real timers never fire synchronously inside setTimeout(). Keep a virtual
+    // clock and explicitly advance it in timeout tests.
+    setTimeout: (fn, ms) => {
+      const task = { id: rec.timers.length + 1, fn, ms, cleared: false };
+      rec.timers.push(task);
+      return task.id;
+    },
+    clearTimeout: (id) => {
+      const task = rec.timers.find((t) => t.id === id);
+      if (task) task.cleared = true;
+    },
     requestIdleCallback: (fn) => { rec.idles.push(fn); fn(); return rec.idles.length; },
     MutationObserver: undefined,
     rec,
@@ -313,6 +322,10 @@ console.log('\n── http：GM XHR 优先 + fetch 兜底 ──');
     const api = buildCore(env);
     api.httpGet('https://e.com/slow', 5).catch(() => {});
     await new Promise((r) => setImmediate(r));
+    const pendingTimeout = env.rec.timers.find((t) => !t.cleared);
+    eq('fetch 超时定时器已注册', pendingTimeout?.ms, 5);
+    pendingTimeout?.fn();
+    await Promise.resolve();
     eq('fetch 超时触发 abort', aborted, 1);
     eq('fetch 收到 abort signal', env.rec.fetchCalls[0]?.opt?.signal?.tag, 'sig');
   }

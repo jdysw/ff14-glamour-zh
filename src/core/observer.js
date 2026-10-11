@@ -29,52 +29,79 @@ export { _obsStats, createObserver, observeLocal };
     const o = opts || {};
     const debounce = o.debounce || 350;
     const floodLimit = o.floodLimit || 800;
+    const maxPending = Math.max(floodLimit + 1, floodLimit * 2);
     const root = o.root || document.body || document.documentElement;
     let timer = null;
     let pending = [];
-    let pendingCD = [];              // v1.4.1：characterData 变更目标（与 pending 分列；nodes 语义不变）
-    // v1.4.1：变更目标入队（独立函数——为 collectMuts 控制认知复杂度预算）
-    const _queueCD = (t) => { if (t) pendingCD.push(t); };
-    const _queueAttribute = (mutation) => {
-      if (o.filter && !o.filter(mutation)) return;
-      if (mutation.target) pending.push(mutation.target);
+    let pendingCD = [];
+    let collapsed = false;
+    let floodRescheduled = false;
+    let stopped = false;
+
+    // Beyond the hard cap, a root rescan subsumes all queued mutations.
+    // Keep at most one root instead of accumulating unbounded SPA updates.
+    const collapse = () => {
+      pending = [root];
+      pendingCD = [];
+      collapsed = true;
     };
-    const _collectCharacterData = (mutation) => {
+    const queueNode = (n) => {
+      if (!n || collapsed) return;
+      pending.push(n);
+      if (pending.length + pendingCD.length > maxPending) collapse();
+    };
+    const queueCD = (n) => {
+      if (!n || collapsed) return;
+      pendingCD.push(n);
+      if (pending.length + pendingCD.length > maxPending) collapse();
+    };
+    const queueCharacterData = (mutation) => {
       if (!o.characterData || (o.filter && !o.filter(mutation))) return false;
-      _queueCD(mutation.target);
+      queueCD(mutation.target);
       return true;
     };
-    // mutation 明细收集拆为局部函数（仅降复杂度；判定与产物不变）
+    const queueAttribute = (mutation) => {
+      if (!o.filter || o.filter(mutation)) queueNode(mutation.target);
+    };
+    const queueAdded = (mutation) => {
+      for (const n of mutation.addedNodes) {
+        if (n.nodeType === 1 || n.nodeType === 3) queueNode(n);
+        if (collapsed) break;
+      }
+    };
     const collectMuts = (muts) => {
       let hitCD = false;
       for (const m of muts) {
-        if (m.type === 'characterData') {
-          hitCD = _collectCharacterData(m) || hitCD;
-          continue;
-        }
-        if (m.type === 'attributes') {
-          _queueAttribute(m);
-          continue;
-        }
-        for (const n of m.addedNodes) {
-          if (n.nodeType === 1 || n.nodeType === 3) pending.push(n);
-        }
+        if (collapsed) break;
+        if (m.type === 'characterData') hitCD = queueCharacterData(m) || hitCD;
+        else if (m.type === 'attributes') queueAttribute(m);
+        else queueAdded(m);
       }
       return hitCD;
     };
     const mo = new MutationObserver((muts) => {
+      if (stopped) return;
       const hitCD = collectMuts(muts);
-      const flood = pending.length > floodLimit;          // 洪峰保护：避免 pending 无限增长
-      if (flood && timer) { clearTimeout(timer); timer = null; }
-      if (timer || (!pending.length && !hitCD)) return;
+      const flood = collapsed || pending.length + pendingCD.length > floodLimit;
+      // One reschedule is enough; repeatedly restarting under sustained load
+      // would starve the handler even though the queue has a size cap.
+      if (flood && timer !== null && !floodRescheduled) {
+        clearTimeout(timer);
+        timer = null;
+        floodRescheduled = true;
+      }
+      if (timer !== null || (!pending.length && !pendingCD.length && !hitCD)) return;
       timer = setTimeout(() => {
         timer = null;
-        const nodes = dedupeByAncestor(pending);
-        const cdTargets = dedupeByAncestor(pendingCD);        // v1.4.1：变更目标（去重后）随批次传出
+        if (stopped) return;
+        const nodes = collapsed ? [root] : dedupeByAncestor(pending);
+        const cdTargets = collapsed ? [] : dedupeByAncestor(pendingCD);
         pending = [];
         pendingCD = [];
-        _obsStats.ticks++; _obsStats.nodes += nodes.length;   // Phase 10：Probe 统计
-        const t0 = _perfNow();                                // Phase 19：处理时长统计
+        collapsed = false;
+        floodRescheduled = false;
+        _obsStats.ticks++; _obsStats.nodes += nodes.length;
+        const t0 = _perfNow();
         try { o.handler(nodes, cdTargets); } catch (e) { _zhxErr('createObserver', e); }
         const dt = _perfNow() - t0;
         _obsStats.ms += dt;
@@ -88,7 +115,17 @@ export { _obsStats, createObserver, observeLocal };
       if (o.attributeFilter) subscription.attributeFilter = o.attributeFilter;
     }
     mo.observe(root, subscription);
-    return { disconnect: () => mo.disconnect() };
+    return {
+      disconnect() {
+        stopped = true;
+        mo.disconnect();
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        pending = [];
+        pendingCD = [];
+        collapsed = false;
+      },
+    };
   }
 
   // 兼容包装：既有站点的局部观察器（handler 收新增节点批次；delay 为 debounce）

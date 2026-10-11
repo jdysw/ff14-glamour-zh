@@ -26,12 +26,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _manifestNeedsCommit = false;
   let _manifestRejected = false;
 
+  // Observers remain subscribed across explicit data refreshes.
   const _readyCbs = [];
   let _tablesReady = false; // NOSONAR — ready 状态由数据完成生命周期更新
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
-    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } return; }
-    _readyCbs.push(fn);
+    if (!_readyCbs.includes(fn)) _readyCbs.push(fn);
+    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } }
   }
   function _fireTablesReady() {
     if (_tablesReady) return;
@@ -41,7 +42,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { cacheReset('lookup'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
-    const cbs = _readyCbs.splice(0);
+    const cbs = _readyCbs.slice(); // Keep subscriptions for subsequent invalidate → reload cycles.
     for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
@@ -68,9 +69,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   /* @zhixia:core-data-manager-start */
   /* V3 manifest、缓存、ready 广播与 dataManager API。 */
   let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
+  let _activeEnsure = null; // Serialize old and new loads when invalidated mid-request.
+  let _ensureGeneration = 0; // Stale loads must neither apply tables nor signal ready.
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
-  function _ensureFinalize() {
+  function _ensureFinalize(generation = _ensureGeneration) {
+    if (generation !== _ensureGeneration) return Promise.resolve();
     __zhxMark('finalize');
     try { _fireTablesReady(); } catch (e) { _zhxErr('fireReady', e); }
     __zhxMark('ready');
@@ -409,20 +413,21 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return _validV3Manifest(manifest) && (!force || manifest.candidatePolicy === 1) ? manifest : null;
   }
 
-  async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed) {
+  async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed, generation = _ensureGeneration) {
     const selected = _manifestSiteFiles(manifest, site, need);
     if (!selected) return null;
     const files = await fetchStationFiles(site.id, selected.names, selected.sm, selected.sharedDict, force, staged, networkAllowed);
-    if (!allFilesReady(selected.names, files, selected.sharedDict)) return null;
+    if (!allFilesReady(selected.names, files, selected.sharedDict) || generation !== _ensureGeneration) return null;
     files.candidatePolicy = manifest.candidatePolicy;
     return _applyV3(files) ? { files } : null;
   }
 
-  async function _tryV3WithCachedFallback(site, manifest, need, force, snapshots, staged) {
-    let loaded = await _tryV3Bundle(site, manifest, need, force, staged, true);
+  async function _tryV3WithCachedFallback(site, manifest, need, force, snapshots, staged, generation = _ensureGeneration) {
+    let loaded = await _tryV3Bundle(site, manifest, need, force, staged, true, generation);
+    if (generation !== _ensureGeneration) return { loaded: null, manifest };
     if (loaded || force || !snapshots.previousValid) return { loaded, manifest };
     staged.clear();
-    loaded = await _tryV3Bundle(site, snapshots.previous.man, need, false, null, false);
+    loaded = await _tryV3Bundle(site, snapshots.previous.man, need, false, null, false, generation);
     if (!loaded) return { loaded: null, manifest };
     _dlStats.fallback++;
     return { loaded, manifest: snapshots.previous.man };
@@ -438,16 +443,16 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return committed;
   }
 
-  async function _ensureTryV3(force = false, refreshManifest = false) {
+  async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
     const site = findSite();
     if (!site?.id) return false;
     try {
       const snapshots = await _readPreviousV3Manifest(site.id);
       const manifest = await _selectV3Manifest(force, refreshManifest, snapshots);
-      if (!manifest) return false;
+      if (!manifest || generation !== _ensureGeneration) return false;
       const staged = new Map();
-      const result = await _tryV3WithCachedFallback(site, manifest, neededTables(), force, snapshots, staged);
-      if (!result.loaded) return false;
+      const result = await _tryV3WithCachedFallback(site, manifest, neededTables(), force, snapshots, staged, generation);
+      if (!result.loaded || generation !== _ensureGeneration) return false;
       if (result.manifest === manifest) await _commitV3Selection(site.id, manifest, snapshots, force, staged);
       if (result.manifest.version) DATA_VER = String(result.manifest.version);
       return true;
@@ -534,20 +539,33 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return stored;
   }
 
-  async function _ensureMain() {
+  async function _ensureMain(generation = _ensureGeneration) {
     _irCandidatePolicy = 0;
-    _forceDataRefresh = await _prepareDataRefresh();
+    const force = await _prepareDataRefresh();
+    if (generation !== _ensureGeneration) return;
+    _forceDataRefresh = force;
     if (!neededTables().length) return;
     const refreshManifest = _manifestRefreshRequested;
     _manifestRefreshRequested = false;
-    const loaded = await _ensureTryV3(_forceDataRefresh, refreshManifest);
-    if (loaded && _forceDataRefresh && _irCandidatePolicy === 1) await _completeDataRefresh();
+    const loaded = await _ensureTryV3(force, refreshManifest, generation);
+    if (generation !== _ensureGeneration) return;
+    if (loaded && force && _irCandidatePolicy === 1) await _completeDataRefresh();
   }
 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
-    _ensurePromise = _ensureMain().catch((e) => { _zhxErr('ensureMain', e); }).then(_ensureFinalize);
-    return _ensurePromise;
+    const generation = _ensureGeneration;
+    // A refresh requested during an in-flight load waits for it to settle,
+    // while a generation guard prevents stale work from publishing results.
+    const previous = _activeEnsure;
+    const promise = Promise.resolve(previous)
+      .catch(() => {})
+      .then(() => generation === _ensureGeneration ? _ensureMain(generation) : undefined)
+      .catch((e) => { _zhxErr('ensureMain', e); })
+      .then(() => _ensureFinalize(generation));
+    _ensurePromise = promise;
+    _activeEnsure = promise;
+    return promise;
   }
   function itemDbReady(cb) {
     ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) { _zhxErr('readyCb', e); } });
@@ -577,6 +595,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
   function dataInvalidate() {
     // 重新检查 V3 manifest，同时保留按指纹校验的文件缓存供离线复用。
+    _ensureGeneration++;
+    _tablesReady = false;
     _ensurePromise = null;
     DATA_VER = '';
     _manifestRefreshRequested = true;
