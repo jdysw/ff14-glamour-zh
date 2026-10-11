@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.28
+// @version      1.4.3.44.29
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 21e306c8d5df5670052d8cf6dc67e5176f66f62d
+// PR44 source commit: 6eb5251555bc88f32c9606e6bb4b320788e984d6
 
 
 (function () {
@@ -5005,7 +5005,11 @@
       if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
       globalThis.__zhxECResetBound = true;
       document.addEventListener('click', (event) => {
-        const path = globalThis.location?.pathname || '';
+        // This existing test hook permits the offline EC fixture to exercise
+        // the *same* reset path without accessing a live website.
+        const path = globalThis.__zhxTestSite === 'ec'
+          ? (globalThis.__zhxTestECResetPath || globalThis.location?.pathname || '')
+          : (globalThis.location?.pathname || '');
         if (!/^\/glamours(?:\/|$)/iu.test(path)) return;
         const button = event.target?.closest?.('button, [role="button"]');
         if (!button || button.disabled) return;
