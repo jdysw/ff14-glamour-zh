@@ -8,7 +8,6 @@ import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';
 
 
-  /* @zhixia:core-item-resolver-end */
 
   /* ===================================================================== */
 
