@@ -33,6 +33,7 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
 // 从三个规范模块提取对应代码段，避免依赖打包产物的文本顺序。
 const DICT_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/dictionary.js'), 'utf8');
 const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
+const PRIMITIVE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 
 // ─────────────────────────────────────────────────────────────
 // 提取装置：按 @zhixia:<tag> 标记切出区段（同名多段按顺序全部取出）
@@ -55,6 +56,7 @@ function sliceAll(s, tag) {
 }
 
 const DICT_SEG = sliceAll(DICT_TEXT, 'core-dictionary');
+const CACHE_PRIMITIVE_SEG = sliceAll(PRIMITIVE_TEXT, 'core-cache-primitives');
 const CACHE_REG_SEG = sliceAll(CACHE_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
 
 const STUB_LINES = [
@@ -95,7 +97,7 @@ function buildDict(mock = {}) {
       };
     },
   };
-  const body = [...STUB_LINES, ...CACHE_REG_SEG, ...DICT_SEG, RETURN_STMT].join('\n');
+  const body = [...STUB_LINES, ...CACHE_PRIMITIVE_SEG, ...CACHE_REG_SEG, ...DICT_SEG, RETURN_STMT].join('\n');
   try {
     const fn = new Function('document', 'console', 'NodeFilter', '__rec', body);
     return fn(doc, { warn: () => {} }, NF, rec);
