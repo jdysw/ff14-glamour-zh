@@ -397,8 +397,12 @@ console.log('\n── dom / runtime：去重 / 错误边界 ──');
   eq('_zhxErr：console.warn 前缀', String(env.rec.warns[0]?.[0] || ''), 't1：');
   eq('_zhxErr：消息进缓冲', api.__errLog.length, 1);
   eq('_zhxErr：消息格式（位置 + 消息）', api.__errLog[0], 't1：boom');
+  const sameLog = api.__errLog;
   for (let i = 0; i < 30; i++) api._zhxErr('cap' + i, new Error('x'));
   eq('_zhxErr：缓冲封顶 20 条', api.__errLog.length, 20);
+  eq('_zhxErr：沿用原日志数组引用', api.__errLog, sameLog);
+  eq('_zhxErr：清除最早超限消息', api.__errLog[0], 'cap10：x');
+  eq('_zhxErr：保留最后一条故障', api.__errLog[19], 'cap29：x');
 }
 {
   // Phase 18：Probe 镜像 —— 仅当 __zhxErrs 已存在时追加（不主动创建）
@@ -407,6 +411,12 @@ console.log('\n── dom / runtime：去重 / 错误边界 ──');
   const api = buildCore(env);
   api._zhxErr('mirror', new Error('m'));
   eq('Probe 镜像：写入既有 __zhxErrs', env.window.__zhxErrs[0], 'mirror：m');
+  const sameMirror = env.window.__zhxErrs;
+  for (let i = 0; i < 27; i++) api._zhxErr('probe' + i, new Error('test'));
+  eq('Probe 镜像：不会无限增长', sameMirror.length, 20);
+  eq('Probe 镜像：保持数组引用', env.window.__zhxErrs, sameMirror);
+  eq('Probe 镜像：保留最近最早记录', sameMirror[0], 'probe7：test');
+  eq('Probe 镜像：保留最后记录', sameMirror[19], 'probe26：test');
   const env2 = makeEnv();
   const api2 = buildCore(env2);
   api2._zhxErr('nope', new Error('n'));
