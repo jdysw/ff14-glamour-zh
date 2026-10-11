@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 End Closet 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44/endcloset
-// @version      1.4.3.44.26
+// @version      1.4.3.44.27
 // @description  PR44 End Closet 独立测试版：汉化、中文搜索与筛选按钮原生交互保护；在该站须禁用正式版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 8554ab848aec4f051ac54f75ac586869694c2772
+// PR44 source commit: 7a30639ed3414910a23874dd774cf2511a087b02
 
 
 (function () {
@@ -9323,6 +9323,17 @@
       return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
     }
 
+    // The Wiki lookup is only for equipment links. EC's Reset/Apply filters,
+    // search, form labels and toggles are app-owned controls: intercepting
+    // their click in document capture prevents the site's own handlers.
+    function isECNativeControl(el) {
+      return !!el?.closest?.(
+        'button, input, select, textarea, label, [role="button"], ' +
+        '[role="checkbox"], [role="radio"], [role="switch"], ' +
+        '[role="combobox"], [role="option"], [role="slider"]'
+      );
+    }
+
     // 统一采集：root 内（含自身）按类型收集候选，输出标准 target：
     //   { type, element, text, context }
     // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
@@ -9537,7 +9548,7 @@
       window.__zhixiaWikiJumpBound = true;
       document.addEventListener('click', (e) => {
         const el0 = e.target;
-        if (!el0?.closest || isECSearchOption(el0)) return;
+        if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)) return;
         const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
         let probe = a || el0;
         let guard = 0;
