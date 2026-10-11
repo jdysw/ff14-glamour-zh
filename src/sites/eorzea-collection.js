@@ -1,5 +1,4 @@
 /* @phase15-module-order:sites/eorzea-collection */
-/* @phase15-order-link:sites/eorzea-collection<-core/dictionary */
 import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
