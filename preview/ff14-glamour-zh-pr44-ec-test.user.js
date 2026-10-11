@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.9
+// @version      1.4.3.44.10
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: bd0a6fb4f8822665571c2921c08eb7a6556df04d
+// PR44 source commit: f00e2bc8fb4f24be7b3b2e849dcaf451c9493685
 
 
 (function () {
@@ -8213,12 +8213,20 @@
     }, SUGGEST_DEBOUNCE_MS);
   }
 
+  function isECVueSearchInput(input) {
+    return _activeSearchSiteId === 'ec'
+      && /\bvs__search\b/.test(String(input?.className || ''));
+  }
+
   function selectSuggestion(index) {
     const row = _suggestRows[index];
     if (!row || !_suggestInput) return;
     const input = _suggestInput;
     input.focus({ preventScroll: true });
-    input.value = row.zh;
+    // EC's vue-select owns the input's value. Never write a temporary Chinese
+    // label into this controlled field; it can race the component's own v-model
+    // updates and make subsequent typing appear to be ignored/reset.
+    if (!isECVueSearchInput(input)) input.value = row.zh;
     _selectedSearchRows.set(input, row);
     hideSuggestions(true);
     try {
@@ -8511,7 +8519,10 @@
         || (!context && allowPartial ? resolvePartialByZh(query) : null);
       if (!native || native === query) return false;
       if (!rewriteInputNatively(input, native)) return false;
-      restoreStandaloneDisplay(input, shown, native);
+      // The EC vue-select model must remain synchronized with the dispatched
+      // native search term. Silent delayed display restoration desynchronizes
+      // its DOM value from Vue state and can override later user keystrokes.
+      if (!isECVueSearchInput(input)) restoreStandaloneDisplay(input, shown, native);
       return true;
     } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
   }
