@@ -790,6 +790,19 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // back to a clean reload only if it did not navigate itself.
   const EC_RESET_FILTER_LABEL = /^(?:reset filters|重置筛选|清空筛选)$/iu;
   const EC_RESET_SHORT_LABEL = /^(?:reset|重置)$/iu;
+  // /glamours/head/27832 is itself a gear filter, not a permanent
+  // category. Removing only ?query (or reloading this URL) re-applies
+  // the same selected item. Canonical reset must leave the item route.
+  const EC_GLAMOUR_ITEM_FILTER_PATH =
+    /^\/glamours\/(?:weapon|head|body|hands|legs|feet|ear|ears|neck|wrist|ring)\/\d+\/?$/iu;
+
+  function ecResetFiltersUrl(href) {
+    const url = new URL(href);
+    if (EC_GLAMOUR_ITEM_FILTER_PATH.test(url.pathname)) url.pathname = '/glamours';
+    url.search = '';
+    url.hash = '';
+    return url.href;
+  }
 
   function bindECResetFilters() {
     if (globalThis.__zhxECResetBound || !document?.addEventListener) return;
@@ -812,13 +825,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
       const before = globalThis.location?.href;
       if (!before) return;
-      const clean = new URL(before);
-      clean.search = '';
-      // Do not block EC's click/default handlers. A prior page navigation
-      // wins; only a still-current page needs the deterministic fallback.
+      const cleanUrl = ecResetFiltersUrl(before);
+      // The site's own click handler still runs. If it does not navigate,
+      // follow the canonical clean route; reloading an item-filter URL would
+      // simply apply the unwanted filter all over again.
       setTimeout(() => {
         if (globalThis.location?.href !== before) return;
-        if (clean.href !== before) globalThis.location.assign(clean.href);
+        if (cleanUrl !== before) globalThis.location.assign(cleanUrl);
         else globalThis.location.reload?.();
       }, 250);
     }, true);
