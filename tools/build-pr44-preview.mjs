@@ -37,8 +37,9 @@ let header = initialHeader;
 header = replaceLine(header, 'name', endcloset
   ? 'FF14 幻化站中文化 · PR44 End Closet 测试版'
   : 'FF14 幻化站中文化 · PR44 EC 测试版');
-header = replaceLine(header, 'namespace',
-  'https://github.com/jdysw/ff14-glamour-zh/preview/pr44/' + site);
+header = replaceLine(header, 'namespace', endcloset
+  ? 'https://github.com/jdysw/ff14-glamour-zh/preview/pr44/endcloset'
+  : 'https://github.com/jdysw/ff14-glamour-zh/preview/pr44');
 header = replaceLine(header, 'version', version);
 header = replaceLine(header, 'description', endcloset
   ? 'PR44 End Closet 独立测试版：汉化、中文搜索与筛选按钮原生交互保护；在该站须禁用正式版。'
