@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/site-registry */
-/* @phase15-order-link:core/site-registry<-core/http */
-import './http.js';
 import { DATA_REMOTE } from './constants.js';
 import { onTablesReady } from './data-manager.js';
 import { SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost } from './site-policy.js';
