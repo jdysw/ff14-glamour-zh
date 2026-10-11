@@ -29,6 +29,7 @@
 
 - `core/runtime.js` 不再导入 `data-manager.js`；装备链接查询 `lookupZh` 移到真实调用方 `core/targets.js`，保留 hash 优先及原生名称兜底行为。
 - `core/cache.js` 统一拥有英文/日文名称缓存、FC 职能名称表与 Ronka 装备缓存；站点和解析器只能依赖缓存层，不再由缓存层反向导入这些对象。
+- `trEC` 与 `PATTERNS_EC` 统一留在 `sites/eorzea-collection.js`；通用 `item-resolver.js` 不再导入 EC 站点文案，实现 EC → 核心解析器的单向依赖，原 EC 翻译金标准仍逐条验证。
 - 缓存层仍存在注明 `@phase15-order-link` 的纯副作用顺序导入，这属于旧版 Rollup 输出排序约束，而非业务数据依赖；独立图分析按标记排除。
 - 缓存与数据管理器、数据管理器与解析器等其他业务耦合仍存在，不声称全部 ESM 环已消除。
 
