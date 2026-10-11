@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.18
+// @version      1.4.3.44.19
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: 765878f384c79ff5712e6442702602828e92a7bd
+// PR44 source commit: 3f509029ff200eaf87d717848ff58a629c4d81f2
 
 
 (function () {
@@ -8122,8 +8122,8 @@
   const _programmaticInputs = new WeakSet();
   const _selectedSearchRows = new WeakMap();
 
-  // EC vue-select is a two-stage control: typing filters remote options, but
-  // only a native option mousedown commits the selection to Vue's model.
+  // EC vue-select first filters remote results; only its native option click
+  // commits the selected equipment into Vue's component model.
   const EC_NATIVE_PICK_TIMEOUT_MS = 4000;
   let _ecPendingNativePick = null;
 
@@ -8135,9 +8135,8 @@
     clearTimeout(pending.timer);
   }
 
-  // Use the exact original name when possible. EC's normal text translator may
-  // have already localized the native dropdown label; only an unambiguous
-  // Chinese-label fallback is allowed, never a partial match or a guessed index.
+  // The EC localization walker may replace the label. Prefer the preserved
+  // original equipment name; compare translated text only as a unique fallback.
   function ecNativeOptionMatch(option, row) {
     const clean = text => String(text || '').normalize('NFKC').replace(/\s+/gu, ' ').trim();
     const source = option.getAttribute?.('data-zhixia-source-text');
@@ -8146,34 +8145,43 @@
     return clean(option.textContent) === clean(row.zh) ? 'zh' : null;
   }
 
+  function ecNativePickCandidates(pending) {
+    return [...pending.root.querySelectorAll('.vs__dropdown-option')].filter(option =>
+      option.isConnected !== false
+      && option.getAttribute?.('aria-disabled') !== 'true'
+      && !option.classList?.contains('vs__dropdown-option--disabled'));
+  }
+
+  function ecNativePickTarget(pending) {
+    const options = ecNativePickCandidates(pending);
+    const originals = options.filter(option => ecNativeOptionMatch(option, pending.row) === 'native');
+    const matches = originals.length ? originals : options.filter(option =>
+      ecNativeOptionMatch(option, pending.row) === 'zh');
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function attemptECNativePick(pending) {
+    if (_ecPendingNativePick !== pending) return;
+    // An input edit or replaced component invalidates any pending XHR result.
+    if (pending.input.isConnected === false || pending.input.value !== pending.row.native) {
+      cancelECNativePick();
+      return;
+    }
+    const target = ecNativePickTarget(pending);
+    if (!target) return;
+    cancelECNativePick();
+    // vue-select selects the LI on click; mousedown on the UL only preserves
+    // focus. Use its own component handler so v-model and selected chips update.
+    target.click?.();
+  }
+
   function armECNativePick(input, row) {
     cancelECNativePick();
     const root = input.closest?.('.v-select');
     if (!root?.querySelectorAll) return null;
     const pending = { input, root, row, observer: null, timer: null };
     _ecPendingNativePick = pending;
-    const attempt = () => {
-      if (_ecPendingNativePick !== pending) return;
-      // Abort on user edits, navigation, or Vue removing the original field.
-      if (input.isConnected === false || input.value !== row.native) {
-        cancelECNativePick();
-        return;
-      }
-      const options = [...root.querySelectorAll('.vs__dropdown-option')].filter(option =>
-        option.isConnected !== false
-        && option.getAttribute?.('aria-disabled') !== 'true'
-        && !option.classList?.contains('vs__dropdown-option--disabled'));
-      const exact = options.filter(option => ecNativeOptionMatch(option, row) === 'native');
-      const matches = exact.length ? exact : options.filter(option =>
-        ecNativeOptionMatch(option, row) === 'zh');
-      if (matches.length !== 1) return;
-      const target = matches[0];
-      cancelECNativePick();
-      // vue-select's native option is selected on CLICK; its parent UL handles
-      // mousedown only to preserve focus. Do not mistake mousedown for a choice.
-      // This uses the site's own click handler to update v-model and chips.
-      target.click?.();
-    };
+    const attempt = () => attemptECNativePick(pending);
     pending.timer = setTimeout(() => {
       if (_ecPendingNativePick === pending) cancelECNativePick();
     }, EC_NATIVE_PICK_TIMEOUT_MS);
@@ -8181,7 +8189,6 @@
       pending.observer = new MutationObserver(attempt);
       pending.observer.observe(root, { childList: true, subtree: true, characterData: true });
     }
-    // Also support synchronously rendered dropdown options.
     return attempt;
   }
 
