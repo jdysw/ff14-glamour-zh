@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 幻化站中文化 · PR44 EC 测试版
 // @namespace    https://github.com/jdysw/ff14-glamour-zh/preview/pr44
-// @version      1.4.3.44.10
+// @version      1.4.3.44.11
 // @description  PR44 最新代码 EC 测试版：套装与饰品汉化、中文智能搜索、鸟甲/面饰、各装备部位筛选。测试前禁用正式版及旧测试版。
 // @author       zhixia
 // @license      GPL-3.0
@@ -23,7 +23,7 @@
 // @noframes
 // ==/UserScript==
 
-// PR44 source commit: f00e2bc8fb4f24be7b3b2e849dcaf451c9493685
+// PR44 source commit: 1bd961639fdd0ebb013c913630ceb7c1ef4b1c4a
 
 
 (function () {
@@ -8389,6 +8389,10 @@
   }
 
   function handleSuggestionKeydown(event) {
+    // EC vue-select already implements its own keyboard list navigation.
+    // Hijacking Up/Down/Escape/Enter in document capture breaks that native
+    // dropdown; our Chinese suggestions remain pointer-selectable.
+    if (isECVueSearchInput(event.target)) return false;
     if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return false;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
