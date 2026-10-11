@@ -110,6 +110,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     "Ramza's", 'Star Captain', 'Star Pilot', 'Alternative', 'Maritime',
     'Alpha Wolf', 'Eagleclaw', 'Star Tech Crafting', 'Star Tech Gathering',
   ]);
+  // Only verified EC Hoodie variants; never combine unknown set names or fits.
+  const EC_GEARSET_HOODED_BASES = ['Plain Hooded', 'Festival Hooded', 'Succubus Hooded'];
+  const EC_GEARSET_HOODED_FITS = Object.freeze({
+    'Form-fitting': '修身',
+    'Oversized': '大码',
+  });
   // 这些译名核对自 data/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
   // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
   const EC_GEARSET_NAME_EXTRAS = Object.freeze({
@@ -256,7 +262,27 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     return rows;
   }
 
-  function ecGearsetKnownRows() {
+  // Existing localized base + observed fit = descriptive label, not an
+  // invented official CN item name. Official outfit package always wins.
+  function ecGearsetHoodedVariantRows(nameIndex) {
+    const rows = [];
+    for (const base of EC_GEARSET_HOODED_BASES) {
+      if (!EC_GEARSET_SINGLE_SERIES.has(base)) continue;
+      const baseZh = ecGearsetSeriesZh(base);
+      if (!baseZh?.endsWith('套装')) continue;
+      for (const [fit, zhFit] of Object.entries(EC_GEARSET_HOODED_FITS)) {
+        const native = fit + ' ' + base;
+        const official = ecGearsetOfficialPackageZh(native, nameIndex);
+        rows.push({
+          native, zh: official || zhFit + baseZh,
+          ...(official ? {} : { descriptive: true }),
+        });
+      }
+    }
+    return rows;
+  }
+
+  function ecGearsetKnownRows(nameIndex) {
     const rows = [];
     for (const [series, roles] of EC_GEARSET_ROLE_SERIES) {
       const zhSeries = ecGearsetSeriesZh(series);
@@ -269,6 +295,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     for (const native of EC_GEARSET_SINGLE_SERIES) {
       const zh = ecGearsetSeriesZh(native);
       if (zh) rows.push({ native, zh });
+    }
+    const seen = new Set(rows.map(row => row.native));
+    for (const row of ecGearsetHoodedVariantRows(nameIndex)) {
+      if (!seen.has(row.native)) rows.push(row);
     }
     return rows;
   }
@@ -299,7 +329,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, ecBusy, sta
     if (_ecGearsetRows && _ecGearsetRevision === revision && _ecGearsetHadItemIndex === hasItems) {
       return _ecGearsetRows;
     }
-    const rows = ecGearsetKnownRows();
+    const rows = ecGearsetKnownRows(nameIndex);
     ecGearsetAppendInferredRows(rows, nameIndex);
     _ecGearsetRows = rows;
     _ecGearsetRevision = revision;
