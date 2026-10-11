@@ -87,6 +87,13 @@ await c.eval(`(() => {
   host.appendChild(menu);
   window.__nativePickCount = 0;
   window.__nativePickWrong = 0;
+  window.__wikiOpenAttempts = [];
+  const realOpen = window.open;
+  window.open = function (...args) {
+    window.__wikiOpenAttempts.push(args[0]);
+    return null;
+  };
+  window.addEventListener('beforeunload', () => { window.open = realOpen; });
   const original = ${JSON.stringify(expectEn)};
   input.addEventListener('input', () => {
     if (input.value !== original) return;
@@ -101,7 +108,7 @@ await c.eval(`(() => {
       decoy.addEventListener('click', () => { window.__nativePickWrong++; });
       const option = document.createElement('li');
       option.className = 'vs__dropdown-option';
-      option.textContent = '女仆腕带'; // EC may have translated the visible native label.
+      option.textContent = original; // English option must not trigger the global Wiki click hijack.
       option.dataset.zhixiaSourceText = original;
       option.addEventListener('click', event => {
         event.preventDefault();
@@ -167,15 +174,21 @@ const nativeSelected = await c.eval(`(() => ({
     .querySelector('.vs__selected')?.textContent,
   pickCount: window.__nativePickCount,
   wrongCount: window.__nativePickWrong,
+  wikiOpens: window.__wikiOpenAttempts,
 }))()`);
 ok('③ EC 点击中文候选一次即选中真正的原生装备（而非只搜索），并清空 Vue 搜索框',
   picked !== null && v3 === '' && nativeSelected?.name === expectEn
-    && nativeSelected.pickCount === 1 && nativeSelected.wrongCount === 0,
+    && nativeSelected.pickCount === 1 && nativeSelected.wrongCount === 0
+    && nativeSelected.wikiOpens.length === 0,
   JSON.stringify({ picked, v3, nativeSelected, expectEn }));
 const seenVals = await c.eval('window.__inputVals').catch(() => null);
 const convHit = Array.isArray(seenVals) && picked && picked.nativeText
   && seenVals.some((v) => v && v.length >= 2 && (v === picked.nativeText || v.includes(picked.nativeText) || picked.nativeText.includes(v)));
 ok('③b 转换式搜索派发原生名 input（站内搜索生效）', convHit === true, JSON.stringify({ picked, seenVals: (seenVals || []).slice(-4) }));
+
+ok('③g EC 原生选项确认不得打开灰机 Wiki',
+  (await c.eval('window.__wikiOpenAttempts')).length === 0,
+  JSON.stringify(await c.eval('window.__wikiOpenAttempts')));
 
 // Late search responses must not select an old item after the user starts
 // typing a different query.
