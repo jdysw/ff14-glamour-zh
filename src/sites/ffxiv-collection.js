@@ -133,6 +133,14 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     document.addEventListener('click', (e) => {
       const el = e.target?.closest?.('[data-zhx-item]') ?? null;
       if (!el) return;
+      // Item names can be nested inside interactive controls, but a filter
+      // button nested inside an item-marked card is NOT an item-name click.
+      // Never steal reset/apply/clear or other native React control actions.
+      const control = e.target?.closest?.(
+        'button, input, select, textarea, a[href], [role="button"], ' +
+        '[role="checkbox"], [role="switch"], [role="combobox"]'
+      );
+      if (control && control !== el && !control.contains(el)) return;
       const zh = el.dataset.zhxItem;
       if (!zh) return;
       e.preventDefault();
