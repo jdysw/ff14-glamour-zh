@@ -45,7 +45,7 @@ function buildHarness(download) {
     _lcs90: () => null,
     applyRuntimeDict: () => {},
     httpGet: download,
-    tryEnToZh: () => null,
+    // 英文兜底现由规范 data-manager 源码实现，不再注入会重名的假函数。
     __zhxMark: (mark) => marks.push(mark),
     _zhxErr: (where, error) => errors.push([where, error]),
     findSite: () => ({ id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items'] }),
