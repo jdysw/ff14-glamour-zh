@@ -69,6 +69,7 @@ SUITES.unit.push('unit/test-coverage-audit.mjs');
 SUITES.unit.push('unit/test-audit-localization.mjs');
 SUITES.unit.push('unit/test-ec-manual-audit.mjs');
 SUITES.unit.push('unit/test-ec-gearsets.mjs');
+SUITES.unit.push('unit/test-ec-reset-filters.mjs');
 SUITES.unit.push('unit/test-mirapri-manual-audit.mjs');
 SUITES.unit.push('unit/test-manual-coverage-audit.mjs');
 SUITES.unit.push('unit/test-search-diagnostics.mjs');

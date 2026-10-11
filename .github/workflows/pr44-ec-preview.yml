@@ -1,0 +1,118 @@
+name: Build PR44 site userscript previews
+
+on:
+  push:
+    branches:
+      - feat/ec-gearsets-auto-translate-143
+    paths:
+      - .github/workflows/pr44-ec-preview.yml
+      - tools/build-pr44-preview.mjs
+      - src/**
+      - dict/**
+      - build/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr44-ec-preview
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR44 head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Build canonical userscript
+        run: npm run build
+      - name: Build independent site-only previews
+        run: |
+          node tools/build-pr44-preview.mjs
+          node tools/build-pr44-preview.mjs --site=endcloset
+      - name: Verify preview syntax and metadata
+        run: |
+          node --check preview/ff14-glamour-zh-pr44-ec-test.user.js
+          node --check preview/ff14-glamour-zh-pr44-endcloset-test.user.js
+          python3 - <<'PY'
+          from pathlib import Path
+          for site, host, tag in [
+              ('ec', 'ffxiv.eorzeacollection.com', 'PR44-TEST-ONLY'),
+              ('endcloset', 'end-closet.com', 'PR44-ENDCLOSET-TEST-ONLY'),
+          ]:
+              text = Path(f'preview/ff14-glamour-zh-pr44-{site}-test.user.js').read_text()
+              header, body = text.split('// ==/UserScript==', 1)
+              matches = [x.strip() for x in header.splitlines() if x.startswith('// @match')]
+              assert matches == [f'// @match        https://{host}/*']
+              namespace = '/preview/pr44/endcloset' if site == 'endcloset' else '/preview/pr44'
+              assert '// @namespace    https://github.com/jdysw/ff14-glamour-zh' + namespace in header
+              assert tag in header
+              assert len(body) > 100000
+              print('PR44', site, 'metadata and body verified:', len(body), 'chars')
+          PY
+      - name: Upload installable test script
+        uses: actions/upload-artifact@v4
+        with:
+          name: ff14-glamour-zh-pr44-site-tests
+          path: |
+            preview/ff14-glamour-zh-pr44-ec-test.user.js
+            preview/ff14-glamour-zh-pr44-endcloset-test.user.js
+          retention-days: 30
+          if-no-files-found: error
+  # Build dependencies and generated scripts run without write credentials.
+  # Only the separate publication job can write, and it does not execute
+  # downloaded/generated code.
+  publish-preview:
+    needs: build-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout PR44 for publication
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download verified preview artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ff14-glamour-zh-pr44-site-tests
+          path: preview
+      - name: Commit generated userscript (no code execution)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f preview/ff14-glamour-zh-pr44-ec-test.user.js preview/ff14-glamour-zh-pr44-endcloset-test.user.js
+          if ! git diff --cached --quiet; then
+            git commit -m "build(pr44): publish latest isolated EC and End Closet previews"
+            # Tests and independent review commits can advance this PR while
+            # the preview is building. Rebase only the generated-file commit;
+            # never force-push, discard, or overwrite concurrent source work.
+            for attempt in 1 2 3 4 5; do
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                exit 0
+              fi
+              echo "Branch advanced during preview build; rebasing (attempt ${attempt}/5)"
+              git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+              if ! git rebase "origin/${GITHUB_REF_NAME}"; then
+                git rebase --abort || true
+                echo "Generated preview conflicted with upstream; refusing to force push" >&2
+                exit 1
+              fi
+            done
+            echo "Could not publish preview after five non-forced attempts" >&2
+            exit 1
+          fi

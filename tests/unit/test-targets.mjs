@@ -58,6 +58,7 @@ function fakeEl(over = {}) {
     matches: (sel) => (over.matcher ? over.matcher(sel, el) : false),
     querySelector: (sel) => (over.qs ? over.qs(sel, el) : null),
     querySelectorAll: (sel) => (over.qsa ? over.qsa(sel, el) : []),
+    closest: (sel) => (over.closest ? over.closest(sel, el) : null),
   };
   return el;
 }
@@ -242,7 +243,135 @@ console.log('\n── G：处理统计（v1.4 Phase 19）──');
   eq('累计 ≥ 峰值 ≥ 首次（毫秒口径）', z2.ms >= z2.maxMs && z2.maxMs >= z2.firstMs, true);
 }
 
+
+console.log('\n── H：EC 站内选择控件排除自动装备链接包装 ──');
+{
+  const excluded = () => ({});
+  const vueAnchor = fakeEl({
+    text: 'Ao Dai',
+    closest: selector => selector.includes('.v-select') ? excluded() : null,
+  });
+  const vuePlain = fakeEl({
+    text: '纯文本名',
+    closest: selector => selector.includes('.vs__dropdown-option') ? excluded() : null,
+  });
+  const vueCard = fakeEl({
+    text: 'Card Name',
+    closest: selector => selector.includes('.vs__dropdown-menu') ? excluded() : null,
+  });
+  const searchOption = fakeEl({
+    text: 'Ao Dai',
+    closest: selector => selector.includes('[data-zhx-chinese-suggest]') ? excluded() : null,
+  });
+  const doc = {
+    querySelectorAll: selector => {
+      if (selector === SEL) return [vueAnchor, searchOption];
+      if (selector === PLAIN) return [vuePlain];
+      if (selector === CARD) return [vueCard];
+      return [];
+    },
+  };
+  const api = buildTargets(doc);
+  eq('EC 原生 vue-select 和中文候选不进入装备链接改写链', api.collectTargets().length, 0);
+}
+
 console.log(`\n════════ 汇总 ════════`);
 console.log(`通过 ${pass} / 失败 ${fail}`);
+
+console.log('\n── G：EC 原生筛选候选绝不跳 Wiki / 不包装链接 ──');
+{
+  // Freeze the production global click listener, not an independent mock
+  // of its behavior. Search options are always owned by vue-select.
+  const constantsStart = DIST_TEXT.indexOf("  const EC_SEARCH_OPTION_SEL =");
+  const constantsEnd = DIST_TEXT.indexOf("  // 统一采集：root 内", constantsStart);
+  const handlerStart = DIST_TEXT.indexOf("  function bindGlobalWikiJump() {", constantsEnd);
+  const handlerEnd = DIST_TEXT.indexOf("  // EC 物品链统一分派映射", handlerStart);
+  ok('正式构建产物存在原生交互避让规则和 Wiki 监听器',
+    constantsStart >= 0 && constantsEnd > constantsStart &&
+    handlerStart > constantsEnd && handlerEnd > handlerStart);
+  if (handlerEnd > handlerStart && constantsStart >= 0) {
+    let clickHandler = null;
+    const opened = [];
+    const fakeWindow = {
+      open: url => { opened.push(url); return null; },
+    };
+    const fakeDocument = {
+      addEventListener(type, handler, capture) {
+        if (type === 'click' && capture === true) clickHandler = handler;
+      },
+    };
+    const buildWiki = new Function('document', 'window', 'lookupZh', 'WIKI_ITEM',
+      DIST_TEXT.slice(constantsStart, constantsEnd) +
+      DIST_TEXT.slice(handlerStart, handlerEnd) +
+      'return bindGlobalWikiJump;');
+    const register = buildWiki(fakeDocument, fakeWindow,
+      (_anchor, name) => name === 'Example Equipment' ? '测试装备' : null,
+      'https://wiki.example/wiki/物品:');
+    register();
+    ok('已注册捕获阶段的 Wiki 监听器', typeof clickHandler === 'function');
+    const makeClick = target => ({
+      target, prevented: false, stopped: false,
+      preventDefault() { this.prevented = true; },
+      stopPropagation() { this.stopped = true; },
+    });
+    const wikiOption = fakeEl({
+      text: 'Example Equipment',
+      closest: selector => selector.includes('.v-select') ? {} : null,
+    });
+    let evt = makeClick(wikiOption);
+    clickHandler(evt);
+    eq('Vue 原生英文装备选项不会打开灰机 Wiki', opened.length, 0);
+    ok('原生选项 click 不被捕获阻止，Vue 可以正常接收',
+      !evt.prevented && !evt.stopped);
+
+    // Even if an option has a gear-item anchor, the nearest v-select still
+    // protects it from the global fallback jump.
+    const nestedLink = fakeEl({
+      text: 'Example Equipment',
+      closest: selector => selector.includes('.v-select') ? {} : { href: '/gear/body/1' },
+    });
+    evt = makeClick(nestedLink);
+    clickHandler(evt);
+    eq('Vue 原生装备链接不会打开 Wiki', opened.length, 0);
+    ok('Vue 内嵌链接也不拦截站点点击', !evt.prevented && !evt.stopped);
+    const suggestion = fakeEl({
+      text: 'Example Equipment',
+      closest: selector => selector.includes('[data-zhx-chinese-suggest]') ? {} : null,
+    });
+    evt = makeClick(suggestion);
+    clickHandler(evt);
+    eq('中文搜索候选不会触发 Wiki 跳转', opened.length, 0);
+
+    // EC filter actions are normal buttons. Even if an equipment name
+    // appears on the filter panel's ancestor, a global fallback must not
+    // hijack Reset/Apply or other native button clicks.
+    const gearAncestor = { textContent: 'Example Equipment', parentElement: null };
+    for (const label of ['Reset filters', '重置筛选', 'Apply filters']) {
+      const control = { textContent: label, parentElement: gearAncestor };
+      const resetButton = fakeEl({
+        text: label,
+        closest: selector => selector.startsWith('button, input,') ? control : null,
+      });
+      resetButton.parentElement = gearAncestor;
+      const nativeClick = makeClick(resetButton);
+      clickHandler(nativeClick);
+      ok('EC ' + label + ' 按钮不取消点击，React 可执行原生操作',
+        !nativeClick.prevented && !nativeClick.stopped);
+      eq('EC ' + label + ' 不错误跳转灰机 Wiki', opened.length, 0);
+    }
+
+    // Existing wiki behavior for real equipment links remains unchanged.
+    const realAnchor = fakeEl({ text: 'Example Equipment', closest: () => null });
+    const realLink = fakeEl({
+      text: 'Example Equipment',
+      closest: selector => selector.startsWith('a[href*="lodestone"]') ? realAnchor : null,
+    });
+    evt = makeClick(realLink);
+    clickHandler(evt);
+    eq('独立物品链接仍支持 Wiki 跳转', opened.length, 1);
+    ok('只有真实装备链接阻断原跳转', evt.prevented && evt.stopped);
+  }
+}
+
 if (fail > 0) process.exit(1);
 console.log('── ✅ 通过（exit=0）');

@@ -5,7 +5,7 @@ import { DATA_REMOTE } from './constants.js';
 import { onTablesReady } from './data-manager.js';
 import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, startItems } from './targets.js';
-import { bindECPieceTiles, startEC, translateECPage } from '../sites/eorzea-collection.js';
+import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
 import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-collection.js';
 import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
@@ -70,8 +70,17 @@ export { SITE_REGISTRY, _siteIndexes, createSiteAdapter, findSite, neededTables,
       id: 'ec', hosts: ['eorzeacollection.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'],
       start() { startEC(); startItems(); },
       processRoot(root) { safe(translateECPage, 'EC 处理')(root); safe(applyItemZh, 'EC 物品处理')(); },
-      onDataReady() { safe(translateECPage, 'EC 补扫')(); },
-      onPageShow() { safe(translateECPage, 'pageshow')(); safe(bindECPieceTiles, 'pageshow')(); safe(applyItemZh, 'pageshow')(); },
+      onDataReady() {
+        safe(translateECPage, 'EC 补扫')();
+        // 自动推导的套装名要等 V3 nameMap 加载，浏览器标题也需在此时补翻译。
+        safe(translateECTitle, 'EC 数据就绪页面标题')();
+      },
+      onPageShow() {
+        safe(translateECPage, 'pageshow')();
+        safe(translateECTitle, 'EC pageshow 标题')();
+        safe(bindECPieceTiles, 'pageshow')();
+        safe(applyItemZh, 'pageshow')();
+      },
     }),
     createSiteAdapter({
       id: 'wiki', hosts: ['huijiwiki.com'], tables: ['items', 'dict'], indexes: ['ecidMap', 'koByZh'],

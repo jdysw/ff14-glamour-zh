@@ -157,5 +157,60 @@ check('No forced translation of user-submitted titles or official publisher name
     '©2010-2026 SQUARE ENIX CO., LTD. All Rights Reserved. Published in Korea by Actoz Soft CO., LTD.');
 });
 
+
+check('重置筛选三语文本映射保留站点原控制行为', () => {
+  assert.equal(ctx.trEndCloset('필터 초기화'), '重置筛选');
+  assert.equal(ctx.trEndCloset('Clear Filters'), '重置筛选');
+  assert.equal(ctx.trEndCloset('Reset Filters'), '重置筛选');
+});
+check('End Closet 筛选按钮在装备标记容器内部仍收到原生点击', () => {
+  const file = fs.readFileSync(new URL('../../src/sites/ffxiv-collection.js', import.meta.url), 'utf8');
+  const start = file.indexOf('  function bindZhxItemClick(flag) {');
+  const end = file.indexOf('  // 装备块的 The Lodestone', start);
+  assert.ok(start !== -1 && end > start);
+  const events = {};
+  const opened = [];
+  const win = { open: url => opened.push(url) };
+  const doc = {
+    addEventListener(type, handler, capture) {
+      if (type === 'click' && capture) events.click = handler;
+    },
+  };
+  const bind = vm.runInNewContext(
+    '(function() { ' + file.slice(start, end) + ' return bindZhxItemClick; })()',
+    { window: win, document: doc, WIKI_ITEM: 'https://ff14.huijiwiki.com/wiki/物品:' }
+  );
+  bind('__endclosetResetTest');
+  assert.equal(typeof events.click, 'function');
+  const markedCard = { dataset: { zhxItem: '女仆礼服' }, contains: () => true };
+  const createEvent = (control, marker = markedCard) => ({
+    target: {
+      closest(selector) {
+        return selector === '[data-zhx-item]' ? marker : control;
+      },
+    },
+    prevented: false,
+    stopped: false,
+    preventDefault() { this.prevented = true; },
+    stopPropagation() { this.stopped = true; },
+  });
+  for (const button of [{ contains: () => false }, { contains: () => false }]) {
+    const event = createEvent(button);
+    events.click(event);
+    assert.equal(event.prevented, false, '筛选按钮不得被阻止');
+    assert.equal(event.stopped, false, '筛选按钮不得阻断 React 事件传播');
+  }
+  assert.equal(opened.length, 0, '重置及应用筛选不能触发装备 Wiki 跳转');
+
+  // The equipment-name marker nested INSIDE a button remains actionable.
+  const itemLabel = { dataset: { zhxItem: '女仆礼服' } };
+  const itemButton = { contains: node => node === itemLabel };
+  const event = createEvent(itemButton, itemLabel);
+  events.click(event);
+  assert.equal(event.prevented, true);
+  assert.equal(event.stopped, true);
+  assert.equal(opened.length, 1, '真实装备名点击仍打开 Wiki');
+});
+
 console.log(`${pass} passed / ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

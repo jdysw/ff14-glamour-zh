@@ -185,11 +185,11 @@ function buildSearchHarness(suggestionsOverride) {
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
-    'const suggestByZh = (v) => v === "炎灵" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : []);',
+    'const suggestByZh = (v,_limit,scope) => {const rows = v === "炎灵" || v === "鸟甲" || v === "装备" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : __suggestions.filter(r => r.zh.includes(v))); if(scope instanceof Set) return rows.filter(r=>scope.has(r.native)); if(typeof scope==="number") return rows.filter(r=>r.slot===scope); return rows;};',
     'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
     'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
     seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput };',
+    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput, ecSearchContext, ecScopedSuggestions, ecScopedNative, facewearNatives: new Set(EC_FACEWEAR_ROWS.map(row => row.native)) };',
   ].join('\n');
   try {
     const fn = new Function('__ready', '__suggestions', body);
@@ -328,6 +328,62 @@ try {
     eq('pointerdown 后关闭候选框', freshBox.hidden, true);
   }
 
+  console.log('\n── C2：跨站外点击关闭、原生控件、异步重开回归 ──');
+  for (const site of ['mirapri', 'fc', 'ronka', 'collection', 'ec', 'endcloset']) {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const harness = buildSearchHarness();
+    harness.api.startChineseSearch(site);
+    const input = new FakeElement('input');
+    input.setAttribute('type', 'search');
+    input.setAttribute('placeholder', '搜索装备名');
+    if (site === 'ec') input.className = 'vs__search';
+    input.value = '炎灵';
+    harness.ready[0]();
+    document.dispatch('focusin', { target: input });
+    await sleep();
+    const box = findSuggestBox(document);
+    eq(site + ' 候选初始可见', box?.hidden, false);
+
+    let blocked = false;
+    document.dispatch('pointerdown', {
+      target: new FakeElement('button'), preventDefault() { blocked = true; },
+    });
+    eq(site + ' 点击站点控件立即关闭', box.hidden, true);
+    eq(site + ' 不阻断站点原生事件', blocked, false);
+    harness.ready[0]();
+    eq(site + ' 数据就绪不再弹出已关闭候选', box.hidden, true);
+
+    document.dispatch('input', { target: input });
+    await sleep();
+    eq(site + ' 后续输入可重新打开候选', box.hidden, false);
+    document.dispatch('pointerdown', { target: input });
+    eq(site + ' 点击当前搜索框不关闭', box.hidden, false);
+    document.dispatch('pointerdown', { target: box });
+    eq(site + ' 点击面板空白处不关闭', box.hidden, false);
+
+    const label = box.querySelectorAll('button[data-zhx-index]')[0].children[0];
+    let picked = false;
+    document.dispatch('pointerdown', {
+      target: label, preventDefault() { picked = true; },
+    });
+    eq(site + ' 点击候选文本立即关闭', box.hidden, true);
+    eq(site + ' 仅拦截自身候选按钮', picked, true);
+
+    input.value = '炎灵';
+    document.dispatch('input', { target: input });
+    await sleep();
+    const second = new FakeElement('input');
+    second.setAttribute('type', 'search');
+    second.setAttribute('placeholder', '搜索装备名');
+    second.value = '炎灵';
+    document.dispatch('pointerdown', { target: second });
+    eq(site + ' 切换输入框先关闭旧候选', box.hidden, true);
+    document.dispatch('focusin', { target: second });
+    await sleep();
+    eq(site + ' 新输入框能重新显示候选', box.hidden, false);
+  }
+
   console.log('\n── D：IME / Esc / 未命中提示 ──');
   {
     installDocument();
@@ -368,7 +424,7 @@ try {
       preventDefault() { this.prevented = true; },
     };
     document.dispatch('keydown', esc);
-    eq('Escape 阻止默认行为', esc.prevented, true);
+    eq('Escape 保留站点默认行为', esc.prevented, false);
     eq('Escape 关闭候选', box.hidden, true);
 
     input.value = '不存在装备';
@@ -483,6 +539,113 @@ try {
     eq('非 vue-select 的表单内框不转换（回归保护）', plain.value, '炎灵');
   }
 
+
+  console.log('\n── F2：EC vue-select 第一次点击即完成站点原生选择 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const originalObserver = globalThis.MutationObserver;
+    const originalMouse = globalThis.MouseEvent;
+    const observers = [];
+    globalThis.MutationObserver = class {
+      constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
+      observe() {}
+      disconnect() { this.disconnected = true; }
+    };
+    globalThis.MouseEvent = class {
+      constructor(type, opts) { this.type = type; this.bubbles = opts.bubbles; this.cancelable = opts.cancelable; }
+    };
+    try {
+      const { api, ready } = buildSearchHarness([{ zh: '炎灵', native: 'Official Native Name' }]);
+      api.startChineseSearch('ec');
+      ready[0]();
+      const root = new FakeElement('div');
+      root.className = 'v-select';
+      const input = new FakeElement('input');
+      input.className = 'vs__search';
+      input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Search for option');
+      input.closest = selector => selector === '.v-select' ? root : null;
+      root.appendChild(input);
+      const options = [];
+      root.querySelectorAll = selector => selector === '.vs__dropdown-option' ? options : [];
+      const picked = [];
+      const nativeOption = new FakeElement('li');
+      nativeOption.className = 'vs__dropdown-option';
+      nativeOption.textContent = '原生选项已被汉化';
+      nativeOption.setAttribute('data-zhixia-source-text', 'Official Native Name');
+      nativeOption.click = () => { picked.push('click'); };
+      const decoy = new FakeElement('li');
+      decoy.className = 'vs__dropdown-option';
+      decoy.textContent = '炎灵'; // 不能用中文匹配覆盖另一个英文源
+      decoy.setAttribute('data-zhixia-source-text', 'Different Equipment');
+      decoy.click = () => { picked.push('wrong:click'); };
+
+      input.value = '炎灵';
+      document.dispatch('focusin', { target: input });
+      await sleep();
+      const box = findSuggestBox(document);
+      ok('EC 原生选择测试中存在中文候选', box && !box.hidden);
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      eq('中文候选一次点击写入原生搜索词', input.value, 'Official Native Name');
+      eq('中文浮层同时隐藏', box.hidden, true);
+      eq('异步原生候选尚未出现时不提前误选', picked.length, 0);
+      ok('监视器已挂到站点 select 而非整个 document', observers.length > 0);
+
+      root.append(decoy, nativeOption);
+      options.push(decoy, nativeOption);
+      observers.at(-1).callback();
+      eq('英文数据字段精准确认真实原生候选（即使可见文字已汉化）',
+        picked.join('|'), 'click');
+      observers.at(-1).callback();
+      eq('异步二次 DOM 更新不重复选中', picked.length, 1);
+
+      // A new user query invalidates the previous pending selection. Even
+      // if a remote search response arrives afterward, never pick old data.
+      input.value = '炎灵';
+      document.dispatch('input', { target: input });
+      await sleep();
+      options.length = 0;
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      eq('第二次测试已发起原生检索', input.value, 'Official Native Name');
+      const lateObserver = observers.at(-1);
+      input.value = '新关键词';
+      document.dispatch('input', { target: input });
+      options.push(nativeOption);
+      lateObserver.callback();
+      eq('用户修改查询后不再选择过期原生候选', picked.length, 1);
+      eq('过期原生选项不重写用户新输入', input.value, '新关键词');
+
+      // Two identical Chinese labels without the original native identity
+      // cannot be safely auto-selected by position.
+      input.value = '炎灵';
+      document.dispatch('input', { target: input });
+      await sleep();
+      options.length = 0;
+      document.dispatch('pointerdown', {
+        target: box.querySelectorAll('button[data-zhx-index]')[0], preventDefault() {},
+      });
+      const ambiguous = [new FakeElement('li'), new FakeElement('li')];
+      for (const option of ambiguous) {
+        option.textContent = '炎灵';
+        option.className = 'vs__dropdown-option';
+        option.click = () => { picked.push('ambiguous:click'); };
+      }
+      options.push(...ambiguous);
+      observers.at(-1).callback();
+      eq('相同中文名的多个候选不可按第一项猜选', picked.length, 1);
+    } finally {
+      if (originalObserver === undefined) delete globalThis.MutationObserver;
+      else globalThis.MutationObserver = originalObserver;
+      if (originalMouse === undefined) delete globalThis.MouseEvent;
+      else globalThis.MouseEvent = originalMouse;
+    }
+  }
+
   console.log('\n── G：候选列表体验（全量数据 / 可视 8 行 / 滚动不关闭）──');
   {
     installDocument();
@@ -579,12 +742,16 @@ try {
     eq(site + ' 保留站点回车事件', prevented, false);
     ok(site + ' 通过 input 事件更新站点状态', searched.some(([type, value]) => type === 'input' && value === 'カ'));
     await sleep();
-    eq(site + ' 回车后保留中文显示', input.value, '炎灵');
+    // EC Vue's v-model owns the text field; unlike React standalone search,
+    // it must retain the native query it just received, without silent resets.
+    eq(site + ' 回车后输入值与站点受控状态一致',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '炎灵';
     document.dispatch('click', { target: button });
     eq(site + ' 搜索按钮转换使用相同原生名', input.value, 'カ');
     await sleep();
-    eq(site + ' 搜索按钮后保留中文显示', input.value, '炎灵');
+    eq(site + ' 搜索按钮后输入值与站点受控状态一致',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '丙丁';
     document.dispatch('keydown', { target: input, key: 'Enter' });
     eq(site + ' 显式搜索支持部分中文词', input.value, 'ウエ');
@@ -604,7 +771,8 @@ try {
     await sleep(150);
     input.value = 'カ'; // 模拟 React 在结果加载后回写受控值。
     await sleep(450);
-    eq(site + ' 受控框回写后再次恢复中文显示', input.value, '炎灵');
+    eq(site + ' 受控框更新遵循各框架原生语义',
+      input.value, site === 'ec' ? 'カ' : '炎灵');
     input.value = '用户继续输入';
     document.dispatch('input', { target: input });
     await sleep(1000);
@@ -804,6 +972,151 @@ try {
     } finally {
       if (originalLocation === undefined) delete globalThis.location;
       else globalThis.location = originalLocation;
+    }
+  }
+
+  console.log('\n── N：EC 鸟甲 / 独立面饰表 / 五大装备部位，智能输入端到端分类 ──');
+  {
+    installDocument();
+    delete globalThis.__zhxChineseSearchBound;
+    const oldLocation = globalThis.location;
+    const suggestions = [
+      { zh: '鸟甲飞行', native: 'Flyer Shaffron', slot: 5 },
+      { zh: '鸟甲护具', native: 'Some Non-Barding Headgear', slot: 0 },
+      { zh: '装备头盔', native: 'Official Head', slot: 0 },
+      { zh: '装备长袍', native: 'Official Body', slot: 1 },
+      { zh: '装备手套', native: 'Official Hands', slot: 2 },
+      { zh: '装备长裤', native: 'Official Legs', slot: 3 },
+      { zh: '装备靴子', native: 'Official Feet', slot: 4 },
+      { zh: '饰品耳环', native: 'Abyssos Earrings of Fending', slot: 9 },
+      { zh: '饰品戒指', native: 'Abyssos Ring of Fending', slot: 12 },
+      { zh: '饰品相关材料', native: 'Barding Repair Materials' },
+    ];
+    try {
+      const harness = buildSearchHarness(suggestions);
+      harness.api.startChineseSearch('ec');
+      const input = new FakeElement('input');
+      input.className = 'vs__search';
+      input.setAttribute('type', 'search');
+      input.setAttribute('placeholder', 'Search for option');
+      globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/facewear' };
+      input.value = '椭圆眼镜';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      eq('N0 面饰独立 Glasses 数据不依赖 V3 网络成功也可以出现中文候选',
+        findSuggestBox(document)?.hidden, false);
+      for (const cb of harness.ready) cb();
+      input.setAttribute('placeholder', 'Any head');
+      globalThis.location.pathname = '/companion-glamours';
+      eq('N1 鸟甲页面分类不是通用物品', harness.api.ecSearchContext(input)?.kind, 'barding');
+      eq('N2 候选使用官方 ItemAction 鸟甲集合，排除误含鸟甲二字的头盔',
+        harness.api.ecScopedSuggestions('鸟甲',input).map(r=>r.native).join('|'),'Flyer Shaffron');
+      eq('N3 只输入一个完整鸟甲中文名可得到对应英文名称',
+        harness.api.ecScopedNative('鸟甲飞行',input,false),'Flyer Shaffron');
+      input.value = '鸟甲';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      let box = findSuggestBox(document);
+      eq('N4 鸟甲页输入联想只渲染鸟甲',
+        box?.querySelectorAll('button[data-zhx-index]').map(btn=>btn.children[1]?.textContent).join('|'),
+        'Flyer Shaffron');
+      document.dispatch('pointerdown',{target:box.querySelectorAll('button[data-zhx-index]')[0],preventDefault(){}});
+      eq('N5 选择鸟甲候选派发站点原生 input 事件',input.dispatched.includes('input'),true);
+      eq('N5a EC Vue 候选选中后保留英文查询值，与站点 v-model 同步',
+        input.value, 'Flyer Shaffron');
+      // Simulate typing again in the same Vue-controlled search input.
+      // A previous implementation scheduled silent value restoration for
+      // 0/100/500/1500/3000 ms and could overwrite a new user query.
+      let blockedCharacters = 0;
+      input.value = '';
+      for (const ch of '鸟甲飞行') {
+        input.value += ch;
+        document.dispatch('input', { target: input });
+        document.dispatch('keydown', {
+          target: input, key: ch, preventDefault() { blockedCharacters++; },
+        });
+      }
+      eq('N5b EC Vue 选择候选后仍可逐字输入检索词',input.value,'鸟甲飞行');
+      eq('N5c 不应拦截中文按键事件',blockedCharacters,0);
+      await sleep(125);
+      eq('N5d 候选重新出现后不得覆写正在输入的中文',input.value,'鸟甲飞行');
+      const vueKeys = ['ArrowDown', 'ArrowUp', 'Escape'];
+      for (const key of vueKeys) document.dispatch('keydown',{
+        target:input,key,preventDefault(){blockedCharacters++;},
+        stopPropagation(){blockedCharacters++;},
+      });
+      eq('N5d1 EC Vue 原站下拉键盘导航应被保留，不受候选层抢占',blockedCharacters,0);
+      document.dispatch('compositionstart',{target:input});
+      input.value = '新候选';
+      document.dispatch('input',{target:input});
+      document.dispatch('keydown',{target:input,key:'Enter',isComposing:true,preventDefault(){blockedCharacters++;}});
+      document.dispatch('compositionend',{target:input});
+      await sleep(125);
+      eq('N5e 输入法组合期间不阻断输入或回写旧结果',input.value,'新候选');
+      eq('N5f 输入法确认不应被脚本拦截',blockedCharacters,0);
+      globalThis.location.pathname = '/facewear';
+      input.value = '椭圆眼镜';
+      eq('N6 面饰路由强制对应游戏独立 Glasses 表',harness.api.ecSearchContext(input)?.kind,'facewear');
+      const faces=harness.api.ecScopedSuggestions('眼镜',input);
+      ok('N7 中文面饰数据来自 Glasses Sheet',faces.some(row=>row.native==='Oval Spectacles'&&row.zh==='椭圆眼镜'));
+      ok('N8 不会误含头部装备/鸟甲',faces.every(row=>row.zh.includes('眼镜')&&row.native!=='Flyer Shaffron'));
+      eq('N9 面饰精确中文名解析为正确的 EC 原生英文',
+        harness.api.ecScopedNative('椭圆眼镜',input,false),'Oval Spectacles');
+      eq('N10 不把头盔当成面饰候选',harness.api.ecScopedSuggestions('鸟甲',input).length,0);
+      input.value = '椭圆眼镜';
+      document.dispatch('focusin',{target:input});
+      await sleep();
+      box=findSuggestBox(document);
+      ok('N11 面饰弹出候选全部来自官方 Glasses Sheet，不把普通眼镜装备混入',
+        box?.querySelectorAll('button[data-zhx-index]').every(btn=>
+          harness.api.facewearNatives.has(btn.children[1]?.textContent)));
+      globalThis.location.pathname = '/gearsets';
+      for (const [enSlot,expectedSlot,expectedName] of [
+        ['head',0,'Some Non-Barding Headgear|Official Head'],['body',1,'Official Body'],
+        ['hands',2,'Official Hands'],['legs',3,'Official Legs'],['feet',4,'Official Feet'],
+      ]) {
+        input.setAttribute('placeholder','Any '+enSlot);
+        eq('N 识别 EC '+enSlot+' 的官方装备部位',harness.api.ecSearchContext(input)?.slot,expectedSlot);
+        eq('N EC '+enSlot+' 只保留同部位候选',harness.api.ecScopedSuggestions('装备',input).map(r=>r.native).join('|'),expectedName);
+      }
+      input.setAttribute('placeholder','Search for option');
+      const field = new FakeElement('div');
+      field.textContent = 'HEAD';
+      input.parentElement = field;
+      eq('N 未提供部位 placeholder 时，读取邻近单一 HEAD 标签',
+        harness.api.ecSearchContext(input)?.slot, 0);
+      field.textContent = 'HEAD BODY';
+      eq('N 多个邻近部位冲突时不猜测所属部位', harness.api.ecSearchContext(input), null);
+      input.parentElement = null;
+      input.setAttribute('placeholder','手部筛选');
+      eq('N 已汉化的部位名称也能准确识别', harness.api.ecSearchContext(input)?.slot, 2);
+      const main = new FakeElement('input');
+      main.setAttribute('placeholder','搜索');
+      eq('N12 Gearsets 普通主搜索不误判为头部槽位',harness.api.ecSearchContext(main),null);
+      eq('N13 Gearsets 主搜索继续使用套装专用中文索引',
+        harness.api.ecScopedSuggestions('幻境',main)[0]?.native,'Phantom Vision Fending');
+      globalThis.location.pathname = '/accessories';
+      input.setAttribute('placeholder','Search for option');
+      eq('N15 未绑定具体部位的饰品搜索框也只能显示饰品',
+        harness.api.ecSearchContext(input)?.kind, 'accessories');
+      eq('N16 饰品列表使用官方耳颈腕指部位的并集，排除不属于装备的材料',
+        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        'Abyssos Earrings of Fending|Abyssos Ring of Fending');
+      input.setAttribute('placeholder','Any earrings');
+      eq('N17 饰品页已绑定耳部的 Vue 输入优先限定耳部',
+        harness.api.ecSearchContext(input)?.kind, 'accessory-slot');
+      eq('N18 饰品耳部候选排除同系列戒指',
+        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        'Abyssos Earrings of Fending');
+      globalThis.location.pathname = '/accessories/mistic-memory';
+      main.value = '饰品';
+      eq('N19 饰品详情页无具体部位的输入也保持饰品范围',
+        harness.api.ecScopedSuggestions('饰品',main).length, 2);
+      globalThis.location.hostname = 'ff14-fc.com';
+      eq('N14 非 EC 页面不启用分类路由',harness.api.ecSearchContext(input),null);
+    } finally {
+      if (oldLocation === undefined) delete globalThis.location;
+      else globalThis.location = oldLocation;
     }
   }
 

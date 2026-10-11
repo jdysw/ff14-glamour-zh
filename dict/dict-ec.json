@@ -546,6 +546,19 @@
   "Melee": "近战职业",
   "Ranged": "远程职业",
   "Info": "信息",
-  "Quest": "任务"
+  "Quest": "任务",
+  "and Master XII": "且需要制作秘籍第十二卷",
+  "Crafting": "制作",
+  "Female Set": "女性套装",
+  "From the heights of Mount Rokkon to your glamour dresser!": "从六根山之巅，到你的幻化衣柜！",
+  "glamours using this piece": "使用此装备的幻化",
+  "Melee Maiming DPS": "近战制敌输出职业",
+  "Melee Scouting DPS": "近战游击输出职业",
+  "Related": "相关",
+  "Related Sets": "相关套装",
+  "Sets": "套装",
+  "Tradable": "可交易",
+  "Weapons": "武器",
+  "with a recipe level": "配方等级"
  }
 }

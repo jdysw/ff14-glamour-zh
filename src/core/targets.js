@@ -15,6 +15,27 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
      两条路径经同一采集 / 判定逻辑，行为与旧版逐项一致（golden 冻结）。
      Phase 15 模块化构建时原样抽出为 src/core/targets.js。 */
 
+  // EC vue-select uses clickable LI options to commit a search selection.
+  // Neither these options nor our suggestion list are navigable gear cards:
+  // wrapping an option as a wiki link or hijacking its click breaks v-model.
+  const EC_SEARCH_OPTION_SEL = '.v-select, .vs__dropdown-menu, .vs__dropdown-option, ' +
+    '[data-zhx-chinese-suggest]';
+
+  function isECSearchOption(el) {
+    return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
+  }
+
+  // The Wiki lookup is only for equipment links. EC's Reset/Apply filters,
+  // search, form labels and toggles are app-owned controls: intercepting
+  // their click in document capture prevents the site's own handlers.
+  function isECNativeControl(el) {
+    return !!el?.closest?.(
+      'button, input, select, textarea, label, [role="button"], ' +
+      '[role="checkbox"], [role="radio"], [role="switch"], ' +
+      '[role="combobox"], [role="option"], [role="slider"]'
+    );
+  }
+
   // 统一采集：root 内（含自身）按类型收集候选，输出标准 target：
   //   { type, element, text, context }
   // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
@@ -36,7 +57,7 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     const pushItems = () => {
       // item：装备链接（两站均用 eorzeadb_link 标记）
       for (const a of scan('a.eorzeadb_link')) {
-        if (a.classList.contains('zhixia-item-zh')) continue;
+        if (isECSearchOption(a) || a.classList.contains('zhixia-item-zh')) continue;
         const el = a.querySelector('span') || a;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 2 || name.length > 48) continue;
@@ -47,7 +68,7 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     const pushPlainItems = () => {
       // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
       for (const sp of scan('span[class*="has-text-rarity-"]')) {
-        if (sp.classList.contains('zhixia-item-zh')) continue;
+        if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')) continue;
         const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
         if (!resolveByName(name)) continue;
@@ -57,7 +78,7 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     const pushCards = () => {
       // card：EC 列表页卡片标题（外层 <a> 指向站内页）
       for (const el of scan(EC_CARD_SEL)) {
-        if (el.dataset.zhixiaCard) continue;
+        if (isECSearchOption(el) || el.dataset.zhixiaCard) continue;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
         if (!resolveByName(name)) continue;
@@ -229,7 +250,7 @@ export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, 
     window.__zhixiaWikiJumpBound = true;
     document.addEventListener('click', (e) => {
       const el0 = e.target;
-      if (!el0?.closest) return;
+      if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)) return;
       const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
       let probe = a || el0;
       let guard = 0;

@@ -790,13 +790,18 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 每个部位设五个有序匹配桶；先采集完整匹配，再进行最终限流，
   // 否则高优先级部位可能被词典顺序和 limit 提前截断。
-  function _irSuggestionCollect(buckets, query, kind, limit, map) {
+  // Scope before bucketing and limiting, not after truncating 3,000 results.
+  // A set represents exact official native-name membership (e.g. bardings);
+  // a numeric value represents the official V3 equipment slot group.
+  function _irSuggestionCollect(buckets, query, kind, limit, map, scope) {
     for (const name of _getIrSearchKeysByKind(kind)) {
       const score = _irSuggestionScore(name, query, kind);
       if (score < 0) continue;
       const native = map[name];
       if (!native) continue;
       const group = _irSearchSlotByNative?.[native] ?? 5;
+      if (scope instanceof Set && !scope.has(native)) continue;
+      if (typeof scope === 'number' && scope !== group) continue;
       const bucket = buckets[group][score];
       if (bucket.length < limit) bucket.push({ zh: name, native });
     }
@@ -815,7 +820,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 先按头、身、手、腿、脚、其余；组内按匹配度排序，保持已存在的
   // 正式名、别名、limit、旧 V3 缓存及六站原生名行为。
-  function suggestByZh(zh, limit = 0) {
+  function suggestByZh(zh, limit = 0, scope = null) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _ensureIrSearch();
@@ -823,8 +828,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const buckets = Array.from({ length: 6 }, () => Array.from({ length: 5 }, () => []));
-    _irSuggestionCollect(buckets, key, 0, max, map);
-    _irSuggestionCollect(buckets, key, 1, max, map);
+    _irSuggestionCollect(buckets, key, 0, max, map, scope);
+    _irSuggestionCollect(buckets, key, 1, max, map, scope);
     return _irSuggestionFlatten(buckets, max);
   }
 
