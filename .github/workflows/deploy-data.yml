@@ -36,12 +36,18 @@ jobs:
       - name: 数据文件校验（结构完整性）
         run: python3 build/validate-data.py
 
-      - name: 获取权威装备部位数据（FFXIV Item.csv）
+      - name: 获取固定版本的权威装备部位数据（FFXIV Item.csv）
+        env:
+          # 固定上游提交，避免 master 更新后相同输入生成不同分类数据。
+          DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
         run: |
+          set -euo pipefail
           mkdir -p build/.cache/datamining
           curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
-            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@master/csv/en/Item.csv" \
+            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
             --output build/.cache/datamining/en-Item.csv
+          test -s build/.cache/datamining/en-Item.csv
+          echo "使用 xivapi/ffxiv-datamining 提交 ${DATAMINING_COMMIT}"
 
       - name: Assemble site
         env:

@@ -1,5 +1,5 @@
-// Exercise real V3 lifecycle functions with an in-memory network and GM store.
-// No assertions are weakened to accommodate the implementation under test.
+// 使用内存网络与 GM 存储桩，测试真实的 V3 数据生命周期函数。
+// 不为迎合待测实现而放宽断言。
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -73,8 +73,8 @@ function network(getVersion) {
   };
 }
 
-// Refresh is a new ready generation: the old index becomes unavailable and
-// existing subscribers must receive another notification when data is ready.
+// 刷新会产生新的就绪代际：旧索引立即失效，
+// 原有订阅者应在数据重新就绪时再次收到通知。
 {
   let version = 1;
   const { api, errors } = buildHarness(network(() => version));
@@ -93,8 +93,8 @@ function network(getVersion) {
   assert.deepEqual(errors, []);
 }
 
-// A refresh can be requested before the first download finishes. The stale
-// generation must never apply or send a ready notification after invalidation.
+// 首次下载完成前可能触发刷新；过期的一代请求
+// 在失效后不能应用数据，也不能发送就绪通知。
 {
   let version = 1;
   let blocked = false;

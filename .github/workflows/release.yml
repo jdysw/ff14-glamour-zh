@@ -1,8 +1,8 @@
 name: Release
 
-# Release is a deliberate, manual operation. Merging development changes into
-# main must never publish a release or re-use an already published version.
-# The version is changed separately only when a release is intentionally planned.
+# 发布必须由维护者手动操作。合并开发代码进入
+# main 不应自动创建发行版，也不能复用已发布版本号。
+# 只有明确决定发版时，才单独调整版本号。
 on:
   workflow_dispatch:
 

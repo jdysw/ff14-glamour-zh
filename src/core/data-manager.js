@@ -26,7 +26,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _manifestNeedsCommit = false;
   let _manifestRejected = false;
 
-  // Observers remain subscribed across explicit data refreshes.
+  // 显式刷新数据后仍保留已注册的就绪回调。
   const _readyCbs = [];
   let _tablesReady = false; // NOSONAR — ready 状态由数据完成生命周期更新
   function onTablesReady(fn) {
@@ -42,7 +42,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { cacheReset('lookup'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
-    const cbs = _readyCbs.slice(); // Keep subscriptions for subsequent invalidate → reload cycles.
+    const cbs = _readyCbs.slice(); // 保留订阅，确保数据失效并重新加载后再次通知。
     for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
@@ -69,8 +69,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   /* @zhixia:core-data-manager-start */
   /* V3 manifest、缓存、ready 广播与 dataManager API。 */
   let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
-  let _activeEnsure = null; // Serialize old and new loads when invalidated mid-request.
-  let _ensureGeneration = 0; // Stale loads must neither apply tables nor signal ready.
+  let _activeEnsure = null; // 请求进行中触发刷新时，串行执行前后两代加载。
+  let _ensureGeneration = 0; // 过期加载不能应用数据表，也不能触发就绪通知。
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureFinalize(generation = _ensureGeneration) {
@@ -555,8 +555,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
     const generation = _ensureGeneration;
-    // A refresh requested during an in-flight load waits for it to settle,
-    // while a generation guard prevents stale work from publishing results.
+    // 加载过程中触发刷新时，先等待旧请求完成，
+    // 再通过代际校验防止过期请求发布结果。
     const previous = _activeEnsure;
     const promise = Promise.resolve(previous)
       .catch(() => {})
@@ -638,6 +638,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _irSearchKind = null;  // 0=正式名称，1=中文别名
   let _irSearchCanonicalKeys = null;
   let _irSearchAliasKeys = null;
+  // 中文片段倒排：按连续双字符索引，首次查询时按排序后的原始键序建立。
+  // 桶中保留原始键顺序，确保候选优先级和同级排序不变。
+  let _irSearchGramIndex = [null, null];
 
   function _irNormZhSearch(value) {
     return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
@@ -685,6 +688,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _irSearchKind = built.kind;
     _irSearchCanonicalKeys = null;
     _irSearchAliasKeys = null;
+    _irSearchGramIndex = [null, null];
     return _irSearchByZh;
   }
 
@@ -698,31 +702,39 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return out;
   }
 
-  function _irSearchLowerBound(keys, target) {
-    let lo = 0, hi = keys.length;
-    while (lo < hi) {
-      const mid = lo + ((hi - lo) >> 1);
-      if (keys[mid].localeCompare(target) < 0) lo = mid + 1;
-      else hi = mid;
+  // 只构建当前站点、当前类别的索引。每个键在同一双字符桶中只出现一次。
+  function _irSearchBuildGramIndex(kind) {
+    const index = new Map();
+    for (const name of _getIrSearchKeysByKind(kind)) {
+      const seen = new Set();
+      for (let pos = 0; pos + 1 < name.length; pos++) {
+        const gram = name.slice(pos, pos + 2);
+        if (seen.has(gram)) continue;
+        seen.add(gram);
+        let bucket = index.get(gram);
+        if (!bucket) { bucket = []; index.set(gram, bucket); }
+        bucket.push(name);
+      }
     }
-    return lo;
+    _irSearchGramIndex[kind] = index;
+    return index;
   }
 
-  function _irSearchCollectPrefix(keys, target, limit, out, excluded) {
-    const start = _irSearchLowerBound(keys, target);
-    for (let i = start; i < keys.length && out.length < limit; i++) {
-      const candidate = keys[i];
-      if (!candidate.startsWith(target)) break;
-      if (candidate !== excluded) out.push(candidate);
+  // 优先选候选最少的双字符桶，再由原始 includes 校验完整输入，
+  // 避免每次输入都遍历所有正式名称和别名。
+  function _irSearchContainsCandidates(query, kind) {
+    const index = _irSearchGramIndex[kind] || _irSearchBuildGramIndex(kind);
+    let smallest = null;
+    const seen = new Set();
+    for (let pos = 0; pos + 1 < query.length; pos++) {
+      const gram = query.slice(pos, pos + 2);
+      if (seen.has(gram)) continue;
+      seen.add(gram);
+      const bucket = index.get(gram);
+      if (!bucket) return [];
+      if (!smallest || bucket.length < smallest.length) smallest = bucket;
     }
-  }
-
-  // 除前缀外也支持中文装备名中间连续片段；保持允许名单、按站语言映射不变。
-  function _irSearchCollectContains(keys, target, limit, out, excluded) {
-    for (const candidate of keys) {
-      if (out.length >= limit) break;
-      if (candidate !== excluded && !candidate.startsWith(target) && candidate.includes(target)) out.push(candidate);
-    }
+    return smallest || [];
   }
 
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
@@ -750,7 +762,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 单类收集：键含部分词且非键本身时，取对应原生名入列。
   function _zhPartialCollectKind(natives, key, map, kind) {
-    for (const k of _getIrSearchKeysByKind(kind)) {
+    for (const k of _irSearchContainsCandidates(key, kind)) {
       if (k === key || !k.includes(key)) continue;
       const native = map[k];
       if (native) natives.push(native);
@@ -810,11 +822,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 每个部位设五个有序匹配桶；先采集完整匹配，再进行最终限流，
   // 否则高优先级部位可能被词典顺序和 limit 提前截断。
-  // Scope before bucketing and limiting, not after truncating 3,000 results.
-  // A set represents exact official native-name membership (e.g. bardings);
-  // a numeric value represents the official V3 equipment slot group.
+  // 必须先按部位过滤、分桶，不能提前截断到 3000 条。
+  // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
   function _irSuggestionCollect(buckets, query, kind, limit, map, scope) {
-    for (const name of _getIrSearchKeysByKind(kind)) {
+    for (const name of _irSearchContainsCandidates(query, kind)) {
       const score = _irSuggestionScore(name, query, kind);
       if (score < 0) continue;
       const native = map[name];

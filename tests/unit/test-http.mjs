@@ -1,5 +1,5 @@
-// Regression tests for the complete fetch response timeout, not only headers.
-// Exercise the production HTTP adapter in isolation without external requests.
+// 回归验证 fetch 的超时必须覆盖完整响应体，而非仅覆盖响应头。
+// 在无外部网络请求的条件下独立测试生产环境 HTTP 适配器。
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +36,7 @@ function build(fetchImpl, timer, AbortCtor = AbortController, gmRequest = undefi
   return make(fetchImpl, AbortCtor, gmRequest, timer.schedule, timer.clear);
 }
 
-// A server may deliver successful headers then never finish response.text().
+// 服务端可能先返回成功的响应头，再让 response.text() 一直等待。
 {
   const timer = clock();
   const body = deferred();
@@ -58,7 +58,7 @@ function build(fetchImpl, timer, AbortCtor = AbortController, gmRequest = undefi
   assert.equal(first.cleared, true);
 }
 
-// Browsers without AbortController still need a bounded promise.
+// 浏览器缺少 AbortController 时，Promise 仍必须能超时结束。
 {
   const timer = clock();
   const httpGet = build(() => new Promise(() => {}), timer, null);
@@ -68,7 +68,7 @@ function build(fetchImpl, timer, AbortCtor = AbortController, gmRequest = undefi
   await assert.rejects(request, /timeout/);
 }
 
-// Completing a body clears the timer and preserves exact contents.
+// 完整读取响应体后应清理定时器，并保留返回内容。
 {
   const timer = clock();
   const httpGet = build(async () => ({ ok: true, text: async () => '中文词典' }), timer);
@@ -76,7 +76,7 @@ function build(fetchImpl, timer, AbortCtor = AbortController, gmRequest = undefi
   assert.equal([...timer.timers.values()][0].cleared, true);
 }
 
-// Non-2xx HTTP status remains an error; a successful response need not be text.
+// 非 2xx 状态仍应报错；该测试不要求服务端错误响应为文本。
 {
   const timer = clock();
   const httpGet = build(async () => ({ ok: false, status: 503, text: async () => 'unavailable' }), timer);
