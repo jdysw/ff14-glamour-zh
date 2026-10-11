@@ -12,7 +12,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   // 保留 Lodestone hash 优先、名称及拉丁文字兜底的既有语义。
   function lookupZh(a, name) {
     const h = (a?.getAttribute('href')) || '';
-    const m = h.match(/lodestone\\/playguide\\/db\\/item\\/([0-9a-f]+)/i);
+    const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
     return resolve({ hash: m?.[1], name }, { latinFallback: true });
   }
 
