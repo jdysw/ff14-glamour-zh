@@ -2,7 +2,7 @@
 /* @phase15-order-link:sites/eorzea-collection<-core/dictionary */
 import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
-import { trEC } from '../core/item-resolver.js';
+import { tryEnToZh } from '../core/item-resolver.js';
 import { dataGetIndex } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -12,6 +12,31 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
 
   // EC 上会变动的文本（数量、时间、页数…）
+  // EC 专用界面翻译只在 EC 站点模块声明，不再由通用物品解析层反向导入站点。
+  function trEC(text) {
+    if (!text) return text;
+    const t = text.trim();
+    if (!t) return text;
+    if (t.length > 90) return text;          // 长句多为用户描述，不动
+    if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
+    const hit = DICT_EC[t];
+    if (hit) {
+      const i = text.indexOf(t);
+      return text.slice(0, i) + hit + text.slice(i + t.length);
+    }
+    // 纯英文短串（字母开头，含有限符号）→ 查主表/染剂表拿国服中文名
+    if (/^[A-Za-z]/.test(t) && /^[A-Za-z0-9'\-.,:&!? ()（）]+$/.test(t)) {
+      const zhName = tryEnToZh(t);
+      if (zhName && zhName !== t) {
+        const i2 = text.indexOf(t);
+        return text.slice(0, i2) + zhName + text.slice(i2 + t.length);
+      }
+    }
+    let out = text;
+    for (const [re, to] of PATTERNS_EC) out = out.replace(re, to);
+    return out;
+  }
+
   const PATTERNS_EC = [
     // 面饰页动态文案
     [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
