@@ -134,6 +134,19 @@ jobs:
           npm run version:check
           git diff --exit-code
 
+      - name: Recheck main HEAD before publishing
+        if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          latest_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$latest_sha" != "$TARGET_SHA" ]; then
+            echo "main advanced during verification; refusing to publish stale commit $TARGET_SHA." >&2
+            exit 1
+          fi
+
       - name: Create tagged release for verified SHA
         if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0'
         env:
