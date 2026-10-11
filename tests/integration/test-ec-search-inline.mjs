@@ -239,6 +239,39 @@ await sleep(500);
 ok('③e 外部关闭后继续输入可以再次弹出候选',
   (await c.eval(suggestState))?.hidden === false);
 
+// ── ④ 未知中文名不转换 ──
+await setVs('vs-head', '不存在的装备名称xyz');
+await sleep(1300);
+const v4 = await readVs('vs-head');
+ok('④ 未知中文名保持原样', v4 === '不存在的装备名称xyz', JSON.stringify(v4));
+
+// ── ⑤ 对照一："Search by title"（form 内、有 name）不触发独立转换 ──
+await setInput('form[name="filter"] input[name="search"]', EXPECT_ZH);
+await sleep(1300);
+const v5 = await c.eval(`(() => { const i = document.querySelector('form[name="filter"] input[name="search"]'); return i ? i.value : null; })()`);
+ok('⑤ "Search by title" 框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));
+
+// ── ⑥ 对照二：传统表单搜索框（#legacy-search keyword）不触发独立转换 ──
+await setInput('#legacy-search input[name="keyword"]', EXPECT_ZH);
+await sleep(1300);
+const v6 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
+ok('⑥ 传统表单搜索框不触发独立转换（中文保留）', v6 === EXPECT_ZH, JSON.stringify(v6));
+
+// ── ⑦ 部分词「女仆」：同样不自动转换（b 方案；部分词兜底仅保留在提交路径）──
+await setVs('vs-head', '女仆');
+await sleep(1600);
+const v7 = await readVs('vs-head');
+ok('⑦ 部分词「女仆」输入停顿保持原样', v7 === '女仆', JSON.stringify(v7));
+
+const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
+ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
+
+// Live EC uses /glamours routes. The offline file fixture uses this
+// pre-existing test-site hook to exercise the same route gating.
+await c.eval(`(() => {
+  window.__zhxTestECResetPath = '/glamours/head/28453';
+  history.replaceState({}, '', '?filterjob=PLD&search=maid&page=8');
+})()`);
 // ── ③h EC 站点“重置筛选”按钮必须由原生逻辑执行 ──
 // Verify against the injected userscript AND the fixture's existing handlers,
 // rather than accepting a simulated reset performed by the translation script.
@@ -269,32 +302,19 @@ ok('③i EC 应用筛选保持原生 click 与状态处理，不被 Wiki 跳转�
   nativeReset?.applyCount === 1 && nativeReset.applyAllowed && !nativeReset.applyBlocked,
   JSON.stringify(nativeReset));
 
-// ── ④ 未知中文名不转换 ──
-await setVs('vs-head', '不存在的装备名称xyz');
-await sleep(1300);
-const v4 = await readVs('vs-head');
-ok('④ 未知中文名保持原样', v4 === '不存在的装备名称xyz', JSON.stringify(v4));
 
-// ── ⑤ 对照一："Search by title"（form 内、有 name）不触发独立转换 ──
-await setInput('form[name="filter"] input[name="search"]', EXPECT_ZH);
-await sleep(1300);
-const v5 = await c.eval(`(() => { const i = document.querySelector('form[name="filter"] input[name="search"]'); return i ? i.value : null; })()`);
-ok('⑤ "Search by title" 框不触发独立转换（中文保留）', v5 === EXPECT_ZH, JSON.stringify(v5));
+await sleep(750);
+const afterReset = await c.eval(`(() => ({
+  query: location.search,
+  path: location.pathname,
+  job: document.getElementById('ec-filter-job')?.value,
+  resetButton: !!document.getElementById('ec-reset-filters'),
+}))()`);
+ok('③j EC 重置筛选的兜底使浏览器 URL 恢复无筛选状态并重新初始化控件',
+  afterReset?.query === '' && afterReset?.job === ''
+    && afterReset.resetButton === true,
+  JSON.stringify(afterReset));
 
-// ── ⑥ 对照二：传统表单搜索框（#legacy-search keyword）不触发独立转换 ──
-await setInput('#legacy-search input[name="keyword"]', EXPECT_ZH);
-await sleep(1300);
-const v6 = await c.eval(`(() => { const i = document.querySelector('#legacy-search input[name="keyword"]'); return i ? i.value : null; })()`);
-ok('⑥ 传统表单搜索框不触发独立转换（中文保留）', v6 === EXPECT_ZH, JSON.stringify(v6));
-
-// ── ⑦ 部分词「女仆」：同样不自动转换（b 方案；部分词兜底仅保留在提交路径）──
-await setVs('vs-head', '女仆');
-await sleep(1600);
-const v7 = await readVs('vs-head');
-ok('⑦ 部分词「女仆」输入停顿保持原样', v7 === '女仆', JSON.stringify(v7));
-
-const testErr = c.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
-ok('⑧ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);
