@@ -55,24 +55,27 @@ export { _obsStats, createObserver, observeLocal };
       pendingCD.push(n);
       if (pending.length + pendingCD.length > maxPending) collapse();
     };
+    const queueCharacterData = (mutation) => {
+      if (!o.characterData || (o.filter && !o.filter(mutation))) return false;
+      queueCD(mutation.target);
+      return true;
+    };
+    const queueAttribute = (mutation) => {
+      if (!o.filter || o.filter(mutation)) queueNode(mutation.target);
+    };
+    const queueAdded = (mutation) => {
+      for (const n of mutation.addedNodes) {
+        if (n.nodeType === 1 || n.nodeType === 3) queueNode(n);
+        if (collapsed) break;
+      }
+    };
     const collectMuts = (muts) => {
       let hitCD = false;
       for (const m of muts) {
         if (collapsed) break;
-        if (m.type === 'characterData') {
-          if (!o.characterData || (o.filter && !o.filter(m))) continue;
-          queueCD(m.target);
-          hitCD = true;
-          continue;
-        }
-        if (m.type === 'attributes') {
-          if (!o.filter || o.filter(m)) queueNode(m.target);
-          continue;
-        }
-        for (const n of m.addedNodes) {
-          if (n.nodeType === 1 || n.nodeType === 3) queueNode(n);
-          if (collapsed) break;
-        }
+        if (m.type === 'characterData') hitCD = queueCharacterData(m) || hitCD;
+        else if (m.type === 'attributes') queueAttribute(m);
+        else queueAdded(m);
       }
       return hitCD;
     };
