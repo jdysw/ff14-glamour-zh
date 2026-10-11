@@ -71,7 +71,7 @@ await c.eval(`(() => {
   return 1;
 })()`);
 // Simulate the actual two-stage vue-select on EC. Remote search arrives
-// asynchronously; selecting a native li via mousedown commits its option.
+// asynchronously; selecting a native li via click commits its option.
 await c.eval(`(() => {
   const input = document.getElementById('vs-head');
   const toggle = input.parentElement;
@@ -98,12 +98,12 @@ await c.eval(`(() => {
       decoy.className = 'vs__dropdown-option';
       decoy.textContent = '女仆腕带';
       decoy.dataset.zhixiaSourceText = 'Incorrect Native Equipment';
-      decoy.addEventListener('mousedown', () => { window.__nativePickWrong++; });
+      decoy.addEventListener('click', () => { window.__nativePickWrong++; });
       const option = document.createElement('li');
       option.className = 'vs__dropdown-option';
       option.textContent = '女仆腕带'; // EC may have translated the visible native label.
       option.dataset.zhixiaSourceText = original;
-      option.addEventListener('mousedown', event => {
+      option.addEventListener('click', event => {
         event.preventDefault();
         window.__nativePickCount++;
         selected.textContent = original;
