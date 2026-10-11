@@ -30,7 +30,7 @@ function validV3FileMeta(meta, expectedUrl) {
 }
 
 function validV3Manifest(man) {
-  if (!man || man.schema !== 3 || ![0, 1].includes(man.candidatePolicy)
+  if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy)
     || !man.sites || typeof man.sites !== 'object' || Array.isArray(man.sites)) return false;
   const allowed = new Map(SITE_POLICIES.map(site => [site.id, site]));
   const sites = Object.entries(man.sites);
