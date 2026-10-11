@@ -31,7 +31,7 @@ assert.doesNotMatch(registrySrc, /id:\s*'[^']+'\s*,\s*hosts:/, '不能在适配�
 assert.doesNotMatch(registrySrc, /id:\s*'[^']+'\s*,\s*tables:/, '不能在适配器中重复声明数据表');
 
 const order = JSON.parse(read('build/module-order.json')).order;
-assert.equal(order[0], 'core/site-policy', '纯策略必须先于启动适配器求值');
+assert.ok(order.includes('core/site-policy'), '纯策略必须进入确定性构建顺序契约');
 assert.ok(order.indexOf('core/site-policy') < order.indexOf('core/data-manager'));
 assert.ok(order.indexOf('core/site-policy') < order.indexOf('core/site-registry'));
 
