@@ -42,4 +42,10 @@ for (const file of ['tests/unit/test-site-registry.mjs', 'tests/unit/test-observ
   assert.match(body, /src\/core\//, file + ' 应直接加载源码');
 }
 
+// 解析器区段必须闭合在其所属模块内，不得跨越多个无关模块。
+const resolverSource = read(data);
+assert.match(resolverSource, /\/\* @zhixia:core-item-resolver-start \*\//);
+assert.match(resolverSource, /\/\* @zhixia:core-item-resolver-end \*\//);
+assert.doesNotMatch(read('src/main.js'), /@zhixia:core-item-resolver-(start|end)/);
+
 console.log('✅ 数据策略、模块依赖方向、站点配置单一来源及源码测试隔离检查通过');
