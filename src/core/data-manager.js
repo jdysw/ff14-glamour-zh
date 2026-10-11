@@ -1,15 +1,25 @@
 /* @phase15-module-order:core/data-manager */
-/* @phase15-order-link:core/data-manager<-core/constants */
 import { DATA_BASE_V3 } from './constants.js';
-import { DAY_MS, _lcs90, cacheReset } from './cache.js';
+import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache-primitives.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { httpGet } from './http.js';
-import { tryEnToZh } from './item-resolver.js';
-import { __zhxMark } from './probe.js';
-import { _zhxErr } from './runtime.js';
-import { findSite, neededTables } from './site-registry.js';
+import { __zhxMark, _zhxErr } from './runtime.js';
+import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, dataManager, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+
+
+  // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
+  // 装备名/染剂名等短英文串（如 Tule Tunic、Charcoal Grey）。
+  function tryEnToZh(en) {
+    if (!en) return null;
+    if (_en2zhCache.has(en)) return _en2zhCache.get(en);
+    // 物品总表统一索引（英/日/韩名 → 中文名；染剂色名回退已由 V3 names 文件展开）
+    const out = resolveByName(en);
+    cacheGuard(_en2zhCache, CACHE_CAP_LOOKUP);
+    _en2zhCache.set(en, out);
+    return out;
+  }
 
 
   /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
@@ -605,17 +615,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
   }
-  const dataManager = {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
-    ensure(site) { return ensureTables(); },                       // site：预留（见上）
-    ready(cb) {
-      const p = ensureTables();
-      if (typeof cb === 'function') p.then(() => { try { cb(); } catch (e) { _zhxErr('readyCb', e); } });
-      return p;
-    },
-    getTable(name) { return dataGetTable(name); },
-    getIndex(name) { return dataGetIndex(name); },
-    invalidate() { dataInvalidate(); },
-  };
   /* @zhixia:core-data-manager-end */
   /* @zhixia:data-layer-end */
 
@@ -890,3 +889,4 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // EC_ID / 韩文名反查（zh → 值）——v1.4 Phase 10：Wiki 与 Probe 的唯一数据入口
   function resolveEcId(zh) { const z = (zh && ecidMap?.[zh]) ? String(ecidMap[zh]) : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveKo(zh) { const z = (zh && koByZh?.[zh]) ? koByZh[zh] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
+  /* @zhixia:core-item-resolver-end */

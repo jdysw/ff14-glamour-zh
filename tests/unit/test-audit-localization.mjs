@@ -24,10 +24,17 @@ function element(tag, attrs = {}, parent = null) {
   };
 }
 
+// 从真实缓存模块读取 FC 职能词表，而不是在测试中复制一份可能过期的常量。
+const cacheSource = fs.readFileSync(path.join(root, 'src/core/cache.js'), 'utf8');
+const roleStart = cacheSource.indexOf('const FC_ROLE_ZH = {');
+const roleEnd = cacheSource.indexOf('};', roleStart);
+assert.ok(roleStart >= 0 && roleEnd > roleStart, 'FC 职能词表必须由缓存模块统一提供');
+const FC_ROLE_ZH = new Function(cacheSource.slice(roleStart, roleEnd + 2) + '\nreturn FC_ROLE_ZH;')();
+
 const fcDict = { ...dictionary('dict-common.json'), ...dictionary('dict-fc.json') };
 const fc = adapter('ff14-fc.js',
   ['trFC', '_trFCSubstr', '_procFCNode', '_fcCanReplaceAt', 'trFCSegments'],
-  { DICT_FC: fcDict, _tablesReady: true, lookupJp2Zh: () => null, lookupSeries: () => null,
+  { DICT_FC: fcDict, FC_ROLE_ZH, _tablesReady: true, lookupJp2Zh: () => null, lookupSeries: () => null,
     _getSubstrKeysAll: () => ['メール', 'ドレス', '装備', 'まとめ', '検索', '絞り込み'] });
 assert.equal(fc.trFC('絞り込みをリセットする'), '重置筛选');
 assert.equal(fc.trFC('基本ステータス'), '基础属性');

@@ -16,21 +16,16 @@ const document = { title: 'Glamour Collection | Eorzea Collection', documentElem
 const captured = [];
 const stubs = {
   DICT_EC, document, dictGetRevision: () => 0, dataGetIndex: () => null,
+  tryEnToZh: () => null,
   createObserver: opts => { captured.push(opts); return { disconnect() {} }; },
   queryIn: (scope, selector) => body.items.filter(node => node.hasAttribute(selector.slice(1, -1))),
   localScope: node => node || null, _zhixiaTitleKeep: titleKeep,
   _markScan: () => {}, safe: fn => fn, SKIP_TAGS: new Set(), EC_ITEM_SKIP_SEL: '.item-only',
   NodeFilter: { SHOW_TEXT: 4, SHOW_ELEMENT: 1, FILTER_REJECT: 2, FILTER_ACCEPT: 1 },
 };
-const itemSource = fs.readFileSync(path.join(root, 'src/core/item-resolver.js'), 'utf8');
-const start = itemSource.indexOf('  function trEC(text) {');
-const end = itemSource.indexOf('  // 日文 → 中文', start);
-assert.ok(start >= 0 && end > start);
-const patterns = new Function(...Object.keys(stubs), source + '\nreturn PATTERNS_EC;')(...Object.values(stubs));
-stubs.trEC = new Function('DICT_EC','PATTERNS_EC','tryEnToZh',
-  itemSource.slice(start, end) + '\nreturn trEC;')(DICT_EC,patterns,() => null);
+// EC 文案翻译已经归属站点模块；在同一作用域内测试真实 trEC 与 PATTERNS_EC。
 const api = new Function(...Object.keys(stubs), source +
-  '\nreturn { trimECNode, translateECAttrs, translateECTitle, startEC };')(...Object.values(stubs));
+  '\nreturn { trEC, trimECNode, translateECAttrs, translateECTitle, startEC };')(...Object.values(stubs));
 for (const [original, translated] of [
   ['Requirements', '要求'], ['Allowed', '允许'], ['Not Allowed', '不允许'],
   ['Rules for screenshots', '截图规则'], ['Search for option', '搜索选项'],
@@ -39,9 +34,9 @@ for (const [original, translated] of [
   ['Page 1 of 8541', '第 1 页 / 共 8541 页'],
   ['Browse All Round glasses', '浏览全部圆框眼镜'],
   ['Basic (White)', '普通（白色）'], ['Mogstation exclusive', '官方商城专属'],
-]) assert.equal(stubs.trEC(original), translated, original);
-assert.equal(stubs.trEC('Eorzea Collection'), 'Eorzea Collection', 'keep brand');
-assert.equal(stubs.trEC('Some player-made glamour title'), 'Some player-made glamour title');
+]) assert.equal(api.trEC(original), translated, original);
+assert.equal(api.trEC('Eorzea Collection'), 'Eorzea Collection', 'keep brand');
+assert.equal(api.trEC('Some player-made glamour title'), 'Some player-made glamour title');
 const node = (attrs, authored = false) => ({
   nodeType: 1, tagName: 'A', attrs: { ...attrs }, dataset: {},
   hasAttribute(key) { return Object.hasOwn(this.attrs,key); },

@@ -1,6 +1,5 @@
 /* @phase15-module-order:core/runtime */
-import { resolve } from './data-manager.js';
-export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, lookupZh, safe };
+export { ERR_LOG_CAP, __zhxBootAt, __zhxMark, registerProbeMark, _errLog, _perfNow, _zhxErr, safe };
 
   /* @zhixia:core-runtime-start */
   /* ── Core Runtime（v1.4 Phase 4）：脚本注入时刻（运行探测用；未启用时零
@@ -11,12 +10,6 @@ export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, lookupZh, safe };
   // Phase 19：测量用单调时钟（performance 缺失时回退 Date.now；供处理统计与时间线共用）
   function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
   /* @zhixia:core-runtime-end */
-
-  function lookupZh(a, name) {
-    const h = (a?.getAttribute('href')) || '';
-    const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-    return resolve({ hash: m?.[1], name }, { latinFallback: true });   // hash → 名称 → 外文名兜底（等价原逻辑）
-  }
 
   /* ── 通用工具层（工程做法借鉴 maboloshi/github-chinese）───────────── */
 
@@ -44,3 +37,13 @@ export { ERR_LOG_CAP, __zhxBootAt, _errLog, _perfNow, _zhxErr, lookupZh, safe };
   }
 
   /* @zhixia:core-runtime-end */
+  
+  // 数据加载器只调用轻量探测钩子，不需要导入完整诊断面板及 Wiki 逻辑。
+  // Probe 模块求值时注册原有记录函数；未启用探测时记录器本身立即返回。
+  let _probeMarkHandler = null;
+  function registerProbeMark(handler) {
+    _probeMarkHandler = typeof handler === 'function' ? handler : null;
+  }
+  function __zhxMark(name) {
+    if (_probeMarkHandler) _probeMarkHandler(name);
+  }

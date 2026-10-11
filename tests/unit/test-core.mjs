@@ -57,6 +57,7 @@ const SEG = {
   storage: ['core-storage', 1],
   http: ['core-http', 1],
   cache: ['core-cache', 1],
+  cachePrimitives: ['core-cache-primitives', 1],
   cacheReg: ['core-cache-registry', 1],
   dom: ['core-dom', 1],
   observer: ['core-observer', 1],

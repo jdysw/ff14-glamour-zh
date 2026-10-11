@@ -5,9 +5,12 @@ import { readDist, itemsTsvPath, fixtureUrl } from '../helpers/paths.mjs';
 import { seedV3Browser } from '../helpers/v3-cache.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
-const marker = "__zhxMark('ready');";
+// Rollup 在拆环后可能重命名同名导入符号；只接受真实的 ready 探测调用，
+// 仍要求恰好命中一次，保留原有七站索引与离线数据断言。
 let script = readDist();
-if (script.split(marker).length !== 2) throw new Error('就绪锚点必须唯一');
+const readyCalls = [...script.matchAll(/\b__zhxMark(?:\$\d+)?\('ready'\);/g)];
+if (readyCalls.length !== 1) throw new Error('就绪锚点必须唯一，实际命中 ' + readyCalls.length);
+const marker = readyCalls[0][0];
 script = script.replace(marker, `window.__zhxDebug = Object.fromEntries(['nameMap', 'itemHash', 'ecidMap', 'koByZh'].map(k => [k, dataGetIndex(k)])); ${marker}`);
 const rows = fs.readFileSync(itemsTsvPath, 'utf8').split('\n').map(line => line.split('\t'));
 const dye = rows.find(row => row[2] === 'Snow White Dye');

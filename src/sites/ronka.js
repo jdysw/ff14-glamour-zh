@@ -1,5 +1,4 @@
 /* @phase15-module-order:sites/ronka */
-/* @phase15-order-link:sites/ronka<-sites/ffxiv-collection */
 import { bindZhxItemClick, ensureZhxItemStyle } from './ffxiv-collection.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
@@ -8,7 +7,9 @@ import { _markScan, localScope, queryIn } from '../core/dom.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { SKIP_TAGS } from './mirapri.js';
-export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
+// Ronka 查询缓存的所有权属于核心缓存模块，此处仅保留兼容的转发导出。
+export { RONKA_ITEM_CACHE } from '../core/cache.js';
+export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
 
 
   /* ===================================================================== */
@@ -23,7 +24,7 @@ export { RONKA_ITEM_CACHE, RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonka
   const RONKA_KR = /[\uac00-\ud7a3]/;
 
   // 装备名单条查找（缓存 + 名称索引直查）；_ronkaCacheN = 条目计数（容量防线用）
-  const RONKA_ITEM_CACHE = Object.create(null);
+  // 缓存实际存储与容量防线统一由核心缓存模块维护。
 
   // 逐条翻译：UI/染剂精确 → "N-染剂" → 装备名 → "X아이콘" → 版本前缀 → 空白归一化
   // v1.2.x：子步骤拆出（降认知复杂度）——② 染剂 "N-名称"

@@ -1,12 +1,23 @@
 /* @phase15-module-order:core/cache */
-/* @phase15-order-link:core/cache<-core/item-resolver */
-import { _en2zhCache, _jp2zhCache } from './item-resolver.js';
+import { CACHE_CAP_LOOKUP, _cacheReg, _en2zhCache, _lcs90, cacheGuard, cacheRegister } from './cache-primitives.js';
 import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
 import { DICT_FC, dictGetRevision } from './dictionary.js';
-import { FC_ROLE_ZH } from '../sites/ff14-fc.js';
-import { RONKA_ITEM_CACHE } from '../sites/ronka.js';
-export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, _shortestStr, cacheGuard, cacheInfo, cacheRegister, cacheReset, ronkaItemLookup };
+// 无本地调用方的基础层符号直接转发，保留旧模块的导出接口。
+export { DAY_MS, _countIncludes, _shortestStr, cacheReset } from './cache-primitives.js';
+export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, _allKeysCache, _cacheReg, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, cacheGuard, cacheInfo, cacheRegister, ronkaItemLookup };
 
+
+  // 翻译共用的职能词和 Ronka 查询缓存由基础缓存层维护，
+  // 站点层只能依赖这里，不允许缓存层反向引入站点启动模块。
+  const FC_ROLE_ZH = {
+    'ディフェンダー': '御敌', 'スレイヤー': '制敌', 'ストライカー': '强袭',
+    'スカウト': '游击', 'ヒーラー': '治愈', 'キャスター': '咏咒',
+    'レンジャー': '精准', 'ファイター': '战斗', 'ソーサラー': '法系',
+  };
+  const RONKA_ITEM_CACHE = Object.create(null);
+
+  // 名称解析器的命中与负缓存由缓存层统一拥有；清理时不反向依赖解析器。
+  const _jp2zhCache = new Map();
 
   // ── 系列名前缀查找（v1.12.0）：从单件装备表自动推导的系列名（如 ファントムヴィジョン・ディフェンダー → 幻境意象御敌）
   let _seriesMap = null; // NOSONAR — 派生缓存按需构建并由 cacheReset 失效
@@ -115,31 +126,6 @@ export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fc
     } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
   }
-  // v1.2.7：_shortestStr/_countIncludes 拆为子步骤（降认知复杂度）
-  function _shortestStr(list) {
-    let shortest = list[0];
-    for (const x of list) if (x.length < shortest.length) shortest = x;
-    return shortest;
-  }
-
-  function _countIncludes(list, sub) {
-    let c = 0;
-    for (const x of list) if (x.includes(sub)) c++;
-    return c;
-  }
-
-  function _lcs90(list) {
-    const need = Math.ceil(list.length * 0.9);
-    const shortest = _shortestStr(list);
-    const maxLen = Math.min(12, shortest.length);
-    for (let len = maxLen; len >= 2; len--) {
-      for (let i = 0; i + len <= shortest.length; i++) {
-        const sub = shortest.slice(i, i + len);
-        if (_countIncludes(list, sub) >= need) return sub;
-      }
-    }
-    return null;
-  }
   let _ronkaCacheN = 0; // NOSONAR — 缓存容量计数器随缓存写入/清理变化
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
@@ -156,7 +142,7 @@ export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fc
        数据探测周期常量。本模块仅保留内存派生缓存相关逻辑；
        Phase 15 模块化构建时，原样抽出为 src/core/cache.js。 */
 
-  const DAY_MS = 24 * 60 * 60 * 1000;
+  // DAY_MS 定义在无业务依赖的 cache-primitives.js 中。
 
   /* @zhixia:core-cache-end */
 
@@ -177,15 +163,6 @@ export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fc
        · derived   派生缓存（内存，页面生命周期）：由数据表派生的映射与前缀表
                    失效：数据到达（_fireTablesReady）；容量由数据表规模界定
      统一入口：cacheReset(kind) 按类清理；cacheInfo() 观测（修订号 + 条目数）。 */
-  const _cacheReg = new Map();
-  const CACHE_CAP_LOOKUP = 5000;   // lookup 类容量防线：超出即清空重建（避免长会话无界增长）
-  function cacheRegister(name, kind, reset, size) { _cacheReg.set(name, { kind, reset, size }); }
-  function cacheReset(kind) {
-    for (const e of _cacheReg.values()) {
-      if (kind && e.kind !== kind) continue;
-      try { e.reset(); } catch (error_) { /* 忽略：单个缓存清理失败不阻断其余 */ }
-    }
-  }
   function cacheInfo() {
     const entries = {};
     for (const [name, e] of _cacheReg) {
@@ -198,17 +175,6 @@ export { CACHE_CAP_LOOKUP, DAY_MS, _allKeysCache, _cacheReg, _countIncludes, _fc
         dict: (typeof dictGetRevision === 'function' ? dictGetRevision() : 0),
       },
     };
-  }
-  /* 容量防线：条目数达到上限时清空缓存（清空即重建，不影响正确性）。
-     count 供无 size 的对象型缓存（如 RONKA 物品表）传入计数器。 */
-  function cacheGuard(cache, cap, count) {
-    if (!cache) return false;
-    let n = (typeof count === 'number') ? count : cache.size;
-    if (typeof n !== 'number') n = Object.keys(cache).length;
-    if (n < cap) return false;
-    if (typeof cache.clear === 'function') { try { cache.clear(); } catch (e) { /* 忽略：清空失败则重建继续（正确性不受影响） */ } return true; }
-    for (const k in cache) { try { delete cache[k]; } catch (e) { /* 忽略：同上（清空失败无碍） */ } }
-    return true;
   }
   /* ── 登记（新增缓存必须在此加一行；kind 见四类划分）── */
   cacheRegister('en2zh', 'lookup', () => { _en2zhCache.clear(); }, () => _en2zhCache.size);

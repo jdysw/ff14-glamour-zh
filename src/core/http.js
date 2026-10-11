@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/http */
-/* @phase15-order-link:core/http<-core/storage */
-import './storage.js';
 export { httpGet };
 
 

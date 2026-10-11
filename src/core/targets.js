@@ -1,12 +1,19 @@
 /* @phase15-module-order:core/targets */
-/* @phase15-order-link:core/targets<-core/observer */
 import { observeLocal } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
-import { itemDbReady, resolveByName } from './data-manager.js';
+import { itemDbReady, resolve, resolveByName } from './data-manager.js';
 import { localScope, queryIn } from './dom.js';
-import { _perfNow, lookupZh, safe } from './runtime.js';
-export { EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
+import { _perfNow, safe } from './runtime.js';
+export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
+
+  // 装备链查找属于 DOM 目标处理，不应放在所有模块共用的基础运行时。
+  // 保留 Lodestone hash 优先、名称及拉丁文字兜底的既有语义。
+  function lookupZh(a, name) {
+    const h = (a?.getAttribute('href')) || '';
+    const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
+    return resolve({ hash: m?.[1], name }, { latinFallback: true });
+  }
 
   /* @zhixia:core-targets-start */
   /* ── Core Targets（v1.4 Phase 8）：统一 DOM Target Pipeline——

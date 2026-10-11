@@ -1,5 +1,4 @@
 /* @phase15-module-order:sites/mirapri */
-/* @phase15-order-link:sites/mirapri<-core/dom */
 import { _markScan, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
 import { createObserver } from '../core/observer.js';

@@ -1,10 +1,10 @@
-// tests/unit/test-dictionary.mjs — Phase 5：冻结 Translator / Dictionary 行为（golden tests）
+// tests/unit/test-dictionary.mjs — 冻结运行时词典行为（回归测试）
 //
 // 目的：把运行时词典（七层词表访问 / dict.json 原地合并 / 修订号 / 派生缓存失效）
-//       与翻译统一接口层（按 profile 分发）的当前行为用断言钉死。
+//       的现有行为用断言保护。
 //       后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
-// 机制：从构建产物（dist）提取 @zhixia:core-dictionary 与 @zhixia:core-translator
+// 机制：从规范模块源码提取 @zhixia:core-dictionary 与 @zhixia:core-cache-registry
 //       区段，以桩装配运行——六层词表起始为空对象；tr/trEC/… 以带标记的前缀桩
 //       替代；修正扫描用 mock TreeWalker 观测（节点对象可断言 nodeValue）。
 //       不依赖 Chrome / 外网。
@@ -17,7 +17,9 @@
 //   - 提取锚随 src 结构变化会失配并明确报错——届时按新结构更新锚点即可（有意的哨兵）。
 //
 // 运行：node tests/unit/test-dictionary.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -28,7 +30,10 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 从三个规范模块提取对应代码段，避免依赖打包产物的文本顺序。
+const DICT_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/dictionary.js'), 'utf8');
+const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
+const PRIMITIVE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 
 // ─────────────────────────────────────────────────────────────
 // 提取装置：按 @zhixia:<tag> 标记切出区段（同名多段按顺序全部取出）
@@ -50,28 +55,19 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const DICT_SEG = sliceAll(DIST_TEXT, 'core-dictionary');
-const TR_SEG = sliceAll(DIST_TEXT, 'core-translator');
-const CACHE_REG_SEG = sliceAll(DIST_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
+const DICT_SEG = sliceAll(DICT_TEXT, 'core-dictionary');
+const CACHE_PRIMITIVE_SEG = sliceAll(PRIMITIVE_TEXT, 'core-cache-primitives');
+const CACHE_REG_SEG = sliceAll(CACHE_TEXT, 'core-cache-registry');   // Phase 14：dictInvalidate 经注册表按类清理
 
 const STUB_LINES = [
   // ── 桩（必须先于区段：值捕获纪律；七层词表从空开始）──
   'const DICT_COMMON = {}, DICT = {}, DICT_EC = {}, DICT_FC = {}, DICT_RONKA = {}, DICT_ACL = {}, DICT_ENDCLOSET = {};',
   'let _fcSubstrCache = null, _allKeysCache = null;',
-  'const tr = (t) => "T-main:" + t, trEC = (t) => "T-ec:" + t, trFC = (t) => "T-fc:" + t,',
-  '  trRonka = (t) => "T-ronka:" + t, trACL = (t) => "T-acl:" + t;',
-  'const trNode = (n) => __rec.calls.push(["trNode", n]);',
-  'const trimECNode = (n) => __rec.calls.push(["trimECNode", n]), trimFCNode = (n) => __rec.calls.push(["trimFCNode", n]),',
-  '  trimRonkaNode = (n) => __rec.calls.push(["trimRonkaNode", n]), trimACLNode = (n) => __rec.calls.push(["trimACLNode", n]);',
-  'const trEl = (el) => __rec.calls.push(["trEl", el]), translateECAttrs = (el) => __rec.calls.push(["translateECAttrs", el]),',
-  '  _wowFCInput = (el) => __rec.calls.push(["wowFCInput", el]);',
   'const _zhxErr = (where, e) => __rec.calls.push(["zhxErr", String(where)]);',
 ];
 
 const RETURN_STMT = [
   'return { dictGet, dictHas, dictUpdate, dictGetRevision, dictInvalidate, DICT_LAYERS, __rec,',
-  '  translateText, translateNode, translateAttributes,',
-  '  TEXT_TRANSLATORS, NODE_TRANSLATORS, ATTR_TRANSLATORS,',
   '  __peek: () => ({ fc: _fcSubstrCache, ak: _allKeysCache }),',
   '  __poke: () => { _fcSubstrCache = "X"; _allKeysCache = "Y"; } };',
 ].join('\n');
@@ -101,7 +97,7 @@ function buildDict(mock = {}) {
       };
     },
   };
-  const body = [...STUB_LINES, ...CACHE_REG_SEG, ...DICT_SEG, ...TR_SEG, RETURN_STMT].join('\n');
+  const body = [...STUB_LINES, ...CACHE_PRIMITIVE_SEG, ...CACHE_REG_SEG, ...DICT_SEG, RETURN_STMT].join('\n');
   try {
     const fn = new Function('document', 'console', 'NodeFilter', '__rec', body);
     return fn(doc, { warn: () => {} }, NF, rec);
@@ -240,55 +236,7 @@ function buildDict(mock = {}) {
   ok('update 无效：派生缓存不被清（无状态变更）', api.__peek().fc === 'X' && api.__peek().ak === 'Y');
 }
 
-// ─────────────────────────────────────────────────────────────
-// F. 翻译统一接口层：分发正确性
-// ─────────────────────────────────────────────────────────────
-{
-  const api = buildDict();
-
-  // 表完整性
-  eq('TEXT_TRANSLATORS 五站', Object.keys(api.TEXT_TRANSLATORS).sort().join(','), 'acl,ec,fc,mirapri,ronka');
-  eq('NODE_TRANSLATORS 五站', Object.keys(api.NODE_TRANSLATORS).sort().join(','), 'acl,ec,fc,mirapri,ronka');
-  eq('ATTR_TRANSLATORS 三站（acl/ronka 无独立实现）', Object.keys(api.ATTR_TRANSLATORS).sort().join(','), 'ec,fc,mirapri');
-
-  // translateText
-  eq('translateText → mirapri', api.translateText('x', 'mirapri'), 'T-main:x');
-  eq('translateText → ec', api.translateText('x', 'ec'), 'T-ec:x');
-  eq('translateText → fc', api.translateText('x', 'fc'), 'T-fc:x');
-  eq('translateText → ronka', api.translateText('x', 'ronka'), 'T-ronka:x');
-  eq('translateText → acl', api.translateText('x', 'acl'), 'T-acl:x');
-  eq('translateText：未知 profile 原样返回', api.translateText('x', 'nope'), 'x');
-  eq('translateText：无 profile 原样返回', api.translateText('x'), 'x');
-  eq('重复调用一致（分发层无状态）', api.translateText('x', 'ec'), api.translateText('x', 'ec'));
-
-  // translateNode：记录桩的调用
-  const n = { nodeValue: 'v' };
-  api.translateNode(n, 'mirapri');
-  api.translateNode(n, 'ec');
-  api.translateNode(n, 'fc');
-  api.translateNode(n, 'ronka');
-  api.translateNode(n, 'acl');
-  eq('translateNode 五站分发（调用序）',
-    api.__rec.calls.map((c) => c[0]).join(','),
-    'trNode,trimECNode,trimFCNode,trimRonkaNode,trimACLNode');
-  ok('translateNode 透传节点', api.__rec.calls.every((c) => c[1] === n));
-  const lenBefore = api.__rec.calls.length;
-  api.translateNode(n, 'nope');
-  eq('translateNode：未知 profile 无动作', api.__rec.calls.length, lenBefore);
-
-  // translateAttributes
-  const el = {};
-  api.translateAttributes(el, 'mirapri');
-  api.translateAttributes(el, 'ec');
-  api.translateAttributes(el, 'fc');
-  eq('translateAttributes 三站分发',
-    api.__rec.calls.slice(lenBefore).map((c) => c[0]).join(','),
-    'trEl,translateECAttrs,wowFCInput');
-  const len2 = api.__rec.calls.length;
-  api.translateAttributes(el, 'acl');
-  api.translateAttributes(el, 'ronka');
-  eq('translateAttributes：acl/ronka 无注册（no-op）', api.__rec.calls.length, len2);
-}
+// 各站翻译调用由 site-registry 测试验证，此处仅测试词典层实际接口。
 
 // ─────────────────────────────────────────────────────────────
 console.log(`\n════════ 汇总 ════════`);

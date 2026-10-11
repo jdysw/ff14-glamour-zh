@@ -1,6 +1,4 @@
 /* @phase15-module-order:sites/ffxiv-collection */
-/* @phase15-order-link:sites/ffxiv-collection<-sites/ff14-fc */
-import './ff14-fc.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DATA_TEXT } from '../core/data-manager.js';
 import { DICT_ACL } from '../core/dictionary.js';

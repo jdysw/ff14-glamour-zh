@@ -8,10 +8,9 @@
 //      离线快路径、manifest/schema/hash 失败时安全空索引且无旧数据请求，
 //      强制迁移、每站 manifest 快照、ready 广播与内容寻址缓存。
 //
-// 机制：同 test-data-manager.mjs——从 dist 提取区段以桩装配，不依赖 Chrome / 外网。
+// 机制：从规范模块源码提取区段以桩装配，不依赖构建变量名、Chrome 或外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
-import { readDist } from '../helpers/paths.mjs';
 import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -189,7 +188,12 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
 // ══════════ B. 运行时 v3 加载（桩装配）══════════
 console.log('\n── B. 运行时 v3 加载 ──');
 
-const DIST_TEXT = readDist();
+// 直接使用规范模块源，避免 Rollup 对同名探测钩子的变量重命名影响测试装配。
+const DIST_TEXT = [
+  'src/core/cache-primitives.js',
+  'src/core/cache.js',
+  'src/core/data-manager.js',
+].map(file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8')).join('\n');
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
@@ -208,7 +212,7 @@ function sliceAll(s, tag) {
   return out;
 }
 
-const CACHE_SEGS = sliceAll(DIST_TEXT, 'core-cache');
+const CACHE_SEGS = [...sliceAll(DIST_TEXT, 'core-cache-primitives'), ...sliceAll(DIST_TEXT, 'core-cache')];
 const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 const NAMES = [
@@ -217,7 +221,7 @@ const NAMES = [
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
   'neededTables', '_fireTablesReady',
-  'findSite', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
+  'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
   '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
 ];
@@ -242,7 +246,8 @@ function makeWorld(over = {}) {
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
     neededTables: () => over.need || ['items', 'dict'],
     _fireTablesReady: () => { rec.fires.push(1); },
-    findSite: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
+    // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。
+    findSitePolicy: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
     applyRuntimeDict: (t) => { rec.dict.push(t); },
     _irAliasMap: null, _irDupMap: null, _irSearchSlotByNative: null, _irCandidatePolicy: 0,
     _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
@@ -265,10 +270,11 @@ function makeWorld(over = {}) {
 }
 
 function buildDM(world) {
-  const body = [...CACHE_SEGS, ...DM_SEGS].join('\n');
+  // 规范模块把 findSitePolicy 作为 findSite 导入；隔离装配时保留同一别名绑定。
+  const body = 'const findSite = findSitePolicy;\n' + [...CACHE_SEGS, ...DM_SEGS].join('\n');
   const ret = [
     'return {',
-    '  dataManager, ensureTables, itemDbReady,',
+    '  ensureTables, itemDbReady,',
     '  _ensureTryV3, _applyV3, _v3Pairs, _prepareDataRefresh, _completeDataRefresh, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
 
     '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, slots: _irSearchSlotByNative, policy: _irCandidatePolicy, force: _forceDataRefresh, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',

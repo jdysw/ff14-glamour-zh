@@ -1,12 +1,15 @@
 // Item Resolver contract tests against the V3 runtime indexes.
 import fs from 'node:fs';
-import { readDist, itemsTsvPath } from '../helpers/paths.mjs';
+import path from 'node:path';
+import { repoRoot, itemsTsvPath } from '../helpers/paths.mjs';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log('  ✅ ' + name); } else { fail++; console.log('  ❌ ' + name + (extra ? ' — ' + extra : '')); } };
 const eq = (name, actual, expected) => ok(name, actual === expected, '实际=' + JSON.stringify(actual) + ' 期望=' + JSON.stringify(expected));
-const DIST_TEXT = readDist();
+// 直接从所有者模块抽取解析器与纯缓存算法，不依赖打包后的跨模块文本区段。
+const RESOLVER_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/data-manager.js'), 'utf8');
+const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 function sliceAll(s, tag) {
   const a = '/* @zhixia:' + tag + '-start */', b = '/* @zhixia:' + tag + '-end */', out = [];
   let from = 0;
@@ -14,14 +17,14 @@ function sliceAll(s, tag) {
   if (!out.length) throw new Error('missing ' + tag);
   return out;
 }
-const resolverSegs = sliceAll(DIST_TEXT, 'core-item-resolver').map((s) => s.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
+const resolverSegs = sliceAll(RESOLVER_TEXT, 'core-item-resolver').map((s) => s.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
 function extractFn(src, name) {
   const i = src.indexOf('function ' + name + '('); if (i < 0) throw new Error('missing helper ' + name);
   let d = 0, j = i;
   for (; j < src.length; j++) { if (src[j] === '{') d++; else if (src[j] === '}' && --d === 0) return src.slice(i, j + 1); }
   throw new Error('unclosed helper ' + name);
 }
-const helpers = ['_shortestStr', '_countIncludes', '_lcs90'].map((n) => extractFn(DIST_TEXT, n)).join('\n');
+const helpers = ['_shortestStr', '_countIncludes', '_lcs90'].map((n) => extractFn(CACHE_TEXT, n)).join('\n');
 function buildResolver(env = {}) {
   const body = [
     'let _tablesReady = true;',

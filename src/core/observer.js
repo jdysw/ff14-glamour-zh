@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/observer */
-/* @phase15-order-link:core/observer<-core/translator */
-import './translator.js';
 import { dedupeByAncestor } from './dom.js';
 import { _perfNow, _zhxErr } from './runtime.js';
 export { _obsStats, createObserver, observeLocal };

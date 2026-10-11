@@ -12,7 +12,9 @@
 // 金标准来源：tables/indexes 值自 v1.3 的 SITE_TABLES / _siteIndexes() 逐字冻结（v1.4 Phase 3 合并）。
 //
 // 运行：node tests/unit/test-site-registry.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -24,25 +26,34 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 const section = (t) => console.log(`\n── ${t} ──`);
 
-const DIST_TEXT = readDist();
+// 从正式模块源获取策略和启动适配器，避免依赖 Rollup 的拼接顺序。
+const POLICY_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/site-policy.js'), 'utf8');
+const REGISTRY_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/site-registry.js'), 'utf8');
+const DIST_TEXT = POLICY_TEXT + '\n' + REGISTRY_TEXT;
 
 // ─────────────────────────────────────────────────────────────
 // A. 提取区段并装配（stub：location / window）
 // ─────────────────────────────────────────────────────────────
+const POLICY_START = '/* @zhixia:site-policy-start */';
+const POLICY_END = '/* @zhixia:site-policy-end */';
 const START = '/* @zhixia:site-registry-start */';
 const END = '/* @zhixia:site-registry-end */';
 
 section('A：区段提取与装配');
 const nStart = DIST_TEXT.split(START).length - 1;
 const nEnd = DIST_TEXT.split(END).length - 1;
-ok('A1 区段锚点唯一（start/end 各 1 处）', nStart === 1 && nEnd === 1, `start=${nStart} end=${nEnd}`);
+const nPolicyStart = POLICY_TEXT.split(POLICY_START).length - 1;
+const nPolicyEnd = POLICY_TEXT.split(POLICY_END).length - 1;
+ok('A1 策略与站点适配器各自拥有唯一锚点', nStart === 1 && nEnd === 1 && nPolicyStart === 1 && nPolicyEnd === 1,
+  `registry=${nStart}/${nEnd} policy=${nPolicyStart}/${nPolicyEnd}`);
 
 // Phase 9：适配器 boot/pageshow 会触达站点函数与 safe——全部以桩注入（记录调用）
 const STUB_NAMES = [
   'startMirapri', 'startItems', 'startEC', 'startWiki', 'startFC', 'startRonka', 'startACL',
-  'translatePage', 'applyItemZh', 'translateECPage', 'bindECPieceTiles', 'translateFCPage',
+  'translatePage', 'applyItemZh', 'translateECPage', 'translateECTitle', 'bindECPieceTiles', 'translateFCPage',
   'translateFCTitle', 'fixFCMenu', 'bindFCBanners', 'translateRonkaPage', 'translateRonkaTitle',
   'translateACLPage', 'translateACLTitle', 'injectWikiButton',
+  'startEndCloset', 'translateEndClosetPage', 'translateEndClosetTitle',
 ];
 
 function buildDevice(dataRemote, opts = {}) {
@@ -52,7 +63,11 @@ function buildDevice(dataRemote, opts = {}) {
     + STUB_NAMES.map((n) => (opts.throwOn && opts.throwOn.includes(n))
       ? `function ${n}() { __stubCalls.push('${n}'); throw new Error('bang:${n}'); }`
       : `function ${n}() { __stubCalls.push('${n}'); }`).join('\n');
-  const body = DIST_TEXT.slice(DIST_TEXT.indexOf(START) + START.length, DIST_TEXT.indexOf(END));
+  const policyBody = POLICY_TEXT.slice(POLICY_TEXT.indexOf(POLICY_START) + POLICY_START.length,
+    POLICY_TEXT.indexOf(POLICY_END));
+  const registryBody = REGISTRY_TEXT.slice(REGISTRY_TEXT.indexOf(START) + START.length,
+    REGISTRY_TEXT.indexOf(END));
+  const body = policyBody + '\n' + registryBody;
   const factory = new Function('location', 'window', 'DATA_REMOTE', 'onTablesReady', '__stubCalls', '__stubErrs',
     stubDefs + '\n' + body + '\nreturn { findSite, neededTables, _siteIndexes, SITE_REGISTRY, createSiteAdapter };');
   let host = '';
@@ -70,9 +85,9 @@ function buildDevice(dataRemote, opts = {}) {
 let api = null;
 try {
   api = buildDevice(true);
-  ok('A2 区段可在 Node 装配（自足、无外部引用）', true);
+  ok('A2 数据策略与启动适配器可独立装配', true);
 } catch (e) {
-  ok('A2 区段可在 Node 装配（自足、无外部引用）', false, e.message);
+  ok('A2 数据策略与启动适配器可独立装配', false, e.message);
 }
 
 if (!api) {
@@ -165,9 +180,9 @@ eq('F1 onHost( 全文仅 1 处（findSite 内）', onHostCalls, 1);
 eq('F2 SITE_TABLES 残留', DIST_TEXT.split('SITE_TABLES').length - 1, 0);
 eq('F3 旧分发模式 if (onHost(host, 残留', DIST_TEXT.split('if (onHost(host,').length - 1, 0);
 {
-  const body = DIST_TEXT.slice(DIST_TEXT.indexOf(START), DIST_TEXT.indexOf(END));
+  const body = POLICY_TEXT.slice(POLICY_TEXT.indexOf(POLICY_START), POLICY_TEXT.indexOf(POLICY_END));
   const missing = CASES.map(([h]) => h.split('.').slice(-2).join('.')).filter((d) => !body.includes(`'${d}'`));
-  ok('F4 六域名均在区段内（hosts 配置）', missing.length === 0, missing.join(','));
+  ok('F4 全部宿主名均在纯策略配置中', missing.length === 0, missing.join(','));
 }
 eq('F5 function findSite() 定义', DIST_TEXT.split('function findSite()').length - 1, 1);
 
@@ -222,6 +237,74 @@ section('H：适配器错误边界（Phase 18）');
   try { ronka.pageshow(); } catch (e) { threw = true; }
   ok('H4 onPageShow 抛错：pageshow() 不抛出', !threw);
   ok('H5 错误被记录（pageshow:ronka）', g.stubs.errs.some(([w]) => w === 'pageshow:ronka'), JSON.stringify(g.stubs.errs));
+}
+
+// ─────────────────────────────────────────────────────────────
+// I. 运行时真正使用的站点适配器翻译入口（替代未使用的 translator 兼容分发层）
+// ─────────────────────────────────────────────────────────────
+section('I：七站启动、翻译与数据就绪路由');
+{
+  // 基线来自七站原始适配器实际调用顺序；不按测试实现自动推断预期。
+  const routes = {
+    mirapri: {
+      start: ['startMirapri', 'startItems'],
+      process: ['translatePage'],
+      ready: [],
+      pageshow: ['translatePage', 'applyItemZh'],
+    },
+    ec: {
+      start: ['startEC', 'startItems'],
+      process: ['translateECPage', 'applyItemZh'],
+      ready: ['translateECPage', 'translateECTitle'],
+      pageshow: ['translateECPage', 'translateECTitle', 'bindECPieceTiles', 'applyItemZh'],
+    },
+    wiki: {
+      start: ['startWiki'],
+      process: [],
+      ready: ['injectWikiButton'],
+      pageshow: ['injectWikiButton'],
+    },
+    fc: {
+      start: ['startFC'],
+      process: ['translateFCPage'],
+      ready: ['translateFCPage', 'translateFCTitle', 'fixFCMenu', 'bindFCBanners'],
+      pageshow: ['translateFCPage'],
+    },
+    ronka: {
+      start: ['startRonka'],
+      process: ['translateRonkaPage'],
+      ready: ['translateRonkaPage', 'translateRonkaTitle'],
+      pageshow: ['translateRonkaPage', 'translateRonkaTitle'],
+    },
+    collection: {
+      start: ['startACL'],
+      process: ['translateACLPage'],
+      ready: ['translateACLPage', 'translateACLTitle'],
+      pageshow: ['translateACLPage'],
+    },
+    endcloset: {
+      start: ['startEndCloset'],
+      process: ['translateEndClosetPage'],
+      ready: ['translateEndClosetPage', 'translateEndClosetTitle'],
+      pageshow: ['translateEndClosetPage', 'translateEndClosetTitle'],
+    },
+  };
+  for (const [siteId, expected] of Object.entries(routes)) {
+    const g = buildDevice(true);
+    const adapter = g.SITE_REGISTRY.find(item => item.id === siteId);
+    adapter.boot();
+    eq('I ' + siteId + ' 启动调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.start));
+    g.stubs.calls.length = 0;
+    adapter.processRoot({});
+    eq('I ' + siteId + ' 翻译处理调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.process));
+    g.stubs.calls.length = 0;
+    eq('I ' + siteId + ' 订阅数据就绪', g.stubs.ready.length, expected.ready.length ? 1 : 0);
+    for (const fn of g.stubs.ready) fn();
+    eq('I ' + siteId + ' 数据就绪翻译调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.ready));
+    g.stubs.calls.length = 0;
+    adapter.pageshow();
+    eq('I ' + siteId + ' 页面恢复翻译调用', JSON.stringify(g.stubs.calls), JSON.stringify(expected.pageshow));
+  }
 }
 
 console.log('\n════════ 汇总 ════════');

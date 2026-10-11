@@ -1,6 +1,4 @@
 /* @phase15-module-order:sites/endcloset */
-/* @phase15-order-link:sites/endcloset<-core/http */
-import '../core/http.js';
 import { DICT_ENDCLOSET } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';

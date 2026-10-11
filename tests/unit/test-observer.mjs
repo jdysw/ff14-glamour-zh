@@ -3,7 +3,7 @@
 // 目的：把统一观察器（createObserver / observeLocal / dedupeByAncestor 升级版）的
 //       当前行为用断言钉死。后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
-// 机制：从构建产物（dist）提取 @zhixia:core-observer 与 @zhixia:core-dom 区段，
+// 机制：从规范模块源码提取 @zhixia:core-observer 与 @zhixia:core-dom 区段，
 //       以假 MutationObserver / document / setTimeout 装配运行。不依赖 Chrome / 外网。
 //
 // 覆盖（计划书 Phase 7 验收清单）：
@@ -15,7 +15,9 @@
 // 注意：假宿主桩必须在 buildObs(env) 之前设置：装配参数为「值捕获」。
 //
 // 运行：node tests/unit/test-observer.mjs   （或 npm run test:unit）
-import { readDist } from '../helpers/paths.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { repoRoot } from '../helpers/paths.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -26,7 +28,9 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const DIST_TEXT = readDist();
+// 从规范源码提取独立 DOM 和 Observer 模块，避免对构建产物的模块排序产生依赖。
+const DOM_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/dom.js'), 'utf8');
+const OBSERVER_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/observer.js'), 'utf8');
 
 function sliceAll(s, tag) {
   const startTag = `/* @zhixia:${tag}-start */`;
@@ -87,7 +91,7 @@ function makeEnv() {
 }
 
 function buildObs(env) {
-  const parts = [...sliceAll(DIST_TEXT, 'core-dom'), ...sliceAll(DIST_TEXT, 'core-observer')];
+  const parts = [...sliceAll(DOM_TEXT, 'core-dom'), ...sliceAll(OBSERVER_TEXT, 'core-observer')];
   const ret = 'return { createObserver, observeLocal, dedupeByAncestor, queryIn, localScope, __obsStats: () => ({ ..._obsStats }), __scanStats: () => ({ ..._scanStats }) };';
   try {
     const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr', '_perfNow',

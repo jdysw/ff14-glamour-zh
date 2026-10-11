@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/dom */
-/* @phase15-order-link:core/dom<-sites/eorzea-collection */
-import '../sites/eorzea-collection.js';
 export { _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn };
 
 

@@ -1,6 +1,6 @@
 // build/migrate/verify-build-order.mjs —— Phase 15：验证最终 Rollup 产物的模块顺序
 // 用法: node build/migrate/verify-build-order.mjs [dist文件] [顺序表]
-// 依赖 order-modules.mjs 写入的稳定模块标记，不依赖具体业务锚点数量。
+// 读取规范源码保留的模块标记并对照自然 Rollup 输出顺序，不再通过额外 import 强制排序。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +40,11 @@ if (duplicate.length) console.error('重复模块标记：' + [...new Set(duplic
 if (missing.length) console.error('缺失模块标记：' + missing.join(', '));
 if (extra.length) console.error('未知模块标记：' + extra.join(', '));
 if (!exact) {
+  // 直接打印两侧顺序及首个差异，避免依靠远程构建产物才能定位问题。
+  const first = expected.findIndex((item, index) => actual[index] !== item);
+  console.error('模块顺序不符合契约，首个差异位置：' + first);
+  console.error('期望：' + expected.join(' → '));
+  console.error('实际：' + actual.join(' → '));
   process.exit(1);
 }
 console.log('✅ Rollup 产物模块顺序与契约完全一致');

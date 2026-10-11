@@ -1,6 +1,4 @@
 /* @phase15-module-order:core/constants */
-/* @phase15-order-link:core/constants<-sites/ronka */
-import '../sites/ronka.js';
 export { DATA_BASE_V3, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_ICON };
 
 
