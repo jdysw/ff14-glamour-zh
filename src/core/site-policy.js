@@ -1,4 +1,5 @@
 /* @phase15-module-order:core/site-policy */
+export { SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost };
 // 站点数据需求与宿主匹配属于纯配置，不依赖翻译器、数据加载器或 DOM 适配器。
 // 数据层通过本模块查询当前站点，避免反向引入启动适配器而形成循环依赖。
 /* @zhixia:site-policy-start */
@@ -37,4 +38,3 @@ function _siteIndexes() {
 }
 /* @zhixia:site-policy-end */
 
-export { SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost };
