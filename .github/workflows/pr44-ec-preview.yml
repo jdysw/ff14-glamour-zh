@@ -57,7 +57,8 @@ jobs:
               header, body = text.split('// ==/UserScript==', 1)
               matches = [x.strip() for x in header.splitlines() if x.startswith('// @match')]
               assert matches == [f'// @match        https://{host}/*']
-              assert f'/preview/pr44/{site}' in header
+              namespace = '/preview/pr44/endcloset' if site == 'endcloset' else '/preview/pr44'
+              assert '// @namespace    https://github.com/jdysw/ff14-glamour-zh' + namespace in header
               assert tag in header
               assert len(body) > 100000
               print('PR44', site, 'metadata and body verified:', len(body), 'chars')
