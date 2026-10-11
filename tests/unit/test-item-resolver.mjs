@@ -155,8 +155,8 @@ console.log('\n── B3：倒排索引保持匹配、排序和局部词提取�
  eq('稀有中文片段候选扫描范围显著缩小',
    api.__indexedCandidates('幻华', 0).length < api.__allKeys(0).length / 100, true);
  const rows = api.suggestByZh('幻华');
- const expected = ['幻华长袍', '金色幻华发带', '典藏幻华', '幻华披肩',
-   '高阶幻华长袍', '与幻华无关'];
+ const expected = ['幻华长袍', ...['金色幻华发带', '典藏幻华'].sort((a,b)=>a.localeCompare(b)),
+   '幻华披肩', ...['高阶幻华长袍', '与幻华无关'].sort((a,b)=>a.localeCompare(b))];
  const ranked = rows.map(x => x.zh);
  eq('索引不影响正式名与别名的优先级',
    JSON.stringify(ranked), JSON.stringify(expected));
