@@ -86,7 +86,12 @@ console.log('档位 | boot | finalize | ready | fireDone | localStorage ms | V3 
 const report = { rates: {} };
 for (const rate of rates) {
   const runs = all[rate];
-  if (!runs.length) { console.log(rate + 'x | 无数据'); report.rates[rate] = null; continue; }
+  if (runs.length < Math.min(3, ROUNDS)) {
+    console.error(rate + 'x | 有效轮次不足（' + runs.length + '/' + ROUNDS + '），不能报告 P95');
+    report.rates[rate] = null;
+    process.exitCode = 1;
+    continue;
+  }
   const field = (k) => med(runs.map((z) => z[k]));
   const f = (x) => (Number.isFinite(x) ? x.toFixed(1) : '-');
   const row = {
