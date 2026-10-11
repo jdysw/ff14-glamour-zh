@@ -98,6 +98,26 @@ assert.equal(tr('Beastmaster\u0027s'), '兽主套装');
 assert.equal(tr('Yozakura'), '夜樱装束');
 assert.equal(tr('Graffiti Neotunic'), '涂鸦新式上衣套装');
 assert.equal(tr('Plain Hooded'), '素色卫衣套装');
+// Regress all 3 verified Hoodie base models with standard/oversized/form-fitting
+// fit, instead of hardcoding one user-reported untranslated heading.
+for (const [native, expected] of [["Form-fitting Plain Hooded","修身素色卫衣套装"],["Form-fitting Festival Hooded","修身欢庆卫衣套装"],["Form-fitting Succubus Hooded","修身梦魔卫衣套装"],["Oversized Plain Hooded","大码素色卫衣套装"],["Oversized Festival Hooded","大码欢庆卫衣套装"],["Oversized Succubus Hooded","大码梦魔卫衣套装"],["Plain Hooded","素色卫衣套装"],["Festival Hooded","欢庆卫衣套装"],["Succubus Hooded","梦魔卫衣套装"]]) {
+  assert.equal(tr(native), expected, '卫衣套装标题：' + native);
+  assert.equal(tr(native + ' Set'), expected, '卫衣详情标题 Set：' + native);
+  assert.equal(tr(native + ' Crafted Glamour'), expected + ' 制作幻化',
+    '卫衣目录包含来源标签：' + native);
+  assert.equal(api.resolveECGearsetSearch(expected), native,
+    '完整中文套装名搜索命中真实 EC 英文标题：' + native);
+  assert.ok(api.suggestECGearsetsByZh(expected).some(row => row.native === native && row.zh === expected),
+    '中文搜索候选涵盖：' + native);
+}
+assert.equal(api.resolveECGearsetSearch('修身'), 'Form-fitting',
+  '修身型号的共同英文前缀支持系列搜索');
+assert.equal(api.resolveECGearsetSearch('大码'), 'Oversized',
+  '大码型号的共同英文前缀支持系列搜索');
+assert.equal(tr('Form-fitting Unverified Hooded'), null, '不能虚构未经核实的卫衣系列');
+assert.equal(tr('Super-Oversized Plain Hooded'), null, '不能虚构未知版型');
+assert.equal(tr('Form-fitting Plain Hooded Jacket'), null, '普通装备不得误判为套装');
+
 assert.equal(tr('Phantom Vision Fending Battle Content Gear'), '幻境意象御敌套装 战斗内容装备');
 // 缓存须随运行时词典修订而失效，而不是永久锁死首批译名。
 const oldSeries = DICT_EC['Phantom Vision'];
@@ -611,6 +631,14 @@ try {
     assert.equal(node.nodes.map(x => x.nodeValue).join(''), expected + '套装',
       native + ' 再次扫描保持幂等');
   }
+  const hoodedH1 = splitTitle('Form-fitting Plain Hooded');
+  scope.headings = [hoodedH1];
+  api.translateECGearsetNames();
+  assert.equal(hoodedH1.nodes.map(n => n.nodeValue).join(''), '修身素色卫衣套装',
+    'EC 修身卫衣 H1 不能重复套装后缀');
+  api.translateECGearsetNames();
+  assert.equal(hoodedH1.nodes.map(n => n.nodeValue).join(''), '修身素色卫衣套装',
+    'EC 修身卫衣重复扫描保持幂等');
   const alreadyLocalized = splitTitle('Ceremonial Scouting', '套装');
   scope.headings = [alreadyLocalized];
   api.translateECGearsetNames();
