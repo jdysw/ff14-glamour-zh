@@ -11,6 +11,13 @@ import {
 import {
   ERR_LOG_CAP, _errLog, _zhxErr, safe, registerProbeMark, __zhxMark,
 } from '../../src/core/runtime.js';
+import { httpGet } from '../../src/core/http.js';
+import {
+  _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
+} from '../../src/core/storage.js';
+import {
+  dedupeByAncestor, localScope, queryIn, _scanStats,
+} from '../../src/core/dom.js';
 
 test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () => {
   const previousWindow = globalThis.window;
@@ -130,5 +137,110 @@ test('真实运行时：异常边界、诊断注册及最近 20 条滚动日志'
     _errLog.length = 0;
     if (oldWindow === undefined) delete globalThis.window;
     else globalThis.window = oldWindow;
+  }
+});
+
+
+test('原生 HTTP：GM 响应与错误、fetch 响应体及超时', async () => {
+  const oldGM = globalThis.GM_xmlhttpRequest;
+  const oldFetch = globalThis.fetch;
+  try {
+    globalThis.GM_xmlhttpRequest = options => options.onload({ status: 200, responseText: '原生成功' });
+    assert.equal(await httpGet('https://example.invalid/item', 100), '原生成功');
+    globalThis.GM_xmlhttpRequest = options => options.onload({ status: 503, responseText: 'error' });
+    await assert.rejects(httpGet('https://example.invalid/item', 100), /HTTP 503/);
+    globalThis.GM_xmlhttpRequest = options => options.onerror();
+    await assert.rejects(httpGet('https://example.invalid/item', 100), /network/);
+
+    delete globalThis.GM_xmlhttpRequest;
+    globalThis.fetch = async (_url, opts) => {
+      assert.ok(opts.signal);
+      return { ok: true, text: async () => '响应体完成' };
+    };
+    assert.equal(await httpGet('https://example.invalid/item', 100), '响应体完成');
+    globalThis.fetch = async () => ({ ok: false, status: 404 });
+    await assert.rejects(httpGet('https://example.invalid/item', 100), /HTTP 404/);
+    globalThis.fetch = async () => ({ ok: true, text: () => new Promise(() => {}) });
+    await assert.rejects(httpGet('https://example.invalid/item', 5), /timeout/);
+  } finally {
+    if (oldGM === undefined) delete globalThis.GM_xmlhttpRequest;
+    else globalThis.GM_xmlhttpRequest = oldGM;
+    if (oldFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = oldFetch;
+  }
+});
+
+test('原生 GM 存储：读取、写入、枚举、删除及无 GM 降级', async () => {
+  const names = ['GM', 'GM_getValue', 'GM_setValue', 'GM_listValues', 'GM_deleteValue'];
+  const saved = Object.fromEntries(names.map(k => [k, globalThis[k]]));
+  const store = new Map();
+  try {
+    for (const name of names) delete globalThis[name];
+    assert.equal(_storeNorm(undefined), null);
+    assert.equal(_storeNorm(123), '123');
+    assert.equal(_storeNorm('值'), '值');
+    assert.equal(await storeGetAsync('missing'), null);
+    assert.equal(await storeSetAsync('missing', 'value'), false);
+    assert.equal(await storeListAsync(), null);
+
+    globalThis.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
+    globalThis.GM_setValue = (key, value) => { store.set(key, value); };
+    globalThis.GM_listValues = () => [...store.keys()];
+    globalThis.GM_deleteValue = key => { store.delete(key); return true; };
+    assert.equal(await storeSetAsync('test', 100), true);
+    assert.equal(await storeGetAsync('test'), '100');
+    assert.deepEqual(await storeListAsync(), ['test']);
+    assert.equal(await storeDeleteAsync('test'), true);
+    assert.equal(await storeGetAsync('test'), null);
+
+    delete globalThis.GM_getValue;
+    delete globalThis.GM_setValue;
+    delete globalThis.GM_listValues;
+    delete globalThis.GM_deleteValue;
+    globalThis.GM = {
+      getValue: async (key, fallback) => store.get(key) ?? fallback,
+      setValue: async (key, value) => { store.set(key, value); },
+      listValues: async () => [...store.keys()],
+      deleteValue: async key => { store.delete(key); },
+    };
+    assert.equal(await storeSetAsync('async', '异步'), true);
+    assert.equal(await storeGetAsync('async'), '异步');
+    assert.deepEqual(await storeListAsync(), ['async']);
+    assert.equal(await storeDeleteAsync('async'), true);
+    assert.equal(await storeGetAsync('async'), null);
+  } finally {
+    for (const name of names) {
+      if (saved[name] === undefined) delete globalThis[name];
+      else globalThis[name] = saved[name];
+    }
+  }
+});
+
+test('原生 DOM 工具：祖先去重、局部根和查询计数', () => {
+  const parent = { nodeType: 1, parentNode: null };
+  const child = { nodeType: 1, parentNode: parent };
+  const sibling = { nodeType: 1, parentNode: null };
+  assert.deepEqual(dedupeByAncestor([child, parent, sibling, child]), [parent, sibling]);
+  assert.deepEqual(dedupeByAncestor([sibling]), [sibling]);
+  assert.equal(localScope(null), null);
+  assert.equal(localScope(parent), parent);
+  assert.equal(localScope({ nodeType: 3, parentElement: parent }), parent);
+  const originalDoc = globalThis.document;
+  const root = {
+    nodeType: 1,
+    matches: selector => selector === '.a',
+    querySelectorAll: selector => selector === '.a' ? [child] : [],
+  };
+  const beforeLocal = _scanStats.local;
+  const beforeGlobal = _scanStats.global;
+  try {
+    globalThis.document = { querySelectorAll: selector => selector === '.a' ? [sibling] : [] };
+    assert.deepEqual(queryIn(root, '.a'), [root, child]);
+    assert.deepEqual(queryIn(null, '.a'), [sibling]);
+    assert.equal(_scanStats.local, beforeLocal + 1);
+    assert.equal(_scanStats.global, beforeGlobal + 1);
+  } finally {
+    if (originalDoc === undefined) delete globalThis.document;
+    else globalThis.document = originalDoc;
   }
 });
