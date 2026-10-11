@@ -1,6 +1,10 @@
 name: Live localization coverage audit (7 sites)
-# Manual on-demand scan: blocked sites must never appear as zero missing translations.
+# PR 轻量真实七站扫描、手动完整扫描；受阻站点不能计为“零漏翻”。
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/live-coverage-audit.yml'
+      - 'tools/coverage-audit/**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,6 +15,7 @@ jobs:
     timeout-minutes: 58
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         site: [mirapri, ec, fc, ronka, collection, endcloset, wiki]
     steps:
@@ -31,7 +36,17 @@ jobs:
           ZHX_AUDIT_WIKI_URL: 'https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81%3A%E5%8A%A0%E7%89%B9%E5%8B%92'
         run: |
           mkdir -p tests/.cache/coverage-audit
-          node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages 24 --max-depth 2 --per-template 2 --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
+          # PR 只检查代表性模板，手动运行仍执行每站最多 24 页的完整审计。
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            max_pages=4
+            max_depth=1
+            per_template=1
+          else
+            max_pages=24
+            max_depth=2
+            per_template=2
+          fi
+          node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages "$max_pages" --max-depth "$max_depth" --per-template "$per_template" --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
           exit ${PIPESTATUS[0]}
         continue-on-error: true
       - name: Sanitize evidence before artifact upload
