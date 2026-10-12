@@ -49,6 +49,13 @@ function validV3Manifest(man) {
         || !validV3FileMeta(meta, siteId + '/' + name + '.' + extension)) return false;
     }
   }
-  if (man.shared?.dict && !validV3FileMeta(man.shared.dict, 'dict.json')) return false;
+  // 共享文件只允许约定的 dict.json；拒绝未知共享文件和畸形容器，
+  // 避免未来消费者不经校验便使用 manifest 中额外的远程资源。
+  if (man.shared !== undefined) {
+    if (!man.shared || typeof man.shared !== 'object' || Array.isArray(man.shared)) return false;
+    const sharedKeys = Object.keys(man.shared);
+    if (sharedKeys.some(key => key !== 'dict')) return false;
+    if (sharedKeys.includes('dict') && !validV3FileMeta(man.shared.dict, 'dict.json')) return false;
+  }
   return true;
 }
