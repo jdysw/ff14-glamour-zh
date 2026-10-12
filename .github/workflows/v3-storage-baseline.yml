@@ -1,0 +1,139 @@
+name: V3 Storage Baseline
+
+# 仅分析真实生成的数据包；绝不发布 Cloudflare，也不修改脚本版本。
+on:
+  pull_request:
+    paths:
+      - 'tools/data/**'
+      - 'tests/unit/test-storage-audit.mjs'
+      - 'tests/unit/test-v31-preview.mjs'
+      - 'tests/unit/test-shared-candidates.mjs'
+      - 'tests/unit/test-pages-assets.mjs'
+      - 'build/make-runtime-data.py'
+      - 'data/**'
+      - 'dict/**'
+      - '.github/workflows/v3-storage-baseline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 获取固定版本的装备部位 CSV 并校验 Git blob
+        env:
+          DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
+          EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229
+        run: |
+          set -euo pipefail
+          mkdir -p build/.cache/datamining
+          curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
+            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
+            --output build/.cache/datamining/en-Item.csv
+          test "$(git hash-object build/.cache/datamining/en-Item.csv)" = "$EXPECTED_ITEM_BLOB"
+      - name: 生成真实 V3 产物
+        env:
+          FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
+        run: python3 .github/deploy/prepare.py
+      - name: 运行存储审计及基准报告
+        run: |
+          node tests/unit/test-storage-audit.mjs
+          node tests/unit/test-shared-candidates.mjs
+          node tests/unit/test-pages-assets.mjs
+          node tests/unit/test-pages-dedupe.mjs
+          node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
+          node tools/data/verify-pages-assets.mjs --dir site
+          node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
+      - name: V3.1 隔离原型与旧 V3 回退验证
+        run: |
+          node tests/unit/test-v31-preview.mjs
+          node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
+      - name: 第四阶段逐站冷启动与七站共享缓存模型验证
+        run: |
+          node tools/data/v31-evaluate.mjs \
+            --dir site/ff14/v3 \
+            --preview build/.cache/v31-preview \
+            --out v31-phase4-evaluation.json
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import assert from "node:assert/strict";
+            const r = JSON.parse(readFileSync("v31-phase4-evaluation.json", "utf8"));
+            // 数据源合法变化时应重新测量，不能把历史基准数当成永久期待值。
+            assert.ok(r.storage.v3LogicalFiles > 0);
+            assert.ok(r.storage.v31Objects > 0);
+            assert.ok(r.storage.v31Objects <= r.storage.v3LogicalFiles);
+            assert.equal(r.storage.v3LogicalBytes,
+              r.storage.v31UniqueBytes + r.storage.duplicateBytesRemovedInPreview);
+            assert.equal(r.scenarios.sevenSitesIsolatedCache.v3.requests,
+              r.scenarios.sevenSitesIsolatedCache.v31.requests);
+            assert.ok(r.scenarios.sevenSitesSharedCache.v31.requests
+              < r.scenarios.sevenSitesSharedCache.v3.requests);
+            assert.equal(r.decision.readyForProduction, false);
+            console.log("✅ 第四阶段真实 V3/V3.1 存储与访问模型核对通过");
+          '
+      # 不发布 Cloudflare：模拟与正式部署相同的完整 V3 校验 → 去重流程。
+      - name: V3 旧 URL 透明去重与 Pages 产物验收
+        run: |
+          node tools/data/dedupe-pages.mjs --site site | tee pages-dedupe-summary.log
+          node tools/data/dedupe-pages.mjs --site site --verify
+          node tools/data/verify-pages-assets.mjs --dir site
+      # 在 Cloudflare 官方 Wrangler 本地 Pages 运行时检查 200 内部代理响应；
+      # 不是普通的文件系统模拟，能发现重写规则不生效、404 或可见跳转。
+      - name: Wrangler Pages 本地 HTTP 验证原 V3 URL
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 pages dev site --ip 127.0.0.1 --port 8788 --log-level error > pages-dev.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8788/ff14/v3/manifest.json -o /dev/null 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat pages-dev.log
+              exit 1
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat pages-dev.log
+            exit 1
+          fi
+          node tools/data/verify-pages-http.mjs --site site --origin http://127.0.0.1:8788
+      - name: 上传 V3 旧 URL 去重计划与规则
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-pages-dedupe
+          path: |
+            site/_redirects
+            pages-dedupe-summary.log
+          if-no-files-found: error
+      - name: 上传第四阶段对照与生产决策报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: v31-phase4-evaluation
+          path: v31-phase4-evaluation.json
+          if-no-files-found: error
+      - name: 上传 V3.1 实物原型（仅 CI 工件，绝不部署）
+        uses: actions/upload-artifact@v4
+        with:
+          name: v31-isolated-preview
+          path: |
+            build/.cache/v31-preview/
+            v31-preview-summary.log
+          if-no-files-found: error
+      - name: 上传原始报告（不上传数据源）
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-storage-baseline
+          path: storage-baseline.json
+          if-no-files-found: error

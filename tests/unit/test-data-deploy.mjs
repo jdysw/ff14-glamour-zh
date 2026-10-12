@@ -42,6 +42,19 @@ try {
   for (const name of ['404.html', '_headers', '_routes.json', 'index.html']) {
     assert.equal(fs.existsSync(path.join(out, name)), true, name + ' copied to deployment root');
   }
+  // V3 文件名可变，不得配置 immutable；JSON 不能误标成 text/plain。
+  const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
+  const hasRule = (route, values) =>
+    headers.includes([route, ...values.map(value => '  ' + value)].join('\n'));
+  assert.ok(hasRule('/ff14/v3/manifest.json', ['Cache-Control: no-cache, must-revalidate']));
+  assert.ok(hasRule('/ff14/v3/dict.json', ['Cache-Control: no-cache, must-revalidate']));
+  assert.ok(hasRule('/ff14/v3/:site/*.tsv', [
+    'Content-Type: text/plain; charset=utf-8', 'Cache-Control: no-cache, must-revalidate',
+  ]));
+  assert.ok(!headers.includes('Cache-Control: public, max-age=31536000, immutable'),
+    '当前固定路径不能永久缓存');
+  assert.ok(!hasRule('/ff14/v3/*', ['Content-Type: text/plain; charset=utf-8']),
+    '不能将根目录 JSON 资源误标记为纯文本');
 
   const routes = JSON.parse(fs.readFileSync(path.join(out, '_routes.json'), 'utf8'));
   assert.deepEqual(routes.include, ['/ff14/v2', '/ff14/v2/*']);
