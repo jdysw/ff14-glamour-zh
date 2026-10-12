@@ -56,6 +56,24 @@ try {
   assert.ok(!hasRule('/ff14/v3/*', ['Content-Type: text/plain; charset=utf-8']),
     '不能将根目录 JSON 资源误标记为纯文本');
 
+  // 真实部署依赖变更必须触发部署；不能出现修好了验证器却没有更新线上文件的情况。
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-data.yml'), 'utf8');
+  for (const dependency of [
+    'tools/data/dedupe-pages.mjs', 'tools/data/verify-publish-contract.mjs',
+    'tools/data/verify-shared-candidates.mjs', 'tools/data/verify-pages-assets.mjs',
+    'tools/data/verify-pages-production.mjs', 'src/core/v3-contract.js',
+    'src/core/dict-contract.js', 'src/core/site-policy.js', '.github/workflows/deploy-data.yml',
+  ]) {
+    assert.ok(workflow.includes("      - '" + dependency + "'"),
+      '数据发布依赖变化必须触发 GitHub Actions：' + dependency);
+  }
+  assert.ok(workflow.indexOf('Deploy to Cloudflare Pages') >= 0);
+  assert.ok(workflow.indexOf('发布后线上 V3 完整性探针')
+    > workflow.indexOf('Deploy to Cloudflare Pages'),
+    '真实线上探针只能在成功上传之后运行');
+  assert.ok(workflow.includes('node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/'),
+    '线上探针必须验证生产域名而非只验证 Wrangler 本地服务');
+
   const routes = JSON.parse(fs.readFileSync(path.join(out, '_routes.json'), 'utf8'));
   assert.deepEqual(routes.include, ['/ff14/v2', '/ff14/v2/*']);
   assert.deepEqual(routes.exclude, []);

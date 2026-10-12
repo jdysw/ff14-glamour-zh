@@ -15,6 +15,17 @@ on:
       - 'dict/**'
       - 'build/make-runtime-data.py'
       - 'build/make_dict_json.py'
+      - 'build/validate-data.py'
+      # 发布链/契约的修复必须真正触发部署，不能被 paths 过滤悄悄跳过。
+      - 'tools/data/dedupe-pages.mjs'
+      - 'tools/data/verify-publish-contract.mjs'
+      - 'tools/data/verify-shared-candidates.mjs'
+      - 'tools/data/verify-pages-assets.mjs'
+      - 'tools/data/verify-pages-production.mjs'
+      - 'src/core/v3-contract.js'
+      - 'src/core/dict-contract.js'
+      - 'src/core/site-policy.js'
+      - '.github/workflows/deploy-data.yml'
       - '.github/deploy/**'
       - 'functions/**'
   workflow_dispatch:
@@ -88,3 +99,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy site --project-name=ff14-glamour-zh --branch=main --commit-dirty=true
+
+      # Pages 部署 API 返回 success 只表示上传完成，不代表旧 URL 透明重写可达。
+      # 读取正式域名的 manifest，并逐条核对 27 个资源的 HTTP 200、长度和 SHA；
+      # 失败时将此 Actions 明确标红，避免静默发布错误资源。
+      - name: 发布后线上 V3 完整性探针（旧 URL / 200 / SHA）
+        run: node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/
