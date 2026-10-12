@@ -12,7 +12,9 @@ async function readVerified(loader, meta) {
     const text = await loader(meta.url);
     if (typeof text !== 'string') return null;
     const bytes = Buffer.from(text, 'utf8');
-    return bytes.length === meta.bytes && digest(bytes) === meta.sha256 ? text : null;
+    // 旧 V3 离线缓存可能没有 bytes 字段，仍必须强制 SHA 校验。
+    const correctBytes = meta.bytes === undefined || bytes.length === meta.bytes;
+    return correctBytes && digest(bytes) === meta.sha256 ? text : null;
   } catch (error) {
     // 网络失败触发受校验的旧 V3 回退，而不是接受损坏的新对象。
     return null;
