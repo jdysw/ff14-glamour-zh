@@ -60,3 +60,30 @@ node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
 - 全程使用中文代码注释；不修改测试预期来掩盖真实失败。
 - 不更改脚本版本与数据站的自动部署策略，不在 PR 内触发生产发版。
 - 保持 PR 为 Draft，阶段一 CI 完成后再根据结果决定下一阶段方案。
+
+## 第一阶段真实实测结果（2026-10-12）
+
+基准运行：GitHub Actions [V3 Storage Baseline #38237789387](https://github.com/jdysw/ff14-glamour-zh/actions/runs/38237789387)，使用固定 datamining Item.csv、Python 生成器和完整发布契约；原始 JSON 工件名 `v3-storage-baseline`。
+
+| 指标 | 实测值 |
+|---|---:|
+| manifest.version | `0e89254e11fc` |
+| 实际资源文件数 | 27 |
+| 内容唯一 SHA-256 数 | 16 |
+| 原始逻辑文件总量 | 31,154,264 B（29.71 MiB） |
+| 唯一内容总量 | 24,966,475 B（23.81 MiB） |
+| 完全重复的原始字节 | 6,187,789 B（5.90 MiB；19.86%） |
+| 逐文件 gzip-9 估算 | 8,021,876 B（7.65 MiB） |
+| 逐文件 Brotli-11 估算 | 5,071,458 B（4.84 MiB） |
+
+完全相同内容分组（仅按 SHA-256 判定）：
+
+| 文件组 | 相同副本数 | 理论重复原始字节 |
+|---|---:|---:|
+| `fc/names.tsv`、`collection/names.tsv` | 2 | 3,192,415 B |
+| `ec/hash.tsv`、`fc/hash.tsv`、`mirapri/hash.tsv` | 3 | 2,686,338 B |
+| `fc/series.txt`、`collection/series.txt` | 2 | 297,477 B |
+| 六站 `alias.tsv`（不包括 wiki） | 6 | 9,455 B |
+| `collection/dup.tsv`、`fc/dup.tsv`、`mirapri/dup.tsv` | 3 | 2,104 B |
+
+**结论：** 优先验证 `names` 和 `hash` 两组共享资源，它们贡献了绝大部分理论去重空间。单独优化 `alias` 的收益非常小，不宜先投入复杂协议。压缩后传输体积是离线估算，不能用于声称线上 CDN 流量已经降低。第二阶段应以这些真实数字作为收益基线。
