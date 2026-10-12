@@ -55,12 +55,44 @@ node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
 
 文档依据：[Cloudflare Pages 文件上限](https://developers.cloudflare.com/pages/platform/limits/)；[Cloudflare Pages `_headers` 静态响应规则](https://developers.cloudflare.com/pages/configuration/headers/)。
 
-## 阶段三：可选 V3.1 存储协议（仍在同一 PR，须先取得基准）
+## 阶段三：隔离 V3.1 内容寻址原型（已提交，验收见 CI）
 
-- 评估跨站内容寻址对象池、按内容 SHA 命名与旧对象保留策略。
-- 考虑 hash/alias/series 等完全相同的资源，但不以类型名称相同推定内容相同。
-- 制订旧 V3 manifest 与新方案并存的迁移和回滚方式。
-- 禁止生产读路径提前切换；只有完整七站契约、构建与集成回归通过后才可进入上线讨论。
+### 设计与版本边界
+
+**生产数据模式仍为 V3**：原有 `site/ff14/v3/manifest.json`、七站 TSV/TXT、`dict.json`、浏览器 `src/core/data-manager.js` 和 GM 缓存键均未修改。新协议的测试版清单是 `manifest.v31.json`（内部 `schema: 31`），**不是**旧 `manifest.json` 的替代品；旧 V3 严格验证器会拒绝它。
+
+- `tools/data/v31-contract.mjs`：共享对象以 `objects/<SHA 前两位>/<完整 SHA-256>.<tsv|txt|json>` 命名。站点文件白名单完全来自现有 `SITE_POLICIES/requiredV3Files`；拒绝目录回退、意外站点、未知文件、超限字节与不匹配的路径/指纹。对象类型仍由 TSV/TXT/JSON 扩展名表示。
+- `tools/data/v31-preview.mjs`：先通过完整 V3 发布契约校验，再逐文件读取、核对字节长度与 SHA，按内容路径去重生成 16 个左右的不可变对象及一个预览清单；二次逐字节比对原文件，拒绝多余产物。**只允许在 `site/` 外的空目录生成**，不会覆盖 V3 或打包进当前生产 Pages 站点。
+- 新清单包含 `source.version`、`source.manifestSha256`，可以严格绑定对应 V3 快照；源 manifest 变化则不允许复用过时的验证结论。没有引入远端动态查询或数据库。
+- `tools/data/v31-preview-reader.mjs` 是纯 Node 的**独立试读器**，不进入生产构建或浏览器。优先校验 V3.1 对象；缺失、摘要损坏、网络不可用或新 manifest 不合法时，仅在旧 V3 清单满足原契约、对应文本通过 SHA 校验时回退。旧 V3 缺省 `bytes` 的兼容行为保留，但不得省略摘要校验。
+- `tools/data/v31-retention.mjs` 用**两代以上完整预览**演练追加式合并：校验两代源对象及其 SHA，将对象并集写入新目录，独立归档旧版和新版清单，最后写入最新清单指针；拒绝覆写已有目录或发布到 `site/`。
+
+### 本地或 CI 验证
+
+```sh
+# 输入已用 prepare.py 生成并验证的 V3 数据目录；输出必须在 site/ 之外。
+node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview
+node tests/unit/test-v31-preview.mjs
+
+# 当有两个彼此独立的预览目录时，验证旧对象保留。
+node tools/data/v31-retention.mjs \
+  --inputs build/.cache/v31-previous,build/.cache/v31-next \
+  --out build/.cache/v31-retained
+```
+
+独立 **V3 Storage Baseline** 工作流会生成隔离预览、运行全套原型回归，并上传 `v31-isolated-preview` 供审计；不调用 Cloudflare 发布 API。原有 `v3-storage-baseline` 报告保持可比。本阶段预览对象本身可真实去重，但**因生产 V3 文件仍完整保留，线上数据站的逻辑发布体积没有减少**。
+
+### 未来上线时的安全顺序（本 PR 不执行生产切换）
+
+1. V3 与 V3.1 并存；旧脚本仍以 `/ff14/v3/manifest.json` 为唯一入口。先在独立新前缀准备全部不可变对象，并完成远端可达性、SHA 和长度校验。
+2. 备份、归档每代 V3.1 manifest，保留至少覆盖客户端实际缓存最大滞留窗口的旧对象；如无法确定滞留上限，先不自动垃圾回收。**发布顺序必须是对象 → 清单归档 → 当前清单指针**，不可先发布清单再上传文件。
+3. 将来只有单独通过全部七站端到端、离线和失败注入测试，才允许增加浏览器端 V3.1 选择开关。试点失败则停止读取新清单，回退已验证 V3；必要时将当前指针重置到已归档的旧 V3.1 清单（其全部对象仍应存在）。
+4. 当前固定 V3 路径不得设置 `immutable`。仅新对象的真正内容指纹 URL 适合评估长期 `Cache-Control: immutable`；未部署前不宣称 CDN 缓存改善。Cloudflare Pages 的整站部署可能替换旧静态文件，所以正式上线时必须确保旧对象仍包含在**完整待部署目录**中。
+5. 发布与回滚需原子/可恢复；任何数据完整性验证失败均中止新协议启用。数据量、缓存命中和真实跨站请求收益均在第四阶段与第一阶段基准对照后决策。
+
+### 回归与安全保证
+
+`tests/unit/test-v31-preview.mjs` 覆盖完整七站 27 个逻辑文件、真实内容去重、合法/畸形 manifest、路径穿越、重复与差异对象、未知字段、损坏对象、丢失对象、旧 V3 无 bytes 兼容、断网安全回退、双端损坏拒绝、禁止生产目录误写，以及双版本旧对象保留和归档恢复。所有变更和注释以中文解释，原有七站数据契约与旧测试不变。
 
 ## 阶段四：验收、定量对比与决策
 
