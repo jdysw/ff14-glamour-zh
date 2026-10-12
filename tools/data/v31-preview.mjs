@@ -11,24 +11,8 @@ import { verifyV3Publish } from './verify-publish-contract.mjs';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 import { validV31Manifest, v31FileMeta } from './v31-contract.mjs';
 
-const REPO_SITE = path.resolve(fileURLToPath(new URL('../../site', import.meta.url)));
+import { validateIsolatedOutput } from './v31-output-guard.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-const inside = (candidate, base) => candidate === base || candidate.startsWith(base + path.sep);
-
-function safePreviewDirectory(v3Directory, previewDirectory) {
-  const source = path.resolve(v3Directory);
-  const target = path.resolve(previewDirectory);
-  assert.ok(!inside(target, source) && !inside(source, target),
-    '预览产物不得覆盖 V3 正式数据或将其作为父目录');
-  assert.ok(!inside(target, REPO_SITE),
-    '预览产物不得位于站点 site/ 部署目录中，防止误发布');
-  if (existsSync(target)) {
-    assert.ok(lstatSync(target).isDirectory() && !lstatSync(target).isSymbolicLink(),
-      '预览目录必须是普通目录');
-    assert.equal(readdirSync(target).length, 0, '预览目录必须为空；禁止覆盖旧版本对象');
-  }
-  return { source, target };
-}
 
 function sourceManifest(directory) {
   verifyV3Publish(directory);
@@ -38,7 +22,8 @@ function sourceManifest(directory) {
 
 // 只保留一份相同 SHA 和扩展名的字节对象；名称既是内容指纹也是严格下载白名单。
 export function createV31Preview(v3Directory, previewDirectory) {
-  const { source, target } = safePreviewDirectory(v3Directory, previewDirectory);
+  const source = path.resolve(v3Directory);
+  const target = validateIsolatedOutput([source], previewDirectory);
   const original = sourceManifest(source);
   const v3 = original.manifest;
   const objects = new Map();
