@@ -76,3 +76,13 @@ flowchart LR
 - `node tests/unit/test-runtime-v3.mjs`：真实生成器产物与发布前 verifier、篡改拒绝、各站/离线路径。
 - `npm run build` + `npm run test:unit`、三组集成、CodeQL、SonarCloud：生产构建与质量门禁。
 - 数据站发布的 `Deploy data station` 工作流在 `Assemble site` 后、`Deploy to Cloudflare Pages` 前执行 `node tools/data/verify-publish-contract.mjs --dir site/ff14/v3`。
+
+
+## 2026-10-12 接续整改（不含 P3 真机性能）
+
+- **P1 摘要校验**：客户端要求可用的 WebCrypto SHA-256；不存在 digest 时验证返回失败，并沿原数据加载生命周期进入 degraded，通知订阅者，不再将字节数相符视为已校验。保留无 bytes 的旧 manifest，但不能绕过摘要检查。
+- **P2 索引边界**：`dataGetIndex` 向缓存/诊断/站点消费者返回稳定的只读 Proxy，支持属性读取、枚举与刷新后的索引更新，不复制大型对象；拒绝 set/delete/defineProperty/原型修改。内部 Resolver 仍直接访问规范映射。
+- **P2 词典写入**：对涉及的键先记录旧值，层应用异常时逆序回滚并放弃修订号和本轮 DOM 修正。成功批次仍按既有逻辑执行 DOM 补扫。DOM 操作本身并非数据库事务，已成功修改的节点无法提供跨页面原子回滚保证。
+- **P2 站点验证**：本次公开页面搜索能够读取 FF14-FC 足部与身体装备分类页，说明其页面可供静态内容检查；这**不等于**已运行用户脚本或完成七站浏览器验收。其他此前被 403 阻断的站点仍需在可访问网络中执行真实脚本测试；不将搜索索引可读取作为该项通过证据。
+- **P2 发布验证**：工作流代码已在 Assemble site 与 Cloudflare 发布之间设置完整 V3 产物校验；本轮**未主动触发 Cloudflare 部署**。真实部署验收仍需有凭证的维护环境运行该工作流，并核对发布日志与远端 manifest 哈希；CI 单元/集成测试不能替代部署认证。
+- 最新代码 CI 和 Sonar 在提交后重新运行，验收应以最新 HEAD 的检查结论为准，不沿用此前 12/12 成功结论。
