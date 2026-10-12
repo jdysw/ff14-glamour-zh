@@ -4,8 +4,11 @@ name: V3 Storage Baseline
 on:
   pull_request:
     paths:
-      - 'tools/data/audit-storage.mjs'
+      - 'tools/data/**'
       - 'tests/unit/test-storage-audit.mjs'
+      - 'tests/unit/test-v31-preview.mjs'
+      - 'tests/unit/test-shared-candidates.mjs'
+      - 'tests/unit/test-pages-assets.mjs'
       - 'build/make-runtime-data.py'
       - 'data/**'
       - 'dict/**'
@@ -47,6 +50,18 @@ jobs:
           node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
           node tools/data/verify-pages-assets.mjs --dir site
           node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
+      - name: V3.1 隔离原型与旧 V3 回退验证
+        run: |
+          node tests/unit/test-v31-preview.mjs
+          node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
+      - name: 上传 V3.1 实物原型（仅 CI 工件，绝不部署）
+        uses: actions/upload-artifact@v4
+        with:
+          name: v31-isolated-preview
+          path: |
+            build/.cache/v31-preview/
+            v31-preview-summary.log
+          if-no-files-found: error
       - name: 上传原始报告（不上传数据源）
         uses: actions/upload-artifact@v4
         with:
