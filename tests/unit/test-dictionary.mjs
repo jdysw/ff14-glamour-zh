@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from '../helpers/paths.mjs';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
 let pass = 0;
 let fail = 0;
@@ -99,8 +100,8 @@ function buildDict(mock = {}) {
   };
   const body = [...STUB_LINES, ...CACHE_PRIMITIVE_SEG, ...CACHE_REG_SEG, ...DICT_SEG, RETURN_STMT].join('\n');
   try {
-    const fn = new Function('document', 'console', 'NodeFilter', '__rec', body);
-    return fn(doc, { warn: () => {} }, NF, rec);
+    const fn = new Function('document', 'console', 'NodeFilter', '__rec', 'validRuntimeDictionary', body);
+    return fn(doc, { warn: () => {} }, NF, rec, validRuntimeDictionary);
   } catch (e) {
     throw new Error('Dictionary 装配失败：' + e.message);
   }
@@ -168,6 +169,13 @@ function buildDict(mock = {}) {
 
   api.dictUpdate('{"main":{"A":"甲"}}');
   eq('有效输入后修订号 +1', api.dictGetRevision(), 1);
+  // 远程词典异常时必须整包拒绝，不允许改变已有层的原型。
+  api.dictUpdate('{"main":{"__proto__":{"polluted":"yes"}}}');
+  api.dictUpdate('{"main":{"nonString":["错误类型"]}}');
+  api.dictUpdate('{"unknown":{"A":"无效层"}}');
+  eq('非法数据不增加修订号', api.dictGetRevision(), 1);
+  eq('非法数据不加入词典', api.dictGet('nonString'), undefined);
+  eq('远程词典不能修改词典原型', Object.getPrototypeOf(api.DICT_LAYERS.main), Object.prototype);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -234,6 +242,22 @@ function buildDict(mock = {}) {
   api.__poke();
   api.dictUpdate('bad-input');
   ok('update 无效：派生缓存不被清（无状态变更）', api.__peek().fc === 'X' && api.__peek().ak === 'Y');
+}
+
+// 词典中途发生实际写入异常时，已写入的其他层必须回滚。
+{
+  const api = buildDict();
+  api.dictUpdate('{"main":{"stable":"原文"}}');
+  const before = api.dictGetRevision();
+  Object.defineProperty(api.DICT_LAYERS.ec, 'locked', {
+    value: '原文', writable: false, configurable: true, enumerable: true,
+  });
+  api.dictUpdate('{"main":{"stable":"变更","fresh":"新词"},"ec":{"locked":"不可写"}}');
+  eq('批次失败：旧词恢复', api.dictGet('stable'), '原文');
+  eq('批次失败：新词不泄漏', api.dictGet('fresh'), undefined);
+  eq('批次失败：不可写词仍保留原值', api.dictGet('locked', 'ec'), '原文');
+  eq('批次失败：不递增修订号', api.dictGetRevision(), before);
+  delete api.DICT_LAYERS.ec.locked;
 }
 
 // 各站翻译调用由 site-registry 测试验证，此处仅测试词典层实际接口。

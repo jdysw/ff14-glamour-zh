@@ -42,7 +42,12 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
         // Phase 18：适配器入口错误边界——单站启动失败不影响脚本其余部分（其余站点/兜底/探测照常）
         if (typeof c.start === 'function') { try { c.start(); } catch (e) { _zhxErr('boot:' + (c.id || 'site'), e); } }
         if (DATA_REMOTE && typeof c.onDataReady === 'function') {
-          onTablesReady(() => { try { c.onDataReady(); } catch (e) { _zhxErr('dataReady:' + (c.id || 'site'), e); } });
+          onTablesReady((status) => {
+            // 保持历史回调调用时机，并将只读加载状态交给站点适配器。
+            // 将来若多个站点适配器共用同一脚本实例，不跨站派发数据状态。
+            if (status?.site && status.site !== c.id) return;
+            try { c.onDataReady(status); } catch (e) { _zhxErr('dataReady:' + (c.id || 'site'), e); }
+          });
         }
       },
       pageshow() {

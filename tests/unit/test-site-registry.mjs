@@ -202,7 +202,10 @@ section('G：Site Adapter 统一接口');
   ronka.boot();
   ok('G3 boot() 调 start（startRonka）', g.stubs.calls.includes('startRonka'), JSON.stringify(g.stubs.calls));
   eq('G4 DATA_REMOTE=true：boot() 注册 1 条 onDataReady', g.stubs.ready.length, 1);
-  g.stubs.ready[0]();
+  const beforeWrongSite = g.stubs.calls.length;
+  g.stubs.ready[0]({ site: 'ec', state: 'ready', origin: 'cache' });
+  eq('G4b 非目标站点的状态不触发 Ronka 补扫', g.stubs.calls.length, beforeWrongSite);
+  g.stubs.ready[0]({ site: 'ronka', state: 'ready', origin: 'network' });
   ok('G5 补扫回调执行（translateRonkaPage + translateRonkaTitle）',
     g.stubs.calls.includes('translateRonkaPage') && g.stubs.calls.includes('translateRonkaTitle'),
     JSON.stringify(g.stubs.calls));

@@ -2,11 +2,13 @@
 import { DATA_BASE_V3 } from './constants.js';
 import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache-primitives.js';
 import { applyRuntimeDict } from './dictionary.js';
+import { validRuntimeDictionary } from './dict-contract.js';
 import { httpGet } from './http.js';
 import { __zhxMark, _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -42,7 +44,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function onTablesReady(fn) {
     if (typeof fn !== 'function') return;
     if (!_readyCbs.includes(fn)) _readyCbs.push(fn);
-    if (_tablesReady) { try { fn(); } catch (e) { _zhxErr('readyCb', e); } }
+    if (_tablesReady) { try { fn(dataGetStatus()); } catch (e) { _zhxErr('readyCb', e); } }
   }
   function _fireTablesReady() {
     if (_tablesReady) return;
@@ -53,7 +55,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { cacheReset('translate'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     try { cacheReset('derived'); } catch (e) { /* 忽略：单类缓存清理失败不阻断其余 */ }
     const cbs = _readyCbs.slice(); // 保留订阅，确保数据失效并重新加载后再次通知。
-    for (const f of cbs) { try { f(); } catch (e) { _zhxErr('readyCb', e); } }
+    const status = dataGetStatus();
+    for (const f of cbs) { try { f(status); } catch (e) { _zhxErr('readyCb', e); } }
     __zhxMark('fireDone');   // Phase 19：就绪广播完成
   }
   // （站点 → 数据表/索引/页面入口配置：见下方「Site Registry」单一配置源）
@@ -81,11 +84,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _ensurePromise = null; // NOSONAR — ensure 生命周期 promise 可被 invalidate 重置
   let _activeEnsure = null; // 请求进行中触发刷新时，串行执行前后两代加载。
   let _ensureGeneration = 0; // 过期加载不能应用数据表，也不能触发就绪通知。
+  let _dataLoadState = 'idle'; // idle/loading/ready/degraded 与“广播已完成”分离。
+  let _dataLoadOrigin = 'none'; // cache/network/fallback/none，用于调用方诊断。
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureFinalize(generation = _ensureGeneration) {
     if (generation !== _ensureGeneration) return Promise.resolve();
     __zhxMark('finalize');
+    if (_dataLoadState === 'loading') _dataLoadState = 'degraded';
     try { _fireTablesReady(); } catch (e) { _zhxErr('fireReady', e); }
     __zhxMark('ready');
     return Promise.resolve();
@@ -163,6 +169,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const ko = take('ko') || Object.create(null);
       const ali = take('alias', true) || Object.create(null);
       const dup = take('dup', true) || Object.create(null);
+      // 词典结构必须先于任何索引提交验证，防止无效共享文件导致部分数据发布。
+      if (files.dict) {
+        const runtimeDict = JSON.parse(files.dict);
+        if (!validRuntimeDictionary(runtimeDict)) return false;
+      }
       _replaceMap(nameMap, names);
       _replaceMap(itemHash, hash);
       _irSearchByZh = null;
@@ -198,15 +209,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
-  async function _v3VerifyFile(text, fingerprint) {
-    if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle || typeof TextEncoder !== 'function') return true;
+  async function _v3VerifyFile(text, fingerprint, expectedBytes) {
+    // 两端共享 SHA-256 + UTF-8 字节长度契约；禁止字节数不同的数据污染缓存。
+    if (typeof TextEncoder !== 'function') return false;
+    let encoded;
     try {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      encoded = new TextEncoder().encode(text);
+      if (expectedBytes !== undefined && encoded.byteLength !== expectedBytes) return false;
+      // 无 WebCrypto 时拒绝未经摘要验证的数据，而不是降级为仅检查长度。
+      // 加载流程会正常进入 degraded 并通知订阅者，不会无限等待。
+      if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle?.digest) return false;
+      const buf = await crypto.subtle.digest('SHA-256', encoded);
       const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
       return actual === fingerprint;
     } catch (e) {
       _zhxErr('v3verify', e);
-      return false; // A failed SHA-256 operation must never count as a verified download.
+      return false;
     }
   }
 
@@ -220,18 +238,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return ok;
   }
 
-  async function _v3FindCachedFile(baseKey, fingerprint) {
-    let cached = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
-    if (cached === null) cached = await _v3ReadCachedFile(baseKey, fingerprint);
-    return cached !== null && await _v3VerifyFile(cached, fingerprint) ? cached : null;
+  async function _v3FindCachedFile(baseKey, fingerprint, expectedBytes) {
+    // 指纹键可能已损坏；校验失败后仍应检查旧键中的有效副本，以支持离线恢复。
+    const current = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
+    if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
+    const legacy = await _v3ReadCachedFile(baseKey, fingerprint);
+    return legacy !== null && await _v3VerifyFile(legacy, fingerprint, expectedBytes) ? legacy : null;
   }
 
   // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
-    if (!meta?.url || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return null;
+    const extension = name === 'series' || name === 'acl' ? '.txt' : '.tsv';
+    const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + name + extension;
+    if (!validV3FileMeta(meta, expectedUrl)) return null;
     const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
     const key = baseKey + '.' + meta.sha256;
-    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256);
+    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256, meta.bytes);
     if (cached !== null) {
       _dlStats.cache++;
       if (staged) staged.set(key, meta.sha256 + '\n' + cached);
@@ -242,7 +264,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); }
     catch (e) { text = null; /* 请求失败返回 null，由更新流程选择重试或其他数据通道 */ }
     if (typeof text !== 'string' || !text) return null;
-    if (!await _v3VerifyFile(text, meta.sha256)) return null;
+    if (!await _v3VerifyFile(text, meta.sha256, meta.bytes)) return null;
     _dlStats.net++;
     if (staged) staged.set(key, meta.sha256 + '\n' + text);
     else await _v3WriteFileCache(key, meta.sha256 + '\n' + text, force);
@@ -265,14 +287,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
   function _validV3Manifest(man) {
-    if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy) || !man.sites || typeof man.sites !== 'object') return false;
-    const validFile = (meta) => typeof meta?.url === 'string' && /^[a-f0-9]{64}$/i.test(meta?.sha256 || '');
-    for (const site of Object.values(man.sites)) {
-      if (!site?.files || typeof site.files !== 'object') return false;
-      for (const meta of Object.values(site.files)) if (!validFile(meta)) return false;
-    }
-    if (man.shared?.dict && !validFile(man.shared.dict)) return false;
-    return true;
+    return validV3Manifest(man);
   }
 
   async function fetchManifest(force = false) {
@@ -323,14 +338,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   function _requiredV3Files(site) {
-    const required = [];
-    if (site.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
-    if (site.indexes?.includes('itemHash')) required.push('hash');
-    if (site.indexes?.includes('ecidMap')) required.push('ecid');
-    if (site.indexes?.includes('koByZh')) required.push('ko');
-    if (site.tables?.includes('series')) required.push('series');
-    if (site.tables?.includes('acl')) required.push('acl');
-    return required;
+    return requiredV3Files(site);
   }
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
@@ -456,6 +464,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
     const site = findSite();
     if (!site?.id) return false;
+    const sourceBefore = { ..._dlStats };
     try {
       const snapshots = await _readPreviousV3Manifest(site.id);
       const manifest = await _selectV3Manifest(force, refreshManifest, snapshots);
@@ -465,6 +474,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (!result.loaded || generation !== _ensureGeneration) return false;
       if (result.manifest === manifest) await _commitV3Selection(site.id, manifest, snapshots, force, staged);
       if (result.manifest.version) DATA_VER = String(result.manifest.version);
+      if (_dlStats.fallback > sourceBefore.fallback) _dataLoadOrigin = 'fallback';
+      else if (_dlStats.net > sourceBefore.net) _dataLoadOrigin = 'network';
+      else _dataLoadOrigin = 'cache';
+      _dataLoadState = 'ready';
       return true;
     } catch (e) {
       _zhxErr('v3', e);
@@ -559,12 +572,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _manifestRefreshRequested = false;
     const loaded = await _ensureTryV3(force, refreshManifest, generation);
     if (generation !== _ensureGeneration) return;
+    _dataLoadState = loaded ? 'ready' : 'degraded';
     if (loaded && force && _irCandidatePolicy === 1) await _completeDataRefresh();
   }
 
   function ensureTables() {
     if (_ensurePromise) return _ensurePromise;
     const generation = _ensureGeneration;
+    _dataLoadState = 'loading';
     // 加载过程中触发刷新时，先等待旧请求完成，
     // 再通过代际校验防止过期请求发布结果。
     const previous = _activeEnsure;
@@ -593,21 +608,44 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       default: return null;
     }
   }
+  // 脚本层可观察的只读数据状态，不直接暴露持久缓存或可变索引对象。
+  // 已通知回调不代表下载成功：加载失败时 state=degraded，但仍触发兼容的就绪广播。
+  function dataGetStatus() {
+    return Object.freeze({
+      site: findSite()?.id || null,
+      state: _dataLoadState,
+      origin: _dataLoadOrigin,
+      version: DATA_VER || null,
+      generation: _ensureGeneration,
+      ready: _tablesReady,
+    });
+  }
+  // 保留稳定的按引用读取与 Object.keys 枚举，不额外复制大型索引。
+  // 通过 Proxy 阻止诊断层和业务层绕过 Resolver 修改内部数据。
+  const readonlyIndex = (target) => new Proxy(target, {
+    set() { return false; },
+    deleteProperty() { return false; },
+    defineProperty() { return false; },
+    setPrototypeOf() { return false; },
+    preventExtensions() { return false; },
+  });
+  const publicIndexes = {
+    itemHash: readonlyIndex(itemHash),
+    nameMap: readonlyIndex(nameMap),
+    ecidMap: readonlyIndex(ecidMap),
+    koByZh: readonlyIndex(koByZh),
+  };
   function dataGetIndex(name) {
-    // 索引引用（数据层与核心模块内部/调试用途；业务侧查询一律走 Item Resolver）
-    switch (name) {
-      case 'itemHash': return _tablesReady ? itemHash : null;
-      case 'nameMap': return _tablesReady ? nameMap : null;
-      case 'ecidMap': return _tablesReady ? ecidMap : null;
-      case 'koByZh': return _tablesReady ? koByZh : null;
-      default: return null;
-    }
+    // 站点仍可读取和枚举索引，但不得修改数据管理器持有的原始索引。
+    return _tablesReady && Object.hasOwn(publicIndexes, name) ? publicIndexes[name] : null;
   }
   function dataInvalidate() {
     // 重新检查 V3 manifest，同时保留按指纹校验的文件缓存供离线复用。
     _ensureGeneration++;
     _tablesReady = false;
     _ensurePromise = null;
+    _dataLoadState = 'idle';
+    _dataLoadOrigin = 'none';
     DATA_VER = '';
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);

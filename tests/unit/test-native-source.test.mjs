@@ -1,5 +1,6 @@
 // 直接加载生产 ESM 模块执行测试，由 Node V8 生成真实源码 LCOV 覆盖率。
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import {
   SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost,
@@ -12,6 +13,9 @@ import {
   ERR_LOG_CAP, _errLog, _zhxErr, safe, registerProbeMark, __zhxMark,
 } from '../../src/core/runtime.js';
 import { httpGet } from '../../src/core/http.js';
+import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady } from '../../src/core/data-manager.js';
 import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
 } from '../../src/core/storage.js';
@@ -242,5 +246,149 @@ test('原生 DOM 工具：祖先去重、局部根和查询计数', () => {
   } finally {
     if (originalDoc === undefined) delete globalThis.document;
     else globalThis.document = originalDoc;
+  }
+});
+
+
+test('原生 V3 契约：站点表一致、固定路径和异常元数据不得进入下载器', () => {
+  for (const policy of SITE_POLICIES) {
+    const required = requiredV3Files(policy);
+    assert.ok(required.length >= 2 && required.every(name =>
+      ['names', 'alias', 'dup', 'hash', 'ecid', 'ko', 'series', 'acl'].includes(name)));
+  }
+  const sha = 'a'.repeat(64);
+  const make = () => ({
+    schema: 3, candidatePolicy: 1, sites: {
+      mirapri: { files: {
+        names: { url: 'mirapri/names.tsv', sha256: sha, bytes: 12 },
+        hash: { url: 'mirapri/hash.tsv', sha256: sha, bytes: 4 },
+        alias: { url: 'mirapri/alias.tsv', sha256: sha, bytes: 5 },
+        dup: { url: 'mirapri/dup.tsv', sha256: sha, bytes: 6 },
+      } },
+    },
+    shared: { dict: { url: 'dict.json', sha256: sha, bytes: 2 } },
+  });
+  assert.equal(validV3Manifest(make()), true);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), true);
+  assert.equal(validRuntimeDictionary({ main: { Name: null } }), false);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }, true), false);
+  assert.equal(validV3FileMeta(null, 'mirapri/names.tsv'), false);
+  assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha, bytes: -1 },
+    'mirapri/names.tsv'), false);
+  assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha },
+    'mirapri/names.tsv'), true);
+  const variants = [
+    m => { m.sites.mirapri.files.names.url = '../../unexpected'; },
+    m => { m.sites.mirapri.files.names.url = 'https://external.invalid'; },
+    m => { m.sites.mirapri.files.names.bytes = 2 ** 31; },
+    m => { m.sites.mirapri.files.names.sha256 = 'invalid'; },
+    m => { m.sites.untrusted = m.sites.mirapri; },
+    m => { m.sites.mirapri.files.unexpected = m.sites.mirapri.files.names; },
+    m => { m.shared.dict.url = '/dict.json'; },
+    m => { m.sites = []; },
+    m => { m.sites = {}; },
+    m => { m.candidatePolicy = 2; },
+  ];
+  for (const alter of variants) {
+    const m = make(); alter(m);
+    assert.equal(validV3Manifest(m), false);
+  }
+});
+
+test('真实数据层及脚本事件桥：网络加载、内容校验、刷新和异常降级', async () => {
+  const names = ['window', 'location', 'GM_xmlhttpRequest', 'GM_getValue',
+    'GM_setValue', 'GM_listValues', 'GM_deleteValue'];
+  const original = Object.fromEntries(names.map(name => [name, globalThis[name]]));
+  const gm = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
+  const sha = text => createHash('sha256').update(text).digest('hex');
+  let version = 1;
+  let invalidManifest = false;
+  const events = [];
+  let requests = 0;
+
+  function bundle() {
+    const zh = version === 1 ? '测试第一版' : '测试第二版';
+    const files = {
+      names: 'English Test Gear\t' + zh + '\t1\t0\n',
+      hash: '0001\t' + zh + '\n',
+      alias: '装备别称\t' + zh + '\n',
+      dup: 'English Test Gear\t' + zh + '\n',
+      dict: '{"common":{}}',
+    };
+    const entries = Object.fromEntries(Object.entries(files).filter(([n]) => n !== 'dict')
+      .map(([name, contents]) =>
+        [name, { url: 'mirapri/' + name + '.tsv', sha256: sha(contents), bytes: Buffer.byteLength(contents) }]));
+    const manifest = {
+      schema: 3, candidatePolicy: 1, version: 'contract-' + version,
+      sites: { mirapri: { files: entries } },
+      shared: { dict: { url: 'dict.json', sha256: sha(files.dict), bytes: Buffer.byteLength(files.dict) } },
+    };
+    return { files, manifest };
+  }
+
+  try {
+    globalThis.window = {};
+    globalThis.location = { hostname: 'mirapri.com' };
+    assert.ok(globalThis.crypto?.subtle, 'Node 22 应提供真实 WebCrypto 校验');
+    globalThis.GM_getValue = (k, fallback) => gm.get(k) ?? fallback;
+    globalThis.GM_setValue = (k, val) => { gm.set(k, val); };
+    globalThis.GM_listValues = () => [...gm.keys()];
+    globalThis.GM_deleteValue = k => { gm.delete(k); };
+    globalThis.GM_xmlhttpRequest = options => {
+      requests++;
+      const { files, manifest } = bundle();
+      let responseText;
+      if (options.url.includes('/manifest.json')) responseText = invalidManifest
+        ? '{"schema":2,"sites":{}}' : JSON.stringify(manifest);
+      else if (options.url.endsWith('/dict.json')) responseText = files.dict;
+      else {
+        const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(options.url);
+        if (!match) return options.onerror(new Error('未经允许的资源'));
+        responseText = files[match[1]];
+      }
+      options.onload({ status: 200, responseText });
+    };
+    onTablesReady(status => events.push(status));
+    assert.equal(dataGetStatus().state, 'idle');
+    await ensureTables();
+    assert.equal(resolveByName('English Test Gear'), '测试第一版');
+    assert.equal(events.length, 1);
+    assert.equal(events[0].origin, 'network');
+    assert.equal(events[0].state, 'ready');
+    assert.equal(Object.isFrozen(events[0]), true);
+    assert.equal(requests, 6, '仅下载 manifest + 当前站 4 文件 + 共享词典');
+    const afterFirst = requests;
+
+    version = 2;
+    dataInvalidate();
+    assert.equal(dataGetStatus().state, 'idle');
+    assert.equal(dataGetStatus().generation, 1);
+    await ensureTables();
+    assert.equal(resolveByName('English Test Gear'), '测试第二版');
+    assert.equal(events.at(-1).version, 'contract-2');
+    assert.equal(events.at(-1).generation, 1);
+    assert.equal(events.at(-1).origin, 'network');
+    assert.ok(requests > afterFirst);
+
+    const beforeWarmLoad = requests;
+    dataInvalidate();
+    await ensureTables();
+    assert.equal(dataGetStatus().state, 'ready');
+    assert.equal(dataGetStatus().origin, 'cache', '相同版本优先复用已验证的 GM 文件缓存');
+    assert.equal(requests, beforeWarmLoad + 1,
+      '手动刷新只检查 manifest，不应重新下载相同散列的四个站点文件与词典');
+
+    invalidManifest = true;
+    dataInvalidate();
+    await ensureTables();
+    assert.equal(dataGetStatus().state, 'degraded');
+    assert.equal(dataGetStatus().ready, true, '失败后依旧释放等候者');
+    assert.equal(resolveByName('English Test Gear'), null, '无效 manifest 不应发布旧索引');
+    assert.equal(events.at(-1).state, 'degraded');
+  } finally {
+    for (const name of names) {
+      if (original[name] === undefined) delete globalThis[name];
+      else globalThis[name] = original[name];
+    }
   }
 });

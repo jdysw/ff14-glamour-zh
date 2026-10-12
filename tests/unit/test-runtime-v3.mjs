@@ -11,7 +11,7 @@
 // 机制：从规范模块源码提取区段以桩装配，不依赖构建变量名、Chrome 或外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
-import { readFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -26,6 +26,10 @@ const ok = (name, cond, extra = '') => {
 };
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
+
+import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
@@ -67,6 +71,46 @@ for (const site of SITE_NAMES) {
 }
 ok(`A7 逐文件 sha256 校验（${fileCount} 个文件）`, badSha === 0, `不一致 ${badSha}`);
 ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
+
+// 生成器真实产物与客户端共享契约必须全量相符；一旦文件字节遭破坏，部署必须拒绝。
+const publishInfo = verifyV3Publish(tmp);
+eq('A8a 发布前七站文件清单与客户端配置契合', publishInfo.sites, 7);
+ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publishInfo.bytes > 100000);
+{
+  const targetFile = new URL('mirapri/names.tsv', V3_DIR);
+  const original = readFileSync(targetFile);
+  let rejected = false;
+  try {
+    writeFileSync(targetFile, Buffer.concat([original, Buffer.from('\\n额外损坏行')]));
+    try { verifyV3Publish(tmp); } catch (_error) { rejected = true; }
+  } finally {
+    writeFileSync(targetFile, original);
+  }
+  ok('A8c 生成后文件被篡改必须阻止发布', rejected);
+}
+
+// 文件散列即使与清单一致，发布端仍须拒绝危险词典结构。
+{
+  const manifestPath = new URL('manifest.json', V3_DIR);
+  const dictPath = new URL('dict.json', V3_DIR);
+  const savedManifest = readFileSync(manifestPath);
+  const savedDict = readFileSync(dictPath);
+  let rejectedDict = false;
+  try {
+    const maliciousDict = '{"common":{"__proto__":{"polluted":"yes"}}}';
+    const tamperedManifest = JSON.parse(savedManifest.toString('utf8'));
+    tamperedManifest.shared.dict.bytes = Buffer.byteLength(maliciousDict);
+    tamperedManifest.shared.dict.sha256 = sha256(Buffer.from(maliciousDict));
+    writeFileSync(dictPath, maliciousDict);
+    writeFileSync(manifestPath, JSON.stringify(tamperedManifest));
+    try { verifyV3Publish(tmp); } catch (_error) { rejectedDict = true; }
+  } finally {
+    writeFileSync(manifestPath, savedManifest);
+    writeFileSync(dictPath, savedDict);
+  }
+  ok('A8d 散列自洽但含危险键的词库拒绝发布', rejectedDict);
+}
+
 
 // shared dict 校验
 {
@@ -220,6 +264,7 @@ const NAMES = [
   'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
+  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files', 'validRuntimeDictionary',
   'neededTables', '_fireTablesReady',
   'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
@@ -244,6 +289,7 @@ function makeWorld(over = {}) {
     _manifestRefreshRequested: false, _manifestNeedsCommit: false,
     _forceDataRefresh: false, _forceDataClearSucceeded: false, _forceDataCacheWritesOk: true,
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
+    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
     neededTables: () => over.need || ['items', 'dict'],
     _fireTablesReady: () => { rec.fires.push(1); },
     // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。

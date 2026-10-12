@@ -14,6 +14,9 @@ mkdirSync(directory, { recursive: true });
 const result = spawnSync(process.execPath, [
   '--test',
   '--experimental-test-coverage',
+  // 同时展示原生 test/spec 失败详情，LCOV 仍写入独立报告，不再隐藏错误堆栈。
+  '--test-reporter=spec',
+  '--test-reporter-destination=stdout',
   '--test-reporter=lcov',
   '--test-reporter-destination=' + report,
   'tests/unit/test-native-source.test.mjs',
@@ -31,6 +34,9 @@ const required = [
   'src/core/http.js',
   'src/core/storage.js',
   'src/core/dom.js',
+  'src/core/v3-contract.js',
+  'src/core/dict-contract.js',
+  'src/core/data-manager.js',
 ];
 for (const source of required) {
   const section = records.find(part => part.split('\n').some(line => line.replaceAll('\\', '/').trim() === 'SF:' + source));

@@ -41,3 +41,26 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # 扫描执行成功不代表质量门禁通过；必须等待服务器端 Quality Gate 结果。
+      - name: 等待 SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # 仅当质量门禁失败时输出问题定位信息；令牌只作为请求凭据，不写入日志。
+      - name: 输出未解决 Sonar 问题位置
+        if: failure()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "componentKeys=jdysw_ff14-glamour-zh" \
+            --data-urlencode "pullRequest=${{ github.event.pull_request.number }}" \
+            --data-urlencode "resolved=false" \
+            --data-urlencode "ps=100" \
+            "https://sonarcloud.io/api/issues/search" \
+            | jq -r '.issues[] | [.rule, .severity, .component, (.line // .textRange.startLine // "-"), .message] | @tsv'
