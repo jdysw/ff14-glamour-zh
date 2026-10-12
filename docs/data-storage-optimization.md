@@ -181,3 +181,29 @@ node tools/data/v31-retention.mjs \
 | `collection/dup.tsv`、`fc/dup.tsv`、`mirapri/dup.tsv` | 3 | 2,104 B |
 
 **结论：** 优先验证 `names` 和 `hash` 两组共享资源，它们贡献了绝大部分理论去重空间。单独优化 `alias` 的收益非常小，不宜先投入复杂协议。压缩后传输体积是离线估算，不能用于声称线上 CDN 流量已经降低。第二阶段应以这些真实数字作为收益基线。
+
+## 最终简化实施：仅对 V3 静态文件去重，拒绝客户端协议升级
+
+在四阶段评估后，采用复杂度更低的方案：**保留原 V3 manifest、各站文件 URL 和全部 GM 缓存键，只优化 Cloudflare Pages 的物理静态文件目录。** V3.1 仍是隔离原型与对比研究，**不进入部署命令，也不引入新客户端读路径**。
+
+Cloudflare Pages 的 `_redirects` 支持 `200` 内部代理（非浏览器 301/302 跳转）。所以构建产物中的完全相同的 TSV/TXT 可以只保留一份规范文件，其余旧 URL 通过逐条 `/旧路径 /规范路径 200` 服务同样的正文。具体参考 [Pages Redirects · Proxying](https://developers.cloudflare.com/pages/configuration/redirects/#proxying)。此规则仅作用于静态内容，本项目 `_routes.json` 让 Functions 仅覆盖退役的 V2 路由，不接管 V3。
+
+### 代码执行路径
+
+- `tools/data/dedupe-pages.mjs`：先按原 V3 发布契约验证**全部原始 27 份文件**；按 SHA-256、后缀和长度分组，选字典序最小的原 URL 为唯一保留文件，自动写出 `site/_redirects` 的 200 规则；删除其他完全相同的物理副本；最后重新打开每个规范对象检验实际 SHA、字节数、旧 URL 映射及无循环。
+- `tools/data/verify-pages-http.mjs`：连接官方 Wrangler Pages 本地运行时，对 `manifest.json` 和所有旧资源 URL 逐一发实际 HTTP 请求，确认状态码 200、没有可见 Location 跳转、返回体 SHA 和字节长度与原 V3 manifest 完全一致。
+- `tests/unit/test-pages-dedupe.mjs`：按真实七站需求构造完全合法的 V3 文件，验证精确去重、旧 manifest 原样保留、所有旧 URL 的等价正文、错误代理规则拒绝、规范文件篡改拒绝与禁止重复处理。
+- 正式 `deploy-data.yml`：生产原始 V3 生成 → 严格 V3 完整性验证 → 共享候选与 Pages 限制验证 → V3 静态去重 → 完整旧路径复核 → Pages 上传。**正式部署不生成、不上传 V3.1**。
+- 独立 `V3 Storage Baseline`：重复同样的生成和去重流程，随后启动官方 Wrangler 本地 Pages 开发服务器运行所有旧 URL 的 HTTP 回归，上传 `v3-pages-dedupe` 规则和摘要工件；整个工作流不会触发生产 Pages 部署。
+
+### 收益和限制
+
+在第一、三阶段锁定的数据集上，原始逻辑文件 27 个、唯一正文 16 个，去重可移除 11 份重复的原始资源副本，合计 **6,187,789 B（5.90 MiB，按资源正文统计为 19.86%）**。新增的 `_redirects` 规则本身也占用少量字节，因此整目录减少量会略小于 5.90 MiB。
+
+**不因此声称减少用户网络流量、单站冷启动请求、GM 存储或 CDN 实际计费。** 浏览器原路径不变，脚本行为不变；本优化的直接指标是待上传 Pages 静态目录中少存了重复文件。不同 Pages 部署版本是否重复存储对象由平台决定，不能以磁盘字节预测其计费节省。
+
+### 生产发布门禁
+
+实际部署前必须取得 Wrangler 对所有旧 V3 URL 的 HTTP 200/SHA 验证通过，及同一 HEAD 的完整 Test/Sonar/基准工作流通过。PR 仍保持 Draft、版本仍为 1.4.4，未经合并不会触发生产部署；**合并之后 `.github/deploy/_headers` 的变化可能触发 `deploy-data.yml` 自动发布**，合并时须明确检查实际部署记录。
+
+若 Pages 200 内部代理不符合预期，应直接中止此次去重上线并保留全量 V3 文件；绝不能以修改旧 manifest 或降低 SHA 校验要求掩盖问题。
