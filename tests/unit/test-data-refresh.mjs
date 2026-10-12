@@ -36,7 +36,7 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
-function buildHarness(download, requiredTables = ['items']) {
+function buildHarness(download, requiredTables = ['items'], cryptoProvider = webcrypto) {
   const store = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
   const marks = [];
   const errors = [];
@@ -57,7 +57,7 @@ function buildHarness(download, requiredTables = ['items']) {
     storeSetAsync: async (key, value) => { store.set(key, value); return true; },
     storeListAsync: async () => [...store.keys()],
     storeDeleteAsync: async (key) => { store.delete(key); return true; },
-    crypto: webcrypto,
+    crypto: cryptoProvider,
     TextEncoder,
   };
   const bindings = Object.keys(deps).join(', ');
@@ -161,6 +161,18 @@ function network(getVersion) {
   assert.equal(observations[0].version, null);
   assert.equal(api.resolveByName('English One'), null);
   assert.deepEqual(errors, [], '正常离线降级不属于脚本异常');
+}
+
+// 缺失 WebCrypto 时，不允许用字节长度代替 SHA-256 校验。
+{
+  const { api } = buildHarness(network(() => 1), ['items'], undefined);
+  // 显式传入不具备 digest 的实现，模拟受限浏览器环境。
+  const { api: restricted } = buildHarness(network(() => 1), ['items'], {});
+  await restricted.ensureTables();
+  assert.equal(restricted.dataGetStatus().state, 'degraded');
+  assert.equal(restricted.resolveByName('English One'), null);
+  await api.ensureTables();
+  assert.equal(api.dataGetStatus().state, 'ready', '正常 WebCrypto 必须继续工作');
 }
 
 // 生成器提供字节数后，同 SHA 的缓存和下载体仍必须逐字节匹配。
