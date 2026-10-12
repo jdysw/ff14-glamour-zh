@@ -36,12 +36,24 @@ node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
 - `requests`：每站 manifest 中引用的资源文件数，不包含 manifest 请求；命中 GM 缓存后网络请求可能为零。
 - GM 本地缓存空间、脚本冷启动耗时、跨站 CDN 缓存命中率，需要单独的浏览器测量，不能直接从生成文件大小推断。
 
-## 阶段二：非破坏性优化（后续提交至本 PR）
+## 阶段二：非破坏性优化（已提交，CI 验证中）
 
 1. 根据第一阶段真实报告筛选收益最高的共享数据，制定等价性断言。
 2. 审核 CDN 缓存头与不变指纹资源的适用范围；动态 manifest 不能用永久缓存。
 3. 加入 Pages 单文件部署约束和检测，而不改变现有客户端允许的历史元数据范围。
 4. 继续验证离线回退、旧 manifest 兼容与失败拒绝行为。
+
+### 本阶段已实施
+
+1. **共享候选等价断言**：新增 `tools/data/verify-shared-candidates.mjs`，按照实际生成语义分别锁定 FC/Collection 同源 `names`、EC/FC/Mirapri 同源 `hash`，以及 `series`、`alias`、同语种 `dup`。复用原生产发布校验器先核对磁盘字节和 SHA-256，再断言候选组元数据完全一致。未来如修改某站数据来源而导致文件变异，发布前会明确报错，不能误用去重方案。
+2. **正确划分浏览器缓存策略**：`.github/deploy/_headers` 将 `manifest.json` 和 `dict.json` 显式设置为 `no-cache, must-revalidate`，TSV/TXT 仍以 `text/plain; charset=utf-8` 提供，但不再把 JSON 错误声明为纯文本。当前全部 V3 路径仍是可变固定路径，所以**不设置 immutable**；只在第三阶段生成真实内容指纹 URL 后才可考虑长期不变缓存。
+3. **Cloudflare Pages 发布边界**：新增 `tools/data/verify-pages-assets.mjs` 遍历**完整** `site/` 部署目录，校验每个静态资源大小不超过 25 MiB；拒绝符号链接和非普通文件。该限制属于 Pages 部署平台，与浏览器 V3 旧 manifest 的 64 MiB 兼容上限**分开**，不改变客户端接受范围。
+4. **生产发布前执行**：现有 `deploy-data.yml` 在上传 Pages 前按顺序运行发布契约、共享候选验证和平台文件校验；独立 V3 Storage Baseline CI 也执行同一组校验，维持生产数据站未部署状态。
+5. **测试保护**：新增共享候选的 SHA、字节数和缺文件负面测试，以及 25 MiB 边界、超限和符号链接拒绝测试；强化部署生成目录的 `_headers` 契约测试。原有 `test-data-refresh.mjs` 保留旧缓存键、离线降级、刷新代际和无 WebCrypto 拒绝的测试，不改变其期待结果。
+
+**边界与影响**：本阶段没有替换现有 V3 数据文件、manifest URL 或 GM 缓存布局，因此与旧版脚本兼容，且存储总量仍约为第一阶段的 29.71 MiB；5.90 MiB 是下一阶段*理论*去重空间，不是本阶段已经节省的字节。Pages 的 `_headers` 控制静态文件响应（主要影响浏览器缓存），不能凭此断言 Cloudflare 边缘 CDN 的实际缓存命中率或 Tampermonkey 的 GM 网络调用行为。实际 HTTP 响应验证需在具备相应权限的环境部署后进行。
+
+文档依据：[Cloudflare Pages 文件上限](https://developers.cloudflare.com/pages/platform/limits/)；[Cloudflare Pages `_headers` 静态响应规则](https://developers.cloudflare.com/pages/configuration/headers/)。
 
 ## 阶段三：可选 V3.1 存储协议（仍在同一 PR，须先取得基准）
 
