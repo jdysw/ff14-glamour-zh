@@ -21,7 +21,7 @@ const plain = bytes => ({
 });
 
 // 对一个站点只模拟资源请求，不虚构并发、耗时、边缘缓存命中或 GM 存储实现。
-function requestsFor(site, manifest, metrics, sharedDictionary) {
+function requestsFor(site, manifest, metrics) {
   const files = Object.values(manifest.sites[site.id].files);
   if (site.tables.includes('dict')) files.push(manifest.shared.dict);
   return files.map(meta => {
@@ -127,7 +127,7 @@ export function evaluateV31(v3Directory, previewDirectory) {
     },
     manifest: { v3: oldManifest, v31: newManifest },
     scenarios: {
-      // 依次访问七站，且所有域名共用内容地址键时的理论上限。
+      // 依次访问七站，按资源 URL 共享缓存时的理论上限；不等同于当前 GM 缓存键。
       sevenSitesSharedCache: {
         v3: withSingleManifest(oldShared, oldManifest),
         v31: withSingleManifest(newShared, newManifest),
