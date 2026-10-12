@@ -54,6 +54,32 @@ jobs:
         run: |
           node tests/unit/test-v31-preview.mjs
           node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
+      - name: 第四阶段逐站冷启动与七站共享缓存模型验证
+        run: |
+          node tools/data/v31-evaluate.mjs \
+            --dir site/ff14/v3 \
+            --preview build/.cache/v31-preview \
+            --out v31-phase4-evaluation.json
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import assert from "node:assert/strict";
+            const r = JSON.parse(readFileSync("v31-phase4-evaluation.json", "utf8"));
+            assert.equal(r.storage.v3LogicalFiles, 27);
+            assert.equal(r.storage.v31Objects, 16);
+            assert.equal(r.storage.duplicateBytesRemovedInPreview, 6187789);
+            assert.equal(r.scenarios.sevenSitesIsolatedCache.v3.requests,
+              r.scenarios.sevenSitesIsolatedCache.v31.requests);
+            assert.ok(r.scenarios.sevenSitesSharedCache.v31.requests
+              < r.scenarios.sevenSitesSharedCache.v3.requests);
+            assert.equal(r.decision.readyForProduction, false);
+            console.log("✅ 第四阶段真实 V3/V3.1 存储与访问模型核对通过");
+          '
+      - name: 上传第四阶段对照与生产决策报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: v31-phase4-evaluation
+          path: v31-phase4-evaluation.json
+          if-no-files-found: error
       - name: 上传 V3.1 实物原型（仅 CI 工件，绝不部署）
         uses: actions/upload-artifact@v4
         with:
