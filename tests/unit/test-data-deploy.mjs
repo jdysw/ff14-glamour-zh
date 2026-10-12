@@ -45,7 +45,7 @@ try {
   // V3 文件名可变，不得配置 immutable；JSON 不能误标成 text/plain。
   const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
   const hasRule = (route, values) =>
-    headers.includes([route, ...values.map(value => '  ' + value)].join('\\n'));
+    headers.includes([route, ...values.map(value => '  ' + value)].join('\n'));
   assert.ok(hasRule('/ff14/v3/manifest.json', ['Cache-Control: no-cache, must-revalidate']));
   assert.ok(hasRule('/ff14/v3/dict.json', ['Cache-Control: no-cache, must-revalidate']));
   assert.ok(hasRule('/ff14/v3/:site/*.tsv', [
