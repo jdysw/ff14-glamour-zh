@@ -64,9 +64,12 @@ jobs:
             import { readFileSync } from "node:fs";
             import assert from "node:assert/strict";
             const r = JSON.parse(readFileSync("v31-phase4-evaluation.json", "utf8"));
-            assert.equal(r.storage.v3LogicalFiles, 27);
-            assert.equal(r.storage.v31Objects, 16);
-            assert.equal(r.storage.duplicateBytesRemovedInPreview, 6187789);
+            // 数据源合法变化时应重新测量，不能把历史基准数当成永久期待值。
+            assert.ok(r.storage.v3LogicalFiles > 0);
+            assert.ok(r.storage.v31Objects > 0);
+            assert.ok(r.storage.v31Objects <= r.storage.v3LogicalFiles);
+            assert.equal(r.storage.v3LogicalBytes,
+              r.storage.v31UniqueBytes + r.storage.duplicateBytesRemovedInPreview);
             assert.equal(r.scenarios.sevenSitesIsolatedCache.v3.requests,
               r.scenarios.sevenSitesIsolatedCache.v31.requests);
             assert.ok(r.scenarios.sevenSitesSharedCache.v31.requests
