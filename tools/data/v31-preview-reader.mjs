@@ -22,11 +22,17 @@ async function readVerified(loader, meta) {
 }
 
 export async function readV31WithV3Fallback(options) {
-  const { previewManifest, legacyManifest, siteId, name, fetchPreview, fetchLegacy } = options;
+  const { previewManifest, legacyManifest, legacyManifestBytes,
+    siteId, name, fetchPreview, fetchLegacy } = options;
   // 双协议并存时，只使用与当前 V3 快照同版本的预览，避免跨代混读。
   const legacyValid = validV3Manifest(legacyManifest);
+  // 新清单既要匹配 V3 逻辑版本，也必须绑定 V3 原始清单的完整 SHA。
+  // 缺少原始清单字节时禁止使用 V3.1，仍可走已校验的 V3 兼容回退。
+  const sourceDigest = typeof legacyManifestBytes === 'string'
+    ? digest(Buffer.from(legacyManifestBytes, 'utf8')) : null;
   if (legacyValid && validV31Manifest(previewManifest)
-    && previewManifest.source.version === legacyManifest.version) {
+    && previewManifest.source.version === legacyManifest.version
+    && previewManifest.source.manifestSha256 === sourceDigest) {
     const meta = name === 'dict'
       ? previewManifest.shared.dict : previewManifest.sites[siteId]?.files?.[name];
     const data = await readVerified(fetchPreview, meta);
