@@ -39,12 +39,17 @@ try {
   writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(manifest));
   const report = auditStorage(directory);
   assert.equal(report.total.files, physicalFileCount + 1);
-  assert.equal(report.total.files - report.total.uniqueBlobs, 6,
-    '七站中六份别名文件应作为跨站重复内容');
+  // 根据真实站点策略派生预期：Wiki 等站点可能不需要 alias，不能硬编码七份。
+  const aliasSites = SITE_POLICIES.filter(policy => requiredV3Files(policy).includes('alias'));
+  assert.ok(aliasSites.length > 1, '测试夹具必须具有跨站重复资源');
+  assert.equal(report.total.files - report.total.uniqueBlobs, aliasSites.length - 1,
+    '重复内容计数必须与站点声明的文件需求相符');
   assert.equal(report.duplicates.length, 1);
-  assert.equal(report.duplicates[0].copies, 7);
+  assert.equal(report.duplicates[0].copies, aliasSites.length);
+  assert.deepEqual(report.duplicates[0].paths.sort(),
+    aliasSites.map(policy => policy.id + '/alias.tsv').sort());
   assert.equal(report.duplicates[0].reclaimableBytes,
-    report.duplicates[0].bytesPerCopy * 6);
+    report.duplicates[0].bytesPerCopy * (aliasSites.length - 1));
   assert.equal(report.total.rawBytes - report.total.uniqueRawBytes,
     report.total.duplicateRawBytes);
   assert.ok(report.total.brotliBytes > 0 && report.total.gzipBytes > 0);
