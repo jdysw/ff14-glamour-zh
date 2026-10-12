@@ -13,6 +13,7 @@ import { SHARED_CANDIDATE_GROUPS } from '../../tools/data/verify-shared-candidat
 import { createV31Preview, verifyV31Preview } from '../../tools/data/v31-preview.mjs';
 import { readV31WithV3Fallback } from '../../tools/data/v31-preview-reader.mjs';
 import { createV31RetainedStore } from '../../tools/data/v31-retention.mjs';
+import { evaluateV31 } from '../../tools/data/v31-evaluate.mjs';
 import { v31ObjectUrl, validV31Manifest, v31GetFile } from '../../tools/data/v31-contract.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -62,6 +63,27 @@ try {
   assert.ok(stats.uniqueObjects < stats.logicalFiles, '必须真实减少重复内容对象');
   assert.ok(stats.reclaimableBytes > 0, '必须保有可测量的去重收益');
   assert.deepEqual(stats, verifyV31Preview(oldDir, previewDir));
+  const assessment = evaluateV31(oldDir, previewDir);
+  assert.equal(assessment.storage.v3LogicalFiles, stats.logicalFiles);
+  assert.equal(assessment.storage.v31Objects, stats.uniqueObjects);
+  assert.equal(assessment.storage.duplicateBytesRemovedInPreview, stats.reclaimableBytes);
+  assert.ok(assessment.scenarios.sevenSitesSharedCache.v31.requests
+    < assessment.scenarios.sevenSitesSharedCache.v3.requests,
+  '跨站共享缓存模型应减少实际对象请求数');
+  assert.equal(assessment.scenarios.sevenSitesIsolatedCache.v31.requests,
+    assessment.scenarios.sevenSitesIsolatedCache.v3.requests,
+    '完全隔离缓存模型下不应凭空减少请求数');
+  for (const site of SITE_POLICIES) {
+    assert.equal(assessment.perSiteCold[site.id].sameAssetRequests, true,
+      '单站冷访问不能靠跨站去重减少文件请求');
+    assert.equal(assessment.perSiteCold[site.id].sameAssetBytes, true,
+      '单站冷访问文件正文必须逐字节等价');
+  }
+  assert.equal(assessment.scenarios.fullyWarmReload.v3Requests, 0);
+  assert.equal(assessment.scenarios.fullyWarmReload.v31Requests, 0);
+  assert.equal(assessment.decision.readyForProduction, false,
+    '缺少真实浏览器和 CDN 验收时不得自动宣称已可上线');
+  assert.equal(assessment.constraints.browserTimingMeasured, false);
   assert.equal(stats.uniqueObjects, new Set(
     SITE_POLICIES.flatMap(site => Object.values(preview.sites[site.id].files).map(meta => meta.url))
       .concat(preview.shared.dict.url)).size);
