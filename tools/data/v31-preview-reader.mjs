@@ -23,13 +23,16 @@ async function readVerified(loader, meta) {
 
 export async function readV31WithV3Fallback(options) {
   const { previewManifest, legacyManifest, siteId, name, fetchPreview, fetchLegacy } = options;
-  if (validV31Manifest(previewManifest)) {
+  // 双协议并存时，只使用与当前 V3 快照同版本的预览，避免跨代混读。
+  const legacyValid = validV3Manifest(legacyManifest);
+  if (legacyValid && validV31Manifest(previewManifest)
+    && previewManifest.source.version === legacyManifest.version) {
     const meta = name === 'dict'
       ? previewManifest.shared.dict : previewManifest.sites[siteId]?.files?.[name];
     const data = await readVerified(fetchPreview, meta);
     if (data !== null) return { source: 'v31', text: data };
   }
-  if (!validV3Manifest(legacyManifest)) return null;
+  if (!legacyValid) return null;
   const oldMeta = name === 'dict'
     ? legacyManifest.shared?.dict : legacyManifest.sites[siteId]?.files?.[name];
   const oldText = await readVerified(fetchLegacy, oldMeta);
