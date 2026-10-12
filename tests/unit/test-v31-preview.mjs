@@ -2,7 +2,7 @@
 // 不修改用户脚本，也不通过调整测试预期规避失败。
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,10 @@ try {
     '禁止覆盖已生成的指纹对象集');
   assert.throws(() => createV31Preview(oldDir, path.join(repoRoot, 'site', 'v31-test')),
     /不得位于站点/, '预览构建必须在真实部署目录外');
+  const alias = path.join(root, 'linked-output');
+  symlinkSync(root, alias, 'dir');
+  assert.throws(() => createV31Preview(oldDir, path.join(alias, 'preview')),
+    /符号链接/, '父级符号链接不能绕过预览目录隔离');
 
   // 两代数据彼此隔离；新版本不应删除旧版本的离线回退资产。
   const nextDir = path.join(root, 'v3-next');
