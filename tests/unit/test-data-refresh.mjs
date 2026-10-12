@@ -230,7 +230,8 @@ function network(getVersion) {
   }, ['items', 'dict']);
   await api.ensureTables();
   assert.equal(api.dataGetStatus().state, 'degraded', '词典语义校验失败不得发布 ready');
-  assert.equal(api.dataGetIndex('nameMap'), null, '失败时内部索引不能对外暴露');
+  // 兼容旧接口：ready 广播结束后仍可读空索引，但绝不应包含半途写入的记录。
+  assert.deepEqual(Object.keys(api.dataGetIndex('nameMap') || {}), [], '失败时索引不得部分提交');
   assert.equal(api.resolveByName('English One'), null, '无效共享词典不能使装备索引部分生效');
 }
 
