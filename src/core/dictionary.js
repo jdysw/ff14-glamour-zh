@@ -4077,6 +4077,20 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
     const common = (d.common && typeof d.common === 'object') ? d.common : null;
     // 五站层顺序固定；六层词表引用见 DICT_LAYERS（词典接口区）
     const layers = ['main', 'ec', 'fc', 'ronka', 'acl', 'endcloset'];
+    // 将本次涉及的键预先记录；任意层写入失败时恢复词库，
+    // 不递增修订号，也不将失败批次的 DOM 修正发布出去。
+    const changes = [];
+    const snapshot = (target, entries) => {
+      if (!target || !entries) return;
+      for (const key of Object.keys(entries)) {
+        changes.push({ target, key, exists: Object.hasOwn(target, key), previous: target[key] });
+      }
+    };
+    snapshot(DICT_COMMON, common);
+    for (const key of layers) {
+      snapshot(DICT_LAYERS[key], common);
+      snapshot(DICT_LAYERS[key], d[key]);
+    }
     _dictFixesBuf = [];
     try {
       if (common) Object.assign(DICT_COMMON, common);
@@ -4085,8 +4099,19 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
         if (!obj) continue;
         _applyDictLayer(key, obj, d, common);
       }
-    } catch (e) { _zhxErr('dictApply', e); /* 词库应用 best-effort：失败不阻断，但记录 */ }
-    _dictRevision++;   // 词典修订号（getRevision 提供）
+    } catch (e) {
+      for (let i = changes.length - 1; i >= 0; i--) {
+        const entry = changes[i];
+        try {
+          if (entry.exists) entry.target[entry.key] = entry.previous;
+          else delete entry.target[entry.key];
+        } catch (rollbackError) { _zhxErr('dictRollback', rollbackError); }
+      }
+      _dictFixesBuf = null;
+      _zhxErr('dictApply', e);
+      return;
+    }
+    _dictRevision++;   // 只有成功写入词库后才发布修订号
     // 派生缓存重建（子串键列表 / 组合键列表由词典实时生成）——统一经词典失效入口
     try { dictInvalidate(); } catch (e) { /* 忽略：派生缓存失效内部按类防护 */ }
     // 定向替换：旧译 → 新译（去重后单次全页扫描）
