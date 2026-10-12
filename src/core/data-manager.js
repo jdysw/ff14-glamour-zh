@@ -216,7 +216,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try {
       encoded = new TextEncoder().encode(text);
       if (expectedBytes !== undefined && encoded.byteLength !== expectedBytes) return false;
-      if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle) return true;
+      // 无 WebCrypto 时拒绝未经摘要验证的数据，而不是降级为仅检查长度。
+      // 加载流程会正常进入 degraded 并通知订阅者，不会无限等待。
+      if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle?.digest) return false;
       const buf = await crypto.subtle.digest('SHA-256', encoded);
       const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
       return actual === fingerprint;
