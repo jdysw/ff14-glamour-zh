@@ -12,6 +12,7 @@ import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js'
 import { SHARED_CANDIDATE_GROUPS } from '../../tools/data/verify-shared-candidates.mjs';
 import { createV31Preview, verifyV31Preview } from '../../tools/data/v31-preview.mjs';
 import { readV31WithV3Fallback } from '../../tools/data/v31-preview-reader.mjs';
+import { createV31RetainedStore } from '../../tools/data/v31-retention.mjs';
 import { v31ObjectUrl, validV31Manifest, v31GetFile } from '../../tools/data/v31-contract.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -131,7 +132,26 @@ try {
   assert.deepEqual(verifyV31Preview(oldDir, previewDir), stats,
     '新版预览不能破坏已发布的上一代预览资源');
   assert.ok(verifyV31Preview(nextDir, nextPreviewDir).uniqueObjects >= stats.uniqueObjects);
-  console.log('✅ V3.1 隔离内容寻址、七站等价、完整性和旧 V3 安全回退通过');
+  const retainedDir = path.join(root, 'retained-preview');
+  const retained = createV31RetainedStore([previewDir, nextPreviewDir], retainedDir);
+  assert.equal(retained.snapshots, 2);
+  assert.equal(retained.archivedManifests, 2);
+  const nextManifest = JSON.parse(readFileSync(path.join(nextPreviewDir, 'manifest.v31.json'), 'utf8'));
+  const current = JSON.parse(readFileSync(path.join(retainedDir, 'manifest.v31.json'), 'utf8'));
+  assert.deepEqual(current, nextManifest, '当前指针必须指向最新清单');
+  const previousArchive = path.join(retainedDir, 'manifests',
+    legacy.version + '-' + preview.source.manifestSha256.slice(0, 12) + '.json');
+  assert.deepEqual(JSON.parse(readFileSync(previousArchive, 'utf8')), preview,
+    '必须归档旧清单用于明确回滚');
+  const oldName = preview.sites.mirapri.files.names;
+  const newName = current.sites.mirapri.files.names;
+  assert.notEqual(oldName.url, newName.url, '更新后的不可变对象应使用不同指纹路径');
+  assert.equal(digest(readFileSync(path.join(retainedDir, oldName.url))), oldName.sha256,
+    '发布新清单时不得移除仍被旧客户端引用的对象');
+  assert.equal(digest(readFileSync(path.join(retainedDir, newName.url))), newName.sha256);
+  assert.throws(() => createV31RetainedStore([previewDir, nextPreviewDir], retainedDir),
+    /必须为空/, '禁止覆盖旧的保留式发布快照');
+  console.log('✅ V3.1 隔离去重、完整性、V3 回退及跨版本旧对象保留通过');
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
