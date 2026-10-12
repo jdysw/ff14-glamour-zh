@@ -83,6 +83,16 @@ try {
     { source: 'v3', text: content }, '新对象不存在时必须校验旧 V3 再回退');
   assert.deepEqual(await readV31WithV3Fallback({ ...args, fetchPreview: async () => '损坏' }),
     { source: 'v3', text: content }, '新对象摘要错误不能进入索引');
+  // 历史 V3 manifest 可没有 bytes：旧兼容回退仍按 SHA 检查，不要求补写元数据。
+  const historical = structuredClone(legacy);
+  for (const site of Object.values(historical.sites)) {
+    for (const meta of Object.values(site.files)) delete meta.bytes;
+  }
+  delete historical.shared.dict.bytes;
+  assert.equal(validV3Manifest(historical), true);
+  assert.deepEqual(await readV31WithV3Fallback({ ...args,
+    legacyManifest: historical, fetchPreview: async () => null }),
+    { source: 'v3', text: content }, '旧 V3 无 bytes 仍可通过 SHA 恢复');
   assert.deepEqual(await readV31WithV3Fallback({ ...args, fetchPreview: async () => { throw Error('offline'); } }),
     { source: 'v3', text: content }, '断网时必须能从可信旧 V3 副本恢复');
   assert.equal(await readV31WithV3Fallback({ ...args, fetchPreview: async () => '损坏',
