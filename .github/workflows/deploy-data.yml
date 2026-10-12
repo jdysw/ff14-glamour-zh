@@ -68,8 +68,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: 发布前校验完整 V3 数据包和七站文件需求
-        run: node tools/data/verify-publish-contract.mjs --dir site/ff14/v3
+      - name: 发布前校验 V3 数据、共享资源及 Pages 平台约束
+        run: |
+          node tools/data/verify-publish-contract.mjs --dir site/ff14/v3
+          node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
+          node tools/data/verify-pages-assets.mjs --dir site
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
