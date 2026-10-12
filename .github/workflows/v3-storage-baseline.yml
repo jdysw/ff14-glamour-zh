@@ -1,0 +1,51 @@
+name: V3 Storage Baseline
+
+# 仅分析真实生成的数据包；绝不发布 Cloudflare，也不修改脚本版本。
+on:
+  pull_request:
+    paths:
+      - 'tools/data/audit-storage.mjs'
+      - 'tests/unit/test-storage-audit.mjs'
+      - 'build/make-runtime-data.py'
+      - 'data/**'
+      - 'dict/**'
+      - '.github/workflows/v3-storage-baseline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 获取固定版本的装备部位 CSV 并校验 Git blob
+        env:
+          DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
+          EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229
+        run: |
+          set -euo pipefail
+          mkdir -p build/.cache/datamining
+          curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
+            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
+            --output build/.cache/datamining/en-Item.csv
+          test "$(git hash-object build/.cache/datamining/en-Item.csv)" = "$EXPECTED_ITEM_BLOB"
+      - name: 生成真实 V3 产物
+        env:
+          FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
+        run: python3 .github/deploy/prepare.py
+      - name: 运行存储审计及基准报告
+        run: |
+          node tests/unit/test-storage-audit.mjs
+          node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
+      - name: 上传原始报告（不上传数据源）
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-storage-baseline
+          path: storage-baseline.json
+          if-no-files-found: error
