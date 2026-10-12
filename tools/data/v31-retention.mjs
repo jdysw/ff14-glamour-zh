@@ -3,13 +3,12 @@
 // 不触碰 site/，也不自动部署；仅用于验证未来发布与回滚方案的可行性。
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 import { validV31Manifest } from './v31-contract.mjs';
-
 import { validateIsolatedOutput } from './v31-output-guard.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const resourceRefs = manifest => [
