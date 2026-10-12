@@ -48,6 +48,7 @@ jobs:
           node tests/unit/test-shared-candidates.mjs
           node tests/unit/test-pages-assets.mjs
           node tests/unit/test-pages-dedupe.mjs
+          node tests/unit/test-pages-production.mjs
           node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
           node tools/data/verify-pages-assets.mjs --dir site
           node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
@@ -109,6 +110,8 @@ jobs:
             exit 1
           fi
           node tools/data/verify-pages-http.mjs --site site --origin http://127.0.0.1:8788
+      - name: 核实当前线上 V3 全部旧资源路径
+        run: node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/
       - name: 上传 V3 旧 URL 去重计划与规则
         uses: actions/upload-artifact@v4
         with:
