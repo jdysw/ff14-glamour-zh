@@ -28,6 +28,7 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
 import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -263,7 +264,7 @@ const NAMES = [
   'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', 'DATA_REFRESH_EPOCH_KEY', 'DATA_REFRESH_EPOCH', '_forceDataRefresh', '_forceDataClearSucceeded', '_forceDataCacheWritesOk', '_manifestRefreshRequested', '_manifestNeedsCommit',
-  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files',
+  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files', 'validRuntimeDictionary',
   'neededTables', '_fireTablesReady',
   'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
@@ -288,7 +289,7 @@ function makeWorld(over = {}) {
     _manifestRefreshRequested: false, _manifestNeedsCommit: false,
     _forceDataRefresh: false, _forceDataClearSucceeded: false, _forceDataCacheWritesOk: true,
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
-    validV3Manifest, validV3FileMeta, requiredV3Files,
+    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
     neededTables: () => over.need || ['items', 'dict'],
     _fireTablesReady: () => { rec.fires.push(1); },
     // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。

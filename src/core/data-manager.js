@@ -2,6 +2,7 @@
 import { DATA_BASE_V3 } from './constants.js';
 import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from './cache-primitives.js';
 import { applyRuntimeDict } from './dictionary.js';
+import { validRuntimeDictionary } from './dict-contract.js';
 import { httpGet } from './http.js';
 import { __zhxMark, _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
@@ -168,6 +169,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const ko = take('ko') || Object.create(null);
       const ali = take('alias', true) || Object.create(null);
       const dup = take('dup', true) || Object.create(null);
+      // 词典结构必须先于任何索引提交验证，防止无效共享文件导致部分数据发布。
+      if (files.dict) {
+        const runtimeDict = JSON.parse(files.dict);
+        if (!validRuntimeDictionary(runtimeDict)) return false;
+      }
       _replaceMap(nameMap, names);
       _replaceMap(itemHash, hash);
       _irSearchByZh = null;

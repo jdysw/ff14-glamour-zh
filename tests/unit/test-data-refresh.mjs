@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash, webcrypto } from 'node:crypto';
 import { repoRoot } from '../helpers/paths.mjs';
 import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
 const source = fs.readFileSync(path.join(repoRoot, 'src/core/data-manager.js'), 'utf8');
 const implementation = source.split('\n')
@@ -42,7 +43,7 @@ function buildHarness(download) {
   const deps = {
     DATA_BASE_V3: 'https://unit.test/ff14/v3/',
     DAY_MS: 86400000,
-    validV3Manifest, validV3FileMeta, requiredV3Files,
+    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
     cacheReset: () => {},
     _lcs90: () => null,
     applyRuntimeDict: () => {},
@@ -211,6 +212,26 @@ function network(getVersion) {
   assert.equal(api.resolveByName('English One'), '中文甲');
   assert.equal(api.dataGetStatus().origin, 'cache');
   assert.equal(api.dataGetStatus().state, 'ready');
+}
+
+// 文件 SHA/bytes 即使完全自洽，非法共享词典仍必须使整批数据降级。
+{
+  const { manifest, files } = makeBundle(1);
+  const dictionary = '{"common":{"__proto__":{"polluted":"yes"}}}';
+  manifest.shared = { dict: {
+    url: 'dict.json', sha256: sha(dictionary), bytes: Buffer.byteLength(dictionary),
+  } };
+  const { api } = buildHarness(async url => {
+    if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
+    if (url.endsWith('/dict.json')) return dictionary;
+    const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
+    assert.ok(match, '禁止加载未声明的数据文件：' + url);
+    return files[match[1]];
+  });
+  await api.ensureTables();
+  assert.equal(api.dataGetStatus().state, 'degraded', '词典语义校验失败不得发布 ready');
+  assert.equal(api.dataGetIndex('nameMap'), null, '失败时内部索引不能对外暴露');
+  assert.equal(api.resolveByName('English One'), null, '无效共享词典不能使装备索引部分生效');
 }
 
 console.log('✅ V3 refresh readiness, cache invalidation and in-flight generation regressions passed');
