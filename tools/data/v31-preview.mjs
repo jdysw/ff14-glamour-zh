@@ -2,7 +2,7 @@
 // 从已验证的生产 V3 生成隔离 V3.1 预览：共享相同内容的文件，完全不触碰 V3 正式输出。
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_POLICIES } from '../../src/core/site-policy.js';
@@ -10,7 +10,6 @@ import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { verifyV3Publish } from './verify-publish-contract.mjs';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 import { validV31Manifest, v31FileMeta } from './v31-contract.mjs';
-
 import { validateIsolatedOutput } from './v31-output-guard.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 
