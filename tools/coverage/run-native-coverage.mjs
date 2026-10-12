@@ -35,6 +35,7 @@ const required = [
   'src/core/storage.js',
   'src/core/dom.js',
   'src/core/v3-contract.js',
+  'src/core/dict-contract.js',
   'src/core/data-manager.js',
 ];
 for (const source of required) {

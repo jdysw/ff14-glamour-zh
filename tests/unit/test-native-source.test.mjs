@@ -14,6 +14,7 @@ import {
 } from '../../src/core/runtime.js';
 import { httpGet } from '../../src/core/http.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady } from '../../src/core/data-manager.js';
 import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
@@ -268,6 +269,9 @@ test('原生 V3 契约：站点表一致、固定路径和异常元数据不得�
     shared: { dict: { url: 'dict.json', sha256: sha, bytes: 2 } },
   });
   assert.equal(validV3Manifest(make()), true);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), true);
+  assert.equal(validRuntimeDictionary({ main: { Name: null } }), false);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }, true), false);
   assert.equal(validV3FileMeta(null, 'mirapri/names.tsv'), false);
   assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha, bytes: -1 },
     'mirapri/names.tsv'), false);

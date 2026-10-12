@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
+import { RUNTIME_DICT_LAYERS, validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const python = [
@@ -74,4 +75,16 @@ for (const mutate of [
   const altered = copy(); mutate(altered);
   assert.equal(validV3Manifest(altered), false, '拒绝异常结构：' + JSON.stringify(altered).slice(0,140));
 }
+// 与发布端共用的七层词库形状：缓存兼容部分层，生产发布必须齐全。
+const fullDict = Object.fromEntries(RUNTIME_DICT_LAYERS.map(layer => [layer, { 示例: '译文' }]));
+assert.equal(validRuntimeDictionary(fullDict, true), true);
+assert.equal(validRuntimeDictionary({ main: { 示例: '译文' } }), true);
+assert.equal(validRuntimeDictionary({ main: { 示例: '译文' } }, true), false);
+for (const invalid of [
+  { main: JSON.parse('{"__proto__":{"polluted":"yes"}}') },
+  { main: { constructor: '危险键' } },
+  { main: { 示例: ['错误类型'] } },
+  { main: null },
+  { invalidLayer: { 示例: '不允许' } },
+]) assert.equal(validRuntimeDictionary(invalid), false, '非法词库必须拒绝');
 console.log('✅ Python → V3 Manifest → JavaScript 站点需求及严格 URL/字节元数据契约通过');

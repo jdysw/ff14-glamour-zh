@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
 
 export function verifyV3Publish(directory) {
@@ -40,8 +41,8 @@ export function verifyV3Publish(directory) {
   assert.ok(manifest.shared?.dict, '必须提供共享词典');
   check(manifest.shared.dict);
   const dictionary = JSON.parse(readFileSync(path.join(base, 'dict.json'), 'utf8'));
-  assert.ok(dictionary && typeof dictionary === 'object' && !Array.isArray(dictionary),
-    '共享词典必须是 JSON 对象');
+  assert.ok(validRuntimeDictionary(dictionary, true),
+    '共享词典必须包含七层、字符串译文且不能包含原型特殊键');
   return { sites: SITE_POLICIES.length, files: fileCount, bytes: totalBytes, version: manifest.version };
 }
 

@@ -1,6 +1,7 @@
 /* @phase15-module-order:core/dictionary */
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache-primitives.js';
+import { validRuntimeDictionary } from './dict-contract.js';
 export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
 
 
@@ -4071,7 +4072,8 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
     if (typeof txt !== 'string' || !txt.startsWith('{')) return;
     let d = null;
     try { d = JSON.parse(txt); } catch (e) { return; }
-    if (!d || typeof d !== 'object') return;
+    // 整包结构校验后才允许原地合并，避免原型污染及局部写入。
+    if (!validRuntimeDictionary(d)) return;
     const common = (d.common && typeof d.common === 'object') ? d.common : null;
     // 五站层顺序固定；六层词表引用见 DICT_LAYERS（词典接口区）
     const layers = ['main', 'ec', 'fc', 'ronka', 'acl', 'endcloset'];

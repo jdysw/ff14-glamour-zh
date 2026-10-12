@@ -88,6 +88,28 @@ ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publish
   ok('A8c 生成后文件被篡改必须阻止发布', rejected);
 }
 
+// 文件散列即使与清单一致，发布端仍须拒绝危险词典结构。
+{
+  const manifestPath = new URL('manifest.json', V3_DIR);
+  const dictPath = new URL('dict.json', V3_DIR);
+  const savedManifest = readFileSync(manifestPath);
+  const savedDict = readFileSync(dictPath);
+  let rejectedDict = false;
+  try {
+    const maliciousDict = '{"common":{"__proto__":{"polluted":"yes"}}}';
+    const tamperedManifest = JSON.parse(savedManifest.toString('utf8'));
+    tamperedManifest.shared.dict.bytes = Buffer.byteLength(maliciousDict);
+    tamperedManifest.shared.dict.sha256 = sha256(Buffer.from(maliciousDict));
+    writeFileSync(dictPath, maliciousDict);
+    writeFileSync(manifestPath, JSON.stringify(tamperedManifest));
+    try { verifyV3Publish(tmp); } catch (_error) { rejectedDict = true; }
+  } finally {
+    writeFileSync(manifestPath, savedManifest);
+    writeFileSync(dictPath, savedDict);
+  }
+  ok('A8d 散列自洽但含危险键的词库拒绝发布', rejectedDict);
+}
+
 
 // shared dict 校验
 {

@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from '../helpers/paths.mjs';
+import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
 let pass = 0;
 let fail = 0;
@@ -99,8 +100,8 @@ function buildDict(mock = {}) {
   };
   const body = [...STUB_LINES, ...CACHE_PRIMITIVE_SEG, ...CACHE_REG_SEG, ...DICT_SEG, RETURN_STMT].join('\n');
   try {
-    const fn = new Function('document', 'console', 'NodeFilter', '__rec', body);
-    return fn(doc, { warn: () => {} }, NF, rec);
+    const fn = new Function('document', 'console', 'NodeFilter', '__rec', 'validRuntimeDictionary', body);
+    return fn(doc, { warn: () => {} }, NF, rec, validRuntimeDictionary);
   } catch (e) {
     throw new Error('Dictionary 装配失败：' + e.message);
   }
@@ -168,6 +169,13 @@ function buildDict(mock = {}) {
 
   api.dictUpdate('{"main":{"A":"甲"}}');
   eq('有效输入后修订号 +1', api.dictGetRevision(), 1);
+  // 远程词典异常时必须整包拒绝，不允许改变已有层的原型。
+  api.dictUpdate('{"main":{"__proto__":{"polluted":"yes"}}}');
+  api.dictUpdate('{"main":{"nonString":["错误类型"]}}');
+  api.dictUpdate('{"unknown":{"A":"无效层"}}');
+  eq('非法数据不增加修订号', api.dictGetRevision(), 1);
+  eq('非法数据不加入词典', api.dictGet('nonString'), undefined);
+  eq('远程词典不能修改词典原型', Object.getPrototypeOf(api.DICT_LAYERS.main), Object.prototype);
 }
 
 // ─────────────────────────────────────────────────────────────

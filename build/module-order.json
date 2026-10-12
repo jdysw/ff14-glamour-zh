@@ -10,6 +10,7 @@
     "core/observer",
     "core/constants",
     "core/cache-primitives",
+    "core/dict-contract",
     "core/dictionary",
     "core/http",
     "core/site-policy",
