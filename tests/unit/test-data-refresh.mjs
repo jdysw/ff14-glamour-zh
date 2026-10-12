@@ -201,11 +201,11 @@ function network(getVersion) {
   const { api, store } = buildHarness(async url => {
     throw new Error('应完全离线命中缓存：' + url);
   });
-  store.set('zhx.v3.manifest', Date.now() + '\\n' + JSON.stringify(manifest));
+  store.set('zhx.v3.manifest', Date.now() + '\n' + JSON.stringify(manifest));
   for (const [name, meta] of Object.entries(manifest.sites.mirapri.files)) {
     const baseKey = 'zhx.v3.f.mirapri.' + name;
-    store.set(baseKey, meta.sha256 + '\\n' + files[name]);
-    store.set(baseKey + '.' + meta.sha256, meta.sha256 + '\\n' + '损坏内容');
+    store.set(baseKey, meta.sha256 + '\n' + files[name]);
+    store.set(baseKey + '.' + meta.sha256, meta.sha256 + '\n' + '损坏内容');
   }
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), '中文甲');
