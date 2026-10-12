@@ -620,15 +620,24 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       ready: _tablesReady,
     });
   }
+  // 保留稳定的按引用读取与 Object.keys 枚举，不额外复制大型索引。
+  // 通过 Proxy 阻止诊断层和业务层绕过 Resolver 修改内部数据。
+  const readonlyIndex = (target) => new Proxy(target, {
+    set() { return false; },
+    deleteProperty() { return false; },
+    defineProperty() { return false; },
+    setPrototypeOf() { return false; },
+    preventExtensions() { return false; },
+  });
+  const publicIndexes = {
+    itemHash: readonlyIndex(itemHash),
+    nameMap: readonlyIndex(nameMap),
+    ecidMap: readonlyIndex(ecidMap),
+    koByZh: readonlyIndex(koByZh),
+  };
   function dataGetIndex(name) {
-    // 索引引用（数据层与核心模块内部/调试用途；业务侧查询一律走 Item Resolver）
-    switch (name) {
-      case 'itemHash': return _tablesReady ? itemHash : null;
-      case 'nameMap': return _tablesReady ? nameMap : null;
-      case 'ecidMap': return _tablesReady ? ecidMap : null;
-      case 'koByZh': return _tablesReady ? koByZh : null;
-      default: return null;
-    }
+    // 站点仍可读取和枚举索引，但不得修改数据管理器持有的原始索引。
+    return _tablesReady && Object.hasOwn(publicIndexes, name) ? publicIndexes[name] : null;
   }
   function dataInvalidate() {
     // 重新检查 V3 manifest，同时保留按指纹校验的文件缓存供离线复用。
