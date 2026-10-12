@@ -4068,6 +4068,34 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
     if (extra) Object.assign(obj, extra);
   }
 
+  // 在批次应用之前只记录将被覆盖的键，避免完整克隆七层词典。
+  function _dictCaptureChanges(data, common, layers) {
+    const changes = [];
+    const capture = (target, entries) => {
+      if (!target || !entries) return;
+      for (const key of Object.keys(entries)) {
+        changes.push({ target, key, exists: Object.hasOwn(target, key), previous: target[key] });
+      }
+    };
+    capture(DICT_COMMON, common);
+    for (const key of layers) {
+      capture(DICT_LAYERS[key], common);
+      capture(DICT_LAYERS[key], data[key]);
+    }
+    return changes;
+  }
+
+  // 发生异常时倒序恢复原值，避免留下半应用的站点词典。
+  function _dictRollbackChanges(changes) {
+    for (let i = changes.length - 1; i >= 0; i--) {
+      const entry = changes[i];
+      try {
+        if (entry.exists) entry.target[entry.key] = entry.previous;
+        else delete entry.target[entry.key];
+      } catch (error) { _zhxErr('dictRollback', error); }
+    }
+  }
+
   function applyRuntimeDict(txt) {
     if (typeof txt !== 'string' || !txt.startsWith('{')) return;
     let d = null;
@@ -4079,18 +4107,7 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
     const layers = ['main', 'ec', 'fc', 'ronka', 'acl', 'endcloset'];
     // 将本次涉及的键预先记录；任意层写入失败时恢复词库，
     // 不递增修订号，也不将失败批次的 DOM 修正发布出去。
-    const changes = [];
-    const snapshot = (target, entries) => {
-      if (!target || !entries) return;
-      for (const key of Object.keys(entries)) {
-        changes.push({ target, key, exists: Object.hasOwn(target, key), previous: target[key] });
-      }
-    };
-    snapshot(DICT_COMMON, common);
-    for (const key of layers) {
-      snapshot(DICT_LAYERS[key], common);
-      snapshot(DICT_LAYERS[key], d[key]);
-    }
+    const changes = _dictCaptureChanges(d, common, layers);
     _dictFixesBuf = [];
     try {
       if (common) Object.assign(DICT_COMMON, common);
@@ -4100,13 +4117,7 @@ export { DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAY
         _applyDictLayer(key, obj, d, common);
       }
     } catch (e) {
-      for (let i = changes.length - 1; i >= 0; i--) {
-        const entry = changes[i];
-        try {
-          if (entry.exists) entry.target[entry.key] = entry.previous;
-          else delete entry.target[entry.key];
-        } catch (rollbackError) { _zhxErr('dictRollback', rollbackError); }
-      }
+      _dictRollbackChanges(changes);
       _dictFixesBuf = null;
       _zhxErr('dictApply', e);
       return;
