@@ -29,33 +29,36 @@ function validV3FileMeta(meta, expectedUrl) {
     && meta.bytes >= 0 && meta.bytes <= MAX_V3_FILE_BYTES);
 }
 
+// 单站只允许生成器约定的全部文件，不能增删或替换为其他文件类型。
+function validV3SiteFiles(siteId, entry, policy) {
+  if (!entry?.files || typeof entry.files !== 'object' || Array.isArray(entry.files)) return false;
+  const required = new Set(requiredV3Files(policy));
+  const files = Object.entries(entry.files);
+  if (files.length !== required.size) return false;
+  return files.every(([name, meta]) => {
+    const extension = V3_FILE_TYPES[name];
+    return required.has(name) && !!extension
+      && validV3FileMeta(meta, siteId + '/' + name + '.' + extension);
+  });
+}
+
+// 共享清单只能包含 dict.json；旧版完全缺省 shared 的清单仍兼容。
+function validV3Shared(shared) {
+  if (shared === undefined) return true;
+  if (!shared || typeof shared !== 'object' || Array.isArray(shared)) return false;
+  const keys = Object.keys(shared);
+  return keys.every(key => key === 'dict')
+    && (!keys.includes('dict') || validV3FileMeta(shared.dict, 'dict.json'));
+}
+
 function validV3Manifest(man) {
   if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy)
     || !man.sites || typeof man.sites !== 'object' || Array.isArray(man.sites)) return false;
-  const allowed = new Map(SITE_POLICIES.map(site => [site.id, site]));
-  const sites = Object.entries(man.sites);
-  if (!sites.length) return false;
-  for (const [siteId, entry] of sites) {
-    const site = allowed.get(siteId);
-    if (!site || !entry?.files || typeof entry.files !== 'object'
-      || Array.isArray(entry.files)) return false;
-    // 只接受该站的精确文件集合，不能让多余的已知类型混入下载与缓存流程。
-    const files = Object.entries(entry.files);
-    const required = new Set(requiredV3Files(site));
-    if (files.length !== required.size) return false;
-    for (const [name, meta] of files) {
-      const extension = V3_FILE_TYPES[name];
-      if (!required.has(name) || !extension
-        || !validV3FileMeta(meta, siteId + '/' + name + '.' + extension)) return false;
-    }
-  }
-  // 共享文件只允许约定的 dict.json；拒绝未知共享文件和畸形容器，
-  // 避免未来消费者不经校验便使用 manifest 中额外的远程资源。
-  if (man.shared !== undefined) {
-    if (!man.shared || typeof man.shared !== 'object' || Array.isArray(man.shared)) return false;
-    const sharedKeys = Object.keys(man.shared);
-    if (sharedKeys.some(key => key !== 'dict')) return false;
-    if (sharedKeys.includes('dict') && !validV3FileMeta(man.shared.dict, 'dict.json')) return false;
-  }
-  return true;
+  const policies = new Map(SITE_POLICIES.map(site => [site.id, site]));
+  const entries = Object.entries(man.sites);
+  if (!entries.length) return false;
+  return entries.every(([siteId, entry]) => {
+    const policy = policies.get(siteId);
+    return !!policy && validV3SiteFiles(siteId, entry, policy);
+  }) && validV3Shared(man.shared);
 }
