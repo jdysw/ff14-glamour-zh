@@ -10,30 +10,12 @@ import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 import { validV31Manifest } from './v31-contract.mjs';
 
-const SITE_ROOT = path.resolve(fileURLToPath(new URL('../../site', import.meta.url)));
+import { validateIsolatedOutput } from './v31-output-guard.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-const within = (value, root) => value === root || value.startsWith(root + path.sep);
-
 const resourceRefs = manifest => [
   ...SITE_POLICIES.flatMap(site => Object.values(manifest.sites[site.id].files)),
   manifest.shared.dict,
 ];
-
-// 不允许引用预览目录以外的路径，输出目录必须为空且不能混入 Pages 生产目录。
-function validateTarget(inputs, targetDir) {
-  const target = path.resolve(targetDir);
-  assert.ok(!within(target, SITE_ROOT), '保留式预览不能写入生产 site/ 目录');
-  for (const input of inputs) {
-    const source = path.resolve(input);
-    assert.ok(!within(target, source) && !within(source, target), '输出不得覆盖输入快照');
-  }
-  if (existsSync(target)) {
-    assert.ok(lstatSync(target).isDirectory() && !lstatSync(target).isSymbolicLink(),
-      '输出目录不能是符号链接');
-    assert.equal(readdirSync(target).length, 0, '保留式输出目录必须为空');
-  }
-  return target;
-}
 
 function readSnapshot(directory) {
   verifyPagesAssets(directory);
@@ -56,7 +38,7 @@ export function createV31RetainedStore(previewDirectories, targetDirectory) {
   assert.ok(Array.isArray(previewDirectories) && previewDirectories.length >= 2,
     '必须提供至少两个按发布时间排列的完整预览快照');
   const inputs = previewDirectories.map(source => path.resolve(source));
-  const target = validateTarget(inputs, targetDirectory);
+  const target = validateIsolatedOutput(inputs, targetDirectory);
   // 全部输入通过验证后才创建输出；故障时不发布半份最新清单。
   const snapshots = inputs.map(readSnapshot);
   const unique = new Map();
