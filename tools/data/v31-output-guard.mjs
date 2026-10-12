@@ -21,7 +21,7 @@ function rejectLinkedAncestors(target) {
 
 export function validateIsolatedOutput(sources, directory) {
   const target = path.resolve(directory);
-  assert.ok(!within(target, PAGES_ROOT), '预览产物不得写入站点 site/ 部署目录');
+  assert.ok(!within(target, PAGES_ROOT), '预览产物不得位于站点 site/ 部署目录');
   for (const source of sources) {
     const input = path.resolve(source);
     assert.ok(!within(target, input) && !within(input, target),
