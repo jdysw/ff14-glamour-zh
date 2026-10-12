@@ -1,4 +1,17 @@
-# FF14 数据站响应头规则（Cloudflare Pages）
-# items.tsv 的 text/tab-separated-values 默认不走压缩，声明 text/plain 以启用 Brotli/Gzip。
-/ff14/v3/*
+# Cloudflare Pages 静态数据站的浏览器缓存策略。
+# V3 当前文件路径是可变的，不能使用 immutable；manifest 必须允许更新检测。
+# Pages _headers 仅作用于静态响应；/ff14/v2 走 Pages Functions，不在此配置。
+/ff14/v3/manifest.json
+  Cache-Control: no-cache, must-revalidate
+
+/ff14/v3/dict.json
+  Cache-Control: no-cache, must-revalidate
+
+# 仅对 TSV/TXT 指定纯文本 MIME，避免将 manifest/dict 的 JSON 误标成 text/plain。
+/ff14/v3/:site/*.tsv
   Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
+
+/ff14/v3/:site/*.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache, must-revalidate
