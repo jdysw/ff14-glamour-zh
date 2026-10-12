@@ -177,4 +177,40 @@ function network(getVersion) {
   assert.equal(api.dataGetStatus().state, 'degraded');
 }
 
+// 站点清单即使只混入合法类型的多余文件，也必须在下载前拒绝。
+{
+  const { manifest } = makeBundle(1);
+  manifest.sites.mirapri.files.ecid = {
+    url: 'mirapri/ecid.tsv', sha256: 'a'.repeat(64), bytes: 12,
+  };
+  const requests = [];
+  const { api } = buildHarness(async url => {
+    requests.push(url);
+    if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
+    throw new Error('意外下载额外站点文件：' + url);
+  });
+  await api.ensureTables();
+  assert.equal(api.dataGetStatus().state, 'degraded');
+  assert.equal(requests.length, 1, '无关文件不得进入实际网络下载流程');
+  assert.ok(requests[0].endsWith('/manifest.json'));
+}
+
+// 新键损坏不应阻断旧键的有效离线副本；依旧逐项执行 SHA 和字节校验。
+{
+  const { manifest, files } = makeBundle(1);
+  const { api, store } = buildHarness(async url => {
+    throw new Error('应完全离线命中缓存：' + url);
+  });
+  store.set('zhx.v3.manifest', Date.now() + '\\n' + JSON.stringify(manifest));
+  for (const [name, meta] of Object.entries(manifest.sites.mirapri.files)) {
+    const baseKey = 'zhx.v3.f.mirapri.' + name;
+    store.set(baseKey, meta.sha256 + '\\n' + files[name]);
+    store.set(baseKey + '.' + meta.sha256, meta.sha256 + '\\n' + '损坏内容');
+  }
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English One'), '中文甲');
+  assert.equal(api.dataGetStatus().origin, 'cache');
+  assert.equal(api.dataGetStatus().state, 'ready');
+}
+
 console.log('✅ V3 refresh readiness, cache invalidation and in-flight generation regressions passed');

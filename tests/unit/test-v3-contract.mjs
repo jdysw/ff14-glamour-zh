@@ -62,6 +62,8 @@ for (const bytes of [-1, 1.25, Number.MAX_SAFE_INTEGER, '100', NaN, Infinity]) {
 for (const mutate of [
   obj => { obj.sites.mirapri.files.names.sha256 = 'not-a-sha256'; },
   obj => { obj.sites.mirapri.files.unknown = meta('mirapri/unknown.tsv'); },
+  obj => { obj.sites.mirapri.files.ecid = meta('mirapri/ecid.tsv'); },
+  obj => { delete obj.sites.mirapri.files.dup; },
   obj => { obj.sites.untrusted = obj.sites.mirapri; },
   obj => { obj.shared.dict.url = '/dict.json'; },
   obj => { obj.candidatePolicy = 99; },

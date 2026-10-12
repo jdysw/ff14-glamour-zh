@@ -39,11 +39,14 @@ function validV3Manifest(man) {
     const site = allowed.get(siteId);
     if (!site || !entry?.files || typeof entry.files !== 'object'
       || Array.isArray(entry.files)) return false;
+    // 只接受该站的精确文件集合，不能让多余的已知类型混入下载与缓存流程。
     const files = Object.entries(entry.files);
-    if (!files.length) return false;
+    const required = new Set(requiredV3Files(site));
+    if (files.length !== required.size) return false;
     for (const [name, meta] of files) {
       const extension = V3_FILE_TYPES[name];
-      if (!extension || !validV3FileMeta(meta, siteId + '/' + name + '.' + extension)) return false;
+      if (!required.has(name) || !extension
+        || !validV3FileMeta(meta, siteId + '/' + name + '.' + extension)) return false;
     }
   }
   if (man.shared?.dict && !validV3FileMeta(man.shared.dict, 'dict.json')) return false;

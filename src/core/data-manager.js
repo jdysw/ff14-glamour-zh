@@ -231,9 +231,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _v3FindCachedFile(baseKey, fingerprint, expectedBytes) {
-    let cached = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
-    if (cached === null) cached = await _v3ReadCachedFile(baseKey, fingerprint);
-    return cached !== null && await _v3VerifyFile(cached, fingerprint, expectedBytes) ? cached : null;
+    // 指纹键可能已损坏；校验失败后仍应检查旧键中的有效副本，以支持离线恢复。
+    const current = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
+    if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
+    const legacy = await _v3ReadCachedFile(baseKey, fingerprint);
+    return legacy !== null && await _v3VerifyFile(legacy, fingerprint, expectedBytes) ? legacy : null;
   }
 
   // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
