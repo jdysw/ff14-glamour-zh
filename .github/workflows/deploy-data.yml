@@ -74,6 +74,14 @@ jobs:
           node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
           node tools/data/verify-pages-assets.mjs --dir site
 
+      # 先校验全部原始文件，再把完全相同的资源改为 200 内部代理规则。
+      # manifest 和旧用户脚本 URL 均不变；任何规则或文件错误会阻止上传。
+      - name: 去除 Pages V3 重复静态副本并校验旧 URL 内容
+        run: |
+          node tools/data/dedupe-pages.mjs --site site
+          node tools/data/dedupe-pages.mjs --site site --verify
+          node tools/data/verify-pages-assets.mjs --dir site
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
