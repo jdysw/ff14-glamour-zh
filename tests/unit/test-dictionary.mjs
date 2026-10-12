@@ -244,6 +244,22 @@ function buildDict(mock = {}) {
   ok('update 无效：派生缓存不被清（无状态变更）', api.__peek().fc === 'X' && api.__peek().ak === 'Y');
 }
 
+// 词典中途发生实际写入异常时，已写入的其他层必须回滚。
+{
+  const api = buildDict();
+  api.dictUpdate('{"main":{"stable":"原文"}}');
+  const before = api.dictGetRevision();
+  Object.defineProperty(api.DICT_LAYERS.ec, 'locked', {
+    value: '原文', writable: false, configurable: true, enumerable: true,
+  });
+  api.dictUpdate('{"main":{"stable":"变更","fresh":"新词"},"ec":{"locked":"不可写"}}');
+  eq('批次失败：旧词恢复', api.dictGet('stable'), '原文');
+  eq('批次失败：新词不泄漏', api.dictGet('fresh'), undefined);
+  eq('批次失败：不可写词仍保留原值', api.dictGet('locked', 'ec'), '原文');
+  eq('批次失败：不递增修订号', api.dictGetRevision(), before);
+  delete api.DICT_LAYERS.ec.locked;
+}
+
 // 各站翻译调用由 site-registry 测试验证，此处仅测试词典层实际接口。
 
 // ─────────────────────────────────────────────────────────────
