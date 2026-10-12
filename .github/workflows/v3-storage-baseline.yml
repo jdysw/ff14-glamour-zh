@@ -84,6 +84,31 @@ jobs:
           node tools/data/dedupe-pages.mjs --site site | tee pages-dedupe-summary.log
           node tools/data/dedupe-pages.mjs --site site --verify
           node tools/data/verify-pages-assets.mjs --dir site
+      # 在 Cloudflare 官方 Wrangler 本地 Pages 运行时检查 200 内部代理响应；
+      # 不是普通的文件系统模拟，能发现重写规则不生效、404 或可见跳转。
+      - name: Wrangler Pages 本地 HTTP 验证原 V3 URL
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 pages dev site --ip 127.0.0.1 --port 8788 --log-level error > pages-dev.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8788/ff14/v3/manifest.json -o /dev/null 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat pages-dev.log
+              exit 1
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat pages-dev.log
+            exit 1
+          fi
+          node tools/data/verify-pages-http.mjs --site site --origin http://127.0.0.1:8788
       - name: 上传 V3 旧 URL 去重计划与规则
         uses: actions/upload-artifact@v4
         with:
