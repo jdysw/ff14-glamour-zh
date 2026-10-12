@@ -89,6 +89,13 @@ function network(getVersion) {
   }, '脚本层首轮应能获取明确的未启动状态');
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), '中文甲');
+  const view = api.dataGetIndex('nameMap');
+  assert.equal(view['English One'], '中文甲');
+  assert.equal(api.dataGetIndex('nameMap'), view, '只读索引对象应稳定复用');
+  assert.equal(Reflect.set(view, 'English One', '污染'), false, '索引写入必须拒绝');
+  assert.equal(Reflect.deleteProperty(view, 'English One'), false, '索引删除必须拒绝');
+  assert.equal(Reflect.defineProperty(view, 'inject', { value: '污染' }), false, '不得绕过属性赋值修改索引');
+  assert.equal(api.resolveByName('English One'), '中文甲', '外部写入不得污染解析器');
   assert.equal(readyCount, 1);
   assert.deepEqual(statuses[0], {
     site: 'mirapri', state: 'ready', origin: 'network', version: 'unit-v1', generation: 0, ready: true,
