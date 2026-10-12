@@ -76,10 +76,15 @@ try {
 
   const getPreview = async url => readFileSync(path.join(previewDir, url), 'utf8');
   const getLegacy = async url => readFileSync(path.join(oldDir, url), 'utf8');
-  const args = { previewManifest: preview, legacyManifest: legacy, siteId: 'fc',
-    name: 'names', fetchPreview: getPreview, fetchLegacy: getLegacy };
+  const args = { previewManifest: preview, legacyManifest: legacy,
+    legacyManifestBytes: readFileSync(path.join(oldDir, 'manifest.json'), 'utf8'),
+    siteId: 'fc', name: 'names', fetchPreview: getPreview, fetchLegacy: getLegacy };
   const content = readFileSync(path.join(oldDir, source('fc').url), 'utf8');
   assert.deepEqual(await readV31WithV3Fallback(args), { source: 'v31', text: content });
+  assert.deepEqual(await readV31WithV3Fallback({ ...args, legacyManifestBytes: undefined }),
+    { source: 'v3', text: content }, '缺少来源原始清单字节时不能选择新协议');
+  assert.deepEqual(await readV31WithV3Fallback({ ...args, legacyManifestBytes: '{}'}),
+    { source: 'v3', text: content }, '来源 V3 清单摘要不匹配时必须回退');
   assert.deepEqual(await readV31WithV3Fallback({ ...args, fetchPreview: async () => null }),
     { source: 'v3', text: content }, '新对象不存在时必须校验旧 V3 再回退');
   const incompatible = structuredClone(preview);
