@@ -36,7 +36,7 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
-function buildHarness(download) {
+function buildHarness(download, requiredTables = ['items']) {
   const store = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
   const marks = [];
   const errors = [];
@@ -51,8 +51,8 @@ function buildHarness(download) {
     // 英文兜底现由规范 data-manager 源码实现，不再注入会重名的假函数。
     __zhxMark: (mark) => marks.push(mark),
     _zhxErr: (where, error) => errors.push([where, error]),
-    findSite: () => ({ id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items'] }),
-    neededTables: () => ['items'],
+    findSite: () => ({ id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: requiredTables }),
+    neededTables: () => requiredTables,
     storeGetAsync: async (key) => store.get(key) ?? null,
     storeSetAsync: async (key, value) => { store.set(key, value); return true; },
     storeListAsync: async () => [...store.keys()],
@@ -227,7 +227,7 @@ function network(getVersion) {
     const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
     assert.ok(match, '禁止加载未声明的数据文件：' + url);
     return files[match[1]];
-  });
+  }, ['items', 'dict']);
   await api.ensureTables();
   assert.equal(api.dataGetStatus().state, 'degraded', '词典语义校验失败不得发布 ready');
   assert.equal(api.dataGetIndex('nameMap'), null, '失败时内部索引不能对外暴露');
