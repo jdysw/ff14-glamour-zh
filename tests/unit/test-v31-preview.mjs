@@ -82,6 +82,11 @@ try {
   assert.deepEqual(await readV31WithV3Fallback(args), { source: 'v31', text: content });
   assert.deepEqual(await readV31WithV3Fallback({ ...args, fetchPreview: async () => null }),
     { source: 'v3', text: content }, '新对象不存在时必须校验旧 V3 再回退');
+  const incompatible = structuredClone(preview);
+  incompatible.source.version = 'abcdef123456';
+  assert.equal(validV31Manifest(incompatible), true);
+  assert.deepEqual(await readV31WithV3Fallback({ ...args, previewManifest: incompatible }),
+    { source: 'v3', text: content }, '不能跨数据版本组合新对象和旧版索引');
   assert.deepEqual(await readV31WithV3Fallback({ ...args, fetchPreview: async () => '损坏' }),
     { source: 'v3', text: content }, '新对象摘要错误不能进入索引');
   // 历史 V3 manifest 可没有 bytes：旧兼容回退仍按 SHA 检查，不要求补写元数据。
