@@ -110,6 +110,9 @@ test('真实缓存与物品系列解析：前缀、歧义和派生失效', () =>
       '異なる系列・ヒーラー|毫无关联译名',
       'bad row',
     ].join('\n');
+    Object.defineProperty(DATA_TEXT, 'series', {
+      configurable: true, enumerable: original.enumerable, value: fixture,
+    });
     cacheReset('derived');
     const series = _getSeriesMap();
     assert.equal(series.get('ファントムヴィジョン・ディフェンダー'), '幻境意象御敌');
