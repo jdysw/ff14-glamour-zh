@@ -88,7 +88,7 @@ test('Targets 收集：原链接、纯文本、卡片及染剂均命中，非法
   assert.equal(got[1].text, '日本防具');
   assert.equal(got[3].context.zh, '墨蓝色');
   assert.equal(got[4].context.zh, '未染色');
-  assert.equal(collectTargets({ nodeType: 3 }), undefined); // 容器非元素应安全退化
+  assert.deepEqual(collectTargets({ nodeType: 3 }), []); // 容器非元素应安全退化
 });
 
 test('Targets 分派：同类批处理顺序和缺失处理器互不影响', () => {
