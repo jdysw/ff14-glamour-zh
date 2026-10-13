@@ -118,7 +118,8 @@ test('真实缓存与物品系列解析：前缀、歧义和派生失效', () =>
     assert.equal(lookupSeries('ファントムヴィジョン・ディフェンダー'), '幻境意象御敌');
     assert.equal(lookupSeries('ファントムヴィジョン・ディフェンダー・鎧'),
       '幻境意象御敌');
-    assert.equal(lookupSeries('ファントムヴィジョン'), '幻境意象');
+    assert.equal(lookupSeries('ファントムヴィジョン'), '幻境意象御敌',
+      '系列查找的历史最长前缀算法返回第一个同长度的精确条目');
     assert.equal(lookupSeries(''), null);
     assert.equal(_stripSeriesHit(series, '不相关・名称'), null);
     assert.equal(_mutualPrefix('abc', 'abcd'), true);
