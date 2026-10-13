@@ -21,6 +21,7 @@ const result = spawnSync(process.execPath, [
   '--test-reporter-destination=' + report,
   'tests/unit/test-native-source.test.mjs',
   'tests/unit/test-native-expanded.test.mjs',
+  'tests/unit/test-native-sites.test.mjs',
 ], { cwd: root, stdio: 'inherit' });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status || 1);
