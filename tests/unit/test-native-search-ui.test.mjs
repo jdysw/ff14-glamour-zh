@@ -88,7 +88,7 @@ const location = {
 for(const [key,value] of Object.entries({
   document, location, innerWidth: 1024, innerHeight: 768,
 })) globalThis[key]=value;
-assert.equal(_applyV3({ names: 'English Gear\t测试中文装备\t1\t0\n' }), true);
+assert.equal(_applyV3({ candidatePolicy: 1, names: 'English Gear\t测试中文装备\t1\t0\n' }), true);
 const fire = (name, event) => {
   assert.ok(handlers.has(name), '绑定后必须监听 ' + name);
   for (const fn of handlers.get(name)) fn(event);
