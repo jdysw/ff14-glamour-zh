@@ -106,7 +106,7 @@ def render(bardings, faces, accessory_slots):
             "  let previous = '';\n"
             "  for (const row of packed.split('\\n')) {\n"
             "    const separator = row.indexOf(':');\n"
-            "    const prefix = parseInt(row.slice(0, separator), 36);\n"
+            "    const prefix = Number.parseInt(row.slice(0, separator), 36);\n"
             "    const name = previous.slice(0, prefix) + row.slice(separator + 1);\n"
             "    out.push(name);\n"
             "    previous = name;\n"
