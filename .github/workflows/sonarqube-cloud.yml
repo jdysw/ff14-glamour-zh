@@ -50,17 +50,127 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # 仅当质量门禁失败时输出问题定位信息；令牌只作为请求凭据，不写入日志。
-      - name: 输出未解决 Sonar 问题位置
-        if: failure()
+      # Quality Gate 通过仍可能留有历史问题；独立导出 main 上真正未解决的告警。
+      # 问题位置进入 Actions 工件，令牌只用于请求授权，绝不存入工件。
+      - name: 导出 main 分支全部未解决 Sonar 告警
+        if: always()
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          curl --fail --silent --show-error --get \
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --get \
             --user "${SONAR_TOKEN}:" \
             --data-urlencode "componentKeys=jdysw_ff14-glamour-zh" \
-            --data-urlencode "pullRequest=${{ github.event.pull_request.number }}" \
+            --data-urlencode "branch=main" \
             --data-urlencode "resolved=false" \
-            --data-urlencode "ps=100" \
+            --data-urlencode "ps=500" \
             "https://sonarcloud.io/api/issues/search" \
-            | jq -r '.issues[] | [.rule, .severity, .component, (.line // .textRange.startLine // "-"), .message] | @tsv'
+            | jq '{total, paging, issues: [.issues[] | {
+                key, rule, severity, type, message, component,
+                line: (.line // .textRange.startLine // null),
+                effort, status, impacts
+              }]}' > sonar-unresolved.json
+          jq -r '.total' sonar-unresolved.json
+          jq -r '.issues[] | [.rule, .severity, .component,
+            (.line // "-"), .message] | @tsv' sonar-unresolved.json
+          jq -e '(.total // 0) <= 500' sonar-unresolved.json >/dev/null
+      - name: 上传 Sonar 未解决告警清单
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-unresolved-main
+          path: sonar-unresolved.json
+          if-no-files-found: warn
+
+      # PR 分支单独统计本次改动引起的 Sonar 告警，避免与历史 main 告警混淆。
+      - name: 导出当前 PR 未解决 Sonar 告警
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "componentKeys=jdysw_ff14-glamour-zh" \
+            --data-urlencode "pullRequest=${SONAR_PR_NUMBER}" \
+            --data-urlencode "resolved=false" \
+            --data-urlencode "ps=500" \
+            "https://sonarcloud.io/api/issues/search" \
+            | jq '{total, issues: [.issues[] | {
+                key, rule, severity, message, component,
+                line: (.line // .textRange.startLine // null), status
+              }]}' > sonar-unresolved-pr.json
+          jq -r '.total' sonar-unresolved-pr.json
+          jq -r '.issues[] | [.rule, .component, (.line // "-"), .message] | @tsv' sonar-unresolved-pr.json
+      - name: 上传当前 PR 未解决 Sonar 告警清单
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-unresolved-pr
+          path: sonar-unresolved-pr.json
+          if-no-files-found: error
+
+      # 记录 Sonar 服务端真实统计口径；覆盖率不能只看 V8 测试终端输出。
+      # PR 与 main 分支分别查询，避免把“新代码覆盖率”误称成全项目覆盖率。
+      - name: 导出 Sonar 全量覆盖率与未覆盖文件明细
+        if: ${{ success() }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SONAR_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p sonar-metrics
+          scope="branch=main"
+          if [ "$SONAR_EVENT" = "pull_request" ]; then
+            scope="pullRequest=$SONAR_PR_NUMBER"
+          fi
+          metrics="coverage,line_coverage,branch_coverage,lines_to_cover,uncovered_lines,conditions_to_cover,uncovered_conditions"
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "$scope" \
+            "https://sonarcloud.io/api/measures/component" \
+            | jq '{component: .component.key, measures: .component.measures}' > sonar-metrics/overall.json
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "qualifiers=FIL" \
+            --data-urlencode "ps=500" \
+            --data-urlencode "$scope" \
+            "https://sonarcloud.io/api/measures/component_tree" \
+            | jq '{paging, components: [.components[] | {key, path, qualifier, measures}]}' > sonar-metrics/files.json
+          jq -r '.measures[] | [.metric, (.value // "-")] | @tsv' sonar-metrics/overall.json
+          jq -r '.components[] | [.path, ([.measures[] | select(.metric == "coverage") | .value][0] // "0")] | @tsv' sonar-metrics/files.json
+          jq -e '(.paging.total // 0) <= 500' sonar-metrics/files.json >/dev/null
+          # PR 文件树仅显示变更文件；必须另取 main 全部文件，不能据此错误排序。
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "branch=main" \
+            "https://sonarcloud.io/api/measures/component" \
+            | jq '{component: .component.key, measures: .component.measures}' > sonar-metrics/overall-main.json
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "qualifiers=FIL" \
+            --data-urlencode "ps=500" \
+            --data-urlencode "branch=main" \
+            "https://sonarcloud.io/api/measures/component_tree" \
+            | jq '{paging, components: [.components[] | {key, path, qualifier, measures}]}' > sonar-metrics/files-main.json
+          jq -r '"main 全量覆盖率：" + ([.measures[] | select(.metric == "coverage") | .value][0] // "未取得")' sonar-metrics/overall-main.json
+          jq -r '.components[] | [.path, ([.measures[] | select(.metric == "coverage") | .value][0] // "-")] | @tsv' sonar-metrics/files-main.json
+          jq -e '(.paging.total // 0) <= 500' sonar-metrics/files-main.json >/dev/null
+
+      - name: 上传 Sonar 实际覆盖率与文件级缺口
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-coverage-metrics
+          path: sonar-metrics/*.json
+          if-no-files-found: warn
