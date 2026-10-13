@@ -217,7 +217,7 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     DICT_FC['テストカバー'] = '测试标题';
     assert.equal(_trFCExact(key, key), '模拟译文');
     assert.equal(_trFCDecor('≫' + key + '»', '≫' + key + '»', key), '≫模拟译文»');
-    assert.equal(trFC('≫' + key + '»'), '≫模拟译文»');
+    assert.equal(trFC('≪' + key + '»'), '≪模拟译文»');
     assert.equal(trFC(key), '模拟译文');
     const input = element('INPUT', {
       type: 'submit', placeholder: key, value: key,
