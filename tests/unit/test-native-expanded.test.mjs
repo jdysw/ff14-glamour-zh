@@ -18,6 +18,7 @@ import {
   lookupJp2Zh,
 } from '../../src/core/item-resolver.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
+import { onHost } from '../../src/core/site-policy.js';
 import { DATA_TEXT } from '../../src/core/data-manager.js';
 import { createObserver, observeLocal, _obsStats } from '../../src/core/observer.js';
 
@@ -68,7 +69,14 @@ test('真实站点注册：七站生命周期、异常隔离与域名识别', ()
     destroy: () => events.push('destroy'),
   });
   assert.equal(adapter.id, 'mirapri');
-  assert.ok(adapter.hosts.includes('mirapri.com'));
+  // hosts 是精确的站点配置数组，不应借用字符串子串检查做域名验证。
+  assert.deepEqual(adapter.hosts, ['mirapri.com']);
+  // 宿主判断必须校验点号边界，禁止欺骗性后缀和前缀域名被接受。
+  assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
+  assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
+  assert.equal(onHost('evilmirapri.com', 'mirapri.com'), false);
+  assert.equal(onHost('mirapri.com.evil.test', 'mirapri.com'), false);
+  assert.equal(onHost('not-mirapri.com', 'mirapri.com'), false);
   adapter.boot();
   adapter.pageshow();
   adapter.processRoot('局部 DOM');
