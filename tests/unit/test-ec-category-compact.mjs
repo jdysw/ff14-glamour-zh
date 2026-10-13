@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 // EC 分类压缩快照回归：验证全部官方原生名与旧版完全相同。
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -53,7 +54,7 @@ const python = [
   'result = module.render(names, [{"native":"单眼镜", "zh":"单眼镜"}], {"ears": names})',
   'print(json.dumps({"names":names, "code":result}, ensure_ascii=False))',
 ].join('\n');
-const run = spawnSync('python3', ['-c', python], { cwd: repoRoot, encoding: 'utf8' });
+const run = spawnSync(findPython(), ['-c', python], { cwd: repoRoot, encoding: 'utf8' });
 assert.equal(run.status, 0, run.stderr || 'Python 分类生成器必须能够执行');
 const sample = JSON.parse(run.stdout.trim());
 const roundtrip = new Function(sample.code + '\nreturn { barding: [...EC_BARDING_NATIVES], ears: [...EC_ACCESSORY_SLOT_NATIVES.ears] };')();
@@ -70,7 +71,7 @@ const verifyPython = [
   'source = json.load(sys.stdin)',
   'print(module.render(source["barding"], source["facewear"], {kind:source[kind] for kind in ("ears", "neck", "wrists", "rings")}), end="")',
 ].join('\n');
-const generated = spawnSync('python3', ['-c', verifyPython], {
+const generated = spawnSync(findPython(), ['-c', verifyPython], {
   cwd: repoRoot,
   input: JSON.stringify(data),
   encoding: 'utf8',

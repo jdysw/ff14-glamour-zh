@@ -115,4 +115,4 @@ const olC = rC.otherLinks || [];
 if (!olC.some((h) => /risingstones/.test(h))) { console.log('❌ C2 光之收藏家链接被误删'); cFail++; } else { console.log('✅ C2 「其他站点链接」保持原样'); }
 console.log(cFail ? '场景 C 失败 ' + cFail + ' 项' : '场景 C 通过 2/2');
 await closePage(PORT, t3.target.id);
-process.exit(aFail + bFail + cFail ? 1 : 0);
+process.exitCode = aFail + bFail + cFail ? 1 : 0;

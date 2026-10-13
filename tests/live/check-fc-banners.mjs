@@ -80,4 +80,4 @@ else console.log('  ✅ 无「一覧」残留');
 
 console.log(`\n═══ 结果: ${pass} 通过 / ${fail} 失败 ═══`);
 await closePage(PORT, t.target.id);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

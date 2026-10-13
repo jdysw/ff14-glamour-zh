@@ -21,8 +21,9 @@ try {
   assert.throws(() => verifyPagesAssets(root), /不得超过 25 MiB/,
     '严格拒绝 Cloudflare Pages 的单资源大小超限');
   truncateSync(asset, 0);
-  const link = path.join(root, 'ff14', 'v3', 'external.tsv');
-  symlinkSync(asset, link);
+  const link = path.join(root, 'ff14', 'v3', process.platform === 'win32' ? 'external-dir' : 'external.tsv');
+  if (process.platform === 'win32') symlinkSync(path.dirname(asset), link, 'junction');
+  else symlinkSync(asset, link);
   assert.throws(() => verifyPagesAssets(root), /不允许符号链接/,
     '即使链接指向产物目录内部，也必须拒绝');
   console.log('✅ Pages 资源上限、非空目录与符号链接安全校验通过');

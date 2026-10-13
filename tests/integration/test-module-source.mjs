@@ -23,7 +23,7 @@ const main = path.join(srcDir, 'main.js');
 const legacy = path.join(srcDir, 'ff14-glamour-zh.external.user.js');
 const coreDir = path.join(srcDir, 'core');
 const sitesDir = path.join(srcDir, 'sites');
-const build = fs.readFileSync(path.join(repoRoot, 'build.sh'), 'utf8');
+const build = fs.readFileSync(path.join(repoRoot, 'build', 'build.mjs'), 'utf8');
 
 console.log('── A：Canonical 源码入口 ──');
 ok('A1 src/main.js 存在', fs.existsSync(main));
@@ -48,7 +48,7 @@ for (const token of [
 ]) {
   ok('C-' + token + ' 未进入 build.sh', !build.includes(token));
 }
-ok('C8 build.sh 入口为 src/main.js', build.includes('src/main.js') && build.includes('rollup -c build/rollup.config.mjs'));
+ok('C8 构建入口为 src/main.js', build.includes('src/main.js') && build.includes('build/rollup.config.mjs'));
 
 console.log('── D：源码门禁 ──');
 let code = -1;
@@ -61,4 +61,4 @@ try {
 ok('D1 verify-module-source 通过', code === 0, 'exit=' + code);
 
 console.log(fail ? ('\n失败 ' + fail + ' 项') : ('\n模块源码契约通过 ' + total + '/' + total));
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

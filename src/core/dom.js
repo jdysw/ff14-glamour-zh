@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/dom */
-export { _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn };
+export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn };
 
 
   // 属性翻译：EC 部分导航/图标的文字在 alt / aria-label / title 属性里，
@@ -64,3 +64,5 @@ export { _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, 
   }
 
   /* @zhixia:core-dom-end */
+
+  const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);

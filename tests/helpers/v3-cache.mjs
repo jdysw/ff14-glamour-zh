@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 // Shared real Runtime Data v3 manifest and cache fixtures for tests and benchmarks.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +12,7 @@ process.once('exit', () => { try { fs.rmSync(CACHE_DIR, { recursive: true, force
 function ensureGenerated() {
   if (fs.existsSync(CACHE_DIR)) fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
-  execFileSync('python3', ['build/make-runtime-data.py', '--out', CACHE_DIR], { cwd: repoRoot, stdio: 'pipe' });
+  execFileSync(findPython(), ['build/make-runtime-data.py', '--out', CACHE_DIR], { cwd: repoRoot, stdio: 'pipe' });
 }
 export function readRuntimeV3(siteId = 'ec') {
   if (!loaded) {

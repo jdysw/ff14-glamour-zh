@@ -1,11 +1,11 @@
 # inject_dicts.py —— 从 dict/*.json 生成词典 JS 块并写入 canonical module（v3：common 复用 + 对象展开形态）
 # 用法: python3 inject_dicts.py [目标 JS 路径]
 # 输出格式：
-#   const DICT_COMMON = {...};              ← 通用层（注入一次，四站共享）
-#   const DICT  = { ...DICT_COMMON, {...} };← 站层（覆盖 common；v3 起 Object.assign → 展开语法）
+#   const DICT_COMMON = {...};              ← 通用层（注入一次，站点共享）
+#   const DICT  = { ...DICT_COMMON, {...} };← 站层（覆盖 common，使用对象展开）
 #   （DICT_EC / DICT_FC / DICT_RONKA 同理）
-# dict/*.json 为词典唯一权威源——本脚本每次构建全量覆盖 src/core/dictionary.js 中的 6 个词典块
-# 生成 6 个词典块，并在每块上方维护一行「⚠️ 自动生成」标识（存在即更新、缺失即插入，
+# dict/*.json 为词典唯一权威源——本脚本每次构建全量覆盖 src/core/dictionary.js 中的七个词典块
+# 生成七个词典块，并在每块上方维护一行「⚠️ 自动生成」标识（存在即更新、缺失即插入，
 # 幂等；对块与标识的任何手改都会被下一次构建覆盖）。
 import re, json, sys, os
 
@@ -20,15 +20,15 @@ def _guard(p):
 
 TARGET = _guard(sys.argv[1] if len(sys.argv) > 1 else os.path.join(BASE, 'src/core/dictionary.js'))
 
-# (变量名, 文件名, kind, 是否站点层)
+# (变量名, 文件名, 是否站点层)
 FILES = [
-    ('DICT_COMMON', 'dict-common.json', 'kv', False),
-    ('DICT',        'dict-main.json',   'kv', True),
-    ('DICT_EC',     'dict-ec.json',     'kv', True),
-    ('DICT_FC',     'dict-fc.json',     'kv', True),
-    ('DICT_RONKA',  'dict-ronka.json',  'kv', True),
-    ('DICT_ACL',    'dict-acl.json',    'kv', True),
-    ('DICT_ENDCLOSET', 'dict-endcloset.json', 'kv', True),
+    ('DICT_COMMON', 'dict-common.json', False),
+    ('DICT',        'dict-main.json',   True),
+    ('DICT_EC',     'dict-ec.json',     True),
+    ('DICT_FC',     'dict-fc.json',     True),
+    ('DICT_RONKA',  'dict-ronka.json',  True),
+    ('DICT_ACL',    'dict-acl.json',    True),
+    ('DICT_ENDCLOSET', 'dict-endcloset.json', True),
 ]
 
 def js_str(x):
@@ -42,16 +42,6 @@ def gen_kv(entries, indent='    ', spread=False):
     for k, v in entries.items():
         lines.append(indent + js_str(k) + ': ' + js_str(v) + ',')
     lines.append('  }')
-    return '\n'.join(lines)
-
-def gen_arr(entries, indent='    '):
-    lines = ['[']
-    for it in entries:
-        if it.get('type') == 's':
-            lines.append(indent + js_str(it['v']) + ',')
-        else:
-            lines.append(indent + it['v'] + ',')
-    lines.append('  ]')
     return '\n'.join(lines)
 
 def _skip_str(s, i):
@@ -84,29 +74,15 @@ def _scan_block(s, i, open_ch, close_ch):
     return i
 
 
-def _open_at(s, i, name):
-    """块起始定位：返回 (open_ch, close_ch, body_start)；兼容三种形态。"""
-    pfx_old = 'Object.assign({}, DICT_COMMON, '
-    pfx_new = '{ ...DICT_COMMON,'
-    if s.startswith(pfx_old, i):
-        i += len(pfx_old)
-    elif s.startswith(pfx_new, i):
-        return '{', '}', i + len(pfx_new)
-    open_ch = s[i]
-    assert open_ch in '{[', name + ': 块的起始括号缺失'
-    return open_ch, ('}' if open_ch == '{' else ']'), i + 1
-
-
 def find_block(s, name):
-    """定位 `const NAME = {...};` 块；兼容历史前缀（Object.assign 形态）。
+    """定位生成器拥有的 `const NAME = {...};` 对象块。
     返回 (stmt_start, stmt_end)；未找到返回 None。"""
-    m = re.search(r'\n  const ' + re.escape(name) + r' = ', s)
+    m = re.search(r'\n  const ' + re.escape(name) + r' = \{', s)
     if not m:
         return None
     stmt_start = m.start() + 1  # 行首（跳过 \n）
-    open_ch, close_ch, body = _open_at(s, m.end(), name)
-    j = _scan_block(s, body, open_ch, close_ch)  # 闭合符之后
-    while j < len(s) and s[j] in ';)':           # 吞尾部残留 `;` / `)`（兼容 `});` 与 `};`）
+    j = _scan_block(s, m.end(), '{', '}')  # 闭合符之后
+    if j < len(s) and s[j] == ';':
         j += 1
     return (stmt_start, j)
 
@@ -135,31 +111,16 @@ def ensure_banner(s, name, fn):
 
 s = open(TARGET, encoding='utf-8').read()
 
-# 0) 确保 DICT_COMMON 块存在（首次插入到 `const DICT = ` 之前）
-if find_block(s, 'DICT_COMMON') is None:
-    data = json.load(open(os.path.join(DICT_DIR, 'dict-common.json'), encoding='utf-8'))
-    new_block = '  const DICT_COMMON = ' + gen_kv(data['entries']) + ';\n\n'
-    anchor = re.search(r'\n {2}const DICT = ', s)
-    assert anchor, '未找到 const DICT 块（无法插入 DICT_COMMON）'
-    pos = anchor.start() + 1
-    s = s[:pos] + new_block + s[pos:]
-    print('DICT_COMMON    插入 %d 条（新块）' % len(data['entries']))
-
 total = 0
-for name, fn, kind, is_site in FILES:
+for name, fn, is_site in FILES:
     fp = os.path.join(DICT_DIR, fn)
-    if not os.path.exists(fp):
-        print(name, 'JSON 缺失，跳过'); continue
     data = json.load(open(fp, encoding='utf-8'))
     entries = data['entries']
-    if kind == 'kv':
-        body = gen_kv(entries, spread=is_site)
-    else:
-        body = gen_arr(entries)
+    body = gen_kv(entries, spread=is_site)
     new_stmt = '  const ' + name + ' = ' + body + ';'
     r = find_block(s, name)
     if not r:
-        print(name, '块未找到'); continue
+        raise SystemExit(name + ': 缺少 canonical 词典对象块')
     start, end = r
     s = s[:start] + new_stmt + s[end:]
     s = ensure_banner(s, name, fn)

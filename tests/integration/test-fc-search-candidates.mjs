@@ -114,4 +114,4 @@ ok('⑥ 无 [TEST-INJECT] 错误', !testErr);
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);
-process.exit(fail === 0 ? 0 : 1);
+process.exitCode = fail === 0 ? 0 : 1;

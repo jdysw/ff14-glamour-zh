@@ -1,12 +1,9 @@
-// verify_dicts.js —— 词典一致性校验（Phase 16：三种模式）
+// verify_dicts.js —— 词典一致性校验（源码 / 远程 JSON 两种模式）
 // 用法1（构建用）  : node verify_dicts.js <src.js>
-//                    → 校验 src 内注入的 6 组词典 与 dict/*.json 源 逐条一致
+//                    → 校验 src 内注入的 7 组词典 与 dict/*.json 源 逐条一致
 // 用法2（构建用）  : node verify_dicts.js <src.js> --dict-json <dict.json>
-//                    → 校验 src 内注入的 6 组词典 与「远程词库产物」（build/make_dict_json.py
+//                    → 校验 src 内注入的 7 组词典 与「远程词库产物」（build/make_dict_json.py
 //                      生成、数据站发布用）逐条一致（站点层按 common+本站增量合并语义比对）
-// 用法3（兼容保留）: node verify_dicts.js <a.js> <b.js>
-//                    → 深度对比两个脚本文件的 6 组注入词典是否等价
-//                      （PATTERNS* 为模板内手写块，不参与本对比）
 // 约束：仅接受仓库内路径（防路径穿越）；对词典体做受控文本扫描，不执行任何代码。
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -91,10 +88,10 @@ function parseKvBody(body) {
   return obj;
 }
 
-// ── 提取：定位 const NAME = {...} 块（兼容 Object.assign 历史形态）──
+// ── 提取：定位 const NAME = {...} 当前对象块──
 function extractDict(src, name) {
   const esc = name.replace(/[\\$]/g, String.raw`\$&`);
-  const re = new RegExp(String.raw`const ${esc} = (?:Object\.assign\(\{\}, DICT_COMMON, )?\{`);
+  const re = new RegExp(String.raw`const ${esc} = \{`);
   const m = re.exec(src);
   if (!m) return { missing: true };
   const braceAt = m.index + m[0].length - 1;
@@ -113,19 +110,6 @@ function _logKeys(label, keys) {
   for (const k of keys.slice(0, 8)) console.log('  ' + label + '独有:', JSON.stringify(k));
 }
 
-function diffArray(name, va, vb, labelA, labelB) {
-  const sa = (va || []).map(String).join('\u0001');
-  const sb = (vb || []).map(String).join('\u0001');
-  const eq = sa === sb;
-  console.log(name, '数组', (va || []).length, 'vs', (vb || []).length, eq ? '✅ 完全一致' : '❌ 不一致');
-  if (!eq) {
-    const setA = new Set((va || []).map(String)), setB = new Set((vb || []).map(String));
-    for (const x of setA) if (!setB.has(x)) console.log('  ' + labelA + '独有:', String(x).slice(0, 100));
-    for (const x of setB) if (!setA.has(x)) console.log('  ' + labelB + '独有:', String(x).slice(0, 100));
-  }
-  return eq;
-}
-
 function diffObject(name, va, vb, labelA, labelB) {
   const ka = Object.keys(va || {}), kb = Object.keys(vb || {});
   const onlyA = ka.filter(k => !(k in vb));
@@ -141,15 +125,12 @@ function diffObject(name, va, vb, labelA, labelB) {
   return eq;
 }
 
-function diffOne(name, va, vb, labelA, labelB) {
-  // 返回 true=一致；打印差异
-  return (Array.isArray(va) || Array.isArray(vb))
-    ? diffArray(name, va, vb, labelA, labelB)
-    : diffObject(name, va, vb, labelA, labelB);
+const args = process.argv.slice(2);
+if (!(args.length === 1 || (args.length === 3 && args[1] === '--dict-json'))) {
+  console.error('用法: node verify_dicts.js <src.js> [--dict-json <dict.json>]'); process.exit(1);
 }
-
-const fileA = process.argv[2];
-if (!fileA) { console.log('用法: node verify_dicts.js <src.js> [--dict-json <dict.json> | b.js]'); process.exit(1); }
+const fileA = args[0];
+if (!fileA) { console.log('用法: node verify_dicts.js <src.js> [--dict-json <dict.json>]'); process.exit(1); }
 const a = fs.readFileSync(safeResolve(fileA, '文件A'), 'utf8');
 
 let allEq = true;
@@ -177,24 +158,11 @@ if (dictJsonIdx >= 0) {
     if (d.value === undefined) { console.log(n, '提取失败', d.missing ? '(src 中缺失)' : ''); allEq = false; continue; }
     // 期望值：站点层 = common + 本站增量（与运行时合并 / dict.json 语义一致）
     const expect = (n === 'DICT_COMMON') ? { ...common } : { ...common, ...dj[key] };
-    if (!diffOne(n, d.value, expect, 'src', 'dict.json')) allEq = false;
+    if (!diffObject(n, d.value, expect, 'src', 'dict.json')) allEq = false;
   }
   console.log(`（对照物: ${djPath}  fp=${fp}）`);
   console.log(allEq ? '\n=== 全部一致 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
   if (!allEq) process.exitCode = 1;
-} else if (process.argv[3]) {
-  // ── 模式3：双文件对比（6 组注入词典；PATTERNS* 为手写块，不参与）──
-  const b = fs.readFileSync(safeResolve(process.argv[3], '文件B'), 'utf8');
-  const NAMES = ['DICT_COMMON', 'DICT', 'DICT_EC', 'DICT_FC', 'DICT_RONKA', 'DICT_ACL', 'DICT_ENDCLOSET'];
-  for (const n of NAMES) {
-    const da = extractDict(a, n), db = extractDict(b, n);
-    if (da.value === undefined || db.value === undefined) {
-      console.log(n, '提取失败', da.missing ? 'A缺失' : '', db.missing ? 'B缺失' : '');
-      allEq = false; continue;
-    }
-    if (!diffOne(n, da.value, db.value, 'A', 'B')) allEq = false;
-  }
-  console.log(allEq ? '\n=== 全部等价 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
 } else {
   // ── 模式1：src vs dict/*.json（7 组注入词典）──
   const dictDir = path.join(REPO_ROOT, 'dict');
@@ -219,7 +187,7 @@ if (dictJsonIdx >= 0) {
       console.log(n, '提取失败', d.missing ? '(src 中缺失)' : '');
       allEq = false; continue;
     }
-    if (!diffOne(n, d.value, expect, 'src', 'json')) allEq = false;
+    if (!diffObject(n, d.value, expect, 'src', 'json')) allEq = false;
   }
   console.log('（PATTERNS_EC / PATTERNS 为源码内手写块，非 dict 注入，跳过）');
   console.log(allEq ? '\n=== 全部一致 ✅ ===' : '\n=== 存在差异 ⚠️ ===');

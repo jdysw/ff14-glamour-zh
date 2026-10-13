@@ -86,4 +86,4 @@ ok('B2 无「ファントムヴィジョン」残留', B.kanaLeft === 0, `实际
 
 console.log();
 console.log(`总计: ${pass} 通过 / ${fail} 失败`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -66,8 +66,8 @@ try {
   d1 = { code: e.status, out: String(e.stdout || '') + String(e.stderr || '') };
 }
 ok('D1 build/version.mjs --check 通过', d1.code === 0, d1.code !== 0 ? d1.out.slice(-200).replace(/\n+/g, ' ⏎ ') : '');
-const bs = read(path.join(repoRoot, 'build.sh'));
-ok('D2 build.sh 含版本同步 + 版本校验两步', bs.includes('node build/version.mjs') && bs.includes('node build/version.mjs --check'));
+const bs = read(path.join(repoRoot, 'build', 'build.mjs'));
+ok('D2 构建入口含版本同步 + 版本校验两步', bs.includes("node('build/version.mjs')") && bs.includes("node('build/version.mjs', '--check')"));
 
 console.log('── E：发布 / CI 链契约 ──');
 const ry = read(path.join(repoRoot, '.github', 'workflows', 'release.yml'));
@@ -91,4 +91,4 @@ ok('F4 @run-at document-idle + @noframes（header）', headText.includes('docume
 ok('F5 dist 含 @name/@namespace/@version/@match', distText.includes('@name') && distText.includes('@namespace') && distText.includes('@version') && distText.includes('@match'));
 
 console.log(fail ? `\n失败 ${fail} 项` : `\n版本单一源契约通过 ${total}/${total}`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

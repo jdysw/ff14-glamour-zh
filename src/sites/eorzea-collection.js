@@ -1,12 +1,11 @@
 /* @phase15-module-order:sites/eorzea-collection */
 import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
-import { _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
 import { dataGetIndex } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
-import { SKIP_TAGS } from './mirapri.js';
 export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
 
 

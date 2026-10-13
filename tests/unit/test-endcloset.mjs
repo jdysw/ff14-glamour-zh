@@ -164,10 +164,8 @@ check('重置筛选三语文本映射保留站点原控制行为', () => {
   assert.equal(ctx.trEndCloset('Reset Filters'), '重置筛选');
 });
 check('End Closet 筛选按钮在装备标记容器内部仍收到原生点击', () => {
-  const file = fs.readFileSync(new URL('../../src/sites/ffxiv-collection.js', import.meta.url), 'utf8');
-  const start = file.indexOf('  function bindZhxItemClick(flag) {');
-  const end = file.indexOf('  // 装备块的 The Lodestone', start);
-  assert.ok(start !== -1 && end > start);
+  const file = fs.readFileSync(new URL('../../src/core/item-links.js', import.meta.url), 'utf8');
+  const moduleBody = file.replace(/^import .*;\r?\n/gm, '').replace(/export\s*\{[^}]*\};/s, '');
   const events = {};
   const opened = [];
   const win = { open: url => opened.push(url) };
@@ -177,7 +175,7 @@ check('End Closet 筛选按钮在装备标记容器内部仍收到原生点击',
     },
   };
   const bind = vm.runInNewContext(
-    '(function() { ' + file.slice(start, end) + ' return bindZhxItemClick; })()',
+    '(function() { ' + moduleBody + ' return bindZhxItemClick; })()',
     { window: win, document: doc, WIKI_ITEM: 'https://ff14.huijiwiki.com/wiki/物品:' }
   );
   bind('__endclosetResetTest');

@@ -1,12 +1,13 @@
-/* @phase15-module-order:sites/mirapri */
-import { _markScan, localScope } from '../core/dom.js';
+export { SKIP_TAGS } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePage, translateMirapriTitle };
+export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translateMirapriTitle };
 
 
   // 部分匹配（长句、带变量文本、placeholder）
+/* @phase15-module-order:sites/mirapri */
   const PATTERNS = [
     [/ユーザーの皆さまにMIRAPRI SNAPを快適にご利用いただくため、/g, '为了让各位用户更舒适地使用 MIRAPRI SNAP，'],
     [/」をご一読いただき、お守りいただきますよう、ご協力をお願いいたします。/g, '」，并请遵守其中的规定。'],
@@ -19,7 +20,6 @@ export { PATTERNS, SKIP_TAGS, busy, startMirapri, tr, trEl, trNode, translatePag
     [/^\s*＊\s*/, '＊'],
   ];
 
-  const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
   // These regions are player-authored; item-name data is handled separately.
   const MIRAPRI_AUTHORED_SEL = [
     '#gallery article .article-info .title',

@@ -156,7 +156,7 @@ try {
   assert.throws(() => createV31Preview(oldDir, path.join(repoRoot, 'site', 'v31-test')),
     /不得位于站点/, '预览构建必须在真实部署目录外');
   const alias = path.join(root, 'linked-output');
-  symlinkSync(root, alias, 'dir');
+  symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
   assert.throws(() => createV31Preview(oldDir, path.join(alias, 'preview')),
     /符号链接/, '父级符号链接不能绕过预览目录隔离');
 

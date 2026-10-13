@@ -1,6 +1,38 @@
 // 在 V8 LCOV 中执行七站真实模块的翻译/页面行为，不使用字符串执行替身。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
+
+test('共享物品点击与样式：幂等注册，并保留原生筛选按钮行为', () => {
+  const previous = { window: globalThis.window, document: globalThis.document };
+  const styles = new Map(), opened = [], handlers = [];
+  const appendChild = style => styles.set(style.id, style);
+  globalThis.window = { open: (...args) => opened.push(args) };
+  globalThis.document = { getElementById: id => styles.get(id), createElement: () => ({}),
+    head: { appendChild }, documentElement: { appendChild }, addEventListener: (...args) => handlers.push(args) };
+  try {
+    ensureZhxItemStyle('shared-style'); ensureZhxItemStyle('shared-style');
+    assert.equal(styles.size, 1);
+    globalThis.document.head = null; ensureZhxItemStyle('fallback-style');
+    assert.equal(styles.size, 2);
+    bindZhxItemClick('shared'); bindZhxItemClick('shared'); assert.equal(handlers.length, 1);
+    const click = handlers[0][1];
+    const item = { dataset: { zhxItem: '女仆礼服' } };
+    let prevented = 0, stopped = 0;
+    const event = (el, control) => ({ target: { closest: selector => selector === '[data-zhx-item]' ? el : control },
+      preventDefault: () => prevented++, stopPropagation: () => stopped++ });
+    click({}); click(event(null)); click(event({ dataset: {} }));
+    click(event(item, { contains: () => false })); assert.equal(opened.length, 0);
+    click(event(item)); click(event(item, item)); click(event(item, { contains: () => true }));
+    assert.equal(opened.length, 3); assert.equal(prevented, 3); assert.equal(stopped, 3);
+    assert.ok(opened[0][0].endsWith(encodeURIComponent('女仆礼服')));
+    assert.equal(opened[0][2], 'noopener');
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+  }
+});
 import {
   tr, trNode, trEl, translateMirapriTitle,
 } from '../../src/sites/mirapri.js';
