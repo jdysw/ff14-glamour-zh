@@ -50,17 +50,34 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # 仅当质量门禁失败时输出问题定位信息；令牌只作为请求凭据，不写入日志。
-      - name: 输出未解决 Sonar 问题位置
-        if: failure()
+      # Quality Gate 通过仍可能留有历史问题；独立导出 main 上真正未解决的告警。
+      # 问题位置进入 Actions 工件，令牌只用于请求授权，绝不存入工件。
+      - name: 导出 main 分支全部未解决 Sonar 告警
+        if: always()
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          curl --fail --silent --show-error --get \
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --get \
             --user "${SONAR_TOKEN}:" \
             --data-urlencode "componentKeys=jdysw_ff14-glamour-zh" \
-            --data-urlencode "pullRequest=${{ github.event.pull_request.number }}" \
+            --data-urlencode "branch=main" \
             --data-urlencode "resolved=false" \
-            --data-urlencode "ps=100" \
+            --data-urlencode "ps=500" \
             "https://sonarcloud.io/api/issues/search" \
-            | jq -r '.issues[] | [.rule, .severity, .component, (.line // .textRange.startLine // "-"), .message] | @tsv'
+            | jq '{total, paging, issues: [.issues[] | {
+                key, rule, severity, type, message, component,
+                line: (.line // .textRange.startLine // null),
+                effort, status, impacts
+              }]}' > sonar-unresolved.json
+          jq -r '"main 分支 Sonar 未解决告警数：\\(.total)"' sonar-unresolved.json
+          jq -r '.issues[] | [.rule, .severity, .component,
+            (.line // "-"), .message] | @tsv' sonar-unresolved.json
+          jq -e '(.total // 0) <= 500' sonar-unresolved.json >/dev/null
+      - name: 上传 Sonar 未解决告警清单
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-unresolved-main
+          path: sonar-unresolved.json
+          if-no-files-found: warn
