@@ -146,6 +146,26 @@ jobs:
           jq -r '.measures[] | [.metric, (.value // "-")] | @tsv' sonar-metrics/overall.json
           jq -r '.components[] | [.path, ([.measures[] | select(.metric == "coverage") | .value][0] // "0")] | @tsv' sonar-metrics/files.json
           jq -e '(.paging.total // 0) <= 500' sonar-metrics/files.json >/dev/null
+          # PR 文件树仅显示变更文件；必须另取 main 全部文件，不能据此错误排序。
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "branch=main" \
+            "https://sonarcloud.io/api/measures/component" \
+            | jq '{component: .component.key, measures: .component.measures}' > sonar-metrics/overall-main.json
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "qualifiers=FIL" \
+            --data-urlencode "ps=500" \
+            --data-urlencode "branch=main" \
+            "https://sonarcloud.io/api/measures/component_tree" \
+            | jq '{paging, components: [.components[] | {key, path, qualifier, measures}]}' > sonar-metrics/files-main.json
+          jq -r '"main 全量覆盖率：" + ([.measures[] | select(.metric == "coverage") | .value][0] // "未取得")' sonar-metrics/overall-main.json
+          jq -r '.components[] | [.path, ([.measures[] | select(.metric == "coverage") | .value][0] // "-")] | @tsv' sonar-metrics/files-main.json
+          jq -e '(.paging.total // 0) <= 500' sonar-metrics/files-main.json >/dev/null
 
       - name: 上传 Sonar 实际覆盖率与文件级缺口
         if: ${{ always() }}
