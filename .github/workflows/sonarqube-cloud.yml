@@ -70,7 +70,7 @@ jobs:
                 line: (.line // .textRange.startLine // null),
                 effort, status, impacts
               }]}' > sonar-unresolved.json
-          jq -r '"main 分支 Sonar 未解决告警数：\\(.total)"' sonar-unresolved.json
+          jq -r '.total' sonar-unresolved.json
           jq -r '.issues[] | [.rule, .severity, .component,
             (.line // "-"), .message] | @tsv' sonar-unresolved.json
           jq -e '(.total // 0) <= 500' sonar-unresolved.json >/dev/null
@@ -81,3 +81,32 @@ jobs:
           name: sonar-unresolved-main
           path: sonar-unresolved.json
           if-no-files-found: warn
+
+      # PR 分支单独统计本次改动引起的 Sonar 告警，避免与历史 main 告警混淆。
+      - name: 导出当前 PR 未解决 Sonar 告警
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "componentKeys=jdysw_ff14-glamour-zh" \
+            --data-urlencode "pullRequest=${SONAR_PR_NUMBER}" \
+            --data-urlencode "resolved=false" \
+            --data-urlencode "ps=500" \
+            "https://sonarcloud.io/api/issues/search" \
+            | jq '{total, issues: [.issues[] | {
+                key, rule, severity, message, component,
+                line: (.line // .textRange.startLine // null), status
+              }]}' > sonar-unresolved-pr.json
+          jq -r '.total' sonar-unresolved-pr.json
+          jq -r '.issues[] | [.rule, .component, (.line // "-"), .message] | @tsv' sonar-unresolved-pr.json
+      - name: 上传当前 PR 未解决 Sonar 告警清单
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-unresolved-pr
+          path: sonar-unresolved-pr.json
+          if-no-files-found: error
