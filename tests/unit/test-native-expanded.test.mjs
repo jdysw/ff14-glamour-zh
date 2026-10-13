@@ -100,9 +100,11 @@ test('真实站点注册：七站生命周期、异常隔离与域名识别', ()
 });
 
 test('真实缓存与物品系列解析：前缀、歧义和派生失效', () => {
-  const saved = DATA_TEXT.series;
+  // DATA_TEXT.series 是只读访问器；通过属性描述符注入测试数据，结束后还原访问器。
+  const original = Object.getOwnPropertyDescriptor(DATA_TEXT, 'series');
+  assert.equal(typeof original.get, 'function');
   try {
-    DATA_TEXT.series = [
+    const fixture = [
       'ファントムヴィジョン・ディフェンダー|幻境意象御敌',
       'ファントムヴィジョン・スレイヤー|幻境意象制敌',
       '異なる系列・ヒーラー|毫无关联译名',
@@ -146,7 +148,7 @@ test('真实缓存与物品系列解析：前缀、歧义和派生失效', () =>
     assert.equal(lookupJp2Zh(''), null);
     assert.equal(lookupJp2Zh('X'.repeat(81)), null);
   } finally {
-    DATA_TEXT.series = saved;
+    Object.defineProperty(DATA_TEXT, 'series', original);
     cacheReset('derived');
   }
 });
@@ -188,7 +190,8 @@ test('真实 MutationObserver：批次去重、文字变动、异常隔离和销
     ]);
     await new Promise(resolve => setTimeout(resolve, 25));
     assert.equal(batches.length, 1);
-    assert.deepEqual(batches[0].nodes, [child]);
+    // dedupeByAncestor 仅剔除重复元素；文本节点作为独立变更目标保留。
+    assert.deepEqual(batches[0].nodes, [child, leaf]);
     assert.deepEqual(batches[0].changed, [leaf]);
     assert.equal(_obsStats.ticks, ticks + 1);
     worker.disconnect();
