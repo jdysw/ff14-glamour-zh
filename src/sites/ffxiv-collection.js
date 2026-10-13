@@ -3,11 +3,10 @@ export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DATA_TEXT } from '../core/data-manager.js';
 import { DICT_ACL } from '../core/dictionary.js';
-import { _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-import { SKIP_TAGS } from '../core/dom.js';
 export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 

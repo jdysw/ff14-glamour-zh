@@ -2,9 +2,8 @@
 import { DICT_ENDCLOSET } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
-import { _markScan, localScope } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
-import { SKIP_TAGS } from '../core/dom.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { startChineseSearch } from '../core/chinese-search.js';
 

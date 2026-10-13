@@ -1,6 +1,5 @@
 export { SKIP_TAGS } from '../core/dom.js';
-import { SKIP_TAGS } from '../core/dom.js';
-import { _markScan, localScope } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
