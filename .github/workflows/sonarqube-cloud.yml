@@ -110,3 +110,47 @@ jobs:
           name: sonar-unresolved-pr
           path: sonar-unresolved-pr.json
           if-no-files-found: error
+
+      # 记录 Sonar 服务端真实统计口径；覆盖率不能只看 V8 测试终端输出。
+      # PR 与 main 分支分别查询，避免把“新代码覆盖率”误称成全项目覆盖率。
+      - name: 导出 Sonar 全量覆盖率与未覆盖文件明细
+        if: ${{ success() }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SONAR_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p sonar-metrics
+          scope="branch=main"
+          if [ "$SONAR_EVENT" = "pull_request" ]; then
+            scope="pullRequest=$SONAR_PR_NUMBER"
+          fi
+          metrics="coverage,line_coverage,branch_coverage,lines_to_cover,uncovered_lines,conditions_to_cover,uncovered_conditions"
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "$scope" \
+            "https://sonarcloud.io/api/measures/component" \
+            | jq '{component: .component.key, measures: .component.measures}' > sonar-metrics/overall.json
+          curl --fail --silent --show-error --get \
+            --user "${SONAR_TOKEN}:" \
+            --data-urlencode "component=jdysw_ff14-glamour-zh" \
+            --data-urlencode "metricKeys=$metrics" \
+            --data-urlencode "qualifiers=FIL" \
+            --data-urlencode "ps=500" \
+            --data-urlencode "$scope" \
+            "https://sonarcloud.io/api/measures/component_tree" \
+            | jq '{paging, components: [.components[] | {key, path, qualifier, measures}]}' > sonar-metrics/files.json
+          jq -r '.measures[] | [.metric, (.value // "-")] | @tsv' sonar-metrics/overall.json
+          jq -r '.components[] | [.path, ([.measures[] | select(.metric == "coverage") | .value][0] // "0")] | @tsv' sonar-metrics/files.json
+          jq -e '(.paging.total // 0) <= 500' sonar-metrics/files.json >/dev/null
+
+      - name: 上传 Sonar 实际覆盖率与文件级缺口
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-coverage-metrics
+          path: sonar-metrics/*.json
+          if-no-files-found: warn
