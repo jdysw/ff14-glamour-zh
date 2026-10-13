@@ -26,7 +26,7 @@ function decodeEcNativeNames(packed) {
   let previous = '';
   for (const row of packed.split('\n')) {
     const separator = row.indexOf(':');
-    const prefix = parseInt(row.slice(0, separator), 36);
+    const prefix = Number.parseInt(row.slice(0, separator), 36);
     const name = previous.slice(0, prefix) + row.slice(separator + 1);
     out.push(name);
     previous = name;
