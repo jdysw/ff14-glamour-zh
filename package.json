@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "bash build.sh",
+    "build": "node build/build.mjs",
     "test": "node tests/run.mjs --suite=unit,integration",
     "test:unit": "node tests/run.mjs --suite=unit",
     "test:coverage": "node tools/coverage/run-native-coverage.mjs",
@@ -20,10 +20,11 @@
     "bench:baseline": "node tests/benchmark/bench-lifecycle.mjs --save && node tests/benchmark/bench-read-path.mjs --save",
     "bench:compare": "node tests/benchmark/compare.mjs",
     "check:dist": "node --check dist/ff14-glamour-zh.greasyfork.user.js",
-    "validate:data": "python3 build/validate-data.py",
+    "validate:data": "node build/python.mjs build/validate-data.py",
     "version:check": "node build/version.mjs --check",
     "version:sync": "node build/version.mjs",
-    "check:source": "node build/verify-module-source.mjs"
+    "check:source": "node build/verify-module-source.mjs",
+    "check:deps": "node build/verify-dependencies.mjs"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

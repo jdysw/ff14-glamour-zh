@@ -129,4 +129,4 @@ console.log('\n════ 场景 E3：__zhxDiagOn（无面板测量）══�
 
 console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

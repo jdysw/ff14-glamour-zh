@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 // tests/integration/test-dict-single-source.mjs — Phase 16：词典单一源契约
 //
 // 断言「dict/*.json = 词典唯一权威源」的完整链路：
@@ -85,7 +86,7 @@ if (simple) {
   const c2 = run('node', ['build/verify_dicts.js', 'tests/.cache/dict-single-source/tamper.user.js']);
   ok('C2 篡改副本 → verify 必失败（exit≠0）', c2.code !== 0);
 
-  const c3 = run('python3', ['build/inject_dicts.py', 'tests/.cache/dict-single-source/tamper.user.js']);
+  const c3 = run(findPython(), ['build/inject_dicts.py', 'tests/.cache/dict-single-source/tamper.user.js']);
   ok('C3 inject 再生副本成功（JSON 全量覆盖）', c3.code === 0, c3.code !== 0 ? tail(c3.out) : '');
 
   const c4 = run('node', ['build/verify_dicts.js', 'tests/.cache/dict-single-source/tamper.user.js']);
@@ -95,7 +96,7 @@ if (simple) {
 
 console.log('── D：远程词库产物（内嵌 ≡ dict.json）──');
 const djPath = path.join(dir, 'dict.json');
-const d1 = run('python3', ['build/make_dict_json.py', '--out', djPath]);
+const d1 = run(findPython(), ['build/make_dict_json.py', '--out', djPath]);
 ok('D1 make_dict_json 生成成功', d1.code === 0, d1.code !== 0 ? tail(d1.out) : '');
 const d2 = run('node', ['build/verify_dicts.js', SRC_REL, '--dict-json', 'tests/.cache/dict-single-source/dict.json']);
 ok('D2 verify --dict-json 通过（src 内嵌 ≡ 远程产物）', d2.code === 0, d2.code !== 0 ? tail(d2.out) : '');
@@ -115,9 +116,9 @@ console.log('── E：构建链含两步（不缺环）──');
   const result = run('node', ['build/verify_dicts.js', SRC_REL, '--dict-json', tamperedPath]);
   ok('D4 End Closet 远程词条篡改必须被校验拒绝', result.code !== 0 && result.out.includes('DICT_ENDCLOSET'));
 }
-const bs = fs.readFileSync(path.join(repoRoot, 'build.sh'), 'utf8');
+const bs = fs.readFileSync(path.join(repoRoot, 'build', 'build.mjs'), 'utf8');
 ok('E1 build.sh 含 make_dict_json 生成步骤', bs.includes('make_dict_json.py'));
 ok('E2 build.sh 含 --dict-json 校验步骤', bs.includes('--dict-json'));
 
 console.log(fail ? `\n失败 ${fail} 项` : '\n词典单一源契约通过 12/12');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

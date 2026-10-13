@@ -141,4 +141,4 @@ console.log('\n════ 场景 D4 双份结构·桌面视口（应跳过 hid
 
 console.log('\n════════ 汇总 ════════');
 console.log(`通过 ${pass} / 失败 ${fail}`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

@@ -11,7 +11,7 @@ const sha = (p) => createHash('sha256').update(fs.readFileSync(p)).digest('hex')
 function buildOnce(round) {
   console.log(`第 ${round} 次构建…`);
   try {
-    execFileSync('bash', ['build.sh'], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync(process.execPath, ['build/build.mjs'], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (e) {
     console.error(`第 ${round} 次构建失败（exit=${e.status}）：`);
     console.error(String(e.stdout || '').slice(-2000));
@@ -52,4 +52,4 @@ try {
 }
 
 console.log(fail ? `\n失败 ${fail} 项` : '\n构建幂等测试通过 4/4');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

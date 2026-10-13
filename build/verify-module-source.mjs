@@ -6,7 +6,7 @@
 //   src/core/*.js
 //   src/sites/*.js
 //
-// build/migrate/* 可以作为历史迁移工具保留，但不得重新进入 build.sh 主链。
+// 一次性模块迁移工具已退役，禁止重新引入反向生成源码链。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,7 @@ const legacy = path.join(root, 'src', 'ff14-glamour-zh.external.user.js');
 const main = path.join(root, 'src', 'main.js');
 const coreDir = path.join(root, 'src', 'core');
 const sitesDir = path.join(root, 'src', 'sites');
-const buildFile = path.join(root, 'build.sh');
+const buildFile = path.join(root, 'build', 'build.mjs');
 
 function fail(msg) {
   console.error('❌ ' + msg);
@@ -44,7 +44,7 @@ const forbidden = [
   'build/module-assign.json',
 ];
 const used = forbidden.filter((x) => build.includes(x));
-if (used.length) fail('build.sh 仍调用 Legacy 模块生成链：' + used.join(', '));
+if (used.length) fail('构建入口仍调用 Legacy 模块生成链：' + used.join(', '));
 
 const sourceFiles = [
   main,

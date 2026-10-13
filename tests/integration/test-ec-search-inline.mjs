@@ -318,4 +318,4 @@ ok('③j EC 重置筛选的兜底使浏览器 URL 恢复无筛选状态并重新
 
 console.log(`\n${pass} / ${pass + fail} 通过`);
 await closePage(PORT, t.target.id);
-process.exit(fail === 0 ? 0 : 1);
+process.exitCode = fail === 0 ? 0 : 1;

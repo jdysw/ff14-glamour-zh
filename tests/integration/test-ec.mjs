@@ -105,4 +105,4 @@ for (const [name, ok, got] of checks) {
 console.log(`\n${pass}/${checks.length} 通过`);
 console.log('\nconsole:', c.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 900));
 await closePage(PORT, t.target.id);
-process.exit(pass === checks.length ? 0 : 1);
+process.exitCode = pass === checks.length ? 0 : 1;

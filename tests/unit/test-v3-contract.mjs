@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 // 对照 Python V3 生成器和生产站点策略，防止任一侧独立演进时悄悄漏表。
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -14,7 +15,7 @@ const python = [
   'spec.loader.exec_module(generator)',
   'print(json.dumps(generator.SITE_FILES, ensure_ascii=False))',
 ].join(';');
-const published = JSON.parse(execFileSync('python3', ['-c', python], { cwd: root, encoding: 'utf8' }));
+const published = JSON.parse(execFileSync(findPython(), ['-c', python], { cwd: root, encoding: 'utf8' }));
 assert.equal(SITE_POLICIES.length, 7);
 assert.deepEqual(Object.keys(published).sort(), SITE_POLICIES.map(site => site.id).sort(),
   'Python 发布器与 JavaScript 应用层必须服务相同七站');

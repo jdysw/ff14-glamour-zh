@@ -108,4 +108,4 @@ console.log('╔══ 页2: equipment/phantom_vision_of_casting ══╗');
 }
 
 console.log(`\n═══ 结果: ${pass} 通过 / ${fail} 失败 ═══`);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

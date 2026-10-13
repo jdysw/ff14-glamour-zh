@@ -22,10 +22,11 @@
     "sites/huiji-wiki",
     "core/probe",
     "core/item-resolver",
-    "sites/mirapri",
     "sites/eorzea-collection",
     "sites/ff14-fc",
+    "core/item-links",
     "sites/ffxiv-collection",
+    "sites/mirapri",
     "sites/ronka",
     "sites/endcloset",
     "core/site-registry"

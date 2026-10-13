@@ -166,4 +166,4 @@ console.log('╔══ 场景 B：缓存路径（不清缓存，fresh 直接用�
 console.log();
 console.log(`总计: ${pass} 通过 / ${fail} 失败`);
 await new Promise((resolve) => pageServer.close(resolve));
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

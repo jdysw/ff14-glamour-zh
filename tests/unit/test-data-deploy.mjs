@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -31,7 +32,7 @@ try {
   fs.mkdirSync(path.dirname(stale), { recursive: true });
   fs.writeFileSync(stale, 'stale V2 payload');
 
-  const prep = spawnSync(process.env.PYTHON || 'python3', [path.join(deployDir, 'prepare.py')], {
+  const prep = spawnSync(process.env.PYTHON || findPython(), [path.join(deployDir, 'prepare.py')], {
     cwd: temp,
     encoding: 'utf8',
   });
@@ -43,7 +44,7 @@ try {
     assert.equal(fs.existsSync(path.join(out, name)), true, name + ' copied to deployment root');
   }
   // V3 文件名可变，不得配置 immutable；JSON 不能误标成 text/plain。
-  const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8');
+  const headers = fs.readFileSync(path.join(out, '_headers'), 'utf8').replaceAll('\r\n', '\n');
   const hasRule = (route, values) =>
     headers.includes([route, ...values.map(value => '  ' + value)].join('\n'));
   assert.ok(hasRule('/ff14/v3/manifest.json', ['Cache-Control: no-cache, must-revalidate']));

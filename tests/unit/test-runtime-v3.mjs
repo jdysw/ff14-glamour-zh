@@ -1,3 +1,4 @@
+import { findPython } from '../../build/python.mjs';
 // tests/unit/test-runtime-v3.mjs — Phase 12：Runtime Data v3（生成器产物 + v3-only 运行时加载）
 //
 // 目的：
@@ -36,7 +37,7 @@ const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 
 // 每次测试都从当前源码生成独立 V3 fixture，避免复用旧 data/v3 产物。
 const tmp = mkdtempSync(join(tmpdir(), 'zhx-v3-test-'));
-execFileSync('python3', ['build/make-runtime-data.py', '--out', tmp],
+execFileSync(findPython(), ['build/make-runtime-data.py', '--out', tmp],
   { cwd: fileURLToPath(ROOT), stdio: 'pipe' });
 process.once('exit', () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 const V3_DIR = new URL('file://' + tmp + '/');

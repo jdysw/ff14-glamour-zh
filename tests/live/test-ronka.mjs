@@ -130,4 +130,4 @@ await closePage(PORT, t2.target.id);
 
 const pass = checks.filter(([, okf]) => okf).length;
 console.log(`\n══════ 总计: ${pass}/${checks.length} 通过 ══════`);
-process.exit(pass === checks.length ? 0 : 1);
+process.exitCode = pass === checks.length ? 0 : 1;

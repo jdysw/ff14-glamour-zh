@@ -59,4 +59,4 @@ else if (r.n < 2) { console.log('❌ 区块链接数不足 2（get ' + r.n + '�
 else { console.log(`✅ 慢渲染（主体 5.5s 后出现）下区块成功注入：链接数 ${r.n}，用时约 ${elapsed}s，done=${r.done}`); }
 console.log('console:', c.consoleLines.filter((l) => l.includes('幻化') || l.includes('TEST')).join(' | ').slice(0, 500));
 await closePage(PORT, t.target.id);
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;

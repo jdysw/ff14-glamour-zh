@@ -3,6 +3,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
 export { sleep };
+const pageConnections = new Map();
 
 export class CDP {
   constructor(ws) {
@@ -105,7 +106,12 @@ export class CDP {
     });
   }
   async close() {
-    try { this.ws.close(); } catch (e) {}
+    if (this.ws.readyState === WebSocket.CLOSED) return;
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 1500);
+      this.ws.addEventListener('close', () => { clearTimeout(timer); resolve(); }, { once: true });
+      try { this.ws.close(); } catch { clearTimeout(timer); resolve(); }
+    });
   }
 }
 
@@ -114,6 +120,7 @@ export async function newPage(port, url = 'about:blank', { width = 1440, height 
   if (!r.ok) throw new Error('创建页面失败: ' + r.status);
   const target = await r.json();
   const cdp = await CDP.connect(target.webSocketDebuggerUrl);
+  pageConnections.set(target.id, cdp);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
   try {
@@ -123,5 +130,7 @@ export async function newPage(port, url = 'about:blank', { width = 1440, height 
 }
 
 export async function closePage(port, targetId) {
+  const cdp = pageConnections.get(targetId);
+  if (cdp) { await cdp.close(); pageConnections.delete(targetId); }
   try { await fetch(`http://127.0.0.1:${port}/json/close/${targetId}`); } catch (e) {}
 }

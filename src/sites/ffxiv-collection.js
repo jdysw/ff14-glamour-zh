@@ -1,4 +1,5 @@
-/* @phase15-module-order:sites/ffxiv-collection */
+import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
+export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DATA_TEXT } from '../core/data-manager.js';
 import { DICT_ACL } from '../core/dictionary.js';
@@ -6,8 +7,8 @@ import { _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { observeLocal } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-import { SKIP_TAGS } from './mirapri.js';
-export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, bindZhxItemClick, ensureZhxItemStyle, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
+import { SKIP_TAGS } from '../core/dom.js';
+export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 
   /* ===================================================================== */
@@ -18,6 +19,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
    * 站为 WordPress 服务端渲染（jQuery 增强），observer 覆盖筛选/懒加载。
    */
 
+/* @phase15-module-order:sites/ffxiv-collection */
   const ACL_DECOR_HEAD = /^[\s\u00a0※◆■□●○▼▽☆★]+/;
   const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]{1,64}$/;
   const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;
@@ -115,36 +117,6 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (p.dataset.zhxItem === translated) return;
     p.dataset.zhxItem = translated;
     p.setAttribute('title', '点击查看灰机 wiki 物品页');
-  }
-
-  function ensureZhxItemStyle(id) {
-    if (document.getElementById(id)) return;
-    const st = document.createElement('style');
-    st.id = id;
-    st.textContent = '[data-zhx-item]{cursor:pointer;transition:text-decoration-color .15s}[data-zhx-item]:hover{text-decoration:underline;text-underline-offset:3px}';
-    (document.head || document.documentElement).appendChild(st);
-  }
-
-  function bindZhxItemClick(flag) {
-    if (window[flag]) return;
-    window[flag] = true;
-    document.addEventListener('click', (e) => {
-      const el = e.target?.closest?.('[data-zhx-item]') ?? null;
-      if (!el) return;
-      // Item names can be nested inside interactive controls, but a filter
-      // button nested inside an item-marked card is NOT an item-name click.
-      // Never steal reset/apply/clear or other native React control actions.
-      const control = e.target?.closest?.(
-        'button, input, select, textarea, a[href], [role="button"], ' +
-        '[role="checkbox"], [role="switch"], [role="combobox"]'
-      );
-      if (control && control !== el && !control.contains(el)) return;
-      const zh = el.dataset.zhxItem;
-      if (!zh) return;
-      e.preventDefault();
-      e.stopPropagation();
-      window.open(WIKI_ITEM + encodeURIComponent(zh), '_blank', 'noopener');
-    }, true);
   }
 
   // 装备块的 The Lodestone 图标链接 → 灰机 wiki（图标 + 中文物品页）
