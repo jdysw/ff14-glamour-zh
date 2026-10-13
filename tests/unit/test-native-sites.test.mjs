@@ -14,6 +14,13 @@ import {
 import {
   _trACLSet, _trACLExact, trACL, _trACLLabel, _trACLGearsetAlt, _aclAcceptNode,
 } from '../../src/sites/ffxiv-collection.js';
+import {
+  trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
+  _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode,
+} from '../../src/sites/ff14-fc.js';
+import { DICT_FC } from '../../src/core/dictionary.js';
+
 import { DICT_ACL } from '../../src/core/dictionary.js';
 import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
@@ -183,5 +190,74 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
+  }
+});
+
+test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重写', () => {
+  assert.equal(trFCSegments('不存在'), null);
+  assert.equal(trFCSegments('ディフェンダー・ディフェンダー'), '御敌·御敌');
+  assert.equal(trFCSegments('ABC・ディフェンダー'), 'ABC·御敌');
+  assert.equal(trFCSegments('未知名・ディフェンダー'), null,
+    '未知日文区段不应被半翻译导致后续数据加载无法命中');
+  assert.equal(_fcCanReplaceAt('ノートゥング', 0, 'ノート'), false,
+    '连续片假名中的部分词不能错误替换');
+  assert.equal(_fcCanReplaceAt('☆ ノート ☆', 2, 'ノート'), true);
+  assert.equal(_trFCName('abcdef', 'abcdef', 'abcdef'), null);
+  assert.equal(_trFCSubstr('no', 'no', 'no'), null);
+  assert.equal(trFC(''), '');
+  const key = 'COVERAGE_FC_TEST_WORD';
+  const old = DICT_FC[key];
+  const had = Object.hasOwn(DICT_FC, key);
+  const oldTitle = DICT_FC['テストカバー'];
+  const hadTitle = Object.hasOwn(DICT_FC, 'テストカバー');
+  const doc = globalThis.document;
+  const filter = globalThis.NodeFilter;
+  try {
+    DICT_FC[key] = '模拟译文';
+    DICT_FC['テストカバー'] = '测试标题';
+    assert.equal(_trFCExact(key, key), '模拟译文');
+    assert.equal(_trFCDecor('≫' + key + '»', '≫' + key + '»', key), '≫模拟译文»');
+    assert.equal(trFC('≫' + key + '»'), '≫模拟译文»');
+    assert.equal(trFC(key), '模拟译文');
+    const input = element('INPUT', {
+      type: 'submit', placeholder: key, value: key,
+    });
+    _wowFCInput(input);
+    assert.equal(input.getAttribute('placeholder'), '模拟译文');
+    assert.equal(input.getAttribute('value'), '模拟译文');
+    const title = element('A', { title: 'View all posts in ' + key });
+    _trFCAttr(title, 'title');
+    assert.equal(title.getAttribute('title'), '查看“模拟译文”分类下的全部文章');
+    _procFCNode(element('SPAN', { title: key }));
+    assert.equal(fcLinkZhName({
+      textContent: '精金骑士铠甲', getAttribute: () => '',
+    }), '精金骑士铠甲');
+    const link = element('A', { href: 'https://external.example/item', target: '_blank' });
+    link.textContent = '精金骑士铠甲';
+    link.removeAttribute = name => link.setAttribute(name, null);
+    rewriteFCForeignLink(link);
+    assert.ok(link.getAttribute('href').includes('%E7%B2%BE%E9%87%91'));
+    assert.equal(link.dataset.zhixiaFcHref, '1');
+    rewriteFCForeignLink(link);
+    assert.equal(link.dataset.zhixiaFcHref, '1', '同一节点不能重复包裹');
+
+    globalThis.document = { title: 'テストカバー | テストカバー' };
+    translateFCTitle();
+    assert.equal(document.title, '测试标题 | 测试标题');
+    globalThis.NodeFilter = { FILTER_ACCEPT: 1, FILTER_REJECT: 2 };
+    assert.equal(_fcAcceptNode({ nodeType: 3 }), 1);
+    assert.equal(_fcAcceptNode(element('SCRIPT')), 2);
+    const node = { nodeValue: key, parentElement: element('SPAN') };
+    trimFCNode(node);
+    assert.equal(node.nodeValue, '模拟译文');
+  } finally {
+    if (had) DICT_FC[key] = old;
+    else delete DICT_FC[key];
+    if (hadTitle) DICT_FC['テストカバー'] = oldTitle;
+    else delete DICT_FC['テストカバー'];
+    if (doc === undefined) delete globalThis.document;
+    else globalThis.document = doc;
+    if (filter === undefined) delete globalThis.NodeFilter;
+    else globalThis.NodeFilter = filter;
   }
 });
