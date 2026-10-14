@@ -64,6 +64,17 @@ try {
   assert.match(actual.title, /FF14 幻化展示/);
   assert.deepEqual(actual.requests, []);
   assert.deepEqual(actual.errors, []);
+  const fonts = await c.eval(`(() => {
+    const code=document.createElement('code');code.textContent='code';code.style.fontFamily='monospace';document.body.append(code);
+    const portal=document.createElement('div');portal.setAttribute('role','dialog');portal.style.fontFamily='Georgia';portal.textContent='动态弹层';document.body.append(portal);
+    return {body:getComputedStyle(document.body).fontFamily,heading:getComputedStyle(document.querySelector('h2')).fontFamily,
+      input:getComputedStyle(document.querySelector('input')).fontFamily,portal:getComputedStyle(portal).fontFamily,code:getComputedStyle(code).fontFamily};
+  })()`);
+  for (const key of ['body','heading','input','portal']) {
+    assert.equal(fonts[key], fonts.body, key + ' uses the Chinese font stack');
+    assert.ok(fonts[key].includes('Microsoft YaHei'), key);
+  }
+  assert.equal(fonts.code, 'monospace');
   if (standalone) assert.equal(await c.eval('JSON.stringify(Object.entries(localStorage).sort())'), storageBefore);
 
   // React may reuse a name/link node for a different item or an unknown item.
