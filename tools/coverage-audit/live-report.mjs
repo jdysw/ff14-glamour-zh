@@ -16,7 +16,7 @@ export function loadLiveResults(dir) {
     for(const entry of fs.readdirSync(folder,{withFileTypes:true})){
       const full=path.join(folder,entry.name);
       if(entry.isDirectory()){visit(full);continue;}
-      if(!entry.isFile()||!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki)-.+\.json$/.test(entry.name))continue;
+      if(!entry.isFile()||!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki|miramiru)-.+\.json$/.test(entry.name))continue;
       try {
         const d=JSON.parse(fs.readFileSync(full,'utf8'));
         if(d.site&&(Array.isArray(d.items)||Array.isArray(d.pages)))rows.push(d);

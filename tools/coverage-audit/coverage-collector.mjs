@@ -1,6 +1,10 @@
 // Browser-executed read-only collector. Shared by CDP, Playwright cloud and userscript.
 // No telemetry, storage, network calls, or mutation.
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { miramiruScope } = require('../manual-coverage-audit/audit-core.js');
 export const COLLECTOR_JS = String.raw`(() => {
+  const miramiruScope = ${miramiruScope.toString()};
   const out = [];
   const seen = new Set();
   const BAD = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'IFRAME', 'SVG']);
@@ -51,11 +55,13 @@ export const COLLECTOR_JS = String.raw`(() => {
     );
     const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
       || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
-    const user = authoredContext && !control;
-    const ui = control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
+    const siteScope = globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href) : null;
+    const user = (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
+    const ui = siteScope !== 'item' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
-      || kind.startsWith('attr:') || kind === 'option';
+      || kind.startsWith('attr:') || kind === 'option');
     return {
+      scope: siteScope || undefined,
       tag: el.tagName.toLowerCase(), cls, id, ancestors, ad, user, ui, control,
       role: el.getAttribute('role') || '',
       name: el.getAttribute('name') || '',

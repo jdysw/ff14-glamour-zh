@@ -71,7 +71,7 @@ SITE_LANGS = {
     'ronka': ['ko'],
     'collection': ['ja'],
     'endcloset': ['ko', 'en', 'ja'],
-    'miramiru': ['en'],
+    'miramiru': ['en', 'ja', 'ko'],
     'wiki': [],
 }
 

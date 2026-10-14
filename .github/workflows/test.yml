@@ -152,6 +152,9 @@ jobs:
       - name: 构建（build.sh 全链）
         run: npm run build
 
+      - name: 重建汉化审计安装脚本
+        run: node tools/manual-coverage-audit/build-userscript.mjs
+
       - name: 集成测试 B（站点适配组）
         run: node tests/run.mjs integration/test-miramiru test-ec test-mirapri test-probe test-chinese-search-submit test-ronka-search-inline test-fc-search-candidates test-collection-search-inline test-standalone-search-trigger test-ec-search-inline
 
@@ -159,7 +162,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: miramiru-test-userscript
-          path: dist/ff14-miramiru-zh-*-test.user.js
+          path: |
+            dist/ff14-miramiru-zh-*-test.user.js
+            tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js
           retention-days: 14
           if-no-files-found: error
 

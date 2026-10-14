@@ -1,4 +1,4 @@
-/* FF14 manual browser audit v1.2.0. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.0. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -105,7 +105,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.2.0',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.0',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -137,7 +137,7 @@ async function capture(automatic=false){
     if(all.length>CAP){say('节点超过单页安全限额 '+CAP+'，未保存以免遗漏。',true);return;}
     if(mode==='before'){
       if(!data.baselines[key]&&Object.keys(data.baselines).length>=MAX_BASELINES)throw Error('已达基线数量限制，先导出归档');
-      data.baselines[key]={site,url,state,label,key,items:all,capturedAt:clock(),method:'manual-verified'};
+      data.baselines[key]={site,language:C.pageLanguage(location.href),url,state,label,key,items:all,capturedAt:clock(),method:'manual-verified'};
       say('已保存人工原文基线：'+all.length+' 项。重新启用汉化脚本后对同一状态采集。');
     }else{
       if(!data.pages[recordKey]&&Object.keys(data.pages).length>=MAX_SNAPSHOTS)throw Error('快照数量达到上限，先导出归档');
@@ -146,10 +146,10 @@ async function capture(automatic=false){
       if(baseline){const p=C.pair(baseline.items,all);items=p.items;matched=p.matched;ambiguous=p.ambiguous;}
       const beforeMatched=baseline ? matched : all.filter(it=>it.matchQuality==='inferred-old-value').length;
       const baselineQuality=baseline?'manual-verified':beforeMatched?'partial-inferred':'none';
-      data.pages[recordKey]={site,url,pageId:'manual-'+site,key,state,label,round,status:'ok',
+      data.pages[recordKey]={site,language:C.pageLanguage(location.href),url,pageId:'manual-'+site,key,state,label,round,status:'ok',
         items,beforeCount:baseline?.items.length??null,hasBaseline:!!baseline,
         baselineQuality,matched,ambiguous,observedOldValues:beforeMatched,
-        readiness,scannedAt:clock(),source:'manual-browser-v1.1',title:document.title};
+        readiness,scannedAt:clock(),source:'manual-browser-v1.3',title:document.title};
       say((automatic?'自动':'手动')+'完成 '+all.length+' 条，'+
         (baseline?`人工基线匹配 ${matched}/${all.length}`:`推断原文 ${beforeMatched} 条（不能据此计算汉化率）`)+
         '；采集状态 '+readiness);
@@ -173,8 +173,8 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
-  download(JSON.stringify(out,null,2),'ff14-audit-v1.2-'+clock().replace(/[:.]/g,'-')+'.json');
+  out.toolVersion='1.3.0';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
 async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
@@ -192,7 +192,7 @@ async function init(){
   input[type=text]{width:100%;min-width:60px}button{cursor:pointer}button:hover{background:#35517b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .hint{font-size:11px;color:#c6d1e2}.bad{color:#ffb9b9}.closed .body{display:none}#status{max-height:85px;overflow:auto;overflow-wrap:anywhere}#status[data-error=true]{color:#ffb9b9}`;
   box.append(style);const panel=document.createElement('div');panel.className='panel';
-  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.2'));
+  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.3'));
   head.append(btn('−',()=>{panel.classList.toggle('closed');head.lastChild.textContent=panel.classList.contains('closed')?'+':'−'}));panel.append(head);
   const body=document.createElement('div');body.className='body';
   const hint=document.createElement('div');hint.className='hint';hint.textContent='只读采集；同一网址可保留不同状态和版本。自动推断的原文不等同于完整基线。';body.append(hint);
@@ -236,7 +236,7 @@ async function init(){
   panel.append(body);box.append(panel);await count();
   if(autoCheck.checked&&C.allowedRoute(location.href))void capture(true);
 }
-try{GM_registerMenuCommand('FF14 V1.2：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.2：导出 JSON',()=>exportJSON());
-  GM_registerMenuCommand('FF14 V1.2：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
+try{GM_registerMenuCommand('FF14 V1.3：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.3：导出 JSON',()=>exportJSON());
+  GM_registerMenuCommand('FF14 V1.3：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
 void init().catch(err=>console.error('[FF14 manual audit init]',err));
 })();

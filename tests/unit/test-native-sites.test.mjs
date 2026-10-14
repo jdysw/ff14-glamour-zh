@@ -1,7 +1,34 @@
 // 在 V8 LCOV 中执行七站真实模块的翻译/页面行为，不使用字符串执行替身。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
+import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
+
+test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
+  const locales = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-locales.json', import.meta.url), 'utf8'));
+  for (const row of Object.values(locales)) {
+    assert.equal(trMiramiru(row.Filter.filter), '筛选');
+    assert.equal(trMiramiru(row.Equipment.title), '装备列表');
+    assert.equal(trMiramiru(row.Equipment.noDye), '未染色');
+    assert.equal(trMiramiru(row.Equipment.undyeable), '不可染色');
+    assert.equal(trMiramiru(row.Filter.keywordPlaceholder), '搜索标题、装备或标签');
+    assert.equal(trMiramiru(row.Hero.subtitle), 'FF14 幻化展示');
+  }
+  for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+  for (const raw of ['Other','その他','기타']) assert.equal(trMiramiru(raw), '其他');
+  for (const raw of ['15 Glamours','15 ミラプリ','15 투영']) assert.equal(trMiramiru(raw), '15 套幻化');
+  assert.equal(trMiramiru('  '), '  ');
+  assert.equal(trMiramiru('Unknown player title'), 'Unknown player title');
+  const old = globalThis.document;
+  try {
+    for (const suffix of ['FFXIV Glamour Showcase','FFXIV ミラプリ紹介サイト','FFXIV 투영 소개 사이트']) {
+      globalThis.document = {title:'Miramiru - ' + suffix};
+      translateMiramiruTitle();
+      assert.equal(document.title, 'Miramiru - FF14 幻化展示');
+    }
+  } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
+});
 
 test('共享物品点击与样式：幂等注册，并保留原生筛选按钮行为', () => {
   const previous = { window: globalThis.window, document: globalThis.document };

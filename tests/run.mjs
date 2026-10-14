@@ -65,7 +65,7 @@ const SUITES = {
   ],
 };
 
-SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs');
+SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs', 'integration/test-miramiru-audit.mjs');
 SUITES.unit.push('unit/test-endcloset.mjs');
 SUITES.unit.push('unit/test-coverage-audit.mjs');
 SUITES.unit.push('unit/test-audit-localization.mjs');

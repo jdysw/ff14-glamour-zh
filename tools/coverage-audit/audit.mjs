@@ -31,6 +31,17 @@ export const DIST_FILE = path.join(REPO_ROOT, 'dist', 'ff14-glamour-zh.greasyfor
 
 // ---------- 站点配置 ----------
 export const SITES = {
+  miramiru: {
+    name: 'miramiru', label: 'Miramiru（三语幻化站）', host: 'miramiru.co', channel: 'local',
+    pages: [
+      { id: 'home-ja', url: 'https://miramiru.co/', type: 'home' },
+      { id: 'home-en', url: 'https://miramiru.co/en', type: 'home' },
+      { id: 'home-ko', url: 'https://miramiru.co/ko', type: 'home' },
+      { id: 'ranking-ja', url: 'https://miramiru.co/ranking', type: 'list' },
+      { id: 'ranking-en', url: 'https://miramiru.co/en/ranking', type: 'list' },
+      { id: 'ranking-ko', url: 'https://miramiru.co/ko/ranking', type: 'list' },
+    ],
+  },
   mirapri: {
     name: 'mirapri',
     label: 'mirapri（日服幻化站）',
@@ -170,7 +181,7 @@ const EXEMPT_PATTERNS = [
 // Known Japanese UI text can consist entirely of Han ideographs (e.g. 検索 or 検索).
 // Source dictionaries disambiguate them without misclassifying arbitrary Chinese words.
 const KNOWN_KANJI_UI = new Set();
-for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-endcloset']) {
+for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-endcloset', 'dict-miramiru']) {
   try {
     const dict = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'dict', name + '.json'), 'utf8'));
     for (const [foreign, zh] of Object.entries(dict.entries || {})) {
@@ -196,7 +207,7 @@ export function isResidual(text, ctx = {}) {
   const t = String(text || '').trim();
   if (!t) return false;
   if (JA_RE.test(t) || KO_RE.test(t)) return true;
-  if (ctx.ui && KNOWN_KANJI_UI.has(t) && (!ctx.site || ['mirapri', 'fc', 'collection', 'endcloset'].includes(ctx.site))) return true;
+  if (ctx.ui && KNOWN_KANJI_UI.has(t) && (!ctx.site || ['mirapri', 'fc', 'collection', 'endcloset', 'miramiru'].includes(ctx.site))) return true;
   if (!/[A-Za-z]{2}/.test(t) || !ctx.ui || t.length > 100) return false;
   if (ctx.kind === 'document:title' || ctx.kind === 'attr:alt') return false;
   // Latin letters used in Chinese UI are generally identifiers/abbreviations,

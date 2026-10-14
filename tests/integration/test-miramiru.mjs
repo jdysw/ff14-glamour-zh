@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { seedV3Browser } from '../helpers/v3-cache.mjs';
+import { seedV3Memory } from '../helpers/v3-cache.mjs';
 import { readDist, fixtureUrl } from '../helpers/paths.mjs';
 
 const port = Number(process.env.ZHX_CDP_PORT || 9223);
@@ -8,13 +9,13 @@ const page = await newPage(port, fixtureUrl('miramiru-page.html'));
 const c = page.cdp;
 try {
   const standalone = process.env.ZHX_MIRAMIRU_STANDALONE === '1';
-  if (!standalone) await seedV3Browser(c, 'miramiru');
+  if (!standalone) await seedV3Memory(c, 'miramiru');
   await c.eval(`
     window.__zhxTestSite = 'miramiru';
     window.__zhxDiagOn = true;
     window.__requests = [];
-    window.GM_getValue = (k,d) => localStorage.getItem('gm:' + k) ?? d;
-    window.GM_setValue = (k,v) => localStorage.setItem('gm:' + k, String(v));
+    window.GM_getValue = (k,d) => window.__v3MemoryCache?.get(k) ?? d;
+    window.GM_setValue = (k,v) => window.__v3MemoryCache.set(k, String(v));
     window.GM_xmlhttpRequest = o => { window.__requests.push(o.url); o.onerror?.({status:0}); };
   `);
   const storageBefore = await c.eval('JSON.stringify(Object.entries(localStorage).sort())');
@@ -92,6 +93,35 @@ try {
   const ticks = await c.eval('window.__zhxDiagRecord().obs.ticks');
   await sleep(600);
   assert.equal(await c.eval('window.__zhxDiagRecord().obs.ticks'), ticks);
+  const locales = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-locales.json', import.meta.url), 'utf8'));
+  const names = {en:'Kupo Jacket',ja:'クポクポジャケット',ko:'쿠뽀쿠뽀 재킷'};
+  const dyes = {en:'Chestnut Brown',ja:'チェスナットブラウン',ko:'밤색'};
+  for (const [locale, labels] of Object.entries(locales)) {
+    await c.callFn(`function(locale, labels, name, dye) {
+      document.documentElement.lang = locale;
+      document.querySelector('#dynamic').textContent = labels.Equipment.title;
+      document.querySelector('#filter').textContent = labels.Filter.filter;
+      document.querySelector('input').placeholder = labels.Filter.keywordPlaceholder;
+      document.querySelector('#unknown').textContent = name;
+      document.querySelector('#dye').textContent = dye;
+      const link = document.querySelector('a.eorzeadb_link');
+      link.href = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/b2c13afee4b/';
+      link.querySelector('img').alt = name;
+      document.querySelector('#name').firstChild.nodeValue = name;
+    }`, [locale, labels, names[locale], dyes[locale]]);
+    await sleep(500);
+    const translated = await c.eval(`({heading:document.querySelector('#dynamic').textContent,
+      filter:document.querySelector('#filter').textContent, plain:document.querySelector('#unknown').textContent,
+      name:document.querySelector('#name').textContent, dye:document.querySelector('#dye').textContent,
+      placeholder:document.querySelector('input').placeholder, href:document.querySelector('a.eorzeadb_link').href})`);
+    assert.equal(translated.heading, '装备列表', locale);
+    assert.equal(translated.filter, '筛选', locale);
+    assert.equal(translated.plain, '库啵外套', locale + ' names index');
+    assert.equal(translated.name, '库啵外套', locale);
+    assert.equal(translated.dye, '山栗棕', locale);
+    assert.equal(translated.placeholder, '搜索标题、装备或标签', locale);
+    assert.ok(translated.href.endsWith(encodeURIComponent('库啵外套')), locale);
+  }
   console.log('PASS Miramiru: Chinese UI/items/dyes, Wiki links, native links, user input, React updates, stable observer, offline V3');
 } finally {
   await closePage(port, page.target.id);

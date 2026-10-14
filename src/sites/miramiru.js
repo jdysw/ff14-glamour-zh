@@ -21,8 +21,10 @@ function trMiramiru(text) {
   let zh = Object.hasOwn(DICT_MIRAMIRU, raw) ? DICT_MIRAMIRU[raw] : null;
   if (!zh && raw.length <= 100) zh = resolveByName(raw);
   if (!zh) {
-    const count = raw.match(/^([\d,.]+K?)\s+(Glamours|Creators|Likes|uses)$/);
-    if (count) zh = count[1] + ' ' + ({ Glamours: '套幻化', Creators: '位作者', Likes: '次点赞', uses: '次使用' })[count[2]];
+    const count = raw.match(/^([\d,.]+[KM]?)\s*(Glamours|ミラプリ|투영|Creators|クリエイター|크리에이터|Likes|いいね|좋아요|uses|回使用|회 사용)$/);
+    if (count) zh = count[1] + ' ' + ({ Glamours: '套幻化', 'ミラプリ': '套幻化', '투영': '套幻化',
+      Creators: '位作者', 'クリエイター': '位作者', '크리에이터': '位作者',
+      Likes: '次点赞', 'いいね': '次点赞', '좋아요': '次点赞', uses: '次使用', '回使用': '次使用', '회 사용': '次使用' })[count[2]];
   }
   if (!zh || zh === raw) return text;
   return text.replace(raw, zh);
@@ -101,7 +103,7 @@ function translateMiramiruPage(rootArg) {
 }
 
 function translateMiramiruTitle() {
-  const next = document.title.replace('FFXIV Glamour Showcase', 'FF14 幻化展示');
+  const next = trMiramiru(document.title).replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/g, 'FF14 幻化展示');
   if (next !== document.title) document.title = next;
 }
 

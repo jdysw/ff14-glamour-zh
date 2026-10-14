@@ -4,11 +4,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { seedV3Browser } from '../helpers/v3-cache.mjs';
+import { seedV3Memory } from '../helpers/v3-cache.mjs';
 import { readDist, repoRoot } from '../helpers/paths.mjs';
 
 const port = Number(process.env.ZHX_CDP_PORT || 9223);
-const page = await newPage(port, 'https://miramiru.co/en/mirapuri/cmv7sb7p8000004lbxukefqcv');
+const locale = process.env.ZHX_MIRAMIRU_LOCALE || 'en';
+const prefix = locale === 'ja' ? '' : '/' + locale;
+const page = await newPage(port, 'https://miramiru.co' + prefix + '/mirapuri/cmv7sb7p8000004lbxukefqcv');
 const c = page.cdp;
 try {
   let loaded = false;
@@ -19,11 +21,11 @@ try {
   }
   assert.ok(loaded, 'Miramiru live equipment list must finish loading');
   if (process.env.ZHX_MIRAMIRU_STANDALONE !== '1') {
-    await seedV3Browser(c, 'miramiru');
+    await seedV3Memory(c, 'miramiru');
     await c.eval(`
     window.__zhxDiagOn = true;
-    window.GM_getValue = (k,d) => localStorage.getItem('gm:' + k) ?? d;
-    window.GM_setValue = (k,v) => localStorage.setItem('gm:' + k, String(v));
+    window.GM_getValue = (k,d) => window.__v3MemoryCache?.get(k) ?? d;
+    window.GM_setValue = (k,v) => window.__v3MemoryCache.set(k, String(v));
     window.GM_xmlhttpRequest = o => o.onerror?.({status:0});
     `);
   }
@@ -44,7 +46,7 @@ try {
   assert.ok(result.dyes > 0);
   assert.ok(result.others >= 8);
   assert.deepEqual(result.errors, []);
-  const output = path.join(repoRoot, '.cache', 'miramiru-live.png');
+  const output = path.join(repoRoot, '.cache', 'miramiru-' + locale + '-live.png');
   fs.mkdirSync(path.dirname(output), {recursive:true});
   // Capture the translated equipment area, without scrolling the user's browser.
   const rect = await c.eval(`(() => {const r=document.querySelector('a.eorzeadb_link').getBoundingClientRect(); return {x:Math.max(0,r.left-35), y:r.top+scrollY-70, width:Math.min(850,innerWidth-r.left+35),height:900};})()`);

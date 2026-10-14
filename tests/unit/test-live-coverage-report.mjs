@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {summarizeLive,toManualV11,writeLiveReports} from '../../tools/coverage-audit/live-report.mjs';
+import {summarizeLive,toManualV11,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
 import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 const at='2026-10-09T13:00:00Z';
@@ -17,12 +17,12 @@ const part=summarizeLive([good('fc'),bad('mirapri')],at);
 assert.equal(part.status,'partial');
 assert.equal(part.bySite.mirapri.status,'failed');
 assert.equal(part.bySite.ec.status,'failed');
-assert.equal(part.pages.length,7);
+assert.equal(part.pages.length,Object.keys(SITES).length);
 const complete=summarizeLive(Object.keys(SITES).map(good),at);
 assert.equal(complete.status,'scan-complete');
 const v=toManualV11(complete);
 assert.equal(v.format,'zhx-manual-audit-v2');
-assert.equal(Object.keys(v.pages).length,7);
+assert.equal(Object.keys(v.pages).length,Object.keys(SITES).length);
 assert.ok(Object.values(v.pages).every(p=>!p.hasBaseline&&p.baselineQuality==='partial-inferred'));
 const author=good('fc');
 author.items=[{kind:'text',text:'玩家标题',before:'Author writing',path:'article > h2',
@@ -47,5 +47,8 @@ try{
     path:'div.post-title',ctx:{user:true,ui:false}}]}));
   assert.equal(sanitizeEvidence(rawDir,pubDir),1);
   assert.doesNotMatch(fs.readFileSync(path.join(pubDir,'fc-test.json'),'utf8'),/玩家创作/);
+  fs.writeFileSync(path.join(rawDir,'miramiru-home-ja.json'),JSON.stringify(good('miramiru')));
+  assert.equal(sanitizeEvidence(rawDir,pubDir),2);
+  assert.ok(loadLiveResults(pubDir).some(row=>row.site==='miramiru'));
 }finally{fs.rmSync(rawDir,{recursive:true,force:true});fs.rmSync(pubDir,{recursive:true,force:true});}
 console.log('✅ live-report: strict completeness, V1.1 compatibility, privacy redaction');

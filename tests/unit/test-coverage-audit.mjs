@@ -16,7 +16,7 @@ import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audi
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), 'utf8');
 
-assert.equal(Object.keys(SITES).length, 7, 'all seven active adapters must be audited');
+assert.equal(Object.keys(SITES).length, 8, 'all seven active adapters must be audited');
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
 assert.equal(classify('検索', { site: 'endcloset', ui: true }), 'real');
 assert.equal(classify('検索中', { site: 'endcloset', ui: true }), 'real', 'load EndCloset kanji UI dictionary');
