@@ -41,6 +41,7 @@ const SUITES = {
   ],
   live: [
     'live/test-miramiru.mjs',
+    'live/test-miramiru-filters.mjs',
     'live/test-miramiru-static.mjs',
     'live/test-kasuga.mjs',
     'live/test-fc.mjs',
@@ -66,7 +67,7 @@ const SUITES = {
   ],
 };
 
-SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs', 'integration/test-miramiru-audit.mjs');
+SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs', 'integration/test-miramiru-audit.mjs', 'integration/test-miramiru-filters.mjs');
 SUITES.unit.push('unit/test-endcloset.mjs');
 SUITES.unit.push('unit/test-coverage-audit.mjs');
 SUITES.unit.push('unit/test-audit-localization.mjs');

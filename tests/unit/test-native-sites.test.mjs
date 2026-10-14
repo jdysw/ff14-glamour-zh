@@ -43,6 +43,30 @@ test('Miramiru 实测审计补漏：三语静态说明、长文本、官方标�
   assert.equal(trMiramiru('__proto__'), '__proto__');
 });
 
+test('Miramiru 筛选真实枚举与全部官方标签：三语文案、数量和选中摘要', () => {
+  const fixture = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-filter-options.json', import.meta.url), 'utf8'));
+  assert.equal(fixture.options.length, 83);
+  for (const option of fixture.options) {
+    for (const field of ['nameEn','nameJa','nameKo']) assert.equal(trMiramiru(option[field]), option.zh, option.id + ':' + field);
+  }
+  assert.equal(Object.keys(fixture.officialTags).length, 28);
+  for (const [name,zh] of Object.entries(fixture.officialTags)) {
+    assert.equal(trMiramiru(name,true),zh);
+    assert.equal(trMiramiru(name+'（公式タグ）'),zh+'（官方标签）');
+    assert.equal(trMiramiru(name+' (Official tag)'),zh+'（官方标签）');
+    assert.equal(trMiramiru('#'+name,true),'#'+zh);
+  }
+  assert.equal(trMiramiru('3 posts'),'3 篇投稿');
+  assert.equal(trMiramiru('3件'),'3 篇投稿');
+  assert.equal(trMiramiru('3건'),'3 篇投稿');
+  assert.equal(trMiramiru('Job: Paladin, White Mage'),'职业：骑士、白魔法师');
+  assert.equal(trMiramiru('ジョブ: ナイト'),'职业：骑士');
+  assert.equal(trMiramiru('직업: 나이트'),'职业：骑士');
+  assert.equal(trMiramiru('Tag: 春コーデ'),'标签：春季穿搭');
+  assert.equal(trMiramiru('Tag: My custom tag'),'标签：My custom tag');
+  assert.equal(trMiramiru('PLD'),'PLD');
+});
+
 test('共享物品点击与样式：幂等注册，并保留原生筛选按钮行为', () => {
   const previous = { window: globalThis.window, document: globalThis.document };
   const styles = new Map(), opened = [], handlers = [];

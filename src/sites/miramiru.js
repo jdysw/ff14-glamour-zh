@@ -14,8 +14,12 @@ export { trMiramiru, translateMiramiruPage, translateMiramiruTitle, startMiramir
 const SKIP = 'script,style,noscript,textarea,[contenteditable]:not([contenteditable="false"]),.zhx-skip';
 const ITEM_LINK = 'a.eorzeadb_link';
 const officialItem = /^https:\/\/(?:na|eu|jp|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
+const OFFICIAL_TAG_SUFFIX = /^(.{1,100}?)\s{0,8}(?:\((?:Official tag|公式タグ|공식 태그)\)|（(?:公式タグ|官方标签)）)$/u;
+const knownMiramiruText = key => Object.hasOwn(DICT_MIRAMIRU, key) ? DICT_MIRAMIRU[key] : null;
 
 function translateMiramiruCount(raw) {
+  const posts = raw.match(/^([\d,]+)\s*(posts|件|건)$/u);
+  if (posts) return posts[1] + ' 篇投稿';
   const count = raw.match(/^([\d,.]+[KM]?)\s*(Glamours|ミラプリ|투영|Creators|クリエイター|크리에이터|Likes|いいね|좋아요|uses|回使用|회 사용)$/);
   return count ? count[1] + ' ' + ({ Glamours: '套幻化', 'ミラプリ': '套幻化', '투영': '套幻化',
     Creators: '位作者', 'クリエイター': '位作者', '크리에이터': '位作者',
@@ -23,20 +27,34 @@ function translateMiramiruCount(raw) {
 }
 
 function translateMiramiruTag(raw, official) {
-  const tag = raw.match(/^(.{1,60}?) \((\d{1,10})\)(?: \((Official tag|公式タグ|공식 태그)\))?$/u);
-  if (!tag || (!official && !tag[3])) return null;
-  const name = Object.hasOwn(DICT_MIRAMIRU, tag[1]) ? DICT_MIRAMIRU[tag[1]] : tag[1];
-  return name + ' (' + tag[2] + ')' + (tag[3] ? '（官方标签）' : '');
+  const marked = OFFICIAL_TAG_SUFFIX.exec(raw);
+  if (!official && !marked) return null;
+  const content = marked ? marked[1].trim() : raw;
+  const tag = content.match(/^(#?)(.{1,60}?)(?: \((\d{1,10})\))?$/u);
+  if (!tag) return null;
+  const name = knownMiramiruText('tag:' + tag[2]);
+  if (!name && !marked) return null;
+  return tag[1] + (name || tag[2]) + (tag[3] ? ' (' + tag[3] + ')' : '') + (marked ? '（官方标签）' : '');
+}
+
+function translateMiramiruFilterSummary(raw) {
+  const job = raw.match(/^(?:Job|ジョブ|직업):\s*(.{1,160})$/u);
+  if (job) return '职业：' + job[1].split(/[,、]\s*/u).map(name => knownMiramiruText(name) || knownMiramiruText('job:' + name) || name).join('、');
+  const tag = raw.match(/^(?:Tag|タグ|태그):\s*(.{1,100})$/u);
+  if (tag) return '标签：' + (knownMiramiruText('tag:' + tag[1]) || tag[1]);
+  const slot = raw.match(/^([^:]{1,30}):\s*(.{1,100})$/u);
+  const label = slot && knownMiramiruText('slot:' + slot[1]);
+  return label ? label + '：' + (resolveByName(slot[2]) || slot[2]) : null;
 }
 
 function trMiramiru(text, officialTag = false) {
   const raw = text?.trim();
   if (!raw) return text;
   const normalized = raw.replace(/\s+/gu, ' ');
-  const key = Object.hasOwn(DICT_MIRAMIRU, raw) ? raw : normalized;
-  let zh = Object.hasOwn(DICT_MIRAMIRU, key) ? DICT_MIRAMIRU[key] : null;
+  let zh = officialTag ? translateMiramiruTag(raw, true) : null;
+  if (!zh) zh = knownMiramiruText(raw) || knownMiramiruText(normalized);
   if (!zh && raw.length <= 100) zh = resolveByName(raw);
-  if (!zh) zh = translateMiramiruCount(raw) || translateMiramiruTag(raw, officialTag);
+  if (!zh) zh = translateMiramiruCount(raw) || translateMiramiruTag(raw, officialTag) || translateMiramiruFilterSummary(raw);
   if (!zh || zh === raw) return text;
   return text.replace(raw, zh);
 }
@@ -70,7 +88,26 @@ function translateMiramiruAttributes(element) {
   }
 }
 
+function isMiramiruOfficialTag(element) {
+  const label = element.closest('[aria-label]')?.getAttribute('aria-label') || '';
+  const badge = element.closest('[data-slot="badge"]')?.textContent.trim() || '';
+  const knownBadge = badge.startsWith('#') && !!knownMiramiruText('tag:' + badge.slice(1).trim());
+  return knownBadge || OFFICIAL_TAG_SUFFIX.test(label) || !!element.closest('[role="option"]')?.querySelector('svg.lucide-shield');
+}
+
 function translateMiramiruText(raw, element) {
+  const officialTag = isMiramiruOfficialTag(element);
+  const badge = element.closest('[data-slot="badge"],[role="option"] .truncate');
+  if (badge?.textContent.trim().startsWith('#') && !officialTag) return raw;
+  const jobButton = element.closest('[role="dialog"] button');
+  if (jobButton) {
+    const job = knownMiramiruText('job:' + raw.trim());
+    if (job) {
+      const title = knownMiramiruText('job-title:' + raw.trim());
+      if (title && jobButton.getAttribute('title') !== title) jobButton.setAttribute('title', title);
+      return raw.replace(raw.trim(), job);
+    }
+  }
   // An equipment hash is authoritative even when international names differ.
   const link = element.closest(ITEM_LINK);
   const trimmed = raw?.trim();
@@ -79,8 +116,7 @@ function translateMiramiruText(raw, element) {
   const aboutParticle = /^\/(?:en\/|ko\/|ja\/)?about\/?$/.test(location.pathname)
     && element.closest('h1') && (trimmed === 'を' || trimmed === '을');
   if (aboutParticle) return raw.replace(trimmed, '，');
-  const label = element.closest('[aria-label]')?.getAttribute('aria-label') || '';
-  return trMiramiru(raw, /Official tag|公式タグ|공식 태그|官方标签/u.test(label));
+  return trMiramiru(raw, officialTag);
 }
 
 function processMiramiruNode(node) {
