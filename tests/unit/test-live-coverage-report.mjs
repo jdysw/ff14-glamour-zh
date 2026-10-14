@@ -6,6 +6,10 @@ import path from 'node:path';
 import {summarizeLive,toManualV11,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
 import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
+// The report requires every configured site; CI must schedule the same set.
+const workflow=fs.readFileSync(new URL('../../.github/workflows/live-coverage-audit.yml',import.meta.url),'utf8');
+const matrix=workflow.match(/site: \[([^\]]+)\]/)?.[1].split(',').map(s=>s.trim());
+assert.deepEqual(matrix?.sort(),Object.keys(SITES).sort(),'CI matrix must include every audit site');
 const at='2026-10-09T13:00:00Z';
 const good=site=>({site,pageId:'home',
   url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/物品:加特勒':SITES[site].pages[0].url,status:'ok',

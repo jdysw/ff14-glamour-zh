@@ -48,7 +48,7 @@ export async function verifyProductionV3(originValue = DEFAULT_ORIGIN, transport
   assert.equal(manifest.candidatePolicy, 1, '线上 manifest 缺少当前装备候选策略');
   assert.match(manifest.version, /^[a-f0-9]{12}$/, '线上 manifest.version 格式不正确');
   assert.deepEqual(Object.keys(manifest.sites).sort(), SITE_POLICIES.map(x => x.id).sort(),
-    '线上必须完整提供七站的数据声明');
+    '线上必须完整提供当前契约的全部站点数据声明');
   assert.ok(manifest.shared?.dict, '线上必须提供 dict.json');
 
   let files = 0;
@@ -70,7 +70,7 @@ export async function verifyProductionV3(originValue = DEFAULT_ORIGIN, transport
   assert.equal(dictBytes.length, dict.bytes, '线上词典字节长度不符');
   assert.equal(sha256(dictBytes), dict.sha256.toLowerCase(), '线上词典 SHA-256 不符');
   assert.ok(validRuntimeDictionary(JSON.parse(utf8.decode(dictBytes)), true),
-    '线上词典的七层结构不正确');
+    '线上词典的完整分层结构不正确');
   files++;
   bytesChecked += dictBytes.length;
 

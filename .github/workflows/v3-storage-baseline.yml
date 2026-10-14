@@ -110,7 +110,17 @@ jobs:
             exit 1
           fi
           node tools/data/verify-pages-http.mjs --site site --origin http://127.0.0.1:8788
-      - name: 核实当前线上 V3 全部旧资源路径
+      # PR 候选数据已在上方严格验证；线上尚未发布该候选版本，
+      # 因此线上基线须使用目标分支的完整契约，不能要求提前部署 PR。
+      - name: 获取 PR 目标分支的线上基线契约
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .production-baseline
+          persist-credentials: false
+      - name: 按已发布基线核实线上 V3 全部资源路径
+        working-directory: ${{ github.event_name == 'pull_request' && '.production-baseline' || '.' }}
         run: node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/
       - name: 上传 V3 旧 URL 去重计划与规则
         uses: actions/upload-artifact@v4
