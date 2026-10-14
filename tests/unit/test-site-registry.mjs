@@ -54,6 +54,7 @@ const STUB_NAMES = [
   'translateFCTitle', 'fixFCMenu', 'bindFCBanners', 'translateRonkaPage', 'translateRonkaTitle',
   'translateACLPage', 'translateACLTitle', 'injectWikiButton',
   'startEndCloset', 'translateEndClosetPage', 'translateEndClosetTitle',
+  'startMiramiru', 'translateMiramiruPage',
 ];
 
 function buildDevice(dataRemote, opts = {}) {
@@ -97,10 +98,10 @@ if (!api) {
 
 const { findSite, neededTables, _siteIndexes, SITE_REGISTRY, setHost, win } = api;
 
-ok('A3 SITE_REGISTRY 为数组且 7 站', Array.isArray(SITE_REGISTRY) && SITE_REGISTRY.length === 7,
+ok('A3 SITE_REGISTRY 为数组且 7 站', Array.isArray(SITE_REGISTRY) && SITE_REGISTRY.length === 8,
   `len=${SITE_REGISTRY && SITE_REGISTRY.length}`);
 const ids = SITE_REGISTRY.map((s) => s.id).join(',');
-eq('A4 站点顺序（即匹配优先级）', ids, 'mirapri,ec,wiki,fc,ronka,collection,endcloset');
+eq('A4 站点顺序（即匹配优先级）', ids, 'mirapri,ec,wiki,fc,ronka,collection,endcloset,miramiru');
 {
   const bad = SITE_REGISTRY.filter((s) =>
     !Array.isArray(s.hosts) || !s.hosts.length ||
@@ -116,6 +117,7 @@ eq('A4 站点顺序（即匹配优先级）', ids, 'mirapri,ec,wiki,fc,ronka,col
 // ─────────────────────────────────────────────────────────────
 // [host, 期望 id, 期望 tables, 期望 indexes]
 const CASES = [
+  ['miramiru.co', 'miramiru', ['items', 'dict'], ['nameMap', 'itemHash']],
   ['mirapri.com', 'mirapri', ['items', 'dict'], ['nameMap', 'itemHash']],
   ['www.mirapri.com', 'mirapri', ['items', 'dict'], ['nameMap', 'itemHash']],
   ['ffxiv.eorzeacollection.com', 'ec', ['items', 'dict'], ['nameMap', 'itemHash']],
@@ -249,6 +251,7 @@ section('I：七站启动、翻译与数据就绪路由');
 {
   // 基线来自七站原始适配器实际调用顺序；不按测试实现自动推断预期。
   const routes = {
+    miramiru: { start: ['startMiramiru'], process: ['translateMiramiruPage'], ready: ['translateMiramiruPage'], pageshow: ['translateMiramiruPage'] },
     mirapri: {
       start: ['startMirapri', 'startItems'],
       process: ['translatePage'],

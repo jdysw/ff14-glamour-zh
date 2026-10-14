@@ -2,7 +2,7 @@
 // 词典结构的纯契约，由数据发布器与浏览器运行时共享。
 export { RUNTIME_DICT_LAYERS, validRuntimeDictionary };
 
-const RUNTIME_DICT_LAYERS = Object.freeze(['common', 'main', 'ec', 'fc', 'ronka', 'acl', 'endcloset']);
+const RUNTIME_DICT_LAYERS = Object.freeze(['common', 'main', 'ec', 'fc', 'ronka', 'acl', 'endcloset', 'miramiru']);
 const ALLOWED_LAYERS = new Set(RUNTIME_DICT_LAYERS);
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 

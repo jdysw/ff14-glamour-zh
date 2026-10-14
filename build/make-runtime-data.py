@@ -59,6 +59,7 @@ SITE_FILES = {
     'ronka':      ['names', 'alias', 'dup'],
     'collection': ['names', 'alias', 'dup', 'series', 'acl'],
     'endcloset':  ['names', 'alias', 'dup'],
+    'miramiru':   ['names', 'hash', 'alias', 'dup'],
     'wiki':       ['ecid', 'ko'],
 }
 
@@ -70,6 +71,7 @@ SITE_LANGS = {
     'ronka': ['ko'],
     'collection': ['ja'],
     'endcloset': ['ko', 'en', 'ja'],
+    'miramiru': ['en'],
     'wiki': [],
 }
 

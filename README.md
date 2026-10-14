@@ -24,6 +24,7 @@
 | [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服个人幻化网站（猫娘模特） |
 | [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
+| [Miramiru](https://miramiru.co/en) | 幻化展示站（英文界面、装备和染剂汉化，装备名称跳转灰机 Wiki） |
 | [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 

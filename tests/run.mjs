@@ -40,6 +40,7 @@ const SUITES = {
     'integration/test-module-source.mjs',
   ],
   live: [
+    'live/test-miramiru.mjs',
     'live/test-kasuga.mjs',
     'live/test-fc.mjs',
     'live/test-fc-pages.mjs',
@@ -64,6 +65,7 @@ const SUITES = {
   ],
 };
 
+SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs');
 SUITES.unit.push('unit/test-endcloset.mjs');
 SUITES.unit.push('unit/test-coverage-audit.mjs');
 SUITES.unit.push('unit/test-audit-localization.mjs');

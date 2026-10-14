@@ -29,8 +29,8 @@ test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () =>
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'www.mirapri.com' };
-    assert.equal(SITE_POLICIES.length, 7);
-    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 7);
+    assert.equal(SITE_POLICIES.length, 8);
+    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 8);
     assert.equal(Object.isFrozen(SITE_POLICIES), true);
     assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
     assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);

@@ -33,8 +33,8 @@ assert.ok(imports(site).includes('./data-manager.js'), '站点启动层仍可按
 // 站点配置只能存在一个真实来源，避免数据站和启动器出现配置漂移。
 const policySrc = read(policy);
 const registrySrc = read(site);
-assert.equal((policySrc.match(/\bid: '/g) || []).length, 7, '七站均应在纯策略中声明');
-assert.equal((registrySrc.match(/\bid: '/g) || []).length, 7, '七个启动适配器均应存在');
+assert.equal((policySrc.match(/\bid: '/g) || []).length, 8, '七站均应在纯策略中声明');
+assert.equal((registrySrc.match(/\bid: '/g) || []).length, 8, '七个启动适配器均应存在');
 assert.doesNotMatch(registrySrc, /id:\s*'[^']+'\s*,\s*hosts:/, '不能在适配器中重复声明域名');
 assert.doesNotMatch(registrySrc, /id:\s*'[^']+'\s*,\s*tables:/, '不能在适配器中重复声明数据表');
 

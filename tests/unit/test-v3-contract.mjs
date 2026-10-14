@@ -16,7 +16,7 @@ const python = [
   'print(json.dumps(generator.SITE_FILES, ensure_ascii=False))',
 ].join(';');
 const published = JSON.parse(execFileSync(findPython(), ['-c', python], { cwd: root, encoding: 'utf8' }));
-assert.equal(SITE_POLICIES.length, 7);
+assert.equal(SITE_POLICIES.length, 8);
 assert.deepEqual(Object.keys(published).sort(), SITE_POLICIES.map(site => site.id).sort(),
   'Python 发布器与 JavaScript 应用层必须服务相同七站');
 for (const site of SITE_POLICIES) {

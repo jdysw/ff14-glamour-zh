@@ -46,10 +46,10 @@ const transport = async (url, opts) => {
 };
 
 const result = await verifyProductionV3(origin, transport);
-assert.equal(result.httpPaths, 28);
-assert.equal(result.files, 27);
+assert.equal(result.httpPaths, assets.size);
+assert.equal(result.files, assets.size - 1);
 assert.equal(result.version, manifest.version);
-assert.equal(requests.length, 28);
+assert.equal(requests.length, assets.size);
 assert.ok(requests.some(url => url.endsWith('/collection/names.tsv')),
   '跨站重复文件的原 URL 也必须真实请求');
 assert.ok(requests.some(url => url.endsWith('/fc/names.tsv')));
@@ -81,5 +81,5 @@ const flaky = async (url, opts) => {
   return transport(url, opts);
 };
 const recovered = await verifyProductionWithRetry(origin, flaky, 1, 0);
-assert.equal(recovered.httpPaths, 28, '短暂 CDN 不一致后应完整重新校验所有路径');
+assert.equal(recovered.httpPaths, assets.size, '短暂 CDN 不一致后应完整重新校验所有路径');
 console.log('✅ 生产 V3 HTTP 探针：28 条路径、损坏正文、404、302、词典、HTTPS/主机白名单与重试通过');

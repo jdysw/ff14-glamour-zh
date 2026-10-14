@@ -11,6 +11,7 @@ import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
 import { startMirapri, translatePage } from '../sites/mirapri.js';
 import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ronka.js';
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
+import { startMiramiru, translateMiramiruPage } from '../sites/miramiru.js';
 // 转发站点策略公共接口，同时继续由本模块负责七站启动。
 export { _siteIndexes, neededTables, onHost } from './site-policy.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
@@ -116,6 +117,13 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
       processRoot(root) { safe(translateEndClosetPage, 'EndCloset 处理')(root); },
       onDataReady() { safe(translateEndClosetPage, 'EndCloset 补扫')(); safe(translateEndClosetTitle, 'EndCloset 标题')(); },
       onPageShow() { safe(translateEndClosetPage, 'pageshow')(); safe(translateEndClosetTitle, 'pageshow')(); },
+    }),
+    createSiteAdapter({
+      id: 'miramiru',
+      start: startMiramiru,
+      processRoot: translateMiramiruPage,
+      onDataReady() { translateMiramiruPage(); },
+      onPageShow: translateMiramiruPage,
     }),
   ];
 

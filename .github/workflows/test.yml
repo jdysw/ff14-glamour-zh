@@ -153,7 +153,15 @@ jobs:
         run: npm run build
 
       - name: 集成测试 B（站点适配组）
-        run: node tests/run.mjs test-ec test-mirapri test-probe test-chinese-search-submit test-ronka-search-inline test-fc-search-candidates test-collection-search-inline test-standalone-search-trigger test-ec-search-inline
+        run: node tests/run.mjs integration/test-miramiru test-ec test-mirapri test-probe test-chinese-search-submit test-ronka-search-inline test-fc-search-candidates test-collection-search-inline test-standalone-search-trigger test-ec-search-inline
+
+      - name: 上传 Miramiru 独立测试脚本
+        uses: actions/upload-artifact@v4
+        with:
+          name: miramiru-test-userscript
+          path: dist/ff14-miramiru-zh-*-test.user.js
+          retention-days: 14
+          if-no-files-found: error
 
   integration-c:
     name: Integration C (Contracts)

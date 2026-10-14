@@ -51,6 +51,7 @@ const BLOCKS = [
   ['DICT_RONKA', 'dict-ronka.json'],
   ['DICT_ACL', 'dict-acl.json'],
   ['DICT_ENDCLOSET', 'dict-endcloset.json'],
+  ['DICT_MIRAMIRU', 'dict-miramiru.json'],
 ];
 const missingBanner = [];
 for (const [name, fn] of BLOCKS) {
@@ -62,7 +63,7 @@ for (const [name, fn] of BLOCKS) {
 }
 ok('B1 7 个词典块上方均带 inject 维护的标识行', missingBanner.length === 0, `缺: ${missingBanner.join(', ')}`);
 const bannerCount = srcLines.filter((l) => /^  \/\/ ⚠️ 自动生成.*inject_dicts\.py/.test(l)).length;
-ok('B2 标识行恰为 7 条（无散落/重复）', bannerCount === 7, `实际 ${bannerCount}`);
+ok('B2 标识行恰为 7 条（无散落/重复）', bannerCount === 8, `实际 ${bannerCount}`);
 
 console.log('── C：篡改防护（改副本 → 必失败；inject 再生 → 必恢复）──');
 const dir = cachePath('dict-single-source');
@@ -102,7 +103,7 @@ const d2 = run('node', ['build/verify_dicts.js', SRC_REL, '--dict-json', 'tests/
 ok('D2 verify --dict-json 通过（src 内嵌 ≡ 远程产物）', d2.code === 0, d2.code !== 0 ? tail(d2.out) : '');
 try {
   const keys = Object.keys(JSON.parse(fs.readFileSync(djPath, 'utf8'))).sort().join(',');
-  ok('D3 dict.json 结构完整（七层）', keys === 'acl,common,ec,endcloset,fc,main,ronka', keys);
+  ok('D3 dict.json 结构完整（七层）', keys === 'acl,common,ec,endcloset,fc,main,miramiru,ronka', keys);
 } catch (e) {
   ok('D3 dict.json 结构完整（七层）', false, String(e).slice(0, 120));
 }
