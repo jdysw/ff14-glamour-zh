@@ -67,6 +67,7 @@ const SUITES = {
   ],
 };
 
+SUITES.integration.push('integration/test-chinese-font.mjs');
 SUITES.integration.push('integration/test-miramiru.mjs', 'integration/test-miramiru-test-build.mjs', 'integration/test-miramiru-audit.mjs', 'integration/test-miramiru-filters.mjs');
 SUITES.unit.push('unit/test-endcloset.mjs');
 SUITES.unit.push('unit/test-coverage-audit.mjs');

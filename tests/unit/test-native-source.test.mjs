@@ -20,8 +20,20 @@ import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
 } from '../../src/core/storage.js';
 import {
-  dedupeByAncestor, localScope, queryIn, _scanStats,
+  dedupeByAncestor, localScope, queryIn, _scanStats, ensureChineseFont,
 } from '../../src/core/dom.js';
+
+test('统一字体：重复调用幂等，head 缺失和样式被移除时仍能恢复', () => {
+  const previous=globalThis.document;const styles=new Map();let headWrites=0,rootWrites=0;
+  const add=style=>styles.set(style.id,style);
+  globalThis.document={getElementById:id=>styles.get(id),createElement:()=>({}),
+    head:{appendChild:style=>{headWrites++;add(style)}},documentElement:{appendChild:style=>{rootWrites++;add(style)}}};
+  try{
+    ensureChineseFont();ensureChineseFont();assert.equal(headWrites,1);assert.equal(styles.size,1);
+    styles.clear();document.head=null;ensureChineseFont();assert.equal(rootWrites,1);
+    assert.match(styles.get('zhx-chinese-font').textContent,/Microsoft YaHei/);
+  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
+});
 
 test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () => {
   const previousWindow = globalThis.window;

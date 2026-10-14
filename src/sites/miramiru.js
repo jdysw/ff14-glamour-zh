@@ -17,22 +17,6 @@ const officialItem = /^https:\/\/(?:na|eu|jp|de|fr)\.finalfantasyxiv\.com\/lodes
 const OFFICIAL_TAG_SUFFIX = /^(.{1,100}?)\s{0,8}(?:\((?:Official tag|公式タグ|공식 태그)\)|（(?:公式タグ|官方标签)）)$/u;
 const knownMiramiruText = key => Object.hasOwn(DICT_MIRAMIRU, key) ? DICT_MIRAMIRU[key] : null;
 
-function ensureMiramiruChineseFont() {
-  if (document.getElementById('zhx-miramiru-chinese-font')) return;
-  const style = document.createElement('style');
-  style.id = 'zhx-miramiru-chinese-font';
-  // SC families prevent the site's Japanese/Korean fonts from supplying CJK
-  // glyph variants. CSS also covers later portals without another DOM scan.
-  // Keep font sizes/weights, SVG icons and monospaced code under site control.
-  style.textContent = `
-    :root { --zhx-miramiru-font: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif; }
-    html, body, body :not(:where(svg, svg *, pre, pre *, code, code *, kbd, kbd *, samp, samp *)) {
-      font-family: var(--zhx-miramiru-font) !important;
-    }
-  `;
-  (document.head || document.documentElement).appendChild(style);
-}
-
 function translateMiramiruCount(raw) {
   const posts = raw.match(/^([\d,]+)\s*(posts|件|건)$/u);
   if (posts) return posts[1] + ' 篇投稿';
@@ -179,7 +163,6 @@ function translateMiramiruTitle() {
 }
 
 function startMiramiru() {
-  ensureMiramiruChineseFont();
   safe(translateMiramiruPage, 'Miramiru 首屏')();
   createObserver({
     root: document.documentElement,
