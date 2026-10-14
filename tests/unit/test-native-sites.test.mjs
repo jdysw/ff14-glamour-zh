@@ -30,6 +30,19 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
   } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
 });
 
+test('Miramiru 实测审计补漏：三语静态说明、长文本、官方标签和原型键', () => {
+  const copies = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-static-copy.json', import.meta.url), 'utf8'));
+  for (const copy of copies) {
+    for (const [locale, source] of Object.entries(copy.source)) assert.equal(trMiramiru(source), copy.zh, copy.key + ':' + locale);
+  }
+  assert.equal(trMiramiru('Miramiru Statistics'), 'Miramiru 统计');
+  assert.equal(trMiramiru('クール (41) (Official tag)'), '酷帅 (41)（官方标签）');
+  assert.equal(trMiramiru('クール (41)', true), '酷帅 (41)');
+  assert.equal(trMiramiru('Player tag (2)'), 'Player tag (2)');
+  assert.equal(trMiramiru('constructor'), 'constructor');
+  assert.equal(trMiramiru('__proto__'), '__proto__');
+});
+
 test('共享物品点击与样式：幂等注册，并保留原生筛选按钮行为', () => {
   const previous = { window: globalThis.window, document: globalThis.document };
   const styles = new Map(), opened = [], handlers = [];

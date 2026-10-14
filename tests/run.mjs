@@ -41,6 +41,7 @@ const SUITES = {
   ],
   live: [
     'live/test-miramiru.mjs',
+    'live/test-miramiru-static.mjs',
     'live/test-kasuga.mjs',
     'live/test-fc.mjs',
     'live/test-fc-pages.mjs',

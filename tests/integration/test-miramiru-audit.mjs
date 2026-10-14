@@ -52,7 +52,7 @@ for (const locale of ['ja','en','ko']) {
     await c.eval(`Object.entries(window.__menus).find(([key])=>key.includes('导出 JSON'))[1]()`);
     const exported = JSON.parse(await c.eval('window.__exportBlob.text()'));
     const row = Object.values(exported.pages)[0];
-    assert.equal(exported.toolVersion, '1.3.0');
+    assert.equal(exported.toolVersion, '1.3.1');
     assert.equal(row.site, 'miramiru');
     assert.equal(row.language, locale);
     assert.equal(row.hasBaseline, true);

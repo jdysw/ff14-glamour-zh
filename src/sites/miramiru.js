@@ -15,17 +15,28 @@ const SKIP = 'script,style,noscript,textarea,[contenteditable]:not([contentedita
 const ITEM_LINK = 'a.eorzeadb_link';
 const officialItem = /^https:\/\/(?:na|eu|jp|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
 
-function trMiramiru(text) {
+function translateMiramiruCount(raw) {
+  const count = raw.match(/^([\d,.]+[KM]?)\s*(Glamours|ミラプリ|투영|Creators|クリエイター|크리에이터|Likes|いいね|좋아요|uses|回使用|회 사용)$/);
+  return count ? count[1] + ' ' + ({ Glamours: '套幻化', 'ミラプリ': '套幻化', '투영': '套幻化',
+    Creators: '位作者', 'クリエイター': '位作者', '크리에이터': '位作者',
+    Likes: '次点赞', 'いいね': '次点赞', '좋아요': '次点赞', uses: '次使用', '回使用': '次使用', '회 사용': '次使用' })[count[2]] : null;
+}
+
+function translateMiramiruTag(raw, official) {
+  const tag = raw.match(/^(.{1,60}?) \((\d{1,10})\)(?: \((Official tag|公式タグ|공식 태그)\))?$/u);
+  if (!tag || (!official && !tag[3])) return null;
+  const name = Object.hasOwn(DICT_MIRAMIRU, tag[1]) ? DICT_MIRAMIRU[tag[1]] : tag[1];
+  return name + ' (' + tag[2] + ')' + (tag[3] ? '（官方标签）' : '');
+}
+
+function trMiramiru(text, officialTag = false) {
   const raw = text?.trim();
   if (!raw) return text;
-  let zh = Object.hasOwn(DICT_MIRAMIRU, raw) ? DICT_MIRAMIRU[raw] : null;
+  const normalized = raw.replace(/\s+/gu, ' ');
+  const key = Object.hasOwn(DICT_MIRAMIRU, raw) ? raw : normalized;
+  let zh = Object.hasOwn(DICT_MIRAMIRU, key) ? DICT_MIRAMIRU[key] : null;
   if (!zh && raw.length <= 100) zh = resolveByName(raw);
-  if (!zh) {
-    const count = raw.match(/^([\d,.]+[KM]?)\s*(Glamours|ミラプリ|투영|Creators|クリエイター|크리에이터|Likes|いいね|좋아요|uses|回使用|회 사용)$/);
-    if (count) zh = count[1] + ' ' + ({ Glamours: '套幻化', 'ミラプリ': '套幻化', '투영': '套幻化',
-      Creators: '位作者', 'クリエイター': '位作者', '크리에이터': '位作者',
-      Likes: '次点赞', 'いいね': '次点赞', '좋아요': '次点赞', uses: '次使用', '回使用': '次使用', '회 사용': '次使用' })[count[2]];
-  }
+  if (!zh) zh = translateMiramiruCount(raw) || translateMiramiruTag(raw, officialTag);
   if (!zh || zh === raw) return text;
   return text.replace(raw, zh);
 }
@@ -59,17 +70,25 @@ function translateMiramiruAttributes(element) {
   }
 }
 
+function translateMiramiruText(raw, element) {
+  // An equipment hash is authoritative even when international names differ.
+  const link = element.closest(ITEM_LINK);
+  const trimmed = raw?.trim();
+  const item = link?.dataset.zhxMiramiruZh;
+  if (item && trimmed && (trimmed === link.dataset.zhxMiramiruName || resolveByName(trimmed))) return raw.replace(trimmed, item);
+  const aboutParticle = /^\/(?:en\/|ko\/|ja\/)?about\/?$/.test(location.pathname)
+    && element.closest('h1') && (trimmed === 'を' || trimmed === '을');
+  if (aboutParticle) return raw.replace(trimmed, '，');
+  const label = element.closest('[aria-label]')?.getAttribute('aria-label') || '';
+  return trMiramiru(raw, /Official tag|公式タグ|공식 태그|官方标签/u.test(label));
+}
+
 function processMiramiruNode(node) {
   const element = node.nodeType === 1 ? node : node.parentElement;
   if (!element || element.closest(SKIP)) return;
   if (node.nodeType === 3) {
-    // An equipment hash is authoritative even when international names differ.
-    const link = element.closest(ITEM_LINK);
     const raw = node.nodeValue;
-    const trimmed = raw?.trim();
-    const item = link?.dataset.zhxMiramiruZh;
-    const isName = item && trimmed && (trimmed === link.dataset.zhxMiramiruName || resolveByName(trimmed));
-    const next = isName ? raw.replace(trimmed, item) : trMiramiru(raw);
+    const next = translateMiramiruText(raw, element);
     if (next !== raw) node.nodeValue = next;
     return;
   }

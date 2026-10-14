@@ -21,6 +21,11 @@ assert.equal(C.classifyContext(node('SPAN','','a.eorzeadb_link'),'text','miramir
 assert.equal(C.classifyContext(node('H1','','h1'),'text','miramiru','https://miramiru.co/mirapuri/abc').scope,'user');
 assert.equal(C.classifyContext(node('SPAN','','/users/'),'text','miramiru','https://miramiru.co/ko').scope,'user');
 assert.equal(C.classifyContext(node('BUTTON','',''),'text','miramiru','https://miramiru.co/ko').scope,'ui');
+assert.equal(C.classifyContext(node('P','whitespace-pre-wrap','main'),'text','miramiru','https://miramiru.co/en/faq').scope,'ui');
+assert.equal(C.classifyContext(node('P','whitespace-pre-wrap','main .whitespace-pre-wrap'),'text','miramiru','https://miramiru.co/en/mirapuri/abc').scope,'user');
+for (const text of ['Miramiru','FINAL FANTASY XIV © SQUARE ENIX CO., LTD. All Rights Reserved.']) {
+  assert.equal(C.category({kind:'text',text,ctx:{scope:'ui'}}),'exempt-ui');
+}
 for(const text of ['装備一覧','장비 목록','Equipment List'])assert.equal(C.category({kind:'text',text,ctx:{scope:'ui'}}),'suspected-no-baseline');
 const it=(text,path,scope='ui')=>({kind:'text',text,path,ctx:{scope,name:''}});
 const pair=C.pair([it('検索','button#search')],[it('搜索','button#search')]);
@@ -35,7 +40,7 @@ assert.equal(C.compareRuns(old,[{...now[0],url:'https://ff14-fc.com/other/'}]).r
 const raw=fs.readFileSync(new URL('../../tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js',import.meta.url),'utf8');
 assert.ok(raw.includes('@run-at       document-start'));
 assert.ok(raw.includes('@match        https://miramiru.co/*'));
-assert.ok(raw.includes('@version      1.3.0'));
+assert.ok(raw.includes('@version      1.3.1'));
 assert.ok(raw.includes('inferred-old-value'));
 assert.ok(raw.includes('原文基线'));
 console.log('✅ manual coverage audit V1.1: cross-site scope, pairing, privacy, diff and install script');

@@ -55,7 +55,7 @@ const csvCell=x=>'"'+String(x??'').replaceAll('"','""').replace(/\r?\n/g,' ')+'"
 const csvLine=x=>x.map(csvCell).join(',')+'\r\n';
 let csv='\uFEFF'+csvLine(['站点','作用域','结果','出现次数','不同页面数','原文','译后残留','类型','示例路径']);
 for(const g of suspects){csv+=csvLine([g.site,g.scope,g.category,g.occurrences,g.pages.size,g.before,g.text,g.kind,g.examples[0]])}
-const lines=['# FF14 七站汉化覆盖审计 V1.1','',`生成时间：${summary.generatedAt}`,`源文件：${summary.source}`,'',
+const lines=['# FF14 汉化覆盖审计 '+(data.toolVersion ? 'V'+data.toolVersion : 'V1.1'),'',`生成时间：${summary.generatedAt}`,`源文件：${summary.source}`,'',
   '## 范围及质量','',`- 页面状态快照：${summary.totalSnapshots}；成功：${summary.ok}；失败：${summary.failed}`,
   `- 人工确认的原文基线：${summary.baselineVerified}；仅部分推断的原文：${summary.baselineInferred}`,
   `- 原始疑似命中：${summary.candidateOccurrences} 次；按站点、采集类型、原文归并：${suspects.length} 个不同候选`,

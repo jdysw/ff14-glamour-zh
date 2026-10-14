@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3.0
+// @version      1.3.1
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -42,8 +42,7 @@
     collection: ['.user-post-title','.post-content','.author-description'],
     fc: ['.comment-content','.comment-body','.user-content','.post-author'],
     wiki: ['.comment-content','.user-profile','.mw-userpage-content'],
-    miramiru: ['a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]',
-      'main .whitespace-pre-wrap']
+    miramiru: ['a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]']
   };
   const AD_RE = /(adsbygoogle|ad-slot|adunit|ad-container|affiliate|amazon|rakuten|aswift|sponsored)/i;
   const USER_RE = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body|content)|nickname|username|player-name|user-content|creator-description)/i;
@@ -72,13 +71,15 @@
   }
   function miramiruScope(el,kind,url){
     if(el.closest?.('a.eorzeadb_link,[data-zhx-miramiru-zh]'))return 'item';
-    if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"],main .whitespace-pre-wrap'))return 'user';
-    if(/\/mirapuri\//.test(new URL(url).pathname)&&el.closest?.('h1'))return 'user';
+    const path=new URL(url).pathname;
+    if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'))return 'user';
+    if(/\/(?:mirapuri|users)\//.test(path)&&el.closest?.('h1,main .whitespace-pre-wrap'))return 'user';
     if(el.closest?.('h3')||kind==='attr:alt'){
       for(let p=el.parentElement,n=0;p&&n<3;p=p.parentElement,n++){
         if(p.querySelector?.('a[href*="/mirapuri/"]'))return 'user';
       }
     }
+    if(/^\/(?:en\/|ko\/|ja\/)?(?:about|faq|collection)\/?$/.test(path)&&el.closest?.('main'))return 'ui';
     return null;
   }
   function allowedRoute(url){try{return !ROUTE_BLOCK.test(new URL(url).pathname)}catch{return false}}
@@ -93,16 +94,18 @@
     const exactSel=(AUTHORED[site]||[]).filter(x=>!x.startsWith('/'));
     const authored=exactSel.some(x=>{try{return !!el.closest?.(x)}catch{return false}}) || USER_RE.test(full);
     const likelyGallery = site==='mirapri' && !!el.closest?.('#gallery article h2.title, #gallery article .article-info .title');
-    const ad=AD_RE.test(full);
+    const link=el.closest?.('a[href]');
+    const linked=trimHref(link?.getAttribute?.('href')||'',url);
+    const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
     const siteScope=site==='miramiru'?miramiruScope(el,kind,url):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
     if(ad)scope='ad';
-    else if((authored||likelyGallery||artImage||siteScope==='user') && (!control||kind==='attr:alt'))scope='user';
+    else if((authored||likelyGallery||artImage||siteScope==='user') && siteScope!=='ui' && (!control||kind==='attr:alt'))scope='user';
     else if(item && !control)scope='item';
     else if(kind==='document:title')scope='metadata';
-    else if(control||!!el.closest?.('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"],.pagination,.pager')||UI_RE.test(el.tagName||''))scope='ui';
+    else if(siteScope==='ui'||control||!!el.closest?.('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"],.pagination,.pager')||UI_RE.test(el.tagName||''))scope='ui';
     // Attribute labels are NOT UI by default. They may be creator-supplied titles.
     return {scope,ui:scope==='ui',user:scope==='user',ad,control,confidence:scope==='unknown'?0.35:scope==='user'?0.92:0.86,
       tag:String(el.tagName||'').toLowerCase(),cls:cls.slice(0,150),id:String(el.id||'').slice(0,75),
@@ -130,6 +133,8 @@
     return it.kind+'|'+(it.stablePath||it.path||'')+'|'+(it.ctx?.name||'');
   }
   function scopeEligible(it){return it.ctx?.scope==='ui'}
+  const UI_EXEMPT=new Set(['Miramiru','FINAL FANTASY XIV © SQUARE ENIX CO., LTD. All Rights Reserved.',
+    'FFXIV','FF14','SQUARE ENIX','Discord','X','Ko-fi','XIVAPI','PR','OGP']);
   function category(it){
     if(it.ctx?.ad)return 'excluded-ad';
     if(it.ctx?.user || it.ctx?.scope==='user')return 'excluded-user';
@@ -138,6 +143,7 @@
     if(it.ctx?.scope==='unknown')return 'needs-review';
     if(!scopeEligible(it))return 'needs-review';
     const t=normalize(it.text), b=normalize(it.before);
+    if(UI_EXEMPT.has(t))return 'exempt-ui';
     if(it.before!==null&&it.before!==undefined){
       if(b===t)return hasForeign(t)?'suspected-untranslated':'unchanged';
       if(hasForeign(t))return 'suspected-partial';
@@ -540,7 +546,7 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.3.0. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.1. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -647,7 +653,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.0',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.1',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -715,7 +721,7 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.toolVersion='1.3.0';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  out.toolVersion='1.3.1';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
