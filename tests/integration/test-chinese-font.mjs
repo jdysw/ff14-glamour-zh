@@ -13,8 +13,14 @@ const main=readDist();
 assert.ok(script.includes('// @grant        none'));
 assert.ok(!script.includes('@connect'));
 for(const site of SITE_POLICIES){
-  const page=await newPage(port,fixtureUrl('miramiru-page.html'));const c=page.cdp;
+  const page=await newPage(port);const c=page.cdp;
   try{
+    // Subscribe before navigation: evaluating during the initial document swap
+    // can destroy the function's execution context on fast CI runners.
+    const loaded=c.waitForEvent('Page.loadEventFired');
+    await c.send('Page.navigate',{url:fixtureUrl('miramiru-page.html')});
+    await loaded;
+    assert.equal(await c.eval('location.href'),fixtureUrl('miramiru-page.html'));
     await c.callFn(`function(site,source,companion){
       document.documentElement.lang='ja';
       window.__zhxTestSite=site;window.__zhxTestTables=[];
