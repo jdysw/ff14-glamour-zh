@@ -113,8 +113,9 @@ import { DICT_FC } from '../../src/core/dictionary.js';
 import { DICT_ACL } from '../../src/core/dictionary.js';
 import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
-  blockByTitle,
+  blockByTitle, wikiReverseItems, _buildReverseBlock,
 } from '../../src/sites/huiji-wiki.js';
+import { _applyV3 } from '../../src/core/data-manager.js';
 
 function element(tagName, initial = {}) {
   const attrs = new Map(Object.entries(initial));
@@ -269,14 +270,34 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
         return null;
       },
       querySelectorAll(selector) {
+        if (selector.includes('garlandtools')) return [{ getAttribute: () => 'https://garlandtools.cn/db/#item/38171' }];
         return selector === '.ff14-content-box-block' ? [box] : [];
+      },
+      createElement(tagName) {
+        return { tagName, style: {}, children: [], setAttribute() {},
+          appendChild(child) { this.children.push(child); },
+          insertBefore(child) { this.children.unshift(child); } };
       },
     };
     assert.deepEqual(getSlot(), { key: 'earringsPiece', label: '耳饰' });
     assert.equal(getItemZhName(), '虚构的测试装备');
     assert.equal(blockByTitle('装备资料'), box);
     assert.equal(blockByTitle('不存在的标题'), null);
+    _applyV3({ candidatePolicy: 1, ko: '虚构的测试装备\t테스트 장비 & 이름\n' });
+    const reverse = wikiReverseItems();
+    assert.ok(reverse.some(([href]) => href === 'https://miramiru.co/en/items/38171'));
+    const end = reverse.find(([href]) => href.startsWith('https://end-closet.com/'));
+    assert.equal(new URL(end[0]).searchParams.get('search'), '테스트 장비 & 이름');
+    const block = _buildReverseBlock(reverse);
+    const links = block.children.at(-1).children.map(li => li.children[0]);
+    assert.equal(links.length, reverse.length);
+    assert.ok(links.every(a => a.children[0].tagName === 'img' && a.children[0].src.startsWith('data:image/png;base64,')));
+    globalThis.document.querySelectorAll = () => [];
+    _applyV3({ candidatePolicy: 1 });
+    assert.ok(!wikiReverseItems().some(([href]) => /miramiru|end-closet/.test(href)),
+      '缺少物品 ID 或韩文映射时，不生成无效反查链接');
   } finally {
+    _applyV3({ candidatePolicy: 1 });
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
   }
