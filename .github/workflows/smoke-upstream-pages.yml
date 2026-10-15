@@ -1,0 +1,32 @@
+name: Verify deployed upstream Pages HTTP
+on:
+  push:
+    branches: [deploy/cloudflare-upstream-20261015]
+    paths: [.github/workflows/smoke-upstream-pages.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Davflare HTML and anonymous WebDAV is blocked
+        run: |
+          set -euo pipefail
+          code=$(curl -sSL --retry 3 --max-time 25 -o /tmp/davflare.html -w '%{http_code}' https://davflare-upstream.pages.dev/)
+          echo "Davflare home HTTP: $code"
+          test "$code" = "200"
+          test -s /tmp/davflare.html
+          code=$(curl -sS --retry 3 --max-time 25 -X PROPFIND -H 'Depth: 0' -o /tmp/webdav.txt -w '%{http_code}' https://davflare-upstream.pages.dev/webdav/)
+          echo "Davflare anonymous PROPFIND HTTP: $code"
+          test "$code" = "401" -o "$code" = "403"
+      - name: Verify UptimeFlare homepage and API response
+        run: |
+          set -euo pipefail
+          code=$(curl -sSL --retry 3 --max-time 30 -o /tmp/uptime.html -w '%{http_code}' https://zhixia-uptimeflare.pages.dev/)
+          echo "UptimeFlare home HTTP: $code"
+          test "$code" = "200"
+          test -s /tmp/uptime.html
+          code=$(curl -sS --retry 3 --max-time 30 -o /tmp/status.txt -w '%{http_code}' https://zhixia-uptimeflare.pages.dev/api/data)
+          echo "UptimeFlare /api/data HTTP: $code"
+          test "$code" = "200"
