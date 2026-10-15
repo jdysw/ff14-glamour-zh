@@ -81,6 +81,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _ensureGeneration = 0; // 过期加载不能应用数据表，也不能触发就绪通知。
   let _dataLoadState = 'idle'; // idle/loading/ready/degraded 与“广播已完成”分离。
   let _dataLoadOrigin = 'none'; // cache/network/fallback/none，用于调用方诊断。
+  let _manifestNetworkAttempted = false;
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
   function _ensureFinalize(generation = _ensureGeneration) {
@@ -243,7 +244,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
     if (!networkAllowed) return null;
     let text = null;
-    try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, force ? { fresh: true } : undefined); }
+    // Paths are mutable at deployment. GM's hash-addressed cache is reused
+    // above; a real download must not reuse a stale HTTP response body.
+    try { text = await httpGet(DATA_BASE_V3 + meta.url, 25000, { fresh: true }); }
     catch (e) { text = null; /* 请求失败返回 null，由更新流程选择重试或其他数据通道 */ }
     if (typeof text !== 'string' || !text) return null;
     if (!await _v3VerifyFile(text, meta.sha256, meta.bytes)) return null;
@@ -261,7 +264,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const mraw = await storeGetAsync(key);
       if (mraw) {
         const i = mraw.indexOf('\n');
-        if (i > 0) return { manT: Number(mraw.slice(0, i)) || 0, man: JSON.parse(mraw.slice(i + 1)) };
+        if (i > 0) {
+          const timestamp=Number(mraw.slice(0,i));
+          const manT=Number.isSafeInteger(timestamp)&&timestamp>0&&timestamp<=Date.now()?timestamp:0;
+          return { manT, man: JSON.parse(mraw.slice(i + 1)) };
+        }
       }
     } catch (e) { _zhxErr('v3manifest', e); }
     return { manT: 0, man: null };
@@ -272,11 +279,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return validV3Manifest(man);
   }
 
-  async function fetchManifest(force = false) {
+  async function fetchManifest() {
+    _manifestNetworkAttempted = true;
     _manifestNeedsCommit = false;
     _manifestRejected = false;
     let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, force ? { fresh: true } : undefined); }
+    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, { fresh: true }); }
     catch (e) { txt = null; /* 请求失败时由 loadManifest 决定是否复用旧清单 */ }
     if (typeof txt !== 'string' || !txt) return null;
     try {
@@ -290,7 +298,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 缓存优先 → 必要时网络（站点是否在列由 _ensureTryV3 统一判断）
   async function loadManifest(force = false, refresh = false) {
     _manifestNeedsCommit = false;
-    if (force) return await fetchManifest(true);
+    _manifestNetworkAttempted = false;
+    if (force) return await fetchManifest();
     const c = await readCachedManifest();
     const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
     const valid = _validV3Manifest(c.man);
@@ -422,12 +431,23 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   async function _tryV3WithCachedFallback(site, manifest, need, force, snapshots, staged, generation = _ensureGeneration) {
     let loaded = await _tryV3Bundle(site, manifest, need, force, staged, true, generation);
     if (generation !== _ensureGeneration) return { loaded: null, manifest };
-    if (loaded || force || !snapshots.previousValid) return { loaded, manifest };
+    // A cached manifest can outlive files at mutable deployment URLs, or refer
+    // to a dictionary rejected by the current reader. Recheck it once now.
+    if (!loaded && !force && !_manifestNetworkAttempted) {
+      const latest=await fetchManifest();
+      if (generation !== _ensureGeneration) return { loaded: null, manifest };
+      if (latest) {
+        staged.clear();
+        manifest=latest;
+        loaded=await _tryV3Bundle(site,manifest,need,false,staged,true,generation);
+      }
+    }
+    if (loaded || force || !snapshots.previousValid) return { loaded, manifest, fromSnapshot: false };
     staged.clear();
     loaded = await _tryV3Bundle(site, snapshots.previous.man, need, false, null, false, generation);
     if (!loaded) return { loaded: null, manifest };
     _dlStats.fallback++;
-    return { loaded, manifest: snapshots.previous.man };
+    return { loaded, manifest: snapshots.previous.man, fromSnapshot: true };
   }
 
   async function _commitV3Selection(siteId, manifest, snapshots, force, staged) {
@@ -451,7 +471,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const staged = new Map();
       const result = await _tryV3WithCachedFallback(site, manifest, neededTables(), force, snapshots, staged, generation);
       if (!result.loaded || generation !== _ensureGeneration) return false;
-      if (result.manifest === manifest) await _commitV3Selection(site.id, manifest, snapshots, force, staged);
+      if (!result.fromSnapshot) await _commitV3Selection(site.id, result.manifest, snapshots, force, staged);
       if (result.manifest.version) DATA_VER = String(result.manifest.version);
       if (_dlStats.fallback > sourceBefore.fallback) _dataLoadOrigin = 'fallback';
       else if (_dlStats.net > sourceBefore.net) _dataLoadOrigin = 'network';

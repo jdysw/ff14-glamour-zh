@@ -364,7 +364,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
       let responseText;
       if (options.url.includes('/manifest.json')) responseText = invalidManifest
         ? '{"schema":2,"sites":{}}' : JSON.stringify(manifest);
-      else if (options.url.endsWith('/dict.json')) responseText = files.dict;
+      else if (new URL(options.url).pathname.endsWith('/dict.json')) responseText = files.dict;
       else {
         const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(options.url);
         if (!match) return options.onerror(new Error('未经允许的资源'));

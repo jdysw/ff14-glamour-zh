@@ -39,7 +39,7 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
-function buildHarness(download, requiredTables = ['items'], cryptoProvider = webcrypto) {
+function buildHarness(download, requiredTables = ['items'], cryptoProvider = webcrypto, failWrites = false) {
   const store = new Map();
   const marks = [];
   const errors = [];
@@ -57,7 +57,7 @@ function buildHarness(download, requiredTables = ['items'], cryptoProvider = web
     findSite: () => ({ id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: requiredTables }),
     neededTables: () => requiredTables,
     storeGetAsync: async (key) => store.get(key) ?? null,
-    storeSetAsync: async (key, value) => { store.set(key, value); return true; },
+    storeSetAsync: async (key, value) => { if(failWrites)return false;store.set(key, value); return true; },
     storeListAsync: async () => [...store.keys()],
     storeDeleteAsync: async (key) => { store.delete(key); return true; },
     crypto: cryptoProvider,
@@ -254,6 +254,48 @@ function network(getVersion) {
   // 等待结束后仍可读空索引，但绝不应包含半途写入的记录。
   assert.deepEqual(Object.keys(api.dataGetIndex('nameMap') || {}), [], '失败时索引不得部分提交');
   assert.equal(api.resolveByName('English One'), null, '无效共享词典不能使装备索引部分生效');
+}
+
+// Fresh metadata may reference files replaced by a new server deployment.
+// A missing/corrupt file must trigger a manifest recheck now, not in 24 hours.
+function cacheBundle(store,bundle,timestamp){
+  store.set('zhx.v3.manifest',timestamp+'\n'+JSON.stringify(bundle.manifest));
+  for(const [name,meta]of Object.entries(bundle.manifest.sites.mirapri.files))
+    store.set('zhx.v3.f.mirapri.'+name+'.'+meta.sha256,meta.sha256+'\n'+bundle.files[name]);
+}
+{
+  let probes=0;
+  const bundle=makeBundle(1);
+  const {api,store}=buildHarness(async(url,timeout,options)=>{
+    if(url.endsWith('manifest.json')){probes++;assert.equal(options?.fresh,true,'Refresh must bypass HTTP caches');}
+    return network(()=>2)(url);
+  });
+  store.set('zhx.v3.manifest',Date.now()+'\n'+JSON.stringify(bundle.manifest));
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English Two'),'中文乙','Recover from a stale but not-yet-expired manifest');
+  assert.equal(probes,1,'At most one recovery probe per load');
+  assert.equal(JSON.parse(store.get('zhx.v3.manifest').split('\n').slice(1).join('\n')).version,'unit-v2');
+}
+{
+  let probes=0;
+  const {api,store}=buildHarness(async url=>{if(url.endsWith('manifest.json'))probes++;return network(()=>2)(url)});
+  cacheBundle(store,makeBundle(1),Date.now()+86400000);
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English Two'),'中文乙','Future cache timestamps cannot postpone update checks');
+  assert.equal(probes,1);
+}
+{
+  const previous=makeBundle(1);
+  const {api,store}=buildHarness(network(()=>2),['items'],webcrypto,true);
+  cacheBundle(store,previous,Date.now()-2*86400000);
+  const committed=store.get('zhx.v3.manifest');
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English Two'),'中文乙','Downloaded valid data still works in memory');
+  assert.equal(store.get('zhx.v3.manifest'),committed,'Failed persistence must not publish new metadata');
+  const offline=buildHarness(async()=>{throw new Error('offline')});
+  for(const [key,value]of store)offline.store.set(key,value);
+  await offline.api.ensureTables();
+  assert.equal(offline.api.resolveByName('English One'),'中文甲','The last complete current-format cache must survive a failed update');
 }
 
 console.log('✅ V3 refresh readiness, cache invalidation and in-flight generation regressions passed');
