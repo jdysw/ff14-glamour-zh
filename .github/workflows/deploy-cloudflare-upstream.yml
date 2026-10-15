@@ -1,19 +1,181 @@
-name: Check isolated Cloudflare upstream deploy
+name: Deploy complete upstream Cloudflare apps (isolated)
+
 on:
   push:
     branches: [deploy/cloudflare-upstream-20261015]
+    paths: [.github/workflows/deploy-cloudflare-upstream.yml]
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: isolated-upstream-deploy
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
 jobs:
-  preflight:
+  davflare:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Check linked credentials without printing them
-        env:
-          CF_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Verify deployment credential configuration
         run: |
-          test -n "$CF_ID" || { echo 'Missing Cloudflare account ID'; exit 1; }
-          test -n "$CF_TOKEN" || { echo 'Missing Cloudflare API token'; exit 1; }
-          echo 'Cloudflare deployment credentials are configured.'
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Cloudflare account ID not configured"; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Cloudflare API token not configured"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout exact upstream revision
+        run: |
+          git clone -q https://github.com/fanchenggang/Davflare.git app
+          cd app
+          git checkout -q --detach f3fc32e3f48778b2f2a7e5b78961e390bb2702bd
+          git rev-parse HEAD
+      - name: Install and compile unmodified upstream sources
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+          test -f build/index.html
+      - name: Configure isolated R2 binding
+        working-directory: app
+        run: |
+          sed -i 's/bucket_name = "webdav"/bucket_name = "davflare-storage"/' wrangler.toml
+          sed -i '/WEBDAV_PUBLIC_READ = "0"/a WEBDAV_USERNAME = "zhixia"' wrangler.toml
+      - name: Ensure Cloudflare Pages project
+        working-directory: app
+        run: |
+          npx wrangler pages project create davflare-upstream --production-branch main || npx wrangler pages project list | grep -q davflare-upstream
+      - name: Deploy upstream Davflare Pages and Pages Functions
+        working-directory: app
+        run: npx wrangler pages deploy build --project-name davflare-upstream --branch main --commit-dirty=true
+      # WEBDAV_PASSWORD is intentionally NOT set. Authentication must be configured first; no default password.
+
+  usage-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Verify deployment credentials
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || exit 1
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout exact upstream revision
+        run: |
+          git clone -q https://github.com/HowardZlh/usage-guard-collector.git app
+          cd app
+          git checkout -q --detach 1d0d49da8933117dfd4d5fe8b4fda7b3e07e7159
+          git rev-parse HEAD
+      - name: Install and typecheck upstream
+        working-directory: app
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm typecheck
+      - name: Bind existing isolated D1 and close public dashboard
+        working-directory: app
+        run: |
+          sed -i 's/00000000-0000-0000-0000-000000000000/3fa64ced-d41f-4723-83f9-b8eb0c06feac/' wrangler.jsonc
+          node <<'JS'
+          const fs = require('fs');
+          let s = fs.readFileSync('wrangler.jsonc', 'utf8');
+          s = s.replace('"compatibility_date": "2026-09-01",', '"compatibility_date": "2026-09-01",\n  "workers_dev": false,');
+          s = s.replace('"vars": {', '"vars": {\n    "CF_ACCOUNT_ID": "c1fc6fb71be2eaf8c73c78fd5bacaf6c",');
+          fs.writeFileSync('wrangler.jsonc', s);
+          JS
+      - name: Apply original migration and deploy upstream Worker
+        working-directory: app
+        run: |
+          corepack pnpm exec wrangler d1 migrations apply USAGE --remote
+          corepack pnpm exec wrangler deploy
+      # CF_API_TOKEN must be separate Account Analytics: Read token, NOT deployment token.
+
+  uptimeflare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Verify deployment credentials
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || exit 1
+          test -n "$CLOUDFLARE_API_TOKEN" || exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout patched upstream release
+        run: |
+          git clone -q https://github.com/lyc8503/UptimeFlare.git app
+          cd app
+          git checkout -q --detach 520c0b8dcfcedf8e147863482a490f42af1a76e3
+          git rev-parse HEAD
+      - name: Apply safe personal monitor configuration
+        working-directory: app
+        run: |
+          cat > uptime.config.ts <<'EOF'
+          import type { MaintenanceConfig, PageConfig, WorkerConfig } from './types/config'
+          const pageConfig: PageConfig = {
+            title: 'Zhixia 服务状态',
+            links: [{link: 'https://zhixia.uk/', label: '主页', highlight: true}],
+          }
+          const workerConfig: WorkerConfig = {
+            monitors: [
+              {id: 'zhixia-web', name: 'Zhixia 个人网站', method: 'GET', target: 'https://zhixia.uk/', expectedCodes: [200], timeout: 10000},
+              {id: 'zhixia-image', name: 'Cloudflare 图床', method: 'GET', target: 'https://cloudflare-imgbed-14k.pages.dev/', expectedCodes: [200], timeout: 10000},
+              {id: 'ff14-glamour', name: 'FF14 数据页面', method: 'GET', target: 'https://zhixia-data.pages.dev/', expectedCodes: [200], timeout: 10000},
+            ],
+            notification: {timeZone: 'Asia/Singapore', gracePeriod: 5},
+          }
+          const maintenances: MaintenanceConfig[] = []
+          export { maintenances, pageConfig, workerConfig }
+          EOF
+      - name: Build original Next.js Pages and Worker
+        working-directory: app
+        run: |
+          npm ci
+          npm ci --prefix worker
+          npx @cloudflare/next-on-pages
+          test -e .vercel/output/static/_worker.js
+      - name: Prepare official Worker with D1 and RemoteChecker Durable Object
+        working-directory: app/worker
+        run: |
+          cat > wrangler.upstream.toml <<'EOF'
+          name = "uptimeflare_worker"
+          main = "src/index.ts"
+          compatibility_date = "2025-04-02"
+          compatibility_flags = ["nodejs_compat"]
+          workers_dev = false
+          [[d1_databases]]
+          binding = "UPTIMEFLARE_D1"
+          database_name = "uptimeflare_d1"
+          database_id = "60f3d8bf-b3eb-4c05-906c-ecd8a5186737"
+          [[durable_objects.bindings]]
+          name = "REMOTE_CHECKER_DO"
+          class_name = "RemoteChecker"
+          [[migrations]]
+          tag = "v1"
+          new_sqlite_classes = ["RemoteChecker"]
+          [triggers]
+          crons = ["* * * * *"]
+          EOF
+      - name: Deploy complete upstream monitoring Worker
+        working-directory: app/worker
+        run: npx wrangler deploy --config wrangler.upstream.toml
+      - name: Configure Pages D1 binding
+        working-directory: app
+        run: |
+          cat >> wrangler.toml <<'EOF'
+          pages_build_output_dir = ".vercel/output/static"
+          EOF
+          sed -i 's/00000000-0000-0000-0000-000000000000/60f3d8bf-b3eb-4c05-906c-ecd8a5186737/' wrangler.toml
+      - name: Ensure official UptimeFlare Pages project
+        working-directory: app
+        run: |
+          npx wrangler pages project create uptimeflare --production-branch main || npx wrangler pages project list | grep -q uptimeflare
+      - name: Deploy complete upstream UptimeFlare status page
+        working-directory: app
+        run: npx wrangler pages deploy .vercel/output/static --project-name uptimeflare --branch main --commit-dirty=true
