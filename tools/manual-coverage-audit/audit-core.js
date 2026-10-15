@@ -17,7 +17,7 @@
       '.user-description','.user-content','.comment-content','.glamour-comment'],
     endcloset: ['/detail/','.concept-title','.concept-description','.author-description',
       '[class*="userComment"]','[class*="creatorComment"]'],
-    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text'],
+    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text','.post-box img.post-thumbnail'],
     collection: ['.user-post-title','.post-content','.author-description'],
     fc: ['.comment-content','.comment-body','.user-content','.post-author'],
     wiki: ['.comment-content','.user-profile','.mw-userpage-content'],
@@ -52,6 +52,8 @@
     if(el.closest?.('a.eorzeadb_link,[data-zhx-miramiru-zh]'))return 'item';
     const path=new URL(url).pathname;
     if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'))return 'user';
+    const tagLink=el.closest?.('a[href*="?tag="]');
+    if(tagLink&&el.closest?.('[data-slot="badge"]')?.textContent?.trim().startsWith('#'))return 'user';
     if(/\/(?:mirapuri|users)\//.test(path)&&el.closest?.('h1,main .whitespace-pre-wrap'))return 'user';
     if(el.closest?.('h3')||kind==='attr:alt'){
       for(let p=el.parentElement,n=0;p&&n<3;p=p.parentElement,n++){

@@ -18,6 +18,9 @@ const OFFICIAL_TAG_SUFFIX = /^(.{1,100}?)\s{0,8}(?:\((?:Official tag|公式タ�
 const knownMiramiruText = key => Object.hasOwn(DICT_MIRAMIRU, key) ? DICT_MIRAMIRU[key] : null;
 
 function translateMiramiruCount(raw) {
+  const labelCount = raw.match(/^(.{1,100}?) \(([\d,]+)\)$/u);
+  const label = labelCount && knownMiramiruText(labelCount[1]);
+  if (label) return label + ' (' + labelCount[2] + ')';
   const posts = raw.match(/^([\d,]+)\s*(posts|件|건)$/u);
   if (posts) return posts[1] + ' 篇投稿';
   const count = raw.match(/^([\d,.]+[KM]?)\s*(Glamours|ミラプリ|투영|Creators|クリエイター|크리에이터|Likes|いいね|좋아요|uses|回使用|회 사용)$/);
@@ -111,6 +114,9 @@ function translateMiramiruText(raw, element) {
   // An equipment hash is authoritative even when international names differ.
   const link = element.closest(ITEM_LINK);
   const trimmed = raw?.trim();
+  // React renders the numeric value and its suffix as separate text nodes.
+  if (/^(?:件|건|entries)$/.test(trimmed) && /^[\d,]+\s*(?:件|건|entries)$/.test(element.textContent.trim()))
+    return raw.replace(trimmed, ' 篇投稿');
   const item = link?.dataset.zhxMiramiruZh;
   if (item && trimmed && (trimmed === link.dataset.zhxMiramiruName || resolveByName(trimmed))) return raw.replace(trimmed, item);
   const aboutParticle = /^\/(?:en\/|ko\/|ja\/)?about\/?$/.test(location.pathname)
@@ -158,7 +164,9 @@ function translateMiramiruPage(rootArg) {
 }
 
 function translateMiramiruTitle() {
-  const next = trMiramiru(document.title).replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/g, 'FF14 幻化展示');
+  const source=document.title;
+  const next = (source.endsWith(' | Miramiru') ? trMiramiru(source.slice(0,-11))+' | Miramiru' : trMiramiru(source))
+    .replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/g, 'FF14 幻化展示');
   if (next !== document.title) document.title = next;
 }
 

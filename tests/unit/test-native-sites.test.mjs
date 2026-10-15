@@ -27,6 +27,9 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
       translateMiramiruTitle();
       assert.equal(document.title, 'Miramiru - FF14 幻化展示');
     }
+    globalThis.document={title:'Miramiru 소개 | Miramiru'};
+    translateMiramiruTitle();
+    assert.equal(document.title,'关于 Miramiru | Miramiru');
   } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
 });
 
@@ -41,6 +44,14 @@ test('Miramiru 实测审计补漏：三语静态说明、长文本、官方标�
   assert.equal(trMiramiru('Player tag (2)'), 'Player tag (2)');
   assert.equal(trMiramiru('constructor'), 'constructor');
   assert.equal(trMiramiru('__proto__'), '__proto__');
+});
+
+test('Miramiru 追加实测：比赛、登录、投稿须知、支持与公告摘要', () => {
+  const copies=JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-followup-copy.json',import.meta.url),'utf8'));
+  for(const copy of copies)for(const [locale,source]of Object.entries(copy.source))
+    assert.equal(trMiramiru(source),copy.zh,copy.key+':'+locale);
+  assert.equal(trMiramiru('ハイランダー (41)'), '高地之民 (41)');
+  assert.equal(trMiramiru('Unknown author (41)'), 'Unknown author (41)');
 });
 
 test('Miramiru 筛选真实枚举与全部官方标签：三语文案、数量和选中摘要', () => {

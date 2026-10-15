@@ -214,6 +214,9 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (key === 'title' && n.closest?.('#search-menu')) {
       const filterValues = { yes: '是', no: '否', male: '男性', female: '女性' };
       translated = filterValues[value.toLowerCase()] || null;
+      if (!translated) translated = DICT_ACL['job:' + value.toLowerCase()] || null;
+      const patch = value.match(/^patch-(\d{1,2})(?:-(\d{1,2}))?$/);
+      if (patch) translated = '版本 ' + patch[1] + (patch[2] ? '.' + patch[2] : '');
     }
     if (!translated) translated = trACL(value);
     if (translated !== value) n.setAttribute(key, translated);

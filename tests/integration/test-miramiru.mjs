@@ -100,6 +100,9 @@ try {
   await sleep(500);
   assert.match(await c.eval(`document.querySelector('a.eorzeadb_link').getAttribute('href')`), /deadbeef/);
   assert.equal(await c.eval(`document.querySelector('#name').textContent`), 'Unknown Item');
+  await c.eval(`(()=>{const span=document.createElement('span');span.id='split-counter';span.append('7','건');document.body.append(span)})()`);
+  await sleep(300);
+  assert.equal(await c.eval(`document.querySelector('#split-counter').textContent`),'7 篇投稿');
   // Self-authored title/href mutations must settle, rather than rescheduling forever.
   const ticks = await c.eval('window.__zhxDiagRecord().obs.ticks');
   await sleep(600);

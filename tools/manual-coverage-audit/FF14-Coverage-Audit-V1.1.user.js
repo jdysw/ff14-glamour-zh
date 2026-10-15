@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3.1
+// @version      1.3.2
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -38,7 +38,7 @@
       '.user-description','.user-content','.comment-content','.glamour-comment'],
     endcloset: ['/detail/','.concept-title','.concept-description','.author-description',
       '[class*="userComment"]','[class*="creatorComment"]'],
-    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text'],
+    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text','.post-box img.post-thumbnail'],
     collection: ['.user-post-title','.post-content','.author-description'],
     fc: ['.comment-content','.comment-body','.user-content','.post-author'],
     wiki: ['.comment-content','.user-profile','.mw-userpage-content'],
@@ -73,6 +73,8 @@
     if(el.closest?.('a.eorzeadb_link,[data-zhx-miramiru-zh]'))return 'item';
     const path=new URL(url).pathname;
     if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'))return 'user';
+    const tagLink=el.closest?.('a[href*="?tag="]');
+    if(tagLink&&el.closest?.('[data-slot="badge"]')?.textContent?.trim().startsWith('#'))return 'user';
     if(/\/(?:mirapuri|users)\//.test(path)&&el.closest?.('h1,main .whitespace-pre-wrap'))return 'user';
     if(el.closest?.('h3')||kind==='attr:alt'){
       for(let p=el.parentElement,n=0;p&&n<3;p=p.parentElement,n++){
@@ -546,7 +548,7 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.3.1. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.2. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -646,14 +648,14 @@ function collect(){
   for(const el of document.querySelectorAll('[placeholder],[title],[aria-label],[alt],[value],option')){
     if(el.tagName==='OPTION')push(el,el.textContent,'option'); // once; no duplicate text node
     for(const a of ATTRS)if(el.hasAttribute(a))push(el,el.getAttribute(a),'attr:'+a,null,a);
-    if(/^(INPUT|BUTTON)$/.test(el.tagName)&&/^(button|submit|reset)$/i.test(el.getAttribute('type')||''))push(el,el.getAttribute('value'),'attr:value',null,'value');
+    if(el.tagName==='INPUT'&&/^(button|submit|reset)$/i.test(el.getAttribute('type')||''))push(el,el.getAttribute('value'),'attr:value',null,'value');
   }
   if(document.title){const ctx={scope:'metadata',tag:'title',ui:false,user:false,ad:false,confidence:.9};
     items.push({kind:'document:title',text:document.title,path:'head > title',stablePath:'head > title',ctx,before:null,matchQuality:'none'});}
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.1',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.2',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -721,7 +723,7 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.toolVersion='1.3.1';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  out.toolVersion='1.3.2';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }

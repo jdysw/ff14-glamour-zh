@@ -44,9 +44,13 @@ export const COLLECTOR_JS = String.raw`(() => {
     for (let p = el.parentElement, n = 0; p && n < 4; p = p.parentElement, n++)
       ancestors += ' ' + String(p.className || '') + ' ' + String(p.id || '');
     const full = cls + ' ' + id + ' ' + ancestors;
-    const ad = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift|amazon|rakuten|affiliate)/i.test(full);
-    const authoredContext = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content|(?:^|[\s_-])(?:created[-_]at|posted[-_]at|relative[-_]time|timestamp)(?=$|[\s_-]))/i.test(full);
+    const adClass = /(adsbygoogle|ad-slot|adunit|ad-container|sponsor|aswift|amazon|rakuten|affiliate)/i.test(full);
+    const authoredContext = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content|(?:^|[\s_-])(?:created[-_]at|posted[-_]at|relative[-_]time|timestamp)(?=$|[\s_-]))/i.test(full)
+      || globalThis.location?.hostname === 'lookbook.ronkacloset.com' && kind === 'attr:alt' && /\bpost-thumbnail\b/.test(cls);
     const link = el.closest('a[href]');
+    const linked = link?.getAttribute?.('href') || '';
+    const ad = adClass || /(?:^|\s)sponsored(?:\s|$)/i.test(link?.getAttribute?.('rel') || '')
+      || /^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|amzn\.asia|a\.r10\.to|hb\.afl\.rakuten\.co\.jp)\//i.test(linked);
     const linkCls = String(link?.className || '');
     const actionLink = !!link && (
       /(?:^|[\s_-])(?:button|btn|load-more|show-more|read-more|page-numbers|next|prev)(?:$|[\s_-])/i.test(linkCls)
@@ -91,7 +95,9 @@ export const COLLECTOR_JS = String.raw`(() => {
   for (const el of document.querySelectorAll('[placeholder],[title],[aria-label],[alt],[value],option')) {
     if (el.tagName === 'OPTION') push(el, el.textContent, 'option');
     for (const a of ['placeholder','title','aria-label','alt']) if (el.hasAttribute(a)) push(el, el.getAttribute(a), 'attr:' + a);
-    if (/^(INPUT|BUTTON)$/.test(el.tagName) && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) push(el, el.value, 'attr:value');
+    // A button's value is submitted state (e.g. Radix value="on"), not its
+    // visible label. Only input buttons render their value as UI text.
+    if (el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) push(el, el.value, 'attr:value');
   }
   if (document.title) out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: false, user: false, ad: false } });
   return out;

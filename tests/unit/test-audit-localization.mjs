@@ -38,6 +38,11 @@ const fc = adapter('ff14-fc.js',
     _getSubstrKeysAll: () => ['メール', 'ドレス', '装備', 'まとめ', '検索', '絞り込み'] });
 assert.equal(fc.trFC('絞り込みをリセットする'), '重置筛选');
 assert.equal(fc.trFC('基本ステータス'), '基础属性');
+assert.equal(fc.trFC('インスタンスダンジョン'), '副本');
+assert.equal(fc.trFC('Follow @ff14_hksn'), '关注 @ff14_hksn');
+assert.equal(fc.trFC('パラソル (25)'), '阳伞 (25)');
+assert.equal(fc.trFC('ウィング (9)'), '羽翼 (9)');
+assert.equal(fc.trFC('Unlisted (25)'), 'Unlisted (25)');
 assert.equal(fc.trFC('メールアドレスが公開されることはありません。'), '您的电子邮箱地址不会公开。');
 assert.equal(fc.trFC('メールアドレス'), 'メールアドレス',
   'do not replace ドレス inside the Japanese word メールアドレス');
@@ -73,6 +78,10 @@ assert.equal(next.getAttribute('aria-label'), '分页导航');
 const filter = element('LI', { title: 'yes' }, '#search-menu');
 acl._procACLNode(filter);
 assert.equal(filter.getAttribute('title'), '是');
+for(const [source,zh] of [['pld','骑士'],['pct','绘灵法师'],['crp','刻木匠'],['patch-7-1','版本 7.1']]){
+  const item=element('LI',{title:source},'#search-menu');acl._procACLNode(item);assert.equal(item.getAttribute('title'),zh);
+}
+const unrelatedJob=element('LI',{title:'pld'});acl._procACLNode(unrelatedJob);assert.equal(unrelatedJob.getAttribute('title'),'pld');
 const unrelated = element('LI', { title: 'yes' });
 acl._procACLNode(unrelated);
 assert.equal(unrelated.getAttribute('title'), 'yes');

@@ -338,4 +338,5 @@ async function main() {
   console.log('\n扫描完成。可运行: node tools/coverage-audit/run-scan.mjs --report --out docs/coverage-audit-report.md');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch((e) => { console.error(e); process.exit(1); });
