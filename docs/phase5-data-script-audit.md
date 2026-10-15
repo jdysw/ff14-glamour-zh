@@ -1,5 +1,7 @@
 # 第五阶段：Runtime Data V3 与用户脚本边界专项审计
 
+> 历史审计记录。当前已要求 bytes、完整八层词典和 WebCrypto 摘要验证；缺少 WebCrypto 时拒绝数据并广播降级状态。旧格式兼容及 itemDbReady 包装已移除，详见 [历史清理记录](historical-cleanup-20261015.md)。下文保留当时结论，不作为当前支持策略。
+
 ## 范围与原则
 
 以当前 `1.4.4` 用户脚本数据链为审计对象。覆盖 canonical TSV/词库 → Python V3 生成器 → Cloudflare Pages 发布 → manifest 下载与 GM 本地缓存 → 站点所需文件 → 数据索引 → 站点适配器翻译补扫。审查**两层各自职责以及跨层唯一契约**，不是单独的代码风格巡检。

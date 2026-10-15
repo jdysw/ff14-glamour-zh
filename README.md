@@ -38,7 +38,7 @@
 3. 安装脚本：
    - **Greasy Fork** → [**点此安装**](https://greasyfork.org/zh-CN/scripts/598839-ff14-%E5%B9%BB%E5%8C%96%E7%AB%99%E4%B8%AD%E6%96%87%E5%8C%96-%E4%B8%8E%E7%81%B0%E6%9C%BA-wiki-%E5%8F%8C%E5%90%91%E4%BA%92%E6%9F%A5)
    - **GitHub** → [**点此安装最新版**](https://github.com/jdysw/ff14-glamour-zh/releases/latest/download/ff14-glamour-zh.greasyfork.user.js)
-4. 打开任意支持站点，脚本会自动生效。尚未收到更新时，可从上方链接覆盖安装最新版；首次运行会清理旧数据缓存并获取 V3（设置保留）。
+4. 打开任意支持站点，脚本会自动生效。尚未收到更新时，可从上方链接覆盖安装最新版；脚本只读取当前格式缓存，缺失或失效时获取当前 V3 数据，不迁移或主动清理旧格式缓存。
 
 ## 💡 使用说明
 
@@ -103,7 +103,7 @@ bash build.sh
 npm test
 ```
 
-重建物品数据需提供四语 Item.csv 和英语 ItemAction.csv（en-ItemAction.csv）；可通过 --csv-dir 指定本地目录。package.json 是版本唯一源，新脚本发布时更新版本号。推送到 main 后，GitHub Actions 会按变更自动发布脚本或部署数据；数据站工作流也可在 Actions 页面手动运行。数据更新不需新脚本版本；同版本 Release 会跳过，更新其附件或说明需手动处理。
+重建物品数据需提供四语 Item.csv 和英语 ItemAction.csv（en-ItemAction.csv）；可通过 --csv-dir 指定本地目录。package.json 是版本唯一源。推送到 main 后，GitHub Actions 按相关路径变更自动部署数据；数据站工作流也可在 Actions 页面手动运行。脚本发行需手动触发 Release 工作流，不随合并自动发布。Release 只发布通过质量检查的当前 main 提交；已有版本号指向其他提交时会拒绝发布，必须先递增版本号。数据更新不需新脚本版本。
 
 ### 维护约定
 

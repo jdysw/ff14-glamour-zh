@@ -153,7 +153,7 @@ async function capture(automatic=false){
         '；采集状态 '+readiness);
     }
     await save(data);await count(data);
-  }catch(e){say('采集失败：'+String(e.message||e),true);console.error('[FF14 audit v1.1]',e)}
+  }catch(e){say('采集失败：'+String(e.message||e),true);console.error('[FF14 audit]',e)}
   finally{busy=false}
 }
 async function count(d){const x=d||await load();if(stats)stats.textContent=`原文状态 ${Object.keys(x.baselines).length} / 译后快照 ${Object.keys(x.pages).length} / 搜索事件 ${S?.getSummary?.().events||0}`}
@@ -175,7 +175,7 @@ async function exportJSON(){
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
-async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
+async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件？请先导出备份。'))return;
   await set(KEY,JSON.stringify(blank()));await S?.clear?.();await count();say('已清空。')}
 function btn(text,fn){const x=document.createElement('button');x.type='button';x.textContent=text;x.addEventListener('click',fn);return x}
 async function init(){

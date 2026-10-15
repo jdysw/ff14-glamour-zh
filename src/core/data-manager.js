@@ -95,8 +95,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 只加载 V3；失败时保留空物品索引，并继续广播就绪。
   // v3 文件清单/格式由 build/make-runtime-data.py 生成（生成器侧已完成首行胜、
   // 染剂回退展开、'-' 行跳过等语义等价处理；此处直接建索引一次赋值）。
-  // 缓存：manifest（zhx.v3.manifest = t + '\n' + 原文）；文件（zhx.v3.f.<site>.<name>
-  // = sha256 + '\n' + 文本）。sha256 校验在 crypto.subtle 可用时执行，不可用不阻塞。
+  // 缓存：manifest（zhx.v3.manifest = t + '\n' + 原文）；文件键含站点、名称和 SHA-256。
+  // 文件值为 sha256 + '\n' + 文本；字节数和摘要均须匹配，无 WebCrypto 时拒绝加载并结束等待。
 
   // 「键\t值...」文本 → 映射（多值模式收集为数组；行内/键首列已由生成器去重）
   function _v3Pairs(txt, multi) {

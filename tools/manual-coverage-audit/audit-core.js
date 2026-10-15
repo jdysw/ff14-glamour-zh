@@ -1,4 +1,4 @@
-/* FF14 manual coverage audit v1.1 - shared pure logic (Node and userscript). */
+/* FF14 manual coverage audit - shared pure logic (Node and userscript). */
 (function (global) {
   'use strict';
   const SITES = Object.freeze({
