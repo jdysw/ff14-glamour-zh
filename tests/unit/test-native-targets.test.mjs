@@ -55,6 +55,7 @@ function withGlobals(values, fn) {
 
 test('V3 解析器与 Targets 共用真实名称/散列索引', () => {
   assert.equal(_applyV3({
+    candidatePolicy: 1,
     names: 'English Gear\t测试中文装备\t1\t0\n日本防具\t测试中文防具\t1\t1\nInk Blue\t墨蓝色\t1\t5\n',
     hash: 'abc123\t散列优先译名\n',
   }), true);

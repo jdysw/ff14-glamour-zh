@@ -1,6 +1,6 @@
 {
   "comment": "正常 ESM 依赖驱动的 Rollup 模块输出顺序快照；不再通过副作用 import 强制顺序。",
-  "comment2": "build/migrate/verify-build-order.mjs 对实际产物进行检验，变更顺序必须审查后更新此快照。",
+  "comment2": "build/verify-build-order.mjs 对实际产物进行检验，变更顺序必须审查后更新此快照。",
   "comment3": "模块顺序不再由测试区段的文字位置决定；源模块由 Rollup 按真实依赖图求值。",
   "comment4": "禁止重新生成 @phase15-order-link 人为依赖；所有业务模块应保持无环。",
   "entry": "main",

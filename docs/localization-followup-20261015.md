@@ -37,4 +37,4 @@ node tools/coverage-audit/run-scan.mjs --site miramiru --channel local --discove
 
 Windows 终端运行 Python 相关检查时应设置 `PYTHONIOENCODING=utf-8`，避免系统 GBK 输出编码导致 emoji／校验符号的编码错误。
 
-`npm run build:miramiru-test` 生成内置最新数据的 1.4.5 测试脚本；更新后再配合审计 1.3.2 测试。正式数据尚未部署，PR 仍保留草稿。
+`npm run build:miramiru-test` 生成内置最新数据的 1.4.5 测试脚本；更新后再配合审计 1.3.2 测试。PR #55 已合并，当前八站数据已部署；不再以旧版兼容分发作为发布前提。

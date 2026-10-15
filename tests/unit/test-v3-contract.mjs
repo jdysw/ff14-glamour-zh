@@ -41,8 +41,8 @@ const valid = {
 const copy = () => structuredClone(valid);
 assert.equal(validV3Manifest(valid), true);
 assert.equal(validV3FileMeta(meta('mirapri/names.tsv'), 'mirapri/names.tsv'), true);
-assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha }, 'mirapri/names.tsv'), true,
-  '兼容已有按摘要寻址、没有 bytes 字段的离线 manifest');
+assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha }, 'mirapri/names.tsv'), false,
+  '当前清单必须声明 bytes');
 
 // 这些变体必须在网络下载之前拒绝，不得进入文件缓存。
 const badUrls = [
@@ -74,6 +74,9 @@ for (const mutate of [
   obj => { obj.shared = { dict: null }; },
   obj => { obj.shared = { dict: 'dict.json' }; },
   obj => { obj.candidatePolicy = 99; },
+  obj => { obj.candidatePolicy = 0; },
+  obj => { delete obj.shared; },
+  obj => { delete obj.sites.mirapri.files.names.bytes; },
   obj => { obj.schema = 4; },
   obj => { obj.sites = []; },
   obj => { obj.sites = {}; },
@@ -81,10 +84,10 @@ for (const mutate of [
   const altered = copy(); mutate(altered);
   assert.equal(validV3Manifest(altered), false, '拒绝异常结构：' + JSON.stringify(altered).slice(0,140));
 }
-// 与发布端共用的七层词库形状：缓存兼容部分层，生产发布必须齐全。
+// 缓存与发布端均要求当前八层词典，拒绝缺层历史数据。
 const fullDict = Object.fromEntries(RUNTIME_DICT_LAYERS.map(layer => [layer, { 示例: '译文' }]));
 assert.equal(validRuntimeDictionary(fullDict, true), true);
-assert.equal(validRuntimeDictionary({ main: { 示例: '译文' } }), true);
+assert.equal(validRuntimeDictionary({ main: { 示例: '译文' } }), false);
 assert.equal(validRuntimeDictionary({ main: { 示例: '译文' } }, true), false);
 for (const invalid of [
   { main: JSON.parse('{"__proto__":{"polluted":"yes"}}') },

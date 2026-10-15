@@ -45,23 +45,11 @@ const GM_STUB = `(() => {
 
 const WRAP = (src) => `(function(){ try { ${src} } catch (e) { console.error('[AUDIT-INJECT]', e && e.message); } })();`;
 
-// 数据预置：全部本地页面都需要 items 表（用仓库 data/ff14-items.tsv）
-function presetDataJs(itemsTsv) {
-  const FP = 'testfp000001';
-  return `(() => {
-    for (const k of Object.keys(localStorage)) if (k.indexOf('gm:') === 0) localStorage.removeItem(k);
-    localStorage.setItem('gm:zhx.dt.items', ${JSON.stringify(FP + '\n' + itemsTsv)});
-    localStorage.setItem('gm:zhx.meta', JSON.stringify({ v: 'test', t: Date.now() }));
-    localStorage.setItem('gm:zhx.v3.manifest', ${JSON.stringify(String(Date.now()) + '\n' + JSON.stringify({ schema: 3, sites: {} }))});
-    return 1;
-  })()`;
-}
-
 /**
  * 扫描单个 URL（本地 CDP）。
  * @returns {Promise<object>} { site, pageId, url, items, error? }
  */
-export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, waitMs = 1500 }) {
+export async function scanUrlLocal({ site, pageId, url, port = 9223, waitMs = 1500 }) {
   const t = await newPage(port, 'about:blank');
   const c = t.cdp;
   try {
@@ -107,7 +95,6 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     const before = await c.eval(COLLECTOR_JS);
     const links = await c.eval(LINKS_JS).catch(() => []);
     // 现在清 localStorage + 预置数据 + 注入脚本（页面已就绪）
-    await c.eval(presetDataJs(itemsTsv));
     // Audit the checkout's generated data, including unpublished new adapters.
     // Page-local GM storage also avoids multilingual bundles exceeding quota.
     await seedV3Memory(c, site);
@@ -228,7 +215,6 @@ async function main() {
   if (!siteArg) { usage(); process.exit(2); }
 
   const sites = siteArg === 'all' ? Object.keys(SITES) : [siteArg];
-  const itemsTsv = fs.readFileSync(path.join(REPO_ROOT, 'data', 'ff14-items.tsv'), 'utf8');
   const header = fs.readFileSync(path.join(REPO_ROOT, 'build/userscript-header.txt'), 'utf8');
   // Never claim host coverage on a host where the released userscript cannot run.
   for (const site of sites) {
@@ -289,7 +275,7 @@ async function main() {
         templateCounts.set(template, (templateCounts.get(template) || 0) + 1);
         console.log('  扫描 ' + (p.id || template) + ': ' + norm);
         try {
-          const r = await scanUrlLocal({ site, pageId: p.id || 'discovered-' + n, url: norm, itemsTsv, port, waitMs });
+          const r = await scanUrlLocal({ site, pageId: p.id || 'discovered-' + n, url: norm, port, waitMs });
           const classified = classifyResiduals(r.items.map((it) => ({ ...it, site })));
           const result = { site, pageId: r.pageId, url: norm, template, depth: p.depth,
             items: classified, status: 'ok', beforeCount: r.beforeCount, scannedAt: new Date().toISOString() };

@@ -20,7 +20,7 @@ import {
 import { cacheReset } from '../../src/core/cache-primitives.js';
 import { onHost } from '../../src/core/site-policy.js';
 import { DATA_TEXT } from '../../src/core/data-manager.js';
-import { createObserver, observeLocal, _obsStats } from '../../src/core/observer.js';
+import { createObserver, _obsStats } from '../../src/core/observer.js';
 
 const input = attrs => ({
   className: attrs.className ?? '',
@@ -214,7 +214,7 @@ test('真实 MutationObserver：批次去重、文字变动、异常隔离和销
     await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(batches.length, 1, '销毁后不得再次调度回调');
 
-    const next = observeLocal(() => { throw new Error('预期观察回调异常'); }, 1);
+    const next = createObserver({handler:() => { throw new Error('预期观察回调异常'); },debounce:1});
     assert.equal(observers.length, 2);
     observers[1].emit([{ type: 'childList', addedNodes: [child] }]);
     await new Promise(resolve => setTimeout(resolve, 25));

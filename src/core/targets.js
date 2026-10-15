@@ -1,7 +1,7 @@
 /* @phase15-module-order:core/targets */
-import { observeLocal } from './observer.js';
+import { createObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
-import { itemDbReady, resolve, resolveByName } from './data-manager.js';
+import { ensureTables, resolve, resolveByName } from './data-manager.js';
 import { localScope, queryIn } from './dom.js';
 import { _perfNow, safe } from './runtime.js';
 export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
@@ -12,7 +12,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   function lookupZh(a, name) {
     const h = (a?.getAttribute('href')) || '';
     const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-    return resolve({ hash: m?.[1], name }, { latinFallback: true });
+    return resolve({ hash: m?.[1], name });
   }
 
   /* @zhixia:core-targets-start */
@@ -293,14 +293,14 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   }
 
   function startItems() {
-    itemDbReady(() => {
+    void ensureTables().then(safe(() => {
       safe(bindGlobalWikiJump, 'wikiJump')();
       applyItemZh();
       // 局部：新增节点收窄到 subtree，避免全页重查（与全页同一条 Target Pipeline）
-      observeLocal((nodes) => {
+      createObserver({ debounce: 400, handler(nodes) {
         for (const n of nodes) {
           if (n.nodeType === 1) safe(processRoot, 'EC 物品局部')(n, { applyMap: EC_ITEMS_APPLY });
         }
-      }, 400);
-    });
+      } });
+    }, 'EC 物品数据就绪'));
   }

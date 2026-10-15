@@ -1,4 +1,4 @@
-/* FF14 manual coverage audit v1.1 - shared pure logic (Node and userscript). */
+/* FF14 manual coverage audit - shared pure logic (Node and userscript). */
 (function (global) {
   'use strict';
   const SITES = Object.freeze({
@@ -7,7 +7,7 @@
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
     'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru'
   });
-  const FORMATS = ['zhx-manual-audit-v1','zhx-manual-audit-v2'];
+  const FORMAT = 'zhx-manual-audit-v2';
   const AUTHORED = {
     mirapri: ['#gallery article .article-info .title','#gallery article h2.title',
       '#gallery article figure','#gallery article img[alt]',
@@ -168,7 +168,7 @@
     }
     return out;
   }
-  function upgradeLegacyItems(items,site){
+  function normalizeItems(items,site){
     const src=items||[];
     const optionKeys=new Set(src.filter(it=>it.kind==='option').map(it=>(it.path||'')+'\0'+normalize(it.text)));
     return src.filter(it=>!(it.kind==='text'&&optionKeys.has((it.path||'')+'\0'+normalize(it.text))))
@@ -191,18 +191,9 @@
         return {...it,ctx,stablePath:it.stablePath||it.path};
       });
   }
-  function migrate(data){
-    if(!data||!FORMATS.includes(data.format))throw Error('不支持的审计 JSON 格式');
-    const out={format:'zhx-manual-audit-v2',createdAt:data.createdAt||new Date().toISOString(),
-      baselines:{},pages:{},settings:{},migration:data.format};
-    if(data.format==='zhx-manual-audit-v2')return data;
-    for(const [url,row] of Object.entries(data.baselines||{})){
-      const id=snapshotKey(url,'legacy','');out.baselines[id]={...row,key:id,state:'legacy',method:'manual',items:upgradeLegacyItems(row.items,row.site)};
-    }
-    for(const [url,row] of Object.entries(data.pages||{})){
-      const id=snapshotKey(url,'legacy','');out.pages[id]={...row,key:id,state:'legacy',label:'',round:'legacy',hasBaseline:!!row.hasBaseline,items:upgradeLegacyItems(row.items,row.site)};
-    }
-    return out;
+  function readAudit(data){
+    if(!data||data.format!==FORMAT)throw Error('仅支持当前审计格式 zhx-manual-audit-v2');
+    return data;
   }
   function compareRuns(oldRows,newRows){
     const keyRow=row=>(row.site||'')+'|'+(row.url||'')+'|'+(row.state||'default')+'|'+(row.label||'');
@@ -223,8 +214,8 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMATS,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,upgradeLegacyItems,
-    category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,migrate,compareRuns};
+  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+    category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

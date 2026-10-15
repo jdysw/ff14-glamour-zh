@@ -153,9 +153,9 @@ try {
     pages: {}, baselines: {}, settings: {}, searchAudit: await api.exportState(),
   }));
   execFileSync(process.execPath, [fileURLToPath(new URL('../../tools/manual-coverage-audit/generate-report.mjs', import.meta.url)), inputPath, temp], { stdio: 'pipe' });
-  const report = fs.readFileSync(path.join(temp, 'ff14-审计报告-v1.1.md'), 'utf8');
+  const report = fs.readFileSync(path.join(temp, 'ff14-审计报告.md'), 'utf8');
   assert.ok(report.includes('## 中文搜索诊断'), 'search-only report renders diagnostic timeline');
-  const summary = JSON.parse(fs.readFileSync(path.join(temp, 'ff14-审计汇总-v1.1.json'), 'utf8'));
+  const summary = JSON.parse(fs.readFileSync(path.join(temp, 'ff14-审计汇总.json'), 'utf8'));
   assert.ok(summary.searchDiagnostics.events > 0, 'search-only summary reports recorded events');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });

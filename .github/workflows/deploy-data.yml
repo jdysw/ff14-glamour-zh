@@ -27,7 +27,6 @@ on:
       - 'src/core/site-policy.js'
       - '.github/workflows/deploy-data.yml'
       - '.github/deploy/**'
-      - 'functions/**'
   workflow_dispatch:
 
 permissions:

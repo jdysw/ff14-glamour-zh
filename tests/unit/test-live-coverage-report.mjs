@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {summarizeLive,toManualV11,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
+import {summarizeLive,toManualAudit,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
 import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 // The report requires every configured site; CI must schedule the same set.
@@ -24,20 +24,20 @@ assert.equal(part.bySite.ec.status,'failed');
 assert.equal(part.pages.length,Object.keys(SITES).length);
 const complete=summarizeLive(Object.keys(SITES).map(good),at);
 assert.equal(complete.status,'scan-complete');
-const v=toManualV11(complete);
+const v=toManualAudit(complete);
 assert.equal(v.format,'zhx-manual-audit-v2');
 assert.equal(Object.keys(v.pages).length,Object.keys(SITES).length);
 assert.ok(Object.values(v.pages).every(p=>!p.hasBaseline&&p.baselineQuality==='partial-inferred'));
 const author=good('fc');
 author.items=[{kind:'text',text:'玩家标题',before:'Author writing',path:'article > h2',
   ctx:{user:true,ui:false,ad:false}}];
-const redacted=toManualV11(summarizeLive([author],at));
+const redacted=toManualAudit(summarizeLive([author],at));
 assert.equal(Object.values(redacted.pages).find(p=>p.site==='fc').items[0].text,'[内容已隐藏]');
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'audit-live-'));
 try{
   writeLiveReports(part,temp);
   assert.equal(JSON.parse(fs.readFileSync(path.join(temp,'coverage-audit-live.json'))).status,'partial');
-  assert.equal(JSON.parse(fs.readFileSync(path.join(temp,'coverage-audit-live-v1.1.json'))).format,'zhx-manual-audit-v2');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(temp,'coverage-audit-live-manual.json'))).format,'zhx-manual-audit-v2');
   assert.match(fs.readFileSync(path.join(temp,'coverage-audit-live.md'),'utf8'),/WAF/);
 }finally{fs.rmSync(temp,{recursive:true,force:true});}
 const redactedItems=redactItems([{kind:'text',text:'玩家标题',
@@ -55,4 +55,4 @@ try{
   assert.equal(sanitizeEvidence(rawDir,pubDir),2);
   assert.ok(loadLiveResults(pubDir).some(row=>row.site==='miramiru'));
 }finally{fs.rmSync(rawDir,{recursive:true,force:true});fs.rmSync(pubDir,{recursive:true,force:true});}
-console.log('✅ live-report: strict completeness, V1.1 compatibility, privacy redaction');
+console.log('✅ live-report: strict completeness, current manual audit export, privacy redaction');

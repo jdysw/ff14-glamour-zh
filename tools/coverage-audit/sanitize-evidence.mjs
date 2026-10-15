@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const require=createRequire(import.meta.url);
 const C=require('../manual-coverage-audit/audit-core.js');
 export function redactItems(items,site){
-  return C.upgradeLegacyItems(items||[],site).map(it=>{
+  return C.normalizeItems(items||[],site).map(it=>{
     const item=C.sanitizeItem(it,false);
     if(['unknown','metadata','ad'].includes(item.ctx?.scope)){
       item.text='[未确认内容已隐藏]';

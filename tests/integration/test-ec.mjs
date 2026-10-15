@@ -18,7 +18,7 @@ const gmStub = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'v3-only-1-force-refresh' : d) : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);
@@ -56,7 +56,7 @@ const setCache = (k, v) => c.callFn('function (key, value) { localStorage.setIte
 const t = await newPage(PORT, FIXTURE);
 const c = t.cdp;
 await sleep(800);
-await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); localStorage.setItem('gm:zhx.data.refresh.epoch', 'v3-only-1-force-refresh'); return 1; })()`);
+await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
 // v3 探测节流（v1.4 Phase 12）：预置 v3 manifest 缓存（本站不在其中 → v3 静默跳过；24h 内不再探测）→ 零网络成立
 await c.eval("window.__zhxTestSite = 'ec';");
 await seedV3Browser(c, 'ec');

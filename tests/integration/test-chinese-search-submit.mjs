@@ -20,7 +20,7 @@ const gmStub = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'v3-only-1-force-refresh' : d) : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);

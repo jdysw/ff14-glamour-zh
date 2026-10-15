@@ -2,7 +2,7 @@
 // 产物：dist/ff14-glamour-zh.greasyfork.user.js（IIFE、不压缩、treeshake 关闭保全局）
 // metadata：build/userscript-header.txt 经 banner 置于文件最顶部
 // 环境变量 ZHX_OUT 可重定向产物路径（阶段验证/对照用）。
-// 旧构建（build.sh）在过渡期保留为 fallback，两者产物可比对。
+// build/build.mjs 是唯一构建入口，build.sh 仅转发到该入口。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

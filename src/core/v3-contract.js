@@ -25,8 +25,8 @@ function requiredV3Files(site) {
 function validV3FileMeta(meta, expectedUrl) {
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
   if (meta.url !== expectedUrl || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return false;
-  return meta.bytes === undefined || (Number.isSafeInteger(meta.bytes)
-    && meta.bytes >= 0 && meta.bytes <= MAX_V3_FILE_BYTES);
+  return Number.isSafeInteger(meta.bytes)
+    && meta.bytes >= 0 && meta.bytes <= MAX_V3_FILE_BYTES;
 }
 
 // 单站只允许生成器约定的全部文件，不能增删或替换为其他文件类型。
@@ -42,17 +42,16 @@ function validV3SiteFiles(siteId, entry, policy) {
   });
 }
 
-// 共享清单只能包含 dict.json；旧版完全缺省 shared 的清单仍兼容。
+// 当前清单必须声明唯一共享词典及完整文件元数据。
 function validV3Shared(shared) {
-  if (shared === undefined) return true;
   if (!shared || typeof shared !== 'object' || Array.isArray(shared)) return false;
   const keys = Object.keys(shared);
-  return keys.every(key => key === 'dict')
-    && (!keys.includes('dict') || validV3FileMeta(shared.dict, 'dict.json'));
+  return keys.length === 1 && keys[0] === 'dict'
+    && validV3FileMeta(shared.dict, 'dict.json');
 }
 
 function validV3Manifest(man) {
-  if (man?.schema !== 3 || ![0, 1].includes(man.candidatePolicy)
+  if (man?.schema !== 3 || man.candidatePolicy !== 1
     || !man.sites || typeof man.sites !== 'object' || Array.isArray(man.sites)) return false;
   const policies = new Map(SITE_POLICIES.map(site => [site.id, site]));
   const entries = Object.entries(man.sites);

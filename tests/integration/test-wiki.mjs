@@ -20,7 +20,7 @@ const gmStub = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? (k === 'zhx.data.refresh.epoch' ? 'v3-only-1-force-refresh' : d) : v; } catch (e) { return d; } };
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
   window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);
@@ -33,7 +33,10 @@ const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[T
 
 const dumpBlock = `(() => {
   const b = document.querySelector('.zhixia-reverse-block');
-  const lis = b ? [...b.querySelectorAll('li a')].map((a) => ({ t: a.textContent, h: a.getAttribute('href') })) : null;
+  const lis = b ? [...b.querySelectorAll('li a')].map((a) => ({ t: a.textContent, h: a.getAttribute('href'),
+    icon: a.firstElementChild?.tagName === 'IMG' && a.firstChild === a.firstElementChild
+      && a.firstElementChild.complete && a.firstElementChild.naturalWidth > 0,
+    localIcon: a.firstElementChild?.getAttribute('src')?.startsWith('data:image/png;base64,') })) : null;
   let otherLinks = null;
   for (const bl of document.querySelectorAll('.ff14-content-box-block')) {
     const tt = bl.querySelector('.ff14-content-box-block--title');
@@ -86,11 +89,15 @@ await sleep(6000);
 const rB = await c2.eval(dumpBlock);
 console.log(JSON.stringify(rB, null, 1));
 console.log('console B:', c2.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 900));
-// 场景 B 断言：装备页四站齐 + 区块含标题下分隔线（hr，与「其他站点链接」同款）
+// 场景 B：实际物品反查参数与图标可用性，不只检查链接数量。
 let bFail = 0;
-if (!rB.blockLinks || rB.blockLinks.length !== 4) { console.log('❌ B1 反查区块应含 4 条链接'); bFail++; } else { console.log('✅ B1 反查区块 4 条链接'); }
+if (!rB.blockLinks || rB.blockLinks.length !== 6) { console.log('❌ B1 反查区块应含 6 条链接'); bFail++; } else { console.log('✅ B1 反查区块 6 条链接'); }
 if (rB.hr !== true) { console.log('❌ B2 区块应含标题下分隔线（hr）'); bFail++; } else { console.log('✅ B2 区块含标题下分隔线（hr）'); }
-console.log(bFail ? '场景 B 失败 ' + bFail + ' 项' : '场景 B 通过 2/2');
+if (!rB.blockLinks?.some(a => a.h === 'https://miramiru.co/en/items/38171')) { console.log('❌ B3 Miramiru 未定位到当前物品'); bFail++; }
+const end = rB.blockLinks?.find(a => a.h.startsWith('https://end-closet.com/'));
+if (!end || new URL(end.h).searchParams.get('search') !== '트로이아 유격대 붕대') { console.log('❌ B4 End Closet 未使用当前装备韩文名'); bFail++; }
+if (!rB.blockLinks?.every(a => a.icon && a.localIcon)) { console.log('❌ B5 站点图标缺失、未解码或依赖远程请求'); bFail++; }
+console.log(bFail ? '场景 B 失败 ' + bFail + ' 项' : '场景 B 通过 5/5');
 await closePage(PORT, t2.target.id);
 
 // ============ 场景 C：非装备页（不应注入区块）============

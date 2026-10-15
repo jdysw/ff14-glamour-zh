@@ -5,7 +5,7 @@ import { DATA_TEXT } from '../core/data-manager.js';
 import { DICT_ACL } from '../core/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
-import { observeLocal } from '../core/observer.js';
+import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
@@ -260,9 +260,9 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     bindZhxItemClick('__zhxAclItemBound');
     safe(translateACLPage, 'ACL 全扫')();
     safe(translateACLTitle, 'ACL 标题')();
-    observeLocal((nodes) => {
+    createObserver({ debounce: 300, handler(nodes) {
       for (const n of nodes) safe(translateACLPage, 'ACL 局部')(n);
       safe(translateACLTitle, 'ACL 标题')();
-    }, 300);
+    } });
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

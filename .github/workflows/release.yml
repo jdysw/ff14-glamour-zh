@@ -54,7 +54,7 @@ jobs:
               const checks = JSON.parse(require("fs").readFileSync(0, "utf8")).check_runs || [];
               const names = [
                 "Build & Verify", "Unit Tests", "Integration A (Wiki)",
-                "Integration B (Sites)", "Integration C (Contracts)",
+                "Integration B (Sites)", "Native Source Coverage",
                 "Analyze (javascript-typescript)", "Analyze (python)", "Analyze (actions)",
                 "SonarQube Cloud Scan", "SonarCloud Code Analysis"
               ];

@@ -1,3 +1,4 @@
+import {currentDictionary,currentDictionaryText} from '../helpers/current-dictionary.mjs';
 // 直接加载生产 ESM 模块执行测试，由 Node V8 生成真实源码 LCOV 覆盖率。
 import test from 'node:test';
 import { createHash } from 'node:crypto';
@@ -15,7 +16,7 @@ import {
 import { httpGet } from '../../src/core/http.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
 import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
-import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady } from '../../src/core/data-manager.js';
+import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady, _ensureTryV3 } from '../../src/core/data-manager.js';
 import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
 } from '../../src/core/storage.js';
@@ -292,14 +293,16 @@ test('原生 V3 契约：站点表一致、固定路径和异常元数据不得�
     shared: { dict: { url: 'dict.json', sha256: sha, bytes: 2 } },
   });
   assert.equal(validV3Manifest(make()), true);
-  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), true);
-  assert.equal(validRuntimeDictionary({ main: { Name: null } }), false);
-  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }, true), false);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), false);
+  assert.equal(validRuntimeDictionary(currentDictionary({main:{Name:'译名'}})),true);
+  assert.equal(validRuntimeDictionary(currentDictionary({main:{Name:null}})),false);
+  assert.equal(validRuntimeDictionary(currentDictionary({main:JSON.parse('{"__proto__":"unsafe"}')})),false);
+  assert.equal(validRuntimeDictionary(currentDictionary({main:null})),false);
   assert.equal(validV3FileMeta(null, 'mirapri/names.tsv'), false);
   assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha, bytes: -1 },
     'mirapri/names.tsv'), false);
   assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha },
-    'mirapri/names.tsv'), true);
+    'mirapri/names.tsv'), false);
   const variants = [
     m => { m.sites.mirapri.files.names.url = '../../unexpected'; },
     m => { m.sites.mirapri.files.names.url = 'https://external.invalid'; },
@@ -322,12 +325,14 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
   const names = ['window', 'location', 'GM_xmlhttpRequest', 'GM_getValue',
     'GM_setValue', 'GM_listValues', 'GM_deleteValue'];
   const original = Object.fromEntries(names.map(name => [name, globalThis[name]]));
-  const gm = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
+  const gm = new Map();
   const sha = text => createHash('sha256').update(text).digest('hex');
   let version = 1;
   let invalidManifest = false;
   const events = [];
   let requests = 0;
+  const resourceRequests=[];
+  const probes=()=>resourceRequests.filter(request=>new URL(request.url).pathname.endsWith('/manifest.json')).length;
 
   function bundle() {
     const zh = version === 1 ? '测试第一版' : '测试第二版';
@@ -336,7 +341,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
       hash: '0001\t' + zh + '\n',
       alias: '装备别称\t' + zh + '\n',
       dup: 'English Test Gear\t' + zh + '\n',
-      dict: '{"common":{}}',
+      dict: currentDictionaryText(),
     };
     const entries = Object.fromEntries(Object.entries(files).filter(([n]) => n !== 'dict')
       .map(([name, contents]) =>
@@ -359,11 +364,12 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     globalThis.GM_deleteValue = k => { gm.delete(k); };
     globalThis.GM_xmlhttpRequest = options => {
       requests++;
+      resourceRequests.push(options);
       const { files, manifest } = bundle();
       let responseText;
       if (options.url.includes('/manifest.json')) responseText = invalidManifest
         ? '{"schema":2,"sites":{}}' : JSON.stringify(manifest);
-      else if (options.url.endsWith('/dict.json')) responseText = files.dict;
+      else if (new URL(options.url).pathname.endsWith('/dict.json')) responseText = files.dict;
       else {
         const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(options.url);
         if (!match) return options.onerror(new Error('未经允许的资源'));
@@ -381,6 +387,45 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     assert.equal(Object.isFrozen(events[0]), true);
     assert.equal(requests, 6, '仅下载 manifest + 当前站 4 文件 + 共享词典');
     const afterFirst = requests;
+
+    // A deployment can replace mutable URLs before our cached manifest expires.
+    // Exercise the real loader with a missing file and a newer server bundle.
+    const firstManifest=bundle().manifest;
+    gm.delete('zhx.v3.f.mirapri.names.'+firstManifest.sites.mirapri.files.names.sha256);
+    let beforeProbe=probes();
+    version=2;
+    assert.equal(await _ensureTryV3(),true);
+    assert.equal(resolveByName('English Test Gear'),'测试第二版');
+    assert.equal(probes(),beforeProbe+1,'A stale bundle gets one immediate manifest recheck');
+    assert.equal(JSON.parse(gm.get('zhx.v3.manifest').split('\n').slice(1).join('\n')).version,'contract-2');
+
+    // An incorrect future timestamp must not suppress normal update probes.
+    const cached=gm.get('zhx.v3.manifest').split('\n').slice(1).join('\n');
+    gm.set('zhx.v3.manifest',(Date.now()+86400000)+'\n'+cached);
+    beforeProbe=probes();version=1;
+    assert.equal(await _ensureTryV3(),true);
+    assert.equal(resolveByName('English Test Gear'),'测试第一版');
+    assert.equal(probes(),beforeProbe+1);
+    assert.ok(resourceRequests.every(request=>request.headers?.['Cache-Control']?.includes('no-cache')),
+      'Metadata probes and cache-miss downloads must bypass stale HTTP responses');
+
+    // Quota failure must not destroy the last complete current-format cache.
+    for(const key of ['zhx.v3.manifest','zhx.v3.manifest.mirapri'])
+      gm.set(key,(Date.now()-2*86400000)+'\n'+JSON.stringify(bundle().manifest));
+    const committed=gm.get('zhx.v3.manifest');
+    const write=globalThis.GM_setValue,transport=globalThis.GM_xmlhttpRequest;
+    globalThis.GM_setValue=()=>false;version=2;
+    assert.equal(await _ensureTryV3(),true);
+    assert.equal(resolveByName('English Test Gear'),'测试第二版','Valid downloads remain usable in memory');
+    assert.equal(gm.get('zhx.v3.manifest'),committed,'Failed writes must not publish new cache metadata');
+    globalThis.GM_setValue=write;
+    // Another site's daily probe may advance global metadata while we are offline.
+    gm.set('zhx.v3.manifest',Date.now()+'\n'+JSON.stringify(bundle().manifest));
+    globalThis.GM_xmlhttpRequest=options=>options.onerror();
+    assert.equal(await _ensureTryV3(),true);
+    assert.equal(resolveByName('English Test Gear'),'测试第一版');
+    assert.equal(dataGetStatus().origin,'fallback');
+    globalThis.GM_xmlhttpRequest=transport;
 
     version = 2;
     dataInvalidate();
