@@ -19,6 +19,7 @@ env:
 
 jobs:
   davflare:
+    if: false # Already published successfully on the prior run; avoid redundant deployment
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -89,11 +90,16 @@ jobs:
           s = s.replace('"vars": {', '"vars": {\n    "CF_ACCOUNT_ID": "c1fc6fb71be2eaf8c73c78fd5bacaf6c",');
           fs.writeFileSync('wrangler.jsonc', s);
           JS
-      - name: Apply original migration and deploy upstream Worker
+      - name: Bundle actual upstream Worker without using GitHub Cloudflare permissions
         working-directory: app
         run: |
-          corepack pnpm exec wrangler d1 migrations apply USAGE --remote
-          corepack pnpm exec wrangler deploy
+          corepack pnpm exec wrangler deploy --dry-run --outdir upstream-dist
+          test -f upstream-dist/index.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usage-guard-worker-bundle
+          path: app/upstream-dist/index.js
+          if-no-files-found: error
       # CF_API_TOKEN must be separate Account Analytics: Read token, NOT deployment token.
 
   uptimeflare:
@@ -162,20 +168,58 @@ jobs:
           [triggers]
           crons = ["* * * * *"]
           EOF
-      - name: Deploy complete upstream monitoring Worker
+      - name: Bundle complete upstream monitoring Worker without using GitHub Cloudflare permissions
         working-directory: app/worker
-        run: npx wrangler deploy --config wrangler.upstream.toml
+        run: |
+          npx wrangler deploy --dry-run --outdir upstream-dist --config wrangler.upstream.toml
+          test -f upstream-dist/index.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uptimeflare-worker-bundle
+          path: app/worker/upstream-dist/index.js
+          if-no-files-found: error
       - name: Configure Pages D1 binding
         working-directory: app
         run: |
-          cat >> wrangler.toml <<'EOF'
-          pages_build_output_dir = ".vercel/output/static"
-          EOF
+          sed -i '1i pages_build_output_dir = ".vercel/output/static"' wrangler.toml
+          sed -i 's/^name = "uptimeflare"/name = "zhixia-uptimeflare"/' wrangler.toml
           sed -i 's/00000000-0000-0000-0000-000000000000/60f3d8bf-b3eb-4c05-906c-ecd8a5186737/' wrangler.toml
       - name: Ensure official UptimeFlare Pages project
         working-directory: app
         run: |
-          npx wrangler pages project create uptimeflare --production-branch main || npx wrangler pages project list | grep -q uptimeflare
+          npx wrangler pages project create zhixia-uptimeflare --production-branch main || npx wrangler pages project list | grep -q zhixia-uptimeflare
       - name: Deploy complete upstream UptimeFlare status page
         working-directory: app
-        run: npx wrangler pages deploy .vercel/output/static --project-name uptimeflare --branch main --commit-dirty=true
+        run: npx wrangler pages deploy .vercel/output/static --project-name zhixia-uptimeflare --branch main --commit-dirty=true
+
+  publish-worker-bundles:
+    needs: [usage-guard, uptimeflare]
+    if: ${{ needs.usage-guard.result == 'success' && needs.uptimeflare.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: usage-guard-worker-bundle
+          path: /tmp/usage-guard
+      - uses: actions/download-artifact@v4
+        with:
+          name: uptimeflare-worker-bundle
+          path: /tmp/uptimeflare
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy/cloudflare-upstream-20261015
+          persist-credentials: true
+      - name: Store reproducibly compiled JS on the deployment branch only
+        run: |
+          mkdir -p cloudflare-upstream-build
+          cp /tmp/usage-guard/index.js cloudflare-upstream-build/usage-guard.js
+          cp /tmp/uptimeflare/index.js cloudflare-upstream-build/uptimeflare-worker.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cloudflare-upstream-build/*.js
+          if ! git diff --cached --quiet; then
+            git commit -m "build: pin actual upstream Cloudflare Workers bundles [skip ci]"
+            git push origin HEAD:deploy/cloudflare-upstream-20261015
+          fi
