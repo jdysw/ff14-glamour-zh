@@ -8,8 +8,7 @@ const port = Number(process.env.ZHX_CDP_PORT || 9223);
 const page = await newPage(port, fixtureUrl('miramiru-page.html'));
 const c = page.cdp;
 try {
-  const standalone = process.env.ZHX_MIRAMIRU_STANDALONE === '1';
-  if (!standalone) await seedV3Memory(c, 'miramiru');
+  await seedV3Memory(c, 'miramiru');
   await c.eval(`
     window.__zhxTestSite = 'miramiru';
     window.__zhxDiagOn = true;
@@ -18,14 +17,6 @@ try {
     window.GM_setValue = (k,v) => window.__v3MemoryCache.set(k, String(v));
     window.GM_xmlhttpRequest = o => { window.__requests.push(o.url); o.onerror?.({status:0}); };
   `);
-  const storageBefore = await c.eval('JSON.stringify(Object.entries(localStorage).sort())');
-  if (standalone) {
-    await c.eval(`
-      for (const name of ['GM_getValue', 'GM_setValue', 'GM_listValues', 'GM_deleteValue']) {
-        window[name] = () => { throw new Error('Standalone preview accessed real GM storage'); };
-      }
-    `);
-  }
   await c.callFn('function(source) { (0,eval)(source); }', [readDist()]);
   await sleep(900);
   const actual = await c.eval(`(() => ({
@@ -75,7 +66,6 @@ try {
     assert.ok(fonts[key].includes('Microsoft YaHei'), key);
   }
   assert.equal(fonts.code, 'monospace');
-  if (standalone) assert.equal(await c.eval('JSON.stringify(Object.entries(localStorage).sort())'), storageBefore);
 
   // React may reuse a name/link node for a different item or an unknown item.
   await c.eval(`(() => {

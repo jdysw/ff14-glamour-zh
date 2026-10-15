@@ -162,5 +162,4 @@ try {
 }
 
 assert.ok(installer.includes('zhx-search-audit-v1'), 'installer bundles search diagnostics');
-assert.ok(installer.includes('@version      1.3.2'), 'installer metadata upgraded');
 console.log('✅ search diagnostics: opt-in, event chain, EC candidates, safe network, persistence, export, privacy');

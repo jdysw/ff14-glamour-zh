@@ -43,7 +43,6 @@ assert.equal(C.compareRuns(old,[{...now[0],url:'https://ff14-fc.com/other/'}]).r
 const raw=fs.readFileSync(new URL('../../tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js',import.meta.url),'utf8');
 assert.ok(raw.includes('@run-at       document-start'));
 assert.ok(raw.includes('@match        https://miramiru.co/*'));
-assert.ok(raw.includes('@version      1.3.2'));
 assert.ok(raw.includes('inferred-old-value'));
 assert.ok(raw.includes('原文基线'));
 console.log('✅ manual coverage audit V1.1: cross-site scope, pairing, privacy, diff and install script');

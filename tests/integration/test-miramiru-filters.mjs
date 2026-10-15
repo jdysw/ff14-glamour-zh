@@ -49,6 +49,6 @@ try{
     await c.eval(`document.querySelector('[data-job="pld"]').click();document.querySelector('[data-tag] button').click();`);
     assert.equal(await c.eval('window.__selectedJob'),'pld');
     assert.equal(await c.eval('window.__selectedTag'),Object.keys(fixture.officialTags)[0]);
-    console.log('PASS dynamic filter options, 33 job controls, 28 official tags and native identities: '+locale);
+    console.log('PASS representative filter controls, official/custom tags and native identities: '+locale);
   }
 }finally{await closePage(port,page.target.id)}

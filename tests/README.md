@@ -1,66 +1,46 @@
-# tests/ —— 持久化测试资产
+# 测试
 
-本目录维护当前构建的单元、集成、在线及基准测试。
-默认套件**不依赖真实外网、不依赖开发者私人目录**（历史脚本位于开发机临时目录，已整体相对化）。
+先运行 `npm run build`，再运行 `npm test`。默认执行离线 Node 行为测试和 Chrome 夹具测试，不访问真实站点。
 
-## 快速开始
+| 命令 | 目的 |
+| --- | --- |
+| `npm test` | 默认离线回归：unit + native + integration |
+| `npm run test:unit` | Node 回归，包含直接导入生产模块的 native 测试 |
+| `npm run test:integration` | 完整脚本在 Chrome 夹具上的用户行为 |
+| `npm run test:coverage` | native 测试，同时生成真实 V8 / LCOV |
+| `npm run test:build` | 构建可重现、篡改词典被拒绝、重新生成能够修复 |
+| `npm run test:experimental` | 未上线的 V3.1 原型及存储／基准报告工具 |
+| `npm run test:live` | 显式运行真站检查，需要网络，可能受 403／反爬影响 |
+| `npm run test:bench` | 性能测量 |
 
-```bash
-npm run build     # 生成 dist/（测试读取构建产物）
-npm test          # = unit + integration（离线可跑；自动确保 headless Chrome）
+CI 的 build job 生成待测产物并验证可重现性，后续单元／浏览器任务下载同一份产物。Node 回归与 native 覆盖率各运行一次，浏览器按 `wiki`、`sites` 两个明确套件分组。实验原型不进日常回归；数据基线工作流在对应变更时单独执行它们。外站审计工作流仅手动触发，仍严格保留受阻页面和失败状态。
+
+## 选择测试
+
+```powershell
+node tests/run.mjs --list
+node tests/run.mjs --suite=wiki
+node tests/run.mjs --suite=sites
+node tests/run.mjs integration/test-miramiru
 ```
 
-CI（`.github/workflows/test.yml`）：push / PR 自动跑「数据校验 → 构建 → 产物语法 → 生成物一致性 → 测试」，与本地命令同源。
+按完整路径或唯一文件名精确匹配，不再使用子串。名字不存在或同时命中离线／在线文件时直接报错，防止多跑、漏跑和意外联网。单项耗时记录在 `tests/.cache/logs/last-summary.json`。
 
-## 目录
+Chrome 默认使用隔离的 9223 端口，runner 只关闭自己启动的实例。可设置 `ZHX_CDP_PORT`、`ZHX_CHROME_BIN`、`ZHX_TEST_TIMEOUT_MS`、`ZHX_TEST_QUIET`。Windows 的 Python 子进程默认使用 UTF-8 输出。
 
-| 目录 | 内容 | 需要 Chrome | 需要外网 |
-|---|---|---|---|
-| `unit/` | 纯 Node 单元测试（正则行为、数据层 golden） | 否 | 否 |
-| `integration/` | 夹具（fixtures）级集成测试 + 构建幂等 | 是（自动维护） | 否 |
-| `live/` | 真站连通测试（fc / ronka / ACL / 数据站 e2e） | 是 | **是** |
-| `benchmark/` | 性能基准（V3 加载、读取路径与页面生命周期） | 是 | 否 |
-| `fixtures/` | 静态夹具页面（wiki / EC / mirapri 页结构） | — | — |
-| `helpers/` | CDP 客户端、Chrome 守护、路径解析、词典生成 | — | — |
+## 保留什么测试
 
-## 命令
+- 从实际故障、用户动作或对外协议出发，断言可观察结果。例如中文搜索保留筛选、向原站派发原文、输入框仍显示中文。
+- 保留失败分支：HTTP 响应体超时、存储拒绝、损坏缓存、未知物品、慢页面、用户内容保护。
+- 同一行为跨站点用数据矩阵；站点独有的 Vue 控件、Wiki 慢加载等单独验证。
+- 优先直接导入生产模块。旧提取式测试仍有独立故障场景的暂时保留，逐步迁移；不把它们当真实源码覆盖率。
+- 静态结构、版本和词典一致性由正式构建检查负责。测试补充“故意破坏后应失败”等行为反例。
 
-| 命令 | 说明 |
-|---|---|
-| `npm test` | unit + integration（离线，推荐日常） |
-| `npm run test:unit` | 单元测试（秒级） |
-| `npm run test:integration` | 夹具集成测试 |
-| `npm run test:live` | 真站测试（需要外网） |
-| `npm run test:all` | unit + integration + live |
-| `npm run test:core` | 发布前核心测试子集（跨套件快跑） |
-| `npm run test:bench` | 性能基准（耗时较长） |
-| `npm run validate:data` | 数据与词典结构校验（秒级，CI 同源） |
-| `npm run version:check` | 版本单一源校验（package ≡ header ≡ dist） |
+## 不再新增什么
 
-单跑某项：`node tests/integration/test-wiki.mjs`（任何测试都可直接运行，需先构建且 Chrome 就绪）。
+- 复制生产正则或算法后，只测试副本。
+- 用源码字符串、内部函数名、固定缓存数量、文件曾被删除等断言冻结实现。
+- 把完整词典复制成期待表，再逐条断言同一份译文。少量独立样本代表边界，实际漏翻交给真实页面审计。
+- 为覆盖率数字重复执行同一批浏览器场景。独立安装包只检查内置数据和缓存隔离，不再重跑完整三语功能测试。
 
-## Chrome 约定
-
-- 默认连接 `127.0.0.1:9223` 的 headless Chrome；**没有实例时会自动拉起**（结束后若为自动拉起则关闭）。
-- `9222` 为 VNC 手工环境，测试**不会**触碰。
-- 可用环境变量覆盖：`ZHX_CHROME_BIN`（浏览器可执行文件）、`ZHX_CDP_PORT`（端口）。
-
-## 环境变量
-
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `ZHX_CDP_PORT` | `9223` | CDP 端口 |
-| `ZHX_CHROME_BIN` | 自动探测 | Chrome 可执行文件路径 |
-| `ZHX_TEST_TIMEOUT_MS` | `320000` | 单项测试超时 |
-| `ZHX_TEST_QUIET` | 未设置 | =1 时 runner 不实时透传输出（日志仍保留） |
-| `GF` | `dist/` 产物 | 覆盖待测脚本文本路径 |
-
-## 维护约定
-
-- 测试生成物（临时脚本、日志、浏览器配置等）写入 `tests/.cache/`。
-- 缓存测试应预置成功检查状态与 candidatePolicy=1，避免首次强制刷新改变测试网络路径；修改 v3 数据生成源后，应重新生成 v3 测试数据。
-- 测试读取构建后的 `dist/`；改动相关源码或打包形态后，先运行 `npm run build`，再运行受影响的测试套件。
-- 部分测试从构建产物提取带 `@zhixia` 标记的代码段，或依赖文本锚点。改动对应段落时，按测试报错更新提取范围或锚点，避免测试悄悄失效。
-- `src/main.js`、`src/core/`、`src/sites/` 是当前唯一代码源码；构建不会覆盖这些模块。词典源为 `dict/*.json`，构建生成的内嵌词典不应手改。
-- 站点 host 与数据配置集中在 Site Registry；新增或修改站点支持时，同步维护适配器、词典和相关集成测试。
-- 测试项目与模块架构的历史记录见 [重构计划](../docs/v1.4-refactor-plan.md) 和 [重构进度](../docs/v1.4-progress.md)。
+本次审查范围、删并理由和验证记录见 [测试体系审查](../docs/test-system-review-20261015.md)。

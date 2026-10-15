@@ -5,8 +5,8 @@ on:
   pull_request:
     paths:
       - 'tools/data/**'
-      - 'tests/unit/test-storage-audit.mjs'
-      - 'tests/unit/test-v31-preview.mjs'
+      - 'tests/experimental/test-storage-audit.mjs'
+      - 'tests/experimental/test-v31-preview.mjs'
       - 'tests/unit/test-shared-candidates.mjs'
       - 'tests/unit/test-pages-assets.mjs'
       - 'build/make-runtime-data.py'
@@ -44,7 +44,7 @@ jobs:
         run: python3 .github/deploy/prepare.py
       - name: 运行存储审计及基准报告
         run: |
-          node tests/unit/test-storage-audit.mjs
+          node tests/experimental/test-storage-audit.mjs
           node tests/unit/test-shared-candidates.mjs
           node tests/unit/test-pages-assets.mjs
           node tests/unit/test-pages-dedupe.mjs
@@ -54,7 +54,7 @@ jobs:
           node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
       - name: V3.1 隔离原型与旧 V3 回退验证
         run: |
-          node tests/unit/test-v31-preview.mjs
+          node tests/experimental/test-v31-preview.mjs
           node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
       - name: 第四阶段逐站冷启动与七站共享缓存模型验证
         run: |

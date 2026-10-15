@@ -20,7 +20,7 @@
 
 ## 验证范围
 
-Miramiru 先发现扫描 18 个公开页面／界面状态，再用 `tests/live/test-miramiru-followup.mjs` 检查三语的比赛、公告、统计、关于、支持、登录窗口与投稿须知，共 21 个样本。支持页补齐正文后单独复验三语；最终这些样本未发现审计器识别的 UI 残留。
+Miramiru 先发现扫描 18 个公开页面／界面状态，再检查三语的比赛、公告、统计、关于、支持、登录窗口与投稿须知，共 21 个样本。支持页补齐正文后单独复验三语；这些历史样本未发现审计器识别的 UI 残留。后续测试体系审查已移除与覆盖审计工具重复的零候选断言脚本，真站补漏统一使用审计工具。
 
 另外扫描 FF14-FC 的 10 个页面、ARMOURY 主／武器站、Ronka 首页及公开编辑／说明页。修复后的 ARMOURY 两站和 Ronka 首页未报 UI 残留。
 
@@ -32,7 +32,7 @@ FF14-FC 仍有部分装备系列、图片长说明中的名称不能完整解析
 node build/build.mjs
 node tests/run.mjs --suite=unit,integration
 node tools/coverage/run-native-coverage.mjs
-node tests/live/test-miramiru-followup.mjs
+node tools/coverage-audit/run-scan.mjs --site miramiru --channel local --discover --max-pages 24
 ```
 
 Windows 终端运行 Python 相关检查时应设置 `PYTHONIOENCODING=utf-8`，避免系统 GBK 输出编码导致 emoji／校验符号的编码错误。

@@ -52,7 +52,8 @@ for (const locale of ['ja','en','ko']) {
     await c.eval(`Object.entries(window.__menus).find(([key])=>key.includes('导出 JSON'))[1]()`);
     const exported = JSON.parse(await c.eval('window.__exportBlob.text()'));
     const row = Object.values(exported.pages)[0];
-    assert.equal(exported.toolVersion, '1.3.2');
+    assert.match(exported.toolVersion,/^\d+\.\d+\.\d+$/);
+    assert.equal(exported.toolVersion,installer.match(/^\/\/ @version\s+(\S+)/m)[1], 'Export and installed audit script must agree');
     assert.equal(row.site, 'miramiru');
     assert.equal(row.language, locale);
     assert.equal(row.hasBaseline, true);

@@ -90,6 +90,9 @@ test('真实站点注册：七站生命周期、异常隔离与域名识别', ()
   minimal.pageshow();
   minimal.processRoot(null);
   minimal.destroy();
+  const broken=createSiteAdapter({id:'broken',start(){throw new Error('unavailable')},onPageShow(){throw new Error('unavailable')}});
+  assert.doesNotThrow(()=>broken.boot());
+  assert.doesNotThrow(()=>broken.pageshow());
 
   const previousWindow = globalThis.window;
   const previousLocation = globalThis.location;

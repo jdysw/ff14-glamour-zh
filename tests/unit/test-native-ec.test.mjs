@@ -66,6 +66,9 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
     trimECNode(text);
     assert.equal(text.nodeValue, '共 1,234 条结果');
     assert.equal(contentParent.dataset.zhixiaSourceText, '1,234 results');
+    for(const [source,want] of [['Oct 2nd, 2026','2026年10月2日'],['January 15, 2025','2025年1月15日'],['Test 12, 2024','Test 12, 2024']]){
+      const date={nodeType:3,nodeValue:source,parentElement:contentParent};trimECNode(date);assert.equal(date.nodeValue,want);
+    }
 
     const skipParent = element('DIV');
     skipParent.closest = () => ({});

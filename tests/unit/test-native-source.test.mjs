@@ -224,6 +224,17 @@ test('原生 GM 存储：读取、写入、枚举、删除及无 GM 降级', asy
     assert.deepEqual(await storeListAsync(), ['async']);
     assert.equal(await storeDeleteAsync('async'), true);
     assert.equal(await storeGetAsync('async'), null);
+    // Storage rejection must remain visible; do not report a successful delete.
+    globalThis.GM={setValue:async()=>{throw new Error('denied')},listValues:async()=>{throw new Error('denied')},deleteValue:async()=>{throw new Error('denied')}};
+    assert.equal(await storeSetAsync('bad','value'),false);
+    assert.equal(await storeListAsync(),null);
+    assert.equal(await storeDeleteAsync('bad'),false);
+    delete globalThis.GM;
+    globalThis.GM_getValue=(key,fallback)=>store.get(key)??fallback;
+    globalThis.GM_setValue=(key,value)=>store.set(key,value);
+    store.set('legacy','old');
+    assert.equal(await storeDeleteAsync('legacy'),true);
+    assert.equal(await storeGetAsync('legacy'),'');
   } finally {
     for (const name of names) {
       if (saved[name] === undefined) delete globalThis[name];
