@@ -40,11 +40,9 @@ if (duplicate.length) console.error('重复模块标记：' + [...new Set(duplic
 if (missing.length) console.error('缺失模块标记：' + missing.join(', '));
 if (extra.length) console.error('未知模块标记：' + extra.join(', '));
 if (!exact) {
-  // 直接打印两侧顺序及首个差异，避免依靠远程构建产物才能定位问题。
+  // 给出差异位置；不将 CLI 指定文件的完整内容写入日志。
   const first = expected.findIndex((item, index) => actual[index] !== item);
   console.error('模块顺序不符合契约，首个差异位置：' + first);
-  console.error('期望：' + expected.join(' → '));
-  console.error('实际：' + actual.join(' → '));
   process.exit(1);
 }
 console.log('✅ Rollup 产物模块顺序与契约完全一致');

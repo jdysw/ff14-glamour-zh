@@ -55,4 +55,4 @@ try{
   assert.equal(sanitizeEvidence(rawDir,pubDir),2);
   assert.ok(loadLiveResults(pubDir).some(row=>row.site==='miramiru'));
 }finally{fs.rmSync(rawDir,{recursive:true,force:true});fs.rmSync(pubDir,{recursive:true,force:true});}
-console.log('✅ live-report: strict completeness, V1.1 compatibility, privacy redaction');
+console.log('✅ live-report: strict completeness, current manual audit export, privacy redaction');
