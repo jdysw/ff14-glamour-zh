@@ -16,7 +16,7 @@ export function loadLiveResults(dir) {
     for(const entry of fs.readdirSync(folder,{withFileTypes:true})){
       const full=path.join(folder,entry.name);
       if(entry.isDirectory()){visit(full);continue;}
-      if(!entry.isFile()||!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki)-.+\.json$/.test(entry.name))continue;
+      if(!entry.isFile()||!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki|miramiru)-.+\.json$/.test(entry.name))continue;
       try {
         const d=JSON.parse(fs.readFileSync(full,'utf8'));
         if(d.site&&(Array.isArray(d.items)||Array.isArray(d.pages)))rows.push(d);
@@ -81,7 +81,7 @@ export function toManualV11(report){
 export function writeLiveReports(report,out){
   fs.mkdirSync(out,{recursive:true});
   const {pages,...summary}=report;
-  const header=['# FF14 七站自动化汉化审计','',
+  const header=['# FF14 汉化审计（'+Object.keys(report.bySite).length+' 站）','',
     '本轮扫描状态：**'+summary.status+'**（仅限采集到的页面，不能代表整站汉化率）','',
     '|站点|状态|有效页面|失败页面|','|---|---|---:|---:|'];
   for(const [k,v] of Object.entries(report.bySite))

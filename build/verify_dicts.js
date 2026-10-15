@@ -152,6 +152,7 @@ if (dictJsonIdx >= 0) {
     ['DICT_RONKA',  'ronka'],
     ['DICT_ACL',    'acl'],
     ['DICT_ENDCLOSET', 'endcloset'],
+    ['DICT_MIRAMIRU', 'miramiru'],
   ];
   for (const [n, key] of MAP) {
     const d = extractDict(a, n);
@@ -174,6 +175,7 @@ if (dictJsonIdx >= 0) {
     ['DICT_RONKA',  'dict-ronka.json'],
     ['DICT_ACL',    'dict-acl.json'],
     ['DICT_ENDCLOSET', 'dict-endcloset.json'],
+    ['DICT_MIRAMIRU', 'dict-miramiru.json'],
   ];
   const commonData = JSON.parse(fs.readFileSync(path.join(dictDir, 'dict-common.json'), 'utf8'));
   for (const [n, fn] of MAP) {

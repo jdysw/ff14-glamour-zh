@@ -10,6 +10,8 @@
   const PRIVATE_HINT = /password|passcode|token|secret|api[-_]?key|auth|mail|e-mail|user(name)?|player|author|creator|login|comment|title|description|留言|邮箱|郵箱|用户|用戶|玩家|作者|标题|標題|账户|帳戶/i;
   const HAN = /[\u3400-\u9fff]/u;
   const INPUT_TYPES = new Set(['', 'text', 'search']);
+  const MIRAMIRU_PUBLIC_SEARCH = new Set(['Search by title, gear, or tag',
+    'タイトル・装備名・タグで検索','제목, 장비명, 태그로 검색','搜索标题、装备或标签']);
   const now = () => new Date().toISOString();
   const empty = () => ({ format: 'zhx-search-audit-v1', enabled: false, sessions: [] });
   let state = empty(), started = false, bound = false, ready = null;
@@ -42,6 +44,11 @@
     const ph = input.getAttribute?.('placeholder') || '';
     const label = input.getAttribute?.('aria-label') || '';
     const meta = [id, name, ph, label].join(' ');
+    // Miramiru's public search explicitly mentions post titles. That wording
+    // must not be confused with a private title-editing field. Keep the exact
+    // placeholder allowlist and still reject sensitive IDs/names/labels.
+    if (location.hostname === 'miramiru.co' && MIRAMIRU_PUBLIC_SEARCH.has(ph)
+      && !PRIVATE_HINT.test([id, name, label].join(' '))) return true;
     if (PRIVATE_HINT.test(meta)) return false;
     if (SEARCH_HINT.test(meta)) return true;
     // EC Gearsets has a standalone Search... input, sometimes without a name.

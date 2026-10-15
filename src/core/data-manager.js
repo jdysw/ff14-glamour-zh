@@ -497,11 +497,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   function _knownDataCacheKeys() {
     const keys = new Set([LEGACY_META_KEY, 'zhx.v3.manifest', 'zhx.candidate.policy']);
-    for (const siteId of ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset']) {
+    for (const siteId of ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru']) {
       keys.add('zhx.v3.manifest.' + siteId);
     }
     for (const name of ['items', 'series', 'acl', 'dict']) keys.add(LEGACY_DT_PREFIX + name);
-    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru'];
     const files = ['names', 'hash', 'alias', 'dup', 'ecid', 'ko', 'series', 'acl', 'dict'];
     for (const site of sites) for (const file of files) keys.add('zhx.v3.f.' + site + '.' + file);
     return keys;
@@ -525,7 +525,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _readCachedManifests() {
-    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru'];
     return Promise.all([readCachedManifest(), ...sites.map((siteId) => readCachedManifest(siteId))]);
   }
 

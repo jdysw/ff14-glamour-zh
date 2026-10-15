@@ -1,6 +1,6 @@
 {
   "name": "ff14-glamour-zh",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "private": true,
   "description": "FF14 幻化站中文化 · 与灰机 wiki 双向互查（userscript）",
   "license": "GPL-3.0",
@@ -9,13 +9,12 @@
   },
   "scripts": {
     "build": "node build/build.mjs",
-    "test": "node tests/run.mjs --suite=unit,integration",
-    "test:unit": "node tests/run.mjs --suite=unit",
+    "test": "node tests/run.mjs --suite=unit,native,integration",
+    "test:unit": "node tests/run.mjs --suite=unit,native",
     "test:coverage": "node tools/coverage/run-native-coverage.mjs",
     "test:integration": "node tests/run.mjs --suite=integration",
     "test:live": "node tests/run.mjs --suite=live",
     "test:all": "node tests/run.mjs --suite=all",
-    "test:core": "node tests/run.mjs --suite=core",
     "test:bench": "node tests/run.mjs --suite=benchmark",
     "bench:baseline": "node tests/benchmark/bench-lifecycle.mjs --save && node tests/benchmark/bench-read-path.mjs --save",
     "bench:compare": "node tests/benchmark/compare.mjs",
@@ -24,7 +23,11 @@
     "version:check": "node build/version.mjs --check",
     "version:sync": "node build/version.mjs",
     "check:source": "node build/verify-module-source.mjs",
-    "check:deps": "node build/verify-dependencies.mjs"
+    "check:deps": "node build/verify-dependencies.mjs",
+    "build:miramiru-test": "node build/build.mjs && node build/make-miramiru-test.mjs",
+    "build:font-test": "node build/build.mjs && node build/make-font-test.mjs",
+    "test:build": "node tests/run.mjs --suite=build",
+    "test:experimental": "node tests/run.mjs --suite=experimental"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

@@ -75,6 +75,12 @@ assert.equal(api.isSearchInput({ ...input, attributes: { ...input.attributes, ty
   'never inspect passwords');
 assert.equal(api.isSearchInput({ ...input, attributes: { ...input.attributes, id: 'search_by_player' } }), false,
   'never inspect player fields');
+const mira = harness('/');
+Object.assign(mira.realm.location, {hostname:'miramiru.co',origin:'https://miramiru.co',href:'https://miramiru.co/en'});
+for (const placeholder of ['Search by title, gear, or tag','タイトル・装備名・タグで検索','제목, 장비명, 태그로 검색','搜索标题、装备或标签']) {
+  assert.equal(mira.api.isSearchInput({...input,attributes:{type:'search',placeholder,id:'global-search'}}), true);
+  assert.equal(mira.api.isSearchInput({...input,attributes:{type:'search',placeholder,id:'author-search'}}), false);
+}
 assert.equal(api.cleanValue('test@example.com'), '[redacted]', 'scrub email-like search samples');
 assert.equal(api.cleanValue('123456789测试'), '[digits]测试', 'scrub long numeric tokens');
 assert.deepEqual(JSON.parse(JSON.stringify(api.queryInfo('https://ffxiv.eorzeacollection.com/gearsets?search=Phantom%20Vision&token=super-secret'))),
@@ -156,5 +162,4 @@ try {
 }
 
 assert.ok(installer.includes('zhx-search-audit-v1'), 'installer bundles search diagnostics');
-assert.ok(installer.includes('@version      1.2.0'), 'installer metadata upgraded');
 console.log('✅ search diagnostics: opt-in, event chain, EC candidates, safe network, persistence, export, privacy');

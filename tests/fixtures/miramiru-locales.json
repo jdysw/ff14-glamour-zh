@@ -1,0 +1,62 @@
+{
+  "en": {
+    "Nav": {
+      "ranking": "Ranking"
+    },
+    "Filter": {
+      "keywordPlaceholder": "Search by title, gear, or tag",
+      "filter": "Filter"
+    },
+    "Equipment": {
+      "title": "Equipment List",
+      "undyeable": "Cannot dye",
+      "noDye": "No dye",
+      "detail": "Details",
+      "sourceLabel": "Source:",
+      "viewOtherGlamours": "Other glamours using this gear"
+    },
+    "Hero": {
+      "subtitle": "FFXIV Glamour Showcase"
+    }
+  },
+  "ja": {
+    "Nav": {
+      "ranking": "ランキング"
+    },
+    "Filter": {
+      "keywordPlaceholder": "タイトル・装備名・タグで検索",
+      "filter": "フィルター"
+    },
+    "Equipment": {
+      "title": "装備一覧",
+      "undyeable": "染色不可",
+      "noDye": "染色なし",
+      "detail": "詳細",
+      "sourceLabel": "入手元:",
+      "viewOtherGlamours": "この装備を使用しているミラプリ"
+    },
+    "Hero": {
+      "subtitle": "FFXIV Mirapuri Showcase"
+    }
+  },
+  "ko": {
+    "Nav": {
+      "ranking": "랭킹"
+    },
+    "Filter": {
+      "keywordPlaceholder": "제목, 장비명, 태그로 검색",
+      "filter": "필터"
+    },
+    "Equipment": {
+      "title": "장비 목록",
+      "undyeable": "염색 불가",
+      "noDye": "염색 없음",
+      "detail": "상세",
+      "sourceLabel": "입수처:",
+      "viewOtherGlamours": "이 장비를 사용하는 다른 투영"
+    },
+    "Hero": {
+      "subtitle": "FFXIV Glamour Showcase"
+    }
+  }
+}

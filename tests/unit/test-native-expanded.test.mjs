@@ -57,9 +57,9 @@ test('真实中文搜索模块：输入筛选、查询判定和 URL 保留有效
 });
 
 test('真实站点注册：七站生命周期、异常隔离与域名识别', () => {
-  assert.equal(SITE_REGISTRY.length, 7);
+  assert.equal(SITE_REGISTRY.length, 8);
   assert.deepEqual(SITE_REGISTRY.map(row => row.id),
-    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset']);
+    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru']);
   const events = [];
   const adapter = createSiteAdapter({
     id: 'mirapri',
@@ -90,6 +90,9 @@ test('真实站点注册：七站生命周期、异常隔离与域名识别', ()
   minimal.pageshow();
   minimal.processRoot(null);
   minimal.destroy();
+  const broken=createSiteAdapter({id:'broken',start(){throw new Error('unavailable')},onPageShow(){throw new Error('unavailable')}});
+  assert.doesNotThrow(()=>broken.boot());
+  assert.doesNotThrow(()=>broken.pageshow());
 
   const previousWindow = globalThis.window;
   const previousLocation = globalThis.location;

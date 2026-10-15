@@ -54,7 +54,7 @@ ok('A3 version 为 12 位 hex', /^[0-9a-f]{12}$/.test(man.version || ''), `versi
 ok('A4 generated 为 ISO 时间', /^\d{4}-\d{2}-\d{2}T/.test(man.generated || ''));
 ok('A5 shared.dict 存在', !!(man.shared && man.shared.dict && man.shared.dict.url === 'dict.json'));
 
-const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset'];
+const SITE_NAMES = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru'];
 eq('A6 七站齐备', Object.keys(man.sites || {}).sort().join(','), [...SITE_NAMES].sort().join(','));
 
 // 逐文件 sha256/bytes 全量校验
@@ -75,7 +75,7 @@ ok('A8 逐文件 bytes 校验', badBytes === 0, `不一致 ${badBytes}`);
 
 // 生成器真实产物与客户端共享契约必须全量相符；一旦文件字节遭破坏，部署必须拒绝。
 const publishInfo = verifyV3Publish(tmp);
-eq('A8a 发布前七站文件清单与客户端配置契合', publishInfo.sites, 7);
+eq('A8a 发布前七站文件清单与客户端配置契合', publishInfo.sites, 8);
 ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publishInfo.bytes > 100000);
 {
   const targetFile = new URL('mirapri/names.tsv', V3_DIR);

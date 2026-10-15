@@ -1,7 +1,64 @@
 // 在 V8 LCOV 中执行七站真实模块的翻译/页面行为，不使用字符串执行替身。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
+import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
+
+test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
+  const locales = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-locales.json', import.meta.url), 'utf8'));
+  for (const row of Object.values(locales)) {
+    assert.equal(trMiramiru(row.Filter.filter), '筛选');
+    assert.equal(trMiramiru(row.Equipment.title), '装备列表');
+    assert.equal(trMiramiru(row.Equipment.noDye), '未染色');
+    assert.equal(trMiramiru(row.Equipment.undyeable), '不可染色');
+    assert.equal(trMiramiru(row.Filter.keywordPlaceholder), '搜索标题、装备或标签');
+    assert.equal(trMiramiru(row.Hero.subtitle), 'FF14 幻化展示');
+  }
+  for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+  for (const raw of ['Other','その他','기타']) assert.equal(trMiramiru(raw), '其他');
+  for (const raw of ['15 Glamours','15 ミラプリ','15 투영']) assert.equal(trMiramiru(raw), '15 套幻化');
+  assert.equal(trMiramiru('  '), '  ');
+  assert.equal(trMiramiru('Unknown player title'), 'Unknown player title');
+  const old = globalThis.document;
+  try {
+    for (const suffix of ['FFXIV Glamour Showcase','FFXIV ミラプリ紹介サイト','FFXIV 투영 소개 사이트']) {
+      globalThis.document = {title:'Miramiru - ' + suffix};
+      translateMiramiruTitle();
+      assert.equal(document.title, 'Miramiru - FF14 幻化展示');
+    }
+    globalThis.document={title:'Miramiru 소개 | Miramiru'};
+    translateMiramiruTitle();
+    assert.equal(document.title,'关于 Miramiru | Miramiru');
+  } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
+});
+
+test('Miramiru 用户可见规则：官方标签、数量、未知名称和原型键', () => {
+  assert.equal(trMiramiru('Miramiru Statistics'), 'Miramiru 统计');
+  assert.equal(trMiramiru('クール (41) (Official tag)'), '酷帅 (41)（官方标签）');
+  assert.equal(trMiramiru('クール (41)', true), '酷帅 (41)');
+  assert.equal(trMiramiru('Player tag (2)'), 'Player tag (2)');
+  assert.equal(trMiramiru('constructor'), 'constructor');
+  assert.equal(trMiramiru('__proto__'), '__proto__');
+  assert.equal(trMiramiru('ハイランダー (41)'), '高地之民 (41)');
+  assert.equal(trMiramiru('Unknown author (41)'), 'Unknown author (41)');
+});
+
+test('Miramiru 筛选真实枚举与全部官方标签：三语文案、数量和选中摘要', () => {
+  // Full option rendering and original filter values are exercised in Chrome.
+  // Here only formatting and the official/custom-tag distinction are checked.
+  assert.equal(trMiramiru('クール（公式タグ）'),'酷帅（官方标签）');
+  assert.equal(trMiramiru('#クール',true),'#酷帅');
+  assert.equal(trMiramiru('3 posts'),'3 篇投稿');
+  assert.equal(trMiramiru('3件'),'3 篇投稿');
+  assert.equal(trMiramiru('3건'),'3 篇投稿');
+  assert.equal(trMiramiru('Job: Paladin, White Mage'),'职业：骑士、白魔法师');
+  assert.equal(trMiramiru('ジョブ: ナイト'),'职业：骑士');
+  assert.equal(trMiramiru('직업: 나이트'),'职业：骑士');
+  assert.equal(trMiramiru('Tag: 春コーデ'),'标签：春季穿搭');
+  assert.equal(trMiramiru('Tag: My custom tag'),'标签：My custom tag');
+  assert.equal(trMiramiru('PLD'),'PLD');
+});
 
 test('共享物品点击与样式：幂等注册，并保留原生筛选按钮行为', () => {
   const previous = { window: globalThis.window, document: globalThis.document };
@@ -226,6 +283,7 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
 });
 
 test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重写', () => {
+  assert.equal(trFC('🎉インスタンスダンジョン✨'),'🎉副本✨','Decorative emoji must survive translation');
   assert.equal(trFCSegments('不存在'), null);
   assert.equal(trFCSegments('ディフェンダー・ディフェンダー'), '御敌·御敌');
   assert.equal(trFCSegments('ABC・ディフェンダー'), 'ABC·御敌');

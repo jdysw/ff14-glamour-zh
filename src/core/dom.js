@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/dom */
-export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn };
+export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn, ensureChineseFont };
 
 
   // 属性翻译：EC 部分导航/图标的文字在 alt / aria-label / title 属性里，
@@ -66,3 +66,23 @@ export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, l
   /* @zhixia:core-dom-end */
 
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
+
+// Shared by every supported site. Prefer Simplified Chinese glyphs without
+// changing the site's locale, font sizes, weights, or code/icon font families.
+function ensureChineseFont() {
+  if (document.getElementById('zhx-chinese-font')) return;
+  const style = document.createElement('style');
+  style.id = 'zhx-chinese-font';
+  style.textContent = `
+    :root { --zhx-chinese-font: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif; }
+    html, body, body :not(:where(
+      svg, svg *, pre, pre *, code, code *, kbd, kbd *, samp, samp *, i, i *,
+      .fa, .fa *, .fas, .fas *, .far, .far *, .fab, .fab *,
+      .fa-solid, .fa-solid *, .fa-regular, .fa-regular *, .fa-brands, .fa-brands *,
+      .mdi, .mdi *, .iconfont, .iconfont *, .glyphicon, .glyphicon *,
+      .material-icons, .material-icons *, .material-icons-outlined, .material-icons-outlined *,
+      .material-symbols-outlined, .material-symbols-outlined *, .material-symbols-rounded, .material-symbols-rounded *
+    )) { font-family: var(--zhx-chinese-font) !important; }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+}

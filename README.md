@@ -12,6 +12,7 @@
 - 🌐 **全站中文化** —— 界面、装备名、染剂色名、副本名自动显示为国服中文
 - 🔗 **装备点一下，直达中文 wiki** —— 汉化后的装备名均可点击，直接跳转灰机 wiki 物品页查国服译名与获取途径
 - 🔄 **双向互查** —— 灰机 wiki 物品页会多出「幻化反查」区块，从 wiki 一键跳转到幻化网站，找到使用该装备的穿搭
+- 🖋 **统一中文字体** —— 所有支持站点优先使用简体中文字体，保留代码与图标字体
 - ⚡ **无感翻译** —— 词库本地索引、毫秒级查询；安装即用，无需配置
 - 🔒 **纯本地运行** —— 词库按需下载、本地缓存；不收集、不上传任何用户信息
 
@@ -24,6 +25,7 @@
 | [ミラプリライフ FF14-FC](https://ff14-fc.com) | 日服个人幻化网站（猫娘模特） |
 | [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
+| [Miramiru](https://miramiru.co/en) | 幻化展示站（英／日／韩界面、装备和染剂汉化，装备名称跳转灰机 Wiki） |
 | [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 

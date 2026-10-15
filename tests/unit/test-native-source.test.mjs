@@ -20,8 +20,20 @@ import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
 } from '../../src/core/storage.js';
 import {
-  dedupeByAncestor, localScope, queryIn, _scanStats,
+  dedupeByAncestor, localScope, queryIn, _scanStats, ensureChineseFont,
 } from '../../src/core/dom.js';
+
+test('统一字体：重复调用幂等，head 缺失和样式被移除时仍能恢复', () => {
+  const previous=globalThis.document;const styles=new Map();let headWrites=0,rootWrites=0;
+  const add=style=>styles.set(style.id,style);
+  globalThis.document={getElementById:id=>styles.get(id),createElement:()=>({}),
+    head:{appendChild:style=>{headWrites++;add(style)}},documentElement:{appendChild:style=>{rootWrites++;add(style)}}};
+  try{
+    ensureChineseFont();ensureChineseFont();assert.equal(headWrites,1);assert.equal(styles.size,1);
+    styles.clear();document.head=null;ensureChineseFont();assert.equal(rootWrites,1);
+    assert.match(styles.get('zhx-chinese-font').textContent,/Microsoft YaHei/);
+  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
+});
 
 test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () => {
   const previousWindow = globalThis.window;
@@ -29,8 +41,8 @@ test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () =>
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'www.mirapri.com' };
-    assert.equal(SITE_POLICIES.length, 7);
-    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 7);
+    assert.equal(SITE_POLICIES.length, 8);
+    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 8);
     assert.equal(Object.isFrozen(SITE_POLICIES), true);
     assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
     assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
@@ -212,6 +224,17 @@ test('原生 GM 存储：读取、写入、枚举、删除及无 GM 降级', asy
     assert.deepEqual(await storeListAsync(), ['async']);
     assert.equal(await storeDeleteAsync('async'), true);
     assert.equal(await storeGetAsync('async'), null);
+    // Storage rejection must remain visible; do not report a successful delete.
+    globalThis.GM={setValue:async()=>{throw new Error('denied')},listValues:async()=>{throw new Error('denied')},deleteValue:async()=>{throw new Error('denied')}};
+    assert.equal(await storeSetAsync('bad','value'),false);
+    assert.equal(await storeListAsync(),null);
+    assert.equal(await storeDeleteAsync('bad'),false);
+    delete globalThis.GM;
+    globalThis.GM_getValue=(key,fallback)=>store.get(key)??fallback;
+    globalThis.GM_setValue=(key,value)=>store.set(key,value);
+    store.set('legacy','old');
+    assert.equal(await storeDeleteAsync('legacy'),true);
+    assert.equal(await storeGetAsync('legacy'),'');
   } finally {
     for (const name of names) {
       if (saved[name] === undefined) delete globalThis[name];

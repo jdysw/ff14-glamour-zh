@@ -5,6 +5,7 @@ import { ensureTables } from './core/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';
+import { ensureChineseFont } from './core/dom.js';
 
 
 
@@ -16,6 +17,7 @@ import { startChineseSearch } from './core/chinese-search.js';
   // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
   if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
   const __site = findSite();
+  if (__site) safe(ensureChineseFont, '中文字体')();
   safe(startChineseSearch, '中文装备搜索')(__site?.id);
   if (__site) { try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); } }   // 站点入口（Site Registry 配置驱动；Phase 18 边界）
 
@@ -24,7 +26,7 @@ import { startChineseSearch } from './core/chinese-search.js';
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
     try {
-      if (__site) __site.pageshow();   // 各站补跑入口（Site Registry 配置驱动）
+      if (__site) { ensureChineseFont(); __site.pageshow(); }   // 各站补跑入口（Site Registry 配置驱动）
       safe(ensureTables, 'pageshow 数据')();
     } catch (err) { _zhxErr('pageshow', err); }
   });

@@ -5,8 +5,8 @@ on:
   pull_request:
     paths:
       - 'tools/data/**'
-      - 'tests/unit/test-storage-audit.mjs'
-      - 'tests/unit/test-v31-preview.mjs'
+      - 'tests/experimental/test-storage-audit.mjs'
+      - 'tests/experimental/test-v31-preview.mjs'
       - 'tests/unit/test-shared-candidates.mjs'
       - 'tests/unit/test-pages-assets.mjs'
       - 'build/make-runtime-data.py'
@@ -44,7 +44,7 @@ jobs:
         run: python3 .github/deploy/prepare.py
       - name: 运行存储审计及基准报告
         run: |
-          node tests/unit/test-storage-audit.mjs
+          node tests/experimental/test-storage-audit.mjs
           node tests/unit/test-shared-candidates.mjs
           node tests/unit/test-pages-assets.mjs
           node tests/unit/test-pages-dedupe.mjs
@@ -54,7 +54,7 @@ jobs:
           node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
       - name: V3.1 隔离原型与旧 V3 回退验证
         run: |
-          node tests/unit/test-v31-preview.mjs
+          node tests/experimental/test-v31-preview.mjs
           node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
       - name: 第四阶段逐站冷启动与七站共享缓存模型验证
         run: |
@@ -110,7 +110,17 @@ jobs:
             exit 1
           fi
           node tools/data/verify-pages-http.mjs --site site --origin http://127.0.0.1:8788
-      - name: 核实当前线上 V3 全部旧资源路径
+      # PR 候选数据已在上方严格验证；线上尚未发布该候选版本，
+      # 因此线上基线须使用目标分支的完整契约，不能要求提前部署 PR。
+      - name: 获取 PR 目标分支的线上基线契约
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .production-baseline
+          persist-credentials: false
+      - name: 按已发布基线核实线上 V3 全部资源路径
+        working-directory: ${{ github.event_name == 'pull_request' && '.production-baseline' || '.' }}
         run: node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/
       - name: 上传 V3 旧 URL 去重计划与规则
         uses: actions/upload-artifact@v4

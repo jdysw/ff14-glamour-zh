@@ -11,6 +11,7 @@ const SITE_POLICIES = Object.freeze([
   { id: 'ronka', hosts: ['ronkacloset.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
   { id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'] },
   { id: 'endcloset', hosts: ['end-closet.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
+  { id: 'miramiru', hosts: ['miramiru.co'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
 ]);
 
 // 必须精确匹配主域或子域，不能让 evilmirapri.com 绕过宿主限制。

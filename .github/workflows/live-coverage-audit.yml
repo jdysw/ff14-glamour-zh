@@ -1,13 +1,10 @@
-name: Live localization coverage audit (7 sites)
-# PR 轻量真实七站扫描、手动完整扫描；受阻站点不能计为“零漏翻”。
+name: Live localization coverage audit (8 sites)
+# 外站审计按需执行；WAF/网络故障不充当代码 PR 的测试结果。
+# 手动运行仍严格要求完整证据，受阻站点不能计为“零漏翻”。
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/live-coverage-audit.yml'
-      - 'tools/coverage-audit/**'
   workflow_dispatch:
 concurrency:
-  group: seven-site-live-audit-${{ github.event.pull_request.number || github.ref }}
+  group: live-localization-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -21,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki]
+        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,16 +37,9 @@ jobs:
           ZHX_AUDIT_WIKI_URL: 'https://ff14.huijiwiki.com/wiki/%E7%89%A9%E5%93%81%3A%E5%8A%A0%E7%89%B9%E5%8B%92'
         run: |
           mkdir -p tests/.cache/coverage-audit
-          # PR 只检查代表性模板，手动运行仍执行每站最多 24 页的完整审计。
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            max_pages=4
-            max_depth=1
-            per_template=1
-          else
-            max_pages=24
-            max_depth=2
-            per_template=2
-          fi
+          max_pages=24
+          max_depth=2
+          per_template=2
           node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages "$max_pages" --max-depth "$max_depth" --per-template "$per_template" --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
           exit ${PIPESTATUS[0]}
         continue-on-error: true
@@ -74,7 +64,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Download all seven site outputs
+      - name: Download all site outputs
         uses: actions/download-artifact@v4
         with:
           pattern: coverage-raw-*
@@ -94,4 +84,4 @@ jobs:
           if-no-files-found: warn
       - name: Fail if any required site is missing or blocked
         run: |
-          node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('tests/.cache/coverage-report/coverage-audit-live.json'));if(x.status!=='scan-complete'){console.error('Incomplete seven-site audit: '+x.status);process.exit(1)}"
+          node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('tests/.cache/coverage-report/coverage-audit-live.json'));if(x.status!=='scan-complete'){console.error('Incomplete localization audit: '+x.status);process.exit(1)}"

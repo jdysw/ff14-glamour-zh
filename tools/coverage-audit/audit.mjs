@@ -31,6 +31,17 @@ export const DIST_FILE = path.join(REPO_ROOT, 'dist', 'ff14-glamour-zh.greasyfor
 
 // ---------- 站点配置 ----------
 export const SITES = {
+  miramiru: {
+    name: 'miramiru', label: 'Miramiru（三语幻化站）', host: 'miramiru.co', channel: 'local',
+    pages: [
+      { id: 'home-ja', url: 'https://miramiru.co/', type: 'home' },
+      { id: 'home-en', url: 'https://miramiru.co/en', type: 'home' },
+      { id: 'home-ko', url: 'https://miramiru.co/ko', type: 'home' },
+      { id: 'ranking-ja', url: 'https://miramiru.co/ranking', type: 'list' },
+      { id: 'ranking-en', url: 'https://miramiru.co/en/ranking', type: 'list' },
+      { id: 'ranking-ko', url: 'https://miramiru.co/ko/ranking', type: 'list' },
+    ],
+  },
   mirapri: {
     name: 'mirapri',
     label: 'mirapri（日服幻化站）',
@@ -148,6 +159,16 @@ const SERVER_NAMES = new Set([
 
 // 品牌名 / 站点名 / 明确不译
 const EXEMPT_PATTERNS = [
+  /^Miramiru$/i,
+  /^Mirapri ?Life$/i,
+  /^FFXIV WEAPON(?: COLLECTION)?$/i,
+  /^COLLECTION$/,
+  /^X \(Twitter\)$/,
+  /^Twitter$/,
+  /^you@example\.com$/,
+  /^(?:FINAL FANTASY XIV )?© SQUARE ENIX(?: CO\., LTD\. All Rights Reserved\.)?$/,
+  /^\(C\) SQUARE ENIX CO\., LTD\. All Rights Reserved\.$/,
+  /^(?:PvP|DPS|ID|AF[1-6])(?: \([\d,]+\))?$/,
   /^Eorzea Collection$/i,
   /^FFXIV ARMOURY COLLECTION$/i,
   /^MIRAPRI$/i,
@@ -170,14 +191,19 @@ const EXEMPT_PATTERNS = [
 // Known Japanese UI text can consist entirely of Han ideographs (e.g. 検索 or 検索).
 // Source dictionaries disambiguate them without misclassifying arbitrary Chinese words.
 const KNOWN_KANJI_UI = new Set();
-for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-endcloset']) {
+const KANJI_DICTIONARIES = new Map();
+for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-endcloset', 'dict-miramiru']) {
   try {
     const dict = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'dict', name + '.json'), 'utf8'));
+    KANJI_DICTIONARIES.set(name,dict.entries || {});
     for (const [foreign, zh] of Object.entries(dict.entries || {})) {
       if (/^[\u3400-\u9fff]{2,30}$/.test(foreign) && foreign !== zh && /^[\u3400-\u9fff]/.test(zh)) KNOWN_KANJI_UI.add(foreign);
     }
   } catch (e) { throw new Error('无法读取汉化权威词典 ' + name + ': ' + e.message); }
 }
+const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru'})
+  .map(([site,name])=>[site,new Set(Object.entries({...KANJI_DICTIONARIES.get('dict-common'),...KANJI_DICTIONARIES.get('dict-'+name)})
+    .filter(([source,zh])=>/^[\u3400-\u9fff]{2,30}$/.test(source)&&source!==zh&&/^[\u3400-\u9fff]/.test(zh)).map(([source])=>source))]));
 
 // ---------- 残留检测 ----------
 // 日文假名（平/片）
@@ -196,13 +222,15 @@ export function isResidual(text, ctx = {}) {
   const t = String(text || '').trim();
   if (!t) return false;
   if (JA_RE.test(t) || KO_RE.test(t)) return true;
-  if (ctx.ui && KNOWN_KANJI_UI.has(t) && (!ctx.site || ['mirapri', 'fc', 'collection', 'endcloset'].includes(ctx.site))) return true;
+  if (ctx.ui && (ctx.site ? SITE_KANJI_UI.get(ctx.site)?.has(t) : KNOWN_KANJI_UI.has(t))) return true;
   if (!/[A-Za-z]{2}/.test(t) || !ctx.ui || t.length > 100) return false;
   if (ctx.kind === 'document:title' || ctx.kind === 'attr:alt') return false;
   // Latin letters used in Chinese UI are generally identifiers/abbreviations,
   // but an untranslated English phrase beside Chinese remains a candidate.
   const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
-  const latinCount = (t.match(/[A-Za-z]/g) || []).length;
+  // Retained names in otherwise translated Chinese do not imply partial UI.
+  // Remove only verified names; "关于 Miramiru Settings" remains a candidate.
+  const latinCount = (t.replace(/Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter/g, '').match(/[A-Za-z]/g) || []).length;
   return !hanCount || latinCount >= 6;
 }
 

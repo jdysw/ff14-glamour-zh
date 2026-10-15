@@ -18,6 +18,7 @@ import { discoverSitemapUrls } from './sitemap.mjs';
 import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
+import { seedV3Memory } from '../../tests/helpers/v3-cache.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,8 +34,8 @@ const GM_STUB = `(() => {
   window.__gmStub = true;
   const P = 'gm:';
   window.__reqLog = [];
-  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
-  window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
+  window.GM_getValue = (k, d) => { if (window.__v3MemoryCache?.has(k)) return window.__v3MemoryCache.get(k); try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_setValue = (k, v) => { if (window.__v3MemoryCache) { window.__v3MemoryCache.set(k, v); return; } try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
   window.GM_xmlhttpRequest = (opt) => {
     window.__reqLog.push(opt.url);
     fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} }))
@@ -107,6 +108,9 @@ export async function scanUrlLocal({ site, pageId, url, itemsTsv, port = 9223, w
     const links = await c.eval(LINKS_JS).catch(() => []);
     // 现在清 localStorage + 预置数据 + 注入脚本（页面已就绪）
     await c.eval(presetDataJs(itemsTsv));
+    // Audit the checkout's generated data, including unpublished new adapters.
+    // Page-local GM storage also avoids multilingual bundles exceeding quota.
+    await seedV3Memory(c, site);
     await c.eval(GM_STUB);
     // Enable the existing lightweight diagnostic lifecycle marker before the
     // userscript loads; this does not display the probe panel.
@@ -156,7 +160,7 @@ export function cloudScanPlan(site, opts = {}) {
 // ---------- 报告合并 ----------
 export function loadResults(dir = CACHE_DIR) {
   if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
+  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset|miramiru)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
   const results = [];
   for (const f of files) {
     try { const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (d.site && (d.items || d.pages)) results.push(d); } catch (e) { console.error('[audit] 跳过损坏缓存:', f, e.message); }
@@ -334,4 +338,5 @@ async function main() {
   console.log('\n扫描完成。可运行: node tools/coverage-audit/run-scan.mjs --report --out docs/coverage-audit-report.md');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch((e) => { console.error(e); process.exit(1); });

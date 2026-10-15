@@ -32,7 +32,7 @@ export function sanitizeEvidence(source,target){
       });
       fs.writeFileSync(to,log,'utf8');continue;
     }
-    if(!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki)-.+\.json$/.test(entry.name))continue;
+    if(!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki|miramiru)-.+\.json$/.test(entry.name))continue;
     const row=JSON.parse(fs.readFileSync(from,'utf8'));
     if(!row.site||(!Array.isArray(row.items)&&!Array.isArray(row.pages)))continue;
     const cleaned={...row};

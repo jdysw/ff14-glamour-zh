@@ -15,8 +15,16 @@ import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audi
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), 'utf8');
+assert.equal(classify('Miramiru',{ui:true}),'exempt');
+assert.equal(classify('FFXIV WEAPON COLLECTION',{ui:true}),'exempt');
+assert.equal(classify('关于 Miramiru',{ui:true,before:'About Miramiru'}),'ok');
+assert.equal(classify('关于 Miramiru Settings',{ui:true,before:'About Miramiru Settings'}),'wrong');
+assert.equal(classify('Miramiru Settings',{ui:true}),'real');
+assert.equal(classify('투영 콘테스트',{ui:true}),'real');
+assert.equal(classify('染色',{site:'collection',ui:true}),'ok','Miramiru terminology must not mark another site as untranslated');
+assert.equal(classify('染色',{site:'miramiru',ui:true}),'real');
 
-assert.equal(Object.keys(SITES).length, 7, 'all seven active adapters must be audited');
+assert.equal(Object.keys(SITES).length, 8, 'all seven active adapters must be audited');
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
 assert.equal(classify('検索', { site: 'endcloset', ui: true }), 'real');
 assert.equal(classify('検索中', { site: 'endcloset', ui: true }), 'real', 'load EndCloset kanji UI dictionary');
@@ -216,7 +224,7 @@ let timedOut = 0;
 await assert.rejects(waitForAuditReady(async () => { timedOut++; return false; },
   async () => {}, { timeoutMs: 3, pollMs: 1 }), /未在 3ms 内完成/);
 assert.equal(timedOut, 3, 'timeout must fail instead of falsely reporting scan success');
-function hiddenText(parentOpacity = '1', childOpacity = '1', tagName = 'BUTTON') {
+function hiddenText(parentOpacity = '1', childOpacity = '1', tagName = 'BUTTON', linkAttrs = {}) {
   const parent = {
     nodeType: 1, tagName: 'SECTION', id: '', className: '',
     parentElement: null, hasAttribute: () => false, getAttribute: () => null,
@@ -225,7 +233,7 @@ function hiddenText(parentOpacity = '1', childOpacity = '1', tagName = 'BUTTON')
   const child = {
     nodeType: 1, tagName, id: '', className: tagName === 'A' ? 'btn' : '',
     parentElement: parent, isConnected: true, hasAttribute: () => false,
-    getAttribute: () => null, closest: () => null, textContent: '검색',
+    getAttribute: key => linkAttrs[key] ?? null, closest: () => null, textContent: '검색',
     getClientRects: () => [{}], previousElementSibling: null,
   };
   child.closest = (sel) => sel === 'a[href]' && tagName === 'A' ? child : null;
@@ -262,6 +270,10 @@ assert.equal(hiddenText('1', '1', 'BUTTON')[0]?.ctx.user, false,
 assert.equal(hiddenText('1', '1', 'A')[0]?.ctx.control, true);
 assert.equal(hiddenText('1', '1', 'A')[0]?.ctx.user, false,
   'styled link inside a post must remain an actionable control');
+assert.equal(hiddenText('1','1','A',{href:'https://amzn.to/example'})[0]?.ctx.ad,true);
+assert.equal(hiddenText('1','1','A',{href:'/recommended',rel:'noopener sponsored'})[0]?.ctx.ad,true);
+assert.equal(hiddenText('1','1','A',{href:'https://example.com/amazon-review'})[0]?.ctx.ad,false,
+  'ordinary links mentioning a store are not advertising evidence');
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.control, false);
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.user, true,
   'ordinary authored nested text must remain excluded');

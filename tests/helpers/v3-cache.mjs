@@ -12,7 +12,9 @@ process.once('exit', () => { try { fs.rmSync(CACHE_DIR, { recursive: true, force
 function ensureGenerated() {
   if (fs.existsSync(CACHE_DIR)) fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
-  execFileSync(findPython(), ['build/make-runtime-data.py', '--out', CACHE_DIR], { cwd: repoRoot, stdio: 'pipe' });
+  execFileSync(findPython(), ['build/make-runtime-data.py', '--out', CACHE_DIR], {
+    cwd: repoRoot, stdio: 'pipe', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+  });
 }
 export function readRuntimeV3(siteId = 'ec') {
   if (!loaded) {
@@ -48,6 +50,13 @@ export function v3CacheEntries(siteId = 'ec', prefix = '') {
 export async function seedV3Browser(cdp, siteId = 'ec', prefix = 'gm:') {
   const entries = v3CacheEntries(siteId, prefix);
   await cdp.callFn('function (entries) { for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v); return Object.keys(entries).length; }', [entries]);
+  return Object.keys(entries).length;
+}
+// Multilingual bundles can exceed localStorage's quota. Real userscripts use
+// GM storage; browser tests model that storage with a page-local Map instead.
+export async function seedV3Memory(cdp, siteId) {
+  const entries = v3CacheEntries(siteId);
+  await cdp.callFn('function(entries) { window.__v3MemoryCache = new Map(Object.entries(entries)); }', [entries]);
   return Object.keys(entries).length;
 }
 export function sha256Text(text) { return createHash('sha256').update(text).digest('hex'); }

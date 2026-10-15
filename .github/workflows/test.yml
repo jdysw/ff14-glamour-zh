@@ -54,6 +54,17 @@ jobs:
       - name: 构建后工作区一致性
         run: git diff --exit-code
 
+      - name: 构建可重现与损坏产物拒绝
+        run: npm run test:build
+
+      - name: 共享已验证的 userscript
+        uses: actions/upload-artifact@v4
+        with:
+          name: userscript-build
+          path: dist/ff14-glamour-zh.greasyfork.user.js
+          retention-days: 1
+          if-no-files-found: error
+
   coverage:
     name: Native Source Coverage
     needs: build
@@ -101,11 +112,14 @@ jobs:
       - name: 安装依赖（锁文件）
         run: npm ci
 
-      - name: 构建（build.sh 全链）
-        run: npm run build
+      - name: 下载已验证构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: userscript-build
+          path: dist
 
       - name: 单元测试（纯 Node，秒级）
-        run: npm run test:unit
+        run: node tests/run.mjs --suite=unit
 
   integration-a:
     name: Integration A (Wiki)
@@ -125,11 +139,14 @@ jobs:
       - name: 安装依赖（锁文件）
         run: npm ci
 
-      - name: 构建（build.sh 全链）
-        run: npm run build
+      - name: 下载已验证构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: userscript-build
+          path: dist
 
       - name: 集成测试 A（wiki 夹具组）
-        run: node tests/run.mjs test-wiki test-wiki-slow test-wiki-fallback test-index-scope
+        run: node tests/run.mjs --suite=wiki
 
   integration-b:
     name: Integration B (Sites)
@@ -149,32 +166,25 @@ jobs:
       - name: 安装依赖（锁文件）
         run: npm ci
 
-      - name: 构建（build.sh 全链）
-        run: npm run build
+      - name: 下载已验证构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: userscript-build
+          path: dist
+
+      - name: 重建汉化审计安装脚本
+        run: node tools/manual-coverage-audit/build-userscript.mjs
 
       - name: 集成测试 B（站点适配组）
-        run: node tests/run.mjs test-ec test-mirapri test-probe test-chinese-search-submit test-ronka-search-inline test-fc-search-candidates test-collection-search-inline test-standalone-search-trigger test-ec-search-inline
+        run: node tests/run.mjs --suite=sites
 
-  integration-c:
-    name: Integration C (Contracts)
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: 上传汉化、审计与字体测试脚本
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-
-      - name: 安装依赖（锁文件）
-        run: npm ci
-
-      - name: 构建（build.sh 全链）
-        run: npm run build
-
-      - name: 集成测试 C（契约/构建组）
-        run: node tests/run.mjs test-build-idempotent test-dict-single-source test-version-consistency test-module-source
+          name: miramiru-test-userscript
+          path: |
+            dist/ff14-miramiru-zh-*-test.user.js
+            dist/ff14-chinese-font-*-test.user.js
+            tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js
+          retention-days: 14
+          if-no-files-found: error

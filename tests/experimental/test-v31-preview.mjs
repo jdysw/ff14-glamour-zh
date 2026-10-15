@@ -59,7 +59,7 @@ try {
   const preview = JSON.parse(readFileSync(path.join(previewDir, 'manifest.v31.json'), 'utf8'));
   assert.equal(validV31Manifest(preview), true);
   assert.equal(validV3Manifest(preview), false, '新清单不能混入旧 V3 清单入口');
-  assert.equal(stats.logicalFiles, 27);
+  assert.equal(stats.logicalFiles, Object.values(legacy.sites).reduce((count, site) => count + Object.keys(site.files).length, 1));
   assert.ok(stats.uniqueObjects < stats.logicalFiles, '必须真实减少重复内容对象');
   assert.ok(stats.reclaimableBytes > 0, '必须保有可测量的去重收益');
   assert.deepEqual(stats, verifyV31Preview(oldDir, previewDir));

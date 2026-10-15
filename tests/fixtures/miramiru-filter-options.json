@@ -1,0 +1,86 @@
+{
+  "options": [
+    {
+      "id": "HEAD",
+      "nameJa": "頭",
+      "nameEn": "Head",
+      "nameKo": "머리",
+      "order": 2,
+      "zh": "头部"
+    },
+    {
+      "id": "DUNGEON_RAID",
+      "nameJa": "ダンジョン等",
+      "nameEn": "Dungeon/Raid",
+      "nameKo": "던전/레이드",
+      "color": "#ef4444",
+      "zh": "副本掉落"
+    },
+    {
+      "id": "miqote",
+      "nameJa": "ミコッテ",
+      "nameEn": "Miq'ote",
+      "nameKo": "미코테",
+      "zh": "猫魅族"
+    },
+    {
+      "id": "pld",
+      "nameJa": "ナイト",
+      "nameEn": "Paladin",
+      "nameKo": "나이트",
+      "abbr": "PLD",
+      "abbrJa": "ナ",
+      "role": "tank",
+      "iconId": 19,
+      "zh": "骑士",
+      "shortZh": "骑士"
+    },
+    {
+      "id": "whm",
+      "nameJa": "白魔道士",
+      "nameEn": "White Mage",
+      "nameKo": "백마도사",
+      "abbr": "WHM",
+      "abbrJa": "白",
+      "role": "healer",
+      "iconId": 24,
+      "zh": "白魔法师",
+      "shortZh": "白魔"
+    },
+    {
+      "id": "pct",
+      "nameJa": "ピクトマンサー",
+      "nameEn": "Pictomancer",
+      "nameKo": "픽토맨서",
+      "abbr": "PCT",
+      "abbrJa": "ピ",
+      "role": "caster",
+      "iconId": 42,
+      "zh": "绘灵法师",
+      "shortZh": "绘灵"
+    },
+    {
+      "id": "crp",
+      "nameJa": "木工師",
+      "nameEn": "Carpenter",
+      "nameKo": "목수",
+      "abbr": "CRP",
+      "abbrJa": "木",
+      "role": "crafter",
+      "iconId": 8,
+      "zh": "刻木匠",
+      "shortZh": "刻木"
+    },
+    {
+      "id": "tank",
+      "nameJa": "タンク",
+      "nameEn": "Tank",
+      "nameKo": "탱커",
+      "zh": "防护职业"
+    }
+  ],
+  "officialTags": {
+    "クール": "酷帅",
+    "正月": "新年"
+  }
+}

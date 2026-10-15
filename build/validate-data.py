@@ -5,7 +5,7 @@
 #   data/ff14-items.tsv   表头 9 列、逐行列数一致、glam 仅为 0/1（装备/时尚配饰/鸟甲允许名单）
 #   data/ff14-series.txt  行数合理、逐行含 | 分隔
 #   data/acl-cfc.txt      行数合理、逐行含 | 分隔
-#   dict/dict-*.json×6    可解析、kind=kv、entries 为「字符串 → 字符串」
+#   dict/dict-*.json×8    可解析、kind=kv、entries 为「字符串 → 字符串」
 # 用法：python3 build/validate-data.py
 import json
 import sys
@@ -97,8 +97,8 @@ def check_pairs(rel: str, min_lines: int) -> int:
 def check_dicts() -> int:
     """校验 dict/dict-*.json；返回总条目数"""
     files = sorted((ROOT / "dict").glob("dict-*.json"))
-    if len(files) != 7:
-        errors.append(f"dict/dict-*.json 应为 7 个，实际 {len(files)}：{[f.name for f in files]}")
+    if len(files) != 8:
+        errors.append(f"dict/dict-*.json 应为 8 个，实际 {len(files)}：{[f.name for f in files]}")
     total = 0
     for f in files:
         rel = f.relative_to(ROOT).as_posix()

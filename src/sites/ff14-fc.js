@@ -127,6 +127,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
     const s1 = _trFCExact(text, t0);
     if (s1 !== null) return s1;
+    const count = t0.match(/^(.{1,40}?) \(([\d,]+)\)$/u);
+    if (count && Object.hasOwn(DICT_FC, count[1]))
+      return text.replace(t0, DICT_FC[count[1]] + ' (' + count[2] + ')');
     const s2 = _trFCDecor(text, t0, core);
     if (s2 !== null) return s2;
     const s3 = _trFCName(text, t0, core);

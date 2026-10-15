@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.2.0
+// @version      1.3.2
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -11,6 +11,7 @@
 // @match        https://weapon.ffxivcollection.com/*
 // @match        https://end-closet.com/*
 // @match        https://ff14.huijiwiki.com/*
+// @match        https://miramiru.co/*
 // @noframes
 // @run-at       document-start
 // @grant        GM_getValue
@@ -25,7 +26,7 @@
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
-    'ff14.huijiwiki.com':'wiki'
+    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru'
   });
   const FORMATS = ['zhx-manual-audit-v1','zhx-manual-audit-v2'];
   const AUTHORED = {
@@ -37,10 +38,11 @@
       '.user-description','.user-content','.comment-content','.glamour-comment'],
     endcloset: ['/detail/','.concept-title','.concept-description','.author-description',
       '[class*="userComment"]','[class*="creatorComment"]'],
-    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text'],
+    ronka: ['.post-title','.lookbook-title','.post-content','.comment-text','.post-box img.post-thumbnail'],
     collection: ['.user-post-title','.post-content','.author-description'],
     fc: ['.comment-content','.comment-body','.user-content','.post-author'],
-    wiki: ['.comment-content','.user-profile','.mw-userpage-content']
+    wiki: ['.comment-content','.user-profile','.mw-userpage-content'],
+    miramiru: ['a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]']
   };
   const AD_RE = /(adsbygoogle|ad-slot|adunit|ad-container|affiliate|amazon|rakuten|aswift|sponsored)/i;
   const USER_RE = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body|content)|nickname|username|player-name|user-content|creator-description)/i;
@@ -62,6 +64,26 @@
     return u.toString();
   }
   function siteFor(url){try{return SITES[new URL(url).hostname]||null}catch{return null}}
+  function pageLanguage(url){
+    if(siteFor(url)!=='miramiru')return null;
+    const segment=new URL(url).pathname.split('/')[1];
+    return segment==='en'||segment==='ko'?segment:'ja';
+  }
+  function miramiruScope(el,kind,url){
+    if(el.closest?.('a.eorzeadb_link,[data-zhx-miramiru-zh]'))return 'item';
+    const path=new URL(url).pathname;
+    if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'))return 'user';
+    const tagLink=el.closest?.('a[href*="?tag="]');
+    if(tagLink&&el.closest?.('[data-slot="badge"]')?.textContent?.trim().startsWith('#'))return 'user';
+    if(/\/(?:mirapuri|users)\//.test(path)&&el.closest?.('h1,main .whitespace-pre-wrap'))return 'user';
+    if(el.closest?.('h3')||kind==='attr:alt'){
+      for(let p=el.parentElement,n=0;p&&n<3;p=p.parentElement,n++){
+        if(p.querySelector?.('a[href*="/mirapuri/"]'))return 'user';
+      }
+    }
+    if(/^\/(?:en\/|ko\/|ja\/)?(?:about|faq|collection)\/?$/.test(path)&&el.closest?.('main'))return 'ui';
+    return null;
+  }
   function allowedRoute(url){try{return !ROUTE_BLOCK.test(new URL(url).pathname)}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
@@ -70,19 +92,22 @@
     let ancestors='';for(let p=el.parentElement,n=0;p&&n<5;p=p.parentElement,n++)ancestors+=' '+String(p.className?.baseVal||p.className||'')+' '+String(p.id||'');
     const full=cls+' '+String(el.id||'')+' '+ancestors;
     const control=UI_RE.test(el.tagName||'') && /^(BUTTON|INPUT|SELECT|OPTION|TEXTAREA|SUMMARY|LABEL)$/.test(el.tagName)
-      || !!el.closest?.('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"],select,option');
+      || !!el.closest?.('button,a[data-slot="button"],[role="button"],[role="tab"],[role="switch"],[role="checkbox"],[role="combobox"],select,option');
     const exactSel=(AUTHORED[site]||[]).filter(x=>!x.startsWith('/'));
     const authored=exactSel.some(x=>{try{return !!el.closest?.(x)}catch{return false}}) || USER_RE.test(full);
     const likelyGallery = site==='mirapri' && !!el.closest?.('#gallery article h2.title, #gallery article .article-info .title');
-    const ad=AD_RE.test(full);
-    const item=ITEM_RE.test(full);
+    const link=el.closest?.('a[href]');
+    const linked=trimHref(link?.getAttribute?.('href')||'',url);
+    const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):null;
+    const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
     if(ad)scope='ad';
-    else if((authored||likelyGallery||artImage) && !control)scope='user';
+    else if((authored||likelyGallery||artImage||siteScope==='user') && siteScope!=='ui' && (!control||kind==='attr:alt'))scope='user';
     else if(item && !control)scope='item';
     else if(kind==='document:title')scope='metadata';
-    else if(control||!!el.closest?.('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"],.pagination,.pager')||UI_RE.test(el.tagName||''))scope='ui';
+    else if(siteScope==='ui'||control||!!el.closest?.('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"],.pagination,.pager')||UI_RE.test(el.tagName||''))scope='ui';
     // Attribute labels are NOT UI by default. They may be creator-supplied titles.
     return {scope,ui:scope==='ui',user:scope==='user',ad,control,confidence:scope==='unknown'?0.35:scope==='user'?0.92:0.86,
       tag:String(el.tagName||'').toLowerCase(),cls:cls.slice(0,150),id:String(el.id||'').slice(0,75),
@@ -110,6 +135,8 @@
     return it.kind+'|'+(it.stablePath||it.path||'')+'|'+(it.ctx?.name||'');
   }
   function scopeEligible(it){return it.ctx?.scope==='ui'}
+  const UI_EXEMPT=new Set(['Miramiru','FINAL FANTASY XIV © SQUARE ENIX CO., LTD. All Rights Reserved.',
+    'FFXIV','FF14','SQUARE ENIX','Discord','X','Ko-fi','XIVAPI','PR','OGP']);
   function category(it){
     if(it.ctx?.ad)return 'excluded-ad';
     if(it.ctx?.user || it.ctx?.scope==='user')return 'excluded-user';
@@ -118,6 +145,7 @@
     if(it.ctx?.scope==='unknown')return 'needs-review';
     if(!scopeEligible(it))return 'needs-review';
     const t=normalize(it.text), b=normalize(it.before);
+    if(UI_EXEMPT.has(t))return 'exempt-ui';
     if(it.before!==null&&it.before!==undefined){
       if(b===t)return hasForeign(t)?'suspected-untranslated':'unchanged';
       if(hasForeign(t))return 'suspected-partial';
@@ -125,7 +153,10 @@
     }
     return hasForeign(t)?'suspected-no-baseline':'unverified';
   }
-  function hasForeign(s){return /[\u3040-\u30ff\uac00-\ud7af]/.test(s)||/[A-Za-z]{2,}/.test(s)&&!/[\u3400-\u9fff]/.test(s)}
+  // These verified Japanese UI labels contain no kana, so a script-only
+  // detector would otherwise silently treat them as translated Chinese.
+  const KANJI_UI=new Set(['検索','装備一覧','詳細','新着','投稿一覧','閲覧数','種族','性別','統計','投稿日時','入手元','非表示']);
+  function hasForeign(s){return KANJI_UI.has(normalize(s))||/[\u3040-\u30ff\uac00-\ud7af]/.test(s)||/[A-Za-z]{2,}/.test(s)&&!/[\u3400-\u9fff]/.test(s)}
   function pair(before, after){
     const byPath=new Map();for(const it of before||[]){const k=stableKey(it),q=byPath.get(k)||[];q.push(it);byPath.set(k,q)}
     let matched=0,ambiguous=0;
@@ -169,7 +200,7 @@
           && /gallery|article-info/.test(signature) && ctx.tag==='h2';
         const galleryImg=site==='mirapri' && it.kind==='attr:alt' && /gallery|article-info/.test(signature);
         const authored=ctx.user||galleryTitle||galleryImg||USER_RE.test(signature);
-        const itemName=ITEM_RE.test(signature);
+        const itemName=ctx.scope==='item'||ITEM_RE.test(signature);
         let scope='unknown';
         if(ctx.ad)scope='ad';
         else if(authored&&!ctx.control)scope='user';
@@ -213,7 +244,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMATS,urlKey,siteFor,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,upgradeLegacyItems,
+  const api={SITES,AUTHORED,FORMATS,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,upgradeLegacyItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,migrate,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
@@ -231,6 +262,8 @@
   const PRIVATE_HINT = /password|passcode|token|secret|api[-_]?key|auth|mail|e-mail|user(name)?|player|author|creator|login|comment|title|description|留言|邮箱|郵箱|用户|用戶|玩家|作者|标题|標題|账户|帳戶/i;
   const HAN = /[\u3400-\u9fff]/u;
   const INPUT_TYPES = new Set(['', 'text', 'search']);
+  const MIRAMIRU_PUBLIC_SEARCH = new Set(['Search by title, gear, or tag',
+    'タイトル・装備名・タグで検索','제목, 장비명, 태그로 검색','搜索标题、装备或标签']);
   const now = () => new Date().toISOString();
   const empty = () => ({ format: 'zhx-search-audit-v1', enabled: false, sessions: [] });
   let state = empty(), started = false, bound = false, ready = null;
@@ -263,6 +296,11 @@
     const ph = input.getAttribute?.('placeholder') || '';
     const label = input.getAttribute?.('aria-label') || '';
     const meta = [id, name, ph, label].join(' ');
+    // Miramiru's public search explicitly mentions post titles. That wording
+    // must not be confused with a private title-editing field. Keep the exact
+    // placeholder allowlist and still reject sensitive IDs/names/labels.
+    if (location.hostname === 'miramiru.co' && MIRAMIRU_PUBLIC_SEARCH.has(ph)
+      && !PRIVATE_HINT.test([id, name, label].join(' '))) return true;
     if (PRIVATE_HINT.test(meta)) return false;
     if (SEARCH_HINT.test(meta)) return true;
     // EC Gearsets has a standalone Search... input, sometimes without a name.
@@ -510,7 +548,7 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.2.0. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.2. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -610,14 +648,14 @@ function collect(){
   for(const el of document.querySelectorAll('[placeholder],[title],[aria-label],[alt],[value],option')){
     if(el.tagName==='OPTION')push(el,el.textContent,'option'); // once; no duplicate text node
     for(const a of ATTRS)if(el.hasAttribute(a))push(el,el.getAttribute(a),'attr:'+a,null,a);
-    if(/^(INPUT|BUTTON)$/.test(el.tagName)&&/^(button|submit|reset)$/i.test(el.getAttribute('type')||''))push(el,el.getAttribute('value'),'attr:value',null,'value');
+    if(el.tagName==='INPUT'&&/^(button|submit|reset)$/i.test(el.getAttribute('type')||''))push(el,el.getAttribute('value'),'attr:value',null,'value');
   }
   if(document.title){const ctx={scope:'metadata',tag:'title',ui:false,user:false,ad:false,confidence:.9};
     items.push({kind:'document:title',text:document.title,path:'head > title',stablePath:'head > title',ctx,before:null,matchQuality:'none'});}
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.2.0',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.2',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -649,7 +687,7 @@ async function capture(automatic=false){
     if(all.length>CAP){say('节点超过单页安全限额 '+CAP+'，未保存以免遗漏。',true);return;}
     if(mode==='before'){
       if(!data.baselines[key]&&Object.keys(data.baselines).length>=MAX_BASELINES)throw Error('已达基线数量限制，先导出归档');
-      data.baselines[key]={site,url,state,label,key,items:all,capturedAt:clock(),method:'manual-verified'};
+      data.baselines[key]={site,language:C.pageLanguage(location.href),url,state,label,key,items:all,capturedAt:clock(),method:'manual-verified'};
       say('已保存人工原文基线：'+all.length+' 项。重新启用汉化脚本后对同一状态采集。');
     }else{
       if(!data.pages[recordKey]&&Object.keys(data.pages).length>=MAX_SNAPSHOTS)throw Error('快照数量达到上限，先导出归档');
@@ -658,10 +696,10 @@ async function capture(automatic=false){
       if(baseline){const p=C.pair(baseline.items,all);items=p.items;matched=p.matched;ambiguous=p.ambiguous;}
       const beforeMatched=baseline ? matched : all.filter(it=>it.matchQuality==='inferred-old-value').length;
       const baselineQuality=baseline?'manual-verified':beforeMatched?'partial-inferred':'none';
-      data.pages[recordKey]={site,url,pageId:'manual-'+site,key,state,label,round,status:'ok',
+      data.pages[recordKey]={site,language:C.pageLanguage(location.href),url,pageId:'manual-'+site,key,state,label,round,status:'ok',
         items,beforeCount:baseline?.items.length??null,hasBaseline:!!baseline,
         baselineQuality,matched,ambiguous,observedOldValues:beforeMatched,
-        readiness,scannedAt:clock(),source:'manual-browser-v1.1',title:document.title};
+        readiness,scannedAt:clock(),source:'manual-browser-v1.3',title:document.title};
       say((automatic?'自动':'手动')+'完成 '+all.length+' 条，'+
         (baseline?`人工基线匹配 ${matched}/${all.length}`:`推断原文 ${beforeMatched} 条（不能据此计算汉化率）`)+
         '；采集状态 '+readiness);
@@ -685,8 +723,8 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
-  download(JSON.stringify(out,null,2),'ff14-audit-v1.2-'+clock().replace(/[:.]/g,'-')+'.json');
+  out.toolVersion='1.3.2';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
 async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
@@ -704,7 +742,7 @@ async function init(){
   input[type=text]{width:100%;min-width:60px}button{cursor:pointer}button:hover{background:#35517b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .hint{font-size:11px;color:#c6d1e2}.bad{color:#ffb9b9}.closed .body{display:none}#status{max-height:85px;overflow:auto;overflow-wrap:anywhere}#status[data-error=true]{color:#ffb9b9}`;
   box.append(style);const panel=document.createElement('div');panel.className='panel';
-  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.2'));
+  const head=document.createElement('div');head.className='head';head.append(document.createTextNode('FF14 汉化审计 V1.3'));
   head.append(btn('−',()=>{panel.classList.toggle('closed');head.lastChild.textContent=panel.classList.contains('closed')?'+':'−'}));panel.append(head);
   const body=document.createElement('div');body.className='body';
   const hint=document.createElement('div');hint.className='hint';hint.textContent='只读采集；同一网址可保留不同状态和版本。自动推断的原文不等同于完整基线。';body.append(hint);
@@ -748,7 +786,7 @@ async function init(){
   panel.append(body);box.append(panel);await count();
   if(autoCheck.checked&&C.allowedRoute(location.href))void capture(true);
 }
-try{GM_registerMenuCommand('FF14 V1.2：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.2：导出 JSON',()=>exportJSON());
-  GM_registerMenuCommand('FF14 V1.2：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
+try{GM_registerMenuCommand('FF14 V1.3：采集当前页',()=>capture(false));GM_registerMenuCommand('FF14 V1.3：导出 JSON',()=>exportJSON());
+  GM_registerMenuCommand('FF14 V1.3：开始/停止搜索诊断',async()=>{if(S?.getSummary?.().enabled)await S.stop();else await S?.start?.();});}catch{}
 void init().catch(err=>console.error('[FF14 manual audit init]',err));
 })();
