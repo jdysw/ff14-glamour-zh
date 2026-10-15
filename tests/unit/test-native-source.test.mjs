@@ -1,3 +1,4 @@
+import {currentDictionaryText} from '../helpers/current-dictionary.mjs';
 // 直接加载生产 ESM 模块执行测试，由 Node V8 生成真实源码 LCOV 覆盖率。
 import test from 'node:test';
 import { createHash } from 'node:crypto';
@@ -292,14 +293,14 @@ test('原生 V3 契约：站点表一致、固定路径和异常元数据不得�
     shared: { dict: { url: 'dict.json', sha256: sha, bytes: 2 } },
   });
   assert.equal(validV3Manifest(make()), true);
-  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), true);
+  assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }), false);
   assert.equal(validRuntimeDictionary({ main: { Name: null } }), false);
   assert.equal(validRuntimeDictionary({ main: { Name: '译名' } }, true), false);
   assert.equal(validV3FileMeta(null, 'mirapri/names.tsv'), false);
   assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha, bytes: -1 },
     'mirapri/names.tsv'), false);
   assert.equal(validV3FileMeta({ url: 'mirapri/names.tsv', sha256: sha },
-    'mirapri/names.tsv'), true);
+    'mirapri/names.tsv'), false);
   const variants = [
     m => { m.sites.mirapri.files.names.url = '../../unexpected'; },
     m => { m.sites.mirapri.files.names.url = 'https://external.invalid'; },
@@ -322,7 +323,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
   const names = ['window', 'location', 'GM_xmlhttpRequest', 'GM_getValue',
     'GM_setValue', 'GM_listValues', 'GM_deleteValue'];
   const original = Object.fromEntries(names.map(name => [name, globalThis[name]]));
-  const gm = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
+  const gm = new Map();
   const sha = text => createHash('sha256').update(text).digest('hex');
   let version = 1;
   let invalidManifest = false;
@@ -336,7 +337,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
       hash: '0001\t' + zh + '\n',
       alias: '装备别称\t' + zh + '\n',
       dup: 'English Test Gear\t' + zh + '\n',
-      dict: '{"common":{}}',
+      dict: currentDictionaryText(),
     };
     const entries = Object.fromEntries(Object.entries(files).filter(([n]) => n !== 'dict')
       .map(([name, contents]) =>

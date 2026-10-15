@@ -41,8 +41,8 @@ export function verifyV3Publish(directory) {
   assert.ok(manifest.shared?.dict, '必须提供共享词典');
   check(manifest.shared.dict);
   const dictionary = JSON.parse(readFileSync(path.join(base, 'dict.json'), 'utf8'));
-  assert.ok(validRuntimeDictionary(dictionary, true),
-    '共享词典必须包含七层、字符串译文且不能包含原型特殊键');
+  assert.ok(validRuntimeDictionary(dictionary),
+    '共享词典必须包含当前八层、字符串译文且不能包含原型特殊键');
   return { sites: SITE_POLICIES.length, files: fileCount, bytes: totalBytes, version: manifest.version };
 }
 

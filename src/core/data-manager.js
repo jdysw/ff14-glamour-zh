@@ -29,11 +29,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
      需要等数据就绪的补扫 / 刷新，通过 onTablesReady(fn) 登记。 */
   // 数据版本（外置版由加载器在版本清单到达后赋值；内嵌版保持空 = 随脚本版本）
   let DATA_VER = ''; // NOSONAR — 数据版本由远程 manifest 生命周期更新
-  const DATA_REFRESH_EPOCH_KEY = 'zhx.data.refresh.epoch';
-  const DATA_REFRESH_EPOCH = 'v3-only-1-force-refresh';
-  let _forceDataRefresh = false;
-  let _forceDataClearSucceeded = false;
-  let _forceDataCacheWritesOk = true;
   let _manifestRefreshRequested = false;
   let _manifestNeedsCommit = false;
   let _manifestRejected = false;
@@ -127,43 +122,42 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // names 文本 → {原生名: 候选允许标记('1'/'0'/'')}——行级、首见记录。
   // 仅用于智能候选：只有明确允许的装备、时尚配饰、鸟甲进入倒排。
-  function _v3Glam(txt, requireFlags = false) {
+  function _v3Glam(txt) {
     const m = Object.create(null);
     let sawRow = false;
     for (const ln of String(txt || '').split('\n')) {
       if (!ln) continue;
       const p = ln.split('\t');
       if (!p[0]) continue;
-      if (requireFlags && (p[2] === undefined || !['0', '1'].includes(p[2].trim()))) return null;
-      if (p[2] === undefined) continue;
+      if (p.length !== 4 || !['0', '1'].includes(p[2].trim()) || !/^[0-5]$/.test(p[3].trim())) return null;
       sawRow = true;
       if (m[p[0]] === undefined) m[p[0]] = p[2].trim();
     }
-    return requireFlags && !sawRow ? null : m;
+    return sawRow ? m : null;
   }
 
   // names 第四列为 EquipSlotCategory 派生的展示组（0头 1身 2手 3腿 4脚 5其余）。
-  // 旧 V3 文件只有前三列，全部归入其余，绝不从译名猜测分类。
+  // 只使用当前四列文件声明的分组，不从译名猜测分类。
   function _v3SearchSlots(txt) {
     const slots = Object.create(null);
     for (const ln of String(txt || '').split('\n')) {
       if (!ln) continue;
       const p = ln.split('\t');
       if (p.length < 4 || !p[0] || slots[p[0]] !== undefined) continue;
-      if (/^[0-4]$/.test(p[3])) slots[p[0]] = Number(p[3]);
+      slots[p[0]] = Number(p[3].trim());
     }
     return slots;
   }
 
   // V3 数据直接映射为运行时索引；模块内状态由本 IIFE 共享。
   function _applyV3(files) {
+    if (files.candidatePolicy !== 1) return false;
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
       const names = take('names') || Object.create(null);
-      const requireCandidateFlags = files.candidatePolicy === 1 && typeof files.names === 'string';
-      const glam = _v3Glam(files.names, requireCandidateFlags);
-      if (requireCandidateFlags && !glam) return false;
+      const glam = typeof files.names === 'string' ? _v3Glam(files.names) : Object.create(null);
+      if (!glam) return false;
       const hash = take('hash') || Object.create(null);
       const ecid = take('ecid') || Object.create(null);
       const ko = take('ko') || Object.create(null);
@@ -186,7 +180,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       _irDupMap = dup;
       _irGlamMap = glam || Object.create(null);
       _irSearchSlotByNative = _v3SearchSlots(files.names);
-      _irCandidatePolicy = files.candidatePolicy === 1 ? 1 : 0;
+      _irCandidatePolicy = 1;
       SERIES_TEXT = files.series ? '\n' + files.series : '';
       ACL_CFC_TEXT = files.acl ? '\n' + files.acl : '';
       if (files.dict) applyRuntimeDict(files.dict);
@@ -215,7 +209,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     let encoded;
     try {
       encoded = new TextEncoder().encode(text);
-      if (expectedBytes !== undefined && encoded.byteLength !== expectedBytes) return false;
+      if (encoded.byteLength !== expectedBytes) return false;
       // 无 WebCrypto 时拒绝未经摘要验证的数据，而不是降级为仅检查长度。
       // 加载流程会正常进入 degraded 并通知订阅者，不会无限等待。
       if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle?.digest) return false;
@@ -228,25 +222,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
-  async function _v3WriteFileCache(key, value, force) {
-    if (force) {
-      const ok = await storeSetAsync(key, value);
-      if (!ok) _forceDataCacheWritesOk = false;
-      return ok;
-    }
-    const ok = await storeSetAsync(key, value);
-    return ok;
-  }
-
   async function _v3FindCachedFile(baseKey, fingerprint, expectedBytes) {
-    // 指纹键可能已损坏；校验失败后仍应检查旧键中的有效副本，以支持离线恢复。
     const current = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
     if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
-    const legacy = await _v3ReadCachedFile(baseKey, fingerprint);
-    return legacy !== null && await _v3VerifyFile(legacy, fingerprint, expectedBytes) ? legacy : null;
+    return null;
   }
 
-  // V3 单文件缓存按站点、文件名和 SHA-256 指纹寻址；旧无指纹 key 只读兼容。
+  // 只读取按站点、文件名和 SHA-256 指纹寻址的当前缓存。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
     const extension = name === 'series' || name === 'acl' ? '.txt' : '.tsv';
     const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + name + extension;
@@ -267,7 +249,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!await _v3VerifyFile(text, meta.sha256, meta.bytes)) return null;
     _dlStats.net++;
     if (staged) staged.set(key, meta.sha256 + '\n' + text);
-    else await _v3WriteFileCache(key, meta.sha256 + '\n' + text, force);
+    else await storeSetAsync(key, meta.sha256 + '\n' + text);
     return text;
   }
 
@@ -312,7 +294,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const c = await readCachedManifest();
     const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
     const valid = _validV3Manifest(c.man);
-    if (!refresh && valid && fresh && c.man.candidatePolicy === 1) return c.man;
+    if (!refresh && valid && fresh) return c.man;
     const latest = await fetchManifest();
     if (latest === false) return null;
     if (latest) return latest;
@@ -343,17 +325,15 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败或缺文件均返回 false；调用方保持安全空索引。
-  async function _commitV3Bundle(staged, manifest, siteId, force, commitSnapshot, commitManifest) {
+  async function _commitV3Bundle(staged, manifest, siteId, commitSnapshot, commitManifest) {
     for (const [key, value] of staged) {
-      if (!await _v3WriteFileCache(key, value, force)) return false;
+      if (!await storeSetAsync(key, value)) return false;
     }
     const value = String(Date.now()) + '\n' + JSON.stringify(manifest);
     if (commitSnapshot && !await storeSetAsync('zhx.v3.manifest.' + siteId, value)) {
-      if (force) _forceDataCacheWritesOk = false;
       return false;
     }
     if (commitManifest && !await storeSetAsync('zhx.v3.manifest', value)) {
-      if (force) _forceDataCacheWritesOk = false;
       return false;
     }
     return true;
@@ -382,7 +362,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     for (const [name, meta] of Object.entries(oldFiles)) {
       const current = currentFiles[name];
       if (current && current.sha256 === meta?.sha256) continue;
-      stale.add('zhx.v3.f.' + siteId + '.' + name);
       if (meta?.sha256) stale.add('zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256);
     }
     const oldDict = previousManifest?.shared?.dict;
@@ -428,7 +407,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const pinnedNewer = siteSnapshotValid && siteSnapshot.manT > globalSnapshot.manT;
     const canUseSiteCache = !force && !_manifestRejected && siteSnapshotValid;
     if (canUseSiteCache && (!manifest || (pinnedNewer && !_manifestNeedsCommit))) manifest = siteSnapshot.man;
-    return _validV3Manifest(manifest) && (!force || manifest.candidatePolicy === 1) ? manifest : null;
+    return _validV3Manifest(manifest) ? manifest : null;
   }
 
   async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed, generation = _ensureGeneration) {
@@ -456,7 +435,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       && snapshots.siteSnapshot.manT > snapshots.globalSnapshot.manT;
     const commitSnapshot = force || _manifestNeedsCommit || !snapshots.siteSnapshotValid
       || (!snapshotNewer && snapshots.siteSnapshot.man?.version !== manifest.version);
-    const committed = await _commitV3Bundle(staged, manifest, siteId, force, commitSnapshot, _manifestNeedsCommit);
+    const committed = await _commitV3Bundle(staged, manifest, siteId, commitSnapshot, _manifestNeedsCommit);
     if (committed) await _pruneV3SiteCache(siteId, snapshots.previous.man, manifest);
     return committed;
   }
@@ -487,93 +466,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
 
 
-  // 旧缓存键只在此处保留，用于 V3 一次性迁移清理。
-  const LEGACY_META_KEY = 'zhx.meta';
-  const LEGACY_DT_PREFIX = 'zhx.dt.';
-  function _isDataCacheKey(key) {
-    return key === LEGACY_META_KEY || key === 'zhx.v3.manifest' || key.startsWith('zhx.v3.manifest.')
-      || key === 'zhx.candidate.policy' || key.startsWith(LEGACY_DT_PREFIX) || key.startsWith('zhx.v3.f.');
-  }
-
-  function _knownDataCacheKeys() {
-    const keys = new Set([LEGACY_META_KEY, 'zhx.v3.manifest', 'zhx.candidate.policy']);
-    for (const siteId of ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru']) {
-      keys.add('zhx.v3.manifest.' + siteId);
-    }
-    for (const name of ['items', 'series', 'acl', 'dict']) keys.add(LEGACY_DT_PREFIX + name);
-    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru'];
-    const files = ['names', 'hash', 'alias', 'dup', 'ecid', 'ko', 'series', 'acl', 'dict'];
-    for (const site of sites) for (const file of files) keys.add('zhx.v3.f.' + site + '.' + file);
-    return keys;
-  }
-
-  function _addSiteManifestCacheKeys(keys, siteId, site, sharedDictHash) {
-    for (const [name, meta] of Object.entries(site.files || {})) {
-      const base = 'zhx.v3.f.' + siteId + '.' + name;
-      keys.add(base);
-      if (meta?.sha256) keys.add(base + '.' + meta.sha256);
-    }
-    if (sharedDictHash) keys.add('zhx.v3.f.' + siteId + '.dict.' + sharedDictHash);
-  }
-
-  function _addManifestCacheKeys(keys, manifest) {
-    if (!_validV3Manifest(manifest)) return;
-    const sharedDictHash = manifest.shared?.dict?.sha256;
-    for (const [siteId, site] of Object.entries(manifest.sites)) {
-      _addSiteManifestCacheKeys(keys, siteId, site, sharedDictHash);
-    }
-  }
-
-  async function _readCachedManifests() {
-    const sites = ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'wiki', 'endcloset', 'miramiru'];
-    return Promise.all([readCachedManifest(), ...sites.map((siteId) => readCachedManifest(siteId))]);
-  }
-
-  async function _clearDataCaches() {
-    let listed = null;
-    try { listed = await storeListAsync(); } catch (e) { listed = null; }
-    const keys = _knownDataCacheKeys();
-    for (const stored of await _readCachedManifests()) _addManifestCacheKeys(keys, stored.man);
-    if (Array.isArray(listed)) {
-      for (const key of listed) if (_isDataCacheKey(key)) keys.add(key);
-    }
-    const results = await Promise.all([...keys].map((key) => storeDeleteAsync(key)));
-    return results.every(Boolean);
-  }
-
-  async function _prepareDataRefresh() {
-    let epoch = null;
-    try { epoch = await storeGetAsync(DATA_REFRESH_EPOCH_KEY); } catch (e) { epoch = null; }
-    if (epoch === DATA_REFRESH_EPOCH) {
-      _forceDataClearSucceeded = true;
-      _forceDataCacheWritesOk = true;
-      return false;
-    }
-    _forceDataRefresh = true;
-    _forceDataCacheWritesOk = true;
-    _forceDataClearSucceeded = await _clearDataCaches();
-    return true;
-  }
-
-  async function _completeDataRefresh() {
-    if (!_forceDataClearSucceeded || !_forceDataCacheWritesOk) return false;
-    const stored = await storeSetAsync(DATA_REFRESH_EPOCH_KEY, DATA_REFRESH_EPOCH);
-    if (stored) _forceDataRefresh = false;
-    return stored;
-  }
-
   async function _ensureMain(generation = _ensureGeneration) {
     _irCandidatePolicy = 0;
-    const force = await _prepareDataRefresh();
-    if (generation !== _ensureGeneration) return;
-    _forceDataRefresh = force;
     if (!neededTables().length) return;
     const refreshManifest = _manifestRefreshRequested;
     _manifestRefreshRequested = false;
-    const loaded = await _ensureTryV3(force, refreshManifest, generation);
+    const loaded = await _ensureTryV3(false, refreshManifest, generation);
     if (generation !== _ensureGeneration) return;
     _dataLoadState = loaded ? 'ready' : 'degraded';
-    if (loaded && force && _irCandidatePolicy === 1) await _completeDataRefresh();
   }
 
   function ensureTables() {
@@ -609,7 +509,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
   // 脚本层可观察的只读数据状态，不直接暴露持久缓存或可变索引对象。
-  // 已通知回调不代表下载成功：加载失败时 state=degraded，但仍触发兼容的就绪广播。
+  // 已通知回调不代表下载成功：失败时 state=degraded，仍通知订阅者结束等待。
   function dataGetStatus() {
     return Object.freeze({
       site: findSite()?.id || null,
@@ -912,14 +812,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return d ? d.slice() : [];
   }
   // 统一优先级（计划书 6.4，以现有实际行为为准）：
-  // 1) hash → 2) 名称 → 3) 历史兼容 fallback（latinFallback：外文名自动查物品总表）。
+  // hash 优先，再查统一名称索引。
   // 注：EC_ID / 韩文名反查见 resolveEcId / resolveKo（v1.4 Phase 10：Wiki 唯一数据入口）。
-  function resolve(input, opts) {
+  function resolve(input) {
     if (!input) return null;
     if (input.hash) { const z = resolveByHash(input.hash); if (z) return z; }
     if (input.name) {
       const z = resolveByName(input.name); if (z) return z;
-      if (opts?.latinFallback) { const z2 = tryEnToZh(input.name); if (z2) return z2; }
     }
     if (input.alias) { const zs = resolveAlias(input.alias); if (zs.length) return zs[0]; }
     return null;

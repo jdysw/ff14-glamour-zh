@@ -12,7 +12,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   function lookupZh(a, name) {
     const h = (a?.getAttribute('href')) || '';
     const m = h.match(/lodestone\/playguide\/db\/item\/([0-9a-f]+)/i);
-    return resolve({ hash: m?.[1], name }, { latinFallback: true });
+    return resolve({ hash: m?.[1], name });
   }
 
   /* @zhixia:core-targets-start */

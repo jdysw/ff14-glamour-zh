@@ -2,7 +2,7 @@
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache-primitives.js';
 import { validRuntimeDictionary } from './dict-contract.js';
-export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate, dictUpdate };
+export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate };
 
 
   /* =====================================================================
@@ -6869,5 +6869,4 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
   function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.hasOwn(o, key); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictGetRevision() { return _dictRevision; }
   function dictInvalidate() { cacheReset('translate'); }
-  function dictUpdate(txt) { return applyRuntimeDict(txt); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   /* @zhixia:core-dictionary-end */

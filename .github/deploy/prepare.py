@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # 组装 Cloudflare Pages V3-only 部署目录（site/）。
-# 每次清空生成目录，避免旧部署或本地残留的 V2 文件进入产物。
+# 每次清空生成目录，避免历史部署或本地残留进入当前产物。
 import shutil
 import subprocess
 import sys
@@ -38,7 +38,7 @@ def main() -> int:
         return 1
     print('  [v3] <- build/make-runtime-data.py')
     deploy = Path(__file__).resolve().parent
-    for name in ('index.html', '404.html', '_headers', '_routes.json'):
+    for name in ('index.html', '404.html', '_headers'):
         shutil.copy2(deploy / name, OUT / name)
     print('✓ site/ V3-only 组装完成')
     return 0

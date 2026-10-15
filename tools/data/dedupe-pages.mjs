@@ -89,7 +89,7 @@ export function verifyPagesDedupe(siteDirectory) {
   assert.deepEqual(Object.keys(manifest.sites).sort(), SITE_POLICIES.map(x => x.id).sort(),
     '去重目录必须保留完整七站');
   const dictionary = JSON.parse(readFileSync(path.join(v3, 'dict.json'), 'utf8'));
-  assert.ok(validRuntimeDictionary(dictionary, true), '去重目录的共享词典结构非法');
+  assert.ok(validRuntimeDictionary(dictionary), '去重目录的共享词典结构非法');
   const routes = routesFromManifest(manifest);
   const ruleFile = path.join(site, '_redirects');
   assert.equal(readFileSync(ruleFile, 'utf8'), redirectText(routes),

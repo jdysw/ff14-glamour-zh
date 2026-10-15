@@ -1,3 +1,4 @@
+import {currentDictionaryText} from '../helpers/current-dictionary.mjs';
 // 使用内存网络与 GM 存储桩，测试真实的 V3 数据生命周期函数。
 // 不为迎合待测实现而放宽断言。
 import assert from 'node:assert/strict';
@@ -29,6 +30,8 @@ function makeBundle(version) {
     sites: { mirapri: { files: Object.fromEntries(Object.entries(files)
       .map(([name, value]) => [name, { url: 'mirapri/' + name + '.tsv', sha256: sha(value), bytes: Buffer.byteLength(value) }])) } },
   };
+  const dictionary=currentDictionaryText();
+  manifest.shared={dict:{url:'dict.json',sha256:sha(dictionary),bytes:Buffer.byteLength(dictionary)}};
   return { manifest, files };
 }
 function deferred() {
@@ -37,7 +40,7 @@ function deferred() {
   return { promise, resolve };
 }
 function buildHarness(download, requiredTables = ['items'], cryptoProvider = webcrypto) {
-  const store = new Map([['zhx.data.refresh.epoch', 'v3-only-1-force-refresh']]);
+  const store = new Map();
   const marks = [];
   const errors = [];
   const deps = {
@@ -215,7 +218,7 @@ function network(getVersion) {
   assert.ok(requests[0].endsWith('/manifest.json'));
 }
 
-// 新键损坏不应阻断旧键的有效离线副本；依旧逐项执行 SHA 和字节校验。
+// 无指纹旧键不参与离线恢复，当前指纹键损坏后必须拒绝。
 {
   const { manifest, files } = makeBundle(1);
   const { api, store } = buildHarness(async url => {
@@ -228,9 +231,8 @@ function network(getVersion) {
     store.set(baseKey + '.' + meta.sha256, meta.sha256 + '\n' + '损坏内容');
   }
   await api.ensureTables();
-  assert.equal(api.resolveByName('English One'), '中文甲');
-  assert.equal(api.dataGetStatus().origin, 'cache');
-  assert.equal(api.dataGetStatus().state, 'ready');
+  assert.equal(api.resolveByName('English One'), null);
+  assert.equal(api.dataGetStatus().state, 'degraded', '损坏的当前缓存不得借用无指纹旧键');
 }
 
 // 文件 SHA/bytes 即使完全自洽，非法共享词典仍必须使整批数据降级。
@@ -249,7 +251,7 @@ function network(getVersion) {
   }, ['items', 'dict']);
   await api.ensureTables();
   assert.equal(api.dataGetStatus().state, 'degraded', '词典语义校验失败不得发布 ready');
-  // 兼容旧接口：ready 广播结束后仍可读空索引，但绝不应包含半途写入的记录。
+  // 等待结束后仍可读空索引，但绝不应包含半途写入的记录。
   assert.deepEqual(Object.keys(api.dataGetIndex('nameMap') || {}), [], '失败时索引不得部分提交');
   assert.equal(api.resolveByName('English One'), null, '无效共享词典不能使装备索引部分生效');
 }

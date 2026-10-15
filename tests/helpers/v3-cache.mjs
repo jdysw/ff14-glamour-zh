@@ -38,7 +38,6 @@ export function readRuntimeV3(siteId = 'ec') {
 export function v3CacheEntries(siteId = 'ec', prefix = '') {
   const { manifestText, siteFiles, dict } = readRuntimeV3(siteId);
   const entries = {
-    [prefix + 'zhx.data.refresh.epoch']: 'v3-only-1-force-refresh',
     [prefix + 'zhx.v3.manifest']: Date.now() + String.fromCharCode(10) + manifestText,
     [prefix + 'zhx.v3.manifest.' + siteId]: Date.now() + String.fromCharCode(10) + manifestText,
   };

@@ -213,8 +213,6 @@ console.log('\n── E：统一解析优先级 ──');
  eq('name命中',api.resolve({name:'B'}),'丙');
  eq('别名作为后备',api.resolve({alias:'丙组合'}),'丙');
  eq('全部miss',api.resolve({hash:'x',name:'y',alias:'z'}),null);
- eq('latin fallback on',api.resolve({name:'KNOWN_EN'},{latinFallback:true}),'英文名译');
- eq('latin fallback default off',api.resolve({name:'KNOWN_EN'}),null);
 }
 
 console.log('\n── F：ready-independent API safety ──');

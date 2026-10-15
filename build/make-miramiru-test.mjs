@@ -47,7 +47,6 @@ const source = String.raw`${header}
   const cache = new Map();
   const manifestText = JSON.stringify(snapshot.manifest);
   const cachedManifest = Date.now() + '\n' + manifestText;
-  cache.set('zhx.data.refresh.epoch', 'v3-only-1-force-refresh');
   cache.set('zhx.v3.manifest', cachedManifest);
   cache.set('zhx.v3.manifest.miramiru', cachedManifest);
   for (const [name, file] of Object.entries(snapshot.files)) {

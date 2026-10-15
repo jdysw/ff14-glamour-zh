@@ -6,11 +6,11 @@ const RUNTIME_DICT_LAYERS = Object.freeze(['common', 'main', 'ec', 'fc', 'ronka'
 const ALLOWED_LAYERS = new Set(RUNTIME_DICT_LAYERS);
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-// 历史缓存允许仅包含部分层；新发布的数据包必须提供完整七层。
-function validRuntimeDictionary(value, requireAll = false) {
+// 只接收当前八层词典，缺层的历史缓存与数据包均不再加载。
+function validRuntimeDictionary(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const layers = Object.keys(value);
-  if (!layers.length || (requireAll && layers.length !== RUNTIME_DICT_LAYERS.length)) return false;
+  if (layers.length !== RUNTIME_DICT_LAYERS.length) return false;
   for (const layer of layers) {
     if (!ALLOWED_LAYERS.has(layer)) return false;
     const entries = value[layer];
@@ -20,5 +20,5 @@ function validRuntimeDictionary(value, requireAll = false) {
       if (FORBIDDEN_KEYS.has(key) || typeof translation !== 'string') return false;
     }
   }
-  return !requireAll || RUNTIME_DICT_LAYERS.every(layer => Object.hasOwn(value, layer));
+  return RUNTIME_DICT_LAYERS.every(layer => Object.hasOwn(value, layer));
 }

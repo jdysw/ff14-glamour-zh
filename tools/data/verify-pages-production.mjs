@@ -69,7 +69,7 @@ export async function verifyProductionV3(originValue = DEFAULT_ORIGIN, transport
   const dictBytes = await httpBytes(origin, dict.url, transport);
   assert.equal(dictBytes.length, dict.bytes, '线上词典字节长度不符');
   assert.equal(sha256(dictBytes), dict.sha256.toLowerCase(), '线上词典 SHA-256 不符');
-  assert.ok(validRuntimeDictionary(JSON.parse(utf8.decode(dictBytes)), true),
+  assert.ok(validRuntimeDictionary(JSON.parse(utf8.decode(dictBytes))),
     '线上词典的完整分层结构不正确');
   files++;
   bytesChecked += dictBytes.length;
