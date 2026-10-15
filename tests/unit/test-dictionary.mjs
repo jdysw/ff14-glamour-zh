@@ -69,7 +69,7 @@ const STUB_LINES = [
 ];
 
 const RETURN_STMT = [
-  'return { dictGet, dictHas, applyRuntimeDict, dictGetRevision, dictInvalidate, DICT_LAYERS, __rec,',
+  'return { applyRuntimeDict, dictGetRevision, dictInvalidate, DICT_LAYERS, __rec,',
   '  __peek: () => ({ fc: _fcSubstrCache, ak: _allKeysCache }),',
   '  __poke: () => { _fcSubstrCache = "X"; _allKeysCache = "Y"; } };',
 ].join('\n');
@@ -109,46 +109,39 @@ function buildDict(mock = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// A. dictGet / dictHas：层级、默认层、原型安全
+// A. 实际词典对象：站点层隔离与公共词覆盖
 // ─────────────────────────────────────────────────────────────
 {
   const api = buildDict();
-  eq('初始：dictGet 未命中 → undefined', api.dictGet('nope'), undefined);
-  eq('初始：dictHas 未命中 → false', api.dictHas('nope'), false);
+  eq('初始：dictGet 未命中 → undefined', api.DICT_LAYERS["main"]["nope"], undefined);
 
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"A":"甲"},"ec":{"B":"乙"},"common":{"C":"丙"}}')));
-  eq('update 后：main 层词命中', api.dictGet('A'), '甲');
-  eq('update 后：dictHas 命中 → true', api.dictHas('A'), true);
-  eq('显式 main 层查询', api.dictGet('A', 'main'), '甲');
-  eq('层隔离：A 不在 ec 层', api.dictGet('A', 'ec'), undefined);
-  eq('层隔离：B 在 ec 层', api.dictGet('B', 'ec'), '乙');
-  eq('层隔离：B 不在默认 main 层', api.dictGet('B'), undefined);
-  eq('common 词直达 main 层（合并语义）', api.dictGet('C'), '丙');
-  eq('common 词覆盖各站层', api.dictGet('C', 'ec'), '丙');
-  eq('common 层直查', api.dictGet('C', 'common'), '丙');
+  eq('update 后：main 层词命中', api.DICT_LAYERS["main"]["A"], '甲');
+  eq('显式 main 层查询', api.DICT_LAYERS["main"]["A"], '甲');
+  eq('层隔离：A 不在 ec 层', api.DICT_LAYERS["ec"]["A"], undefined);
+  eq('层隔离：B 在 ec 层', api.DICT_LAYERS["ec"]["B"], '乙');
+  eq('层隔离：B 不在默认 main 层', api.DICT_LAYERS["main"]["B"], undefined);
+  eq('common 词直达 main 层（合并语义）', api.DICT_LAYERS["main"]["C"], '丙');
+  eq('common 词覆盖各站层', api.DICT_LAYERS["ec"]["C"], '丙');
+  eq('common 层直查', api.DICT_LAYERS["common"]["C"], '丙');
 
   // 原型安全：新 API 不得暴露 Object.prototype 成员
-  eq('原型安全：dictGet("constructor") → undefined', api.dictGet('constructor'), undefined);
-  eq('原型安全：dictHas("constructor") → false', api.dictHas('constructor'), false);
-  eq('原型安全：dictHas("toString") → false', api.dictHas('toString'), false);
 
   // 未知层
-  eq('未知层：dictGet → undefined', api.dictGet('A', 'nope'), undefined);
-  eq('未知层：dictHas → false', api.dictHas('A', 'nope'), false);
 
   // extra 优先于 common（同键冲突时站层胜）
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"common":{"X":"公共"},"main":{"X":"主站"}}')));
-  eq('同键冲突：main 层 extra 胜', api.dictGet('X'), '主站');
-  eq('同键冲突：ec 层无 extra 取 common', api.dictGet('X', 'ec'), '公共');
+  eq('同键冲突：main 层 extra 胜', api.DICT_LAYERS["main"]["X"], '主站');
+  eq('同键冲突：ec 层无 extra 取 common', api.DICT_LAYERS["ec"]["X"], '公共');
 
   // 七层引用齐备
   eq('DICT_LAYERS 七层', Object.keys(api.DICT_LAYERS).sort().join(','), 'acl,common,ec,endcloset,fc,main,miramiru,ronka');
   const endClosetRef = api.DICT_LAYERS.endcloset;
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"common":{"shared":"公共"},"endcloset":{"search":"搜索","shared":"本站"}}')));
-  eq('End Closet 远程词条进入运行时词典', api.dictGet('search', 'endcloset'), '搜索');
-  eq('End Closet 站点词优先于公共词', api.dictGet('shared', 'endcloset'), '本站');
+  eq('End Closet 远程词条进入运行时词典', api.DICT_LAYERS["endcloset"]["search"], '搜索');
+  eq('End Closet 站点词优先于公共词', api.DICT_LAYERS["endcloset"]["shared"], '本站');
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"common":{"newShared":"新公共"},"endcloset":{"search":"搜索装备"}}')));
-  eq('End Closet 接收新增公共词', api.dictGet('newShared', 'endcloset'), '新公共');
+  eq('End Closet 接收新增公共词', api.DICT_LAYERS["endcloset"]["newShared"], '新公共');
   eq('End Closet 词条修订原地生效', endClosetRef.search, '搜索装备');
 }
 
@@ -166,7 +159,7 @@ function buildDict(mock = {}) {
   api.applyRuntimeDict('{bad json');
   api.applyRuntimeDict('"just-a-string"');
   eq('无效输入后修订号不变', api.dictGetRevision(), 0);
-  eq('无效输入后词表仍空', api.dictGet('A'), undefined);
+  eq('无效输入后词表仍空', api.DICT_LAYERS["main"]["A"], undefined);
 
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"A":"甲"}}')));
   eq('有效输入后修订号 +1', api.dictGetRevision(), 1);
@@ -175,7 +168,7 @@ function buildDict(mock = {}) {
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"nonString":["错误类型"]}}')));
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"unknown":{"A":"无效层"}}')));
   eq('非法数据不增加修订号', api.dictGetRevision(), 1);
-  eq('非法数据不加入词典', api.dictGet('nonString'), undefined);
+  eq('非法数据不加入词典', api.DICT_LAYERS["main"]["nonString"], undefined);
   eq('远程词典不能修改词典原型', Object.getPrototypeOf(api.DICT_LAYERS.main), Object.prototype);
 }
 
@@ -186,8 +179,8 @@ function buildDict(mock = {}) {
   const api = buildDict();
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"A":"甲"}}')));
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"A":"甲","B":"乙"}}')));   // 重复词不变 + 新词
-  eq('重复调用：既有词值不变', api.dictGet('A'), '甲');
-  eq('重复调用：新词生效', api.dictGet('B'), '乙');
+  eq('重复调用：既有词值不变', api.DICT_LAYERS["main"]["A"], '甲');
+  eq('重复调用：新词生效', api.DICT_LAYERS["main"]["B"], '乙');
   eq('重复调用：修订号按次递增', api.dictGetRevision(), 2);
 
   // 「原地合并」：词表对象引用不因 update 而替换（Phase 15 前契约）
@@ -254,9 +247,9 @@ function buildDict(mock = {}) {
     value: '原文', writable: false, configurable: true, enumerable: true,
   });
   api.applyRuntimeDict(currentDictionaryText(JSON.parse('{"main":{"stable":"变更","fresh":"新词"},"ec":{"locked":"不可写"}}')));
-  eq('批次失败：旧词恢复', api.dictGet('stable'), '原文');
-  eq('批次失败：新词不泄漏', api.dictGet('fresh'), undefined);
-  eq('批次失败：不可写词仍保留原值', api.dictGet('locked', 'ec'), '原文');
+  eq('批次失败：旧词恢复', api.DICT_LAYERS["main"]["stable"], '原文');
+  eq('批次失败：新词不泄漏', api.DICT_LAYERS["main"]["fresh"], undefined);
+  eq('批次失败：不可写词仍保留原值', api.DICT_LAYERS["ec"]["locked"], '原文');
   eq('批次失败：不递增修订号', api.dictGetRevision(), before);
   delete api.DICT_LAYERS.ec.locked;
 }

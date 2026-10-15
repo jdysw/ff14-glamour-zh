@@ -62,10 +62,10 @@ function toV11Item(it){
   }
   return safe;
 }
-export function toManualV11(report){
+export function toManualAudit(report){
   const pages={};
   for(const p of report.pages){
-    const items=manual.upgradeLegacyItems(p.items||[],p.site).map(toV11Item);
+    const items=manual.normalizeItems(p.items||[],p.site).map(toV11Item);
     const paired=items.some(it=>it.before!=null);
     const url=manual.urlKey(p.url);
     const key=manual.snapshotKey(url,'default',p.pageId||'');
@@ -89,7 +89,7 @@ export function writeLiveReports(report,out){
   header.push('','WAF、404、跨站跳转、超时均记为失败，不得当作零漏译。','');
   fs.writeFileSync(path.join(out,'coverage-audit-live.md'),header.join('\n')+'\n'+buildReport(pages),'utf8');
   fs.writeFileSync(path.join(out,'coverage-audit-live.json'),JSON.stringify(summary,null,2)+'\n','utf8');
-  fs.writeFileSync(path.join(out,'coverage-audit-live-v1.1.json'),JSON.stringify(toManualV11(report),null,2)+'\n','utf8');
+  fs.writeFileSync(path.join(out,'coverage-audit-live-manual.json'),JSON.stringify(toManualAudit(report),null,2)+'\n','utf8');
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const args=process.argv.slice(2);

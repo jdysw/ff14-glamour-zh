@@ -71,7 +71,7 @@ jobs:
           path: tests/.cache/coverage-audit/
           merge-multiple: true
         continue-on-error: true
-      - name: Generate Markdown, summary and V1.1-compatible redacted JSON
+      - name: Generate Markdown, summary and current-format redacted JSON
         run: |
           node tools/coverage-audit/live-report.mjs --input tests/.cache/coverage-audit --out tests/.cache/coverage-report
       - name: Always upload results

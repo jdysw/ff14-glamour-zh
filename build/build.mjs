@@ -16,7 +16,6 @@ const node = (...args) => run(process.execPath, args);
 
 node('build/version.mjs');
 run(python, ['build/inject_dicts.py', 'src/core/dictionary.js']);
-node('build/verify-module-source.mjs');
 node('build/verify-dependencies.mjs');
 node('--check', 'src/main.js');
 for (const directory of ['src/core', 'src/sites']) {
@@ -24,7 +23,7 @@ for (const directory of ['src/core', 'src/sites']) {
 }
 node('node_modules/rollup/dist/bin/rollup', '-c', 'build/rollup.config.mjs');
 node('--check', out);
-node('build/migrate/verify-build-order.mjs', out, 'build/module-order.json');
+node('build/verify-build-order.mjs', out, 'build/module-order.json');
 run(python, ['build/verify-anchors.py', out]);
 node('build/verify_dicts.js', 'src/core/dictionary.js');
 run(python, ['build/make_dict_json.py', '--out', path.join(cache, 'dict.json')]);

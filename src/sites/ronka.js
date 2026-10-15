@@ -6,8 +6,6 @@ import { DICT_RONKA } from '../core/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-// Ronka 查询缓存的所有权属于核心缓存模块，此处仅保留兼容的转发导出。
-export { RONKA_ITEM_CACHE } from '../core/cache.js';
 export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
 
 

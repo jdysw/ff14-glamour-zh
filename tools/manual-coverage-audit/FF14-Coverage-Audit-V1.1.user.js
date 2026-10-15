@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3.2
+// @version      1.3.3
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -28,7 +28,7 @@
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
     'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru'
   });
-  const FORMATS = ['zhx-manual-audit-v1','zhx-manual-audit-v2'];
+  const FORMAT = 'zhx-manual-audit-v2';
   const AUTHORED = {
     mirapri: ['#gallery article .article-info .title','#gallery article h2.title',
       '#gallery article figure','#gallery article img[alt]',
@@ -189,7 +189,7 @@
     }
     return out;
   }
-  function upgradeLegacyItems(items,site){
+  function normalizeItems(items,site){
     const src=items||[];
     const optionKeys=new Set(src.filter(it=>it.kind==='option').map(it=>(it.path||'')+'\0'+normalize(it.text)));
     return src.filter(it=>!(it.kind==='text'&&optionKeys.has((it.path||'')+'\0'+normalize(it.text))))
@@ -212,18 +212,9 @@
         return {...it,ctx,stablePath:it.stablePath||it.path};
       });
   }
-  function migrate(data){
-    if(!data||!FORMATS.includes(data.format))throw Error('不支持的审计 JSON 格式');
-    const out={format:'zhx-manual-audit-v2',createdAt:data.createdAt||new Date().toISOString(),
-      baselines:{},pages:{},settings:{},migration:data.format};
-    if(data.format==='zhx-manual-audit-v2')return data;
-    for(const [url,row] of Object.entries(data.baselines||{})){
-      const id=snapshotKey(url,'legacy','');out.baselines[id]={...row,key:id,state:'legacy',method:'manual',items:upgradeLegacyItems(row.items,row.site)};
-    }
-    for(const [url,row] of Object.entries(data.pages||{})){
-      const id=snapshotKey(url,'legacy','');out.pages[id]={...row,key:id,state:'legacy',label:'',round:'legacy',hasBaseline:!!row.hasBaseline,items:upgradeLegacyItems(row.items,row.site)};
-    }
-    return out;
+  function readAudit(data){
+    if(!data||data.format!==FORMAT)throw Error('仅支持当前审计格式 zhx-manual-audit-v2');
+    return data;
   }
   function compareRuns(oldRows,newRows){
     const keyRow=row=>(row.site||'')+'|'+(row.url||'')+'|'+(row.state||'default')+'|'+(row.label||'');
@@ -244,8 +235,8 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMATS,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,upgradeLegacyItems,
-    category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,migrate,compareRuns};
+  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+    category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
@@ -548,14 +539,14 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.3.2. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.3. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
 const S=globalThis.ZHXSearchAudit;
 const site=C.siteFor(location.href);
 if(!site)return;
-const KEY='zhx.audit.manual.v2',OLD='zhx.audit.manual.v1';
+const KEY='zhx.audit.manual.v2';
 const MODE='zhx.audit.manual.mode', AUTO='zhx.audit.manual.autosave';
 const ROUND='zhx.audit.manual.round', LABEL='zhx.audit.manual.label';
 const CAP=6000,MAX_SNAPSHOTS=320,MAX_BASELINES=320;
@@ -655,14 +646,12 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.2',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.3',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
   const now=await get(KEY,'');
-  if(now){try{return C.migrate(JSON.parse(now))}catch(e){console.warn('[audit] damaged v2 storage',e)}}
-  const old=await get(OLD,'');
-  if(old){try{const migrated=C.migrate(JSON.parse(old));await save(migrated);return migrated}catch(e){console.warn('[audit] v1 migration failed',e)}}
+  if(now){try{return C.readAudit(JSON.parse(now))}catch(e){console.warn('[audit] damaged v2 storage',e)}}
   return blank();
 }
 async function save(data){await set(KEY,JSON.stringify(data))}
@@ -723,12 +712,12 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.toolVersion='1.3.2';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  out.toolVersion='1.3.3';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }
 async function clear(){if(!confirm('清空汉化快照和所有搜索审计事件（包含 V1.0 导入数据）？请先导出备份。'))return;
-  await set(KEY,JSON.stringify(blank()));await set(OLD,'');await S?.clear?.();await count();say('已清空。')}
+  await set(KEY,JSON.stringify(blank()));await S?.clear?.();await count();say('已清空。')}
 function btn(text,fn){const x=document.createElement('button');x.type='button';x.textContent=text;x.addEventListener('click',fn);return x}
 async function init(){
   if(!document.body){await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}))}

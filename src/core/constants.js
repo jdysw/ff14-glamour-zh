@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/constants */
-export { DATA_BASE_V3, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_ICON };
+export { DATA_BASE_V3, WIKI_ITEM, ZHX_WIKI_ICON };
 
 
   /* =====================================================================
@@ -23,6 +23,5 @@ export { DATA_BASE_V3, DATA_REMOTE, WIKI_ITEM, ZHX_WIKI_ICON };
   /* @zhixia:core-constants-start */
   /* ── Core Constants（v1.4 Phase 4）：数据源与网络契约（V3 数据端点，https）。Phase 15 模块化构建时，本区段将原样抽出为
        src/core/constants.js。 */
-  const DATA_REMOTE = true;
   const DATA_BASE_V3 = 'https://zhixia-data.pages.dev/ff14/v3/';
   /* @zhixia:core-constants-end */

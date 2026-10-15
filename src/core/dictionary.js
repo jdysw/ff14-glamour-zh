@@ -2,7 +2,7 @@
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache-primitives.js';
 import { validRuntimeDictionary } from './dict-contract.js';
-export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGet, dictGetRevision, dictHas, dictInvalidate };
+export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DICT_FC, DICT_LAYERS, DICT_RONKA, _applyDictLayer, _dictFixCheck, _dictFixesBuf, _dictRevision, _sweepDedupe, _sweepDictFixes, _sweepNode, applyRuntimeDict, dictGetRevision, dictInvalidate };
 
 
   /* =====================================================================
@@ -6865,8 +6865,6 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
   let _dictRevision = 0; // NOSONAR — 词典修订号随运行时词典更新
   // 七层词表引用（common 为公共层；applyRuntimeDict 对 6 站层单独合并）
   const DICT_LAYERS = { common: DICT_COMMON, main: DICT, ec: DICT_EC, fc: DICT_FC, ronka: DICT_RONKA, acl: DICT_ACL, endcloset: DICT_ENDCLOSET, miramiru: DICT_MIRAMIRU };
-  function dictGet(key, layer) { const o = DICT_LAYERS[layer || 'main']; return (o && Object.hasOwn(o, key)) ? o[key] : undefined; }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
-  function dictHas(key, layer) { const o = DICT_LAYERS[layer || 'main']; return !!o && Object.hasOwn(o, key); }   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
   function dictGetRevision() { return _dictRevision; }
   function dictInvalidate() { cacheReset('translate'); }
   /* @zhixia:core-dictionary-end */

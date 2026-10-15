@@ -1,14 +1,14 @@
 /* @phase15-module-order:core/observer */
 import { dedupeByAncestor } from './dom.js';
 import { _perfNow, _zhxErr } from './runtime.js';
-export { _obsStats, createObserver, observeLocal };
+export { _obsStats, createObserver };
 
 
   /* @zhixia:core-observer-start */
   /* ── Core Observer（v1.4 Phase 7）：统一 MutationObserver 调度层——pending 队列 /
        debounce 计时 / 洪峰保护 / 祖先去重（dedupeByAncestor）/ childList 与可选
        characterData（按站点显式开启，禁止无条件开启）。所有站点的观察器都经由
-       createObserver（或兼容包装 observeLocal）创建。Phase 15 模块化构建时，
+       createObserver 创建。Phase 15 模块化构建时，
        本区段将原样抽出为 src/core/observer.js。 */
 
   // 统一观察器工厂。
@@ -126,8 +126,4 @@ export { _obsStats, createObserver, observeLocal };
     };
   }
 
-  // 兼容包装：既有站点的局部观察器（handler 收新增节点批次；delay 为 debounce）
-  function observeLocal(handler, delay) {
-    return createObserver({ handler, debounce: delay || 350 });
-  }
   /* @zhixia:core-observer-end */

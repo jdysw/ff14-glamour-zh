@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/storage */
-export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, storeSetAsync };
+export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync };
 
 
   /* @zhixia:core-storage-start */
@@ -42,9 +42,6 @@ export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSet, 
       } catch (e) { /* persistence failure must be observable to callers */ }
       resolve(false);
     });
-  }
-  function storeSet(k, v) {
-    void storeSetAsync(k, v);
   }
   function storeListAsync() {
     return new Promise((resolve) => {

@@ -8,7 +8,7 @@ import { __zhxMark, _zhxErr } from './runtime.js';
 import { findSitePolicy as findSite, neededTables } from './site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetTable, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, itemDbReady, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -24,10 +24,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
 
-  /* ── 数据就绪广播（外置版 / 内嵌版共用）────────────────────────────
-     外置版：数据异步到达并建表后触发；内嵌版：建表完成时触发。
-     需要等数据就绪的补扫 / 刷新，通过 onTablesReady(fn) 登记。 */
-  // 数据版本（外置版由加载器在版本清单到达后赋值；内嵌版保持空 = 随脚本版本）
+  // 数据建表完成后通知 onTablesReady 订阅者。
+  // 数据版本由当前清单赋值。
   let DATA_VER = ''; // NOSONAR — 数据版本由远程 manifest 生命周期更新
   let _manifestRefreshRequested = false;
   let _manifestNeedsCommit = false;
@@ -511,22 +509,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _ensurePromise = promise;
     _activeEnsure = promise;
     return promise;
-  }
-  function itemDbReady(cb) {
-    ensureTables().then(() => { try { if (typeof cb === 'function') cb(); } catch (e) { _zhxErr('readyCb', e); } });
-  }
-
-  // ── DataManager 统一 API（v1.4 Phase 11）─────────────────────────────
-  // 说明：既有 ensureTables / itemDbReady / onTablesReady 行为与调用点全部保留；
-  // 本对象为别名与扩展入口，新代码统一经 dataManager 访问。site 参数为将来按站
-  // 数据链预留（现状六站共享同一数据链，忽略该参数）。
-  function dataGetTable(name) {
-    // 表文本（只读引用）：items / series / acl；未就绪或未知表 → null
-    switch (name) {
-      case 'series': return SERIES_TEXT || null;
-      case 'acl': return ACL_CFC_TEXT || null;
-      default: return null;
-    }
   }
   // 脚本层可观察的只读数据状态，不直接暴露持久缓存或可变索引对象。
   // 已通知回调不代表下载成功：失败时 state=degraded，仍通知订阅者结束等待。

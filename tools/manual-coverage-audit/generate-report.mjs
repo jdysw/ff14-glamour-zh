@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Browser-based localization coverage report: supports V1 and V1.1 exports. */
+/* Browser-based localization coverage report for the current audit format. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -7,13 +7,13 @@ const require=createRequire(import.meta.url);
 const C=require('./audit-core.js');
 const argv=process.argv.slice(2);
 if(!argv[0]||argv.includes('--help')){
-  console.log('用法：node generate-report.mjs <v1或v2审计.json> [输出目录] [--compare <旧版本.json>]');
+  console.log('用法：node generate-report.mjs <当前审计.json> [输出目录] [--compare <上轮审计.json>]');
   process.exit(argv.includes('--help')?0:2);
 }
 const input=path.resolve(argv[0]),out=path.resolve(argv[1]?.startsWith('--')||!argv[1]?path.dirname(input):argv[1]);
 const ci=argv.indexOf('--compare');
 const old=ci>=0&&argv[ci+1]?path.resolve(argv[ci+1]):null;
-function read(file){const d=JSON.parse(fs.readFileSync(file,'utf8'));return C.migrate(d)}
+function read(file){const d=JSON.parse(fs.readFileSync(file,'utf8'));return C.readAudit(d)}
 const data=read(input);
 const rows=Object.values(data.pages||{});
 const searchSessions=data.searchAudit?.format==='zhx-search-audit-v1'
@@ -55,7 +55,7 @@ const csvCell=x=>'"'+String(x??'').replaceAll('"','""').replace(/\r?\n/g,' ')+'"
 const csvLine=x=>x.map(csvCell).join(',')+'\r\n';
 let csv='\uFEFF'+csvLine(['站点','作用域','结果','出现次数','不同页面数','原文','译后残留','类型','示例路径']);
 for(const g of suspects){csv+=csvLine([g.site,g.scope,g.category,g.occurrences,g.pages.size,g.before,g.text,g.kind,g.examples[0]])}
-const lines=['# FF14 汉化覆盖审计 '+(data.toolVersion ? 'V'+data.toolVersion : 'V1.1'),'',`生成时间：${summary.generatedAt}`,`源文件：${summary.source}`,'',
+const lines=['# FF14 汉化覆盖审计'+(data.toolVersion ? ' V'+data.toolVersion : ''),'',`生成时间：${summary.generatedAt}`,`源文件：${summary.source}`,'',
   '## 范围及质量','',`- 页面状态快照：${summary.totalSnapshots}；成功：${summary.ok}；失败：${summary.failed}`,
   `- 人工确认的原文基线：${summary.baselineVerified}；仅部分推断的原文：${summary.baselineInferred}`,
   `- 原始疑似命中：${summary.candidateOccurrences} 次；按站点、采集类型、原文归并：${suspects.length} 个不同候选`,
@@ -92,9 +92,8 @@ if(old){
     '','**注意：只有相同 URL、状态和元素位置才能用作回归对比；消失的元素不一定已修复，可能只是未采到。**');
 }
 fs.mkdirSync(out,{recursive:true});
-const stamp='v1.1';
-fs.writeFileSync(path.join(out,`ff14-审计报告-${stamp}.md`),lines.join('\n')+'\n');
-fs.writeFileSync(path.join(out,`ff14-去重候选-${stamp}.csv`),csv);
-fs.writeFileSync(path.join(out,`ff14-审计汇总-${stamp}.json`),JSON.stringify(summary,null,2));
-if(diff)fs.writeFileSync(path.join(out,`ff14-版本差异-${stamp}.json`),JSON.stringify(diff,null,2));
+fs.writeFileSync(path.join(out,'ff14-审计报告.md'),lines.join('\n')+'\n');
+fs.writeFileSync(path.join(out,'ff14-去重候选.csv'),csv);
+fs.writeFileSync(path.join(out,'ff14-审计汇总.json'),JSON.stringify(summary,null,2));
+if(diff)fs.writeFileSync(path.join(out,'ff14-版本差异.json'),JSON.stringify(diff,null,2));
 console.log(JSON.stringify(summary,null,2));

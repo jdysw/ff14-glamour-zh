@@ -1,12 +1,12 @@
-// build/migrate/verify-build-order.mjs —— Phase 15：验证最终 Rollup 产物的模块顺序
-// 用法: node build/migrate/verify-build-order.mjs [dist文件] [顺序表]
+// build/verify-build-order.mjs —— Phase 15：验证最终 Rollup 产物的模块顺序
+// 用法: node build/verify-build-order.mjs [dist文件] [顺序表]
 // 读取规范源码保留的模块标记并对照自然 Rollup 输出顺序，不再通过额外 import 强制排序。
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..', '..');
+const repoRoot = path.resolve(__dirname, '..');
 
 // ── 路径净化：结果必须位于仓库内（防路径穿越；CLI 参数不可信）──
 function safeResolve(p, label) {

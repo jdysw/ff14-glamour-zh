@@ -1,6 +1,6 @@
 // tests/unit/test-observer.mjs — Phase 7：冻结统一 MutationObserver 调度层行为（golden tests）
 //
-// 目的：把统一观察器（createObserver / observeLocal / dedupeByAncestor 升级版）的
+// 目的：把统一观察器（createObserver / dedupeByAncestor）的
 //       当前行为用断言钉死。后续模块化（Phase 15）与任何重构必须保持这些行为不变。
 //
 // 机制：从规范模块源码提取 @zhixia:core-observer 与 @zhixia:core-dom 区段，
@@ -92,7 +92,7 @@ function makeEnv() {
 
 function buildObs(env) {
   const parts = [...sliceAll(DOM_TEXT, 'core-dom'), ...sliceAll(OBSERVER_TEXT, 'core-observer')];
-  const ret = 'return { createObserver, observeLocal, dedupeByAncestor, queryIn, localScope, __obsStats: () => ({ ..._obsStats }), __scanStats: () => ({ ..._scanStats }) };';
+  const ret = 'return { createObserver, dedupeByAncestor, queryIn, localScope, __obsStats: () => ({ ..._obsStats }), __scanStats: () => ({ ..._scanStats }) };';
   try {
     const fn = new Function('document', 'console', 'setTimeout', 'clearTimeout', 'MutationObserver', '_zhxErr', '_perfNow',
       parts.join('\n') + '\n' + ret);
@@ -111,7 +111,7 @@ console.log('\n── A：基础调度（1 node / root / 默认关闭 characterD
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  const ctl = api.observeLocal((nodes) => seen.push(nodes), 300);
+  const ctl = api.createObserver({ handler: (nodes) => seen.push(nodes), debounce: 300 });
   const mo = FakeMO.last;
   eq('观察根默认 document.body', mo.root, env.fakeDoc.body);
   eq('订阅 childList + subtree', JSON.stringify(mo.opts), JSON.stringify({ childList: true, subtree: true }));
@@ -138,7 +138,7 @@ console.log('\n── B：规模（100 / 1000 nodes）与性能 ──');
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  api.observeLocal((nodes) => seen.push(nodes), 0);
+  api.createObserver({ handler: (nodes) => seen.push(nodes) });
   const mo = FakeMO.last;
 
   const batch100 = Array.from({ length: 100 }, () => mkNode());
@@ -160,7 +160,7 @@ console.log('\n── C：parent + child 去重（子先父后只留祖先）─
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  api.observeLocal((nodes) => seen.push(nodes), 0);
+  api.createObserver({ handler: (nodes) => seen.push(nodes) });
   const mo = FakeMO.last;
 
   const p = mkNode();
@@ -185,7 +185,7 @@ console.log('\n── D：重复 mutation（同节点多次入队只处理一次
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  api.observeLocal((nodes) => seen.push(nodes), 0);
+  api.createObserver({ handler: (nodes) => seen.push(nodes) });
   const mo = FakeMO.last;
 
   const x = mkNode();
@@ -200,7 +200,7 @@ console.log('\n── E：flood 洪峰保护（超阈值重置计时器）──
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  api.observeLocal((nodes) => seen.push(nodes), 350);
+  api.createObserver({ handler: (nodes) => seen.push(nodes), debounce: 350 });
   const mo = FakeMO.last;
 
   mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
@@ -345,16 +345,8 @@ console.log('\n── F3：局部查询与扫描计数（v1.4.1 新增）──'
   ok('localScope：缺省 → null（全页）', api.localScope() === null, true);
 }
 
-console.log('\n── G：兼容包装与可配置性 ──');
+console.log('\n── G：自定义观察范围与洪峰阈值 ──');
 {
-  const env = makeEnv();
-  const api = buildObs(env);
-  const ctl = api.observeLocal(() => {}, 500);
-  const mo = FakeMO.last;
-  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
-  eq('observeLocal delay=500 → timer 500ms', activeTimers()[0].ms, 500);
-  eq('observeLocal 返回控制对象', typeof ctl.disconnect, 'function');
-
   // 自定义 floodLimit / root
   const env2 = makeEnv();
   const api2 = buildObs(env2);
@@ -371,7 +363,7 @@ console.log('\n── H：观察统计（v1.4 Phase 10）──');
 {
   const env = makeEnv();
   const api = buildObs(env);
-  api.observeLocal(() => {}, 0);
+  api.createObserver({ handler: () => {} });
   const mo = FakeMO.last;
 
   const z0 = api.__obsStats();
@@ -397,7 +389,7 @@ console.log('\n── I：handler 抛错边界（Phase 18）──');
   const env = makeEnv();
   const api = buildObs(env);
   let calls = 0;
-  api.observeLocal(() => { calls++; if (calls === 1) throw new Error('boom1'); }, 0);
+  api.createObserver({ handler: () => { calls++; if (calls === 1) throw new Error('boom1'); } });
   const mo = FakeMO.last;
   mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
   runTimer();

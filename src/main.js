@@ -1,6 +1,5 @@
 /* @phase15-module-order:main */
 import './core/probe.js';
-import { DATA_REMOTE } from './core/constants.js';
 import { ensureTables } from './core/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
@@ -14,8 +13,8 @@ import { ensureChineseFont } from './core/dom.js';
   const host = location.hostname;
   const _ver = (typeof GM_info !== 'undefined' && GM_info?.script?.version) ? GM_info.script.version : 'dev';
   console.log('FF14 幻化站中文化脚本已加载 v' + _ver + ' →', host);
-  // 外置版：先行触发数据加载（各站的就绪回调在数据到达后补扫）
-  if (DATA_REMOTE && typeof ensureTables === 'function') safe(ensureTables, '数据预加载')();
+  // 先行触发当前数据加载，各站在就绪回调中补扫。
+  safe(ensureTables, '数据预加载')();
   const __site = findSite();
   if (__site) safe(ensureChineseFont, '中文字体')();
   safe(startChineseSearch, '中文装备搜索')(__site?.id);

@@ -261,7 +261,7 @@ const CACHE_SEGS = [...sliceAll(DIST_TEXT, 'core-cache-primitives'), ...sliceAll
 const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
 
 const NAMES = [
-  'storeGetAsync', 'storeSet', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
+  'storeGetAsync', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
   'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', '_manifestRefreshRequested', '_manifestNeedsCommit',
@@ -277,7 +277,6 @@ function makeWorld(over = {}) {
   const store = Object.assign({}, over.store || {});
   const args = {
     storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
-    storeSet: (k, v) => { store[k] = v; rec.set.push([k, v]); },
     storeSetAsync: async (k, v) => { if (over.writeFail) return false; store[k] = String(v); rec.set.push([k, v]); return true; },
     storeListAsync: async () => over.listUnavailable ? null : Object.keys(store),
     storeDeleteAsync: async (k) => { rec.deleted.push(k); if (over.deleteFail) return false; delete store[k]; return true; },
@@ -320,7 +319,7 @@ function buildDM(world) {
   const body = 'const findSite = findSitePolicy;\n' + [...CACHE_SEGS, ...DM_SEGS].join('\n');
   const ret = [
     'return {',
-    '  ensureTables, itemDbReady,',
+    '  ensureTables,',
     '  _ensureTryV3, _applyV3, _v3Pairs, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
 
     '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, slots: _irSearchSlotByNative, policy: _irCandidatePolicy, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
