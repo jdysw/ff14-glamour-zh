@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Window as TestWindow} from 'happy-dom';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
+import { _scanStats } from '../../src/core/dom.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
 import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
 
@@ -28,6 +29,9 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     globalThis.document=doc;
     _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
     assert.equal(resolveByZh('测试装备'),'テスト装備','多语表中英文行在先时，Eden 搜索仍必须选日文');
+    _applyV3({candidatePolicy:1});
+    assert.equal(resolveByZh('测试装备'),null,'names 缺省时仍可清空上一版名称索引');
+    _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
     assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
     assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
@@ -37,9 +41,24 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(name.dataset.zhxItem,'测试装备');assert.equal(option.textContent,'测试装备');
     assert.equal(option.dataset.zhxItem,undefined,'原生装备选项不劫持为 Wiki 点击');
     assert.ok(link.getAttribute('href').endsWith(encodeURIComponent('测试装备')));
+    link.removeAttribute('href');translateEdenPage(link);
+    assert.equal(link.dataset.zhxItem,undefined,'复用锚点移除 href 后清理旧装备目标');
+    link.setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/');
+    translateEdenPage(link);
+    assert.ok(link.getAttribute('href').endsWith(encodeURIComponent('测试装备')));
     assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
     assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
     assert.equal(typeof observer,'function');
+    const added=doc.createElement('div'),child=doc.createElement('div');child.className='v-list-item__title';child.textContent='placeholder';
+    added.appendChild(child);doc.body.appendChild(added);child.firstChild.nodeValue='テスト装備';
+    const beforeLocal=_scanStats.local;
+    observer([
+      {type:'childList',addedNodes:[added]},
+      {type:'characterData',target:child.firstChild},
+    ]);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    assert.equal(child.textContent,'测试装备','混合变更批次仍翻译新增子树中的装备文本');
+    assert.equal(_scanStats.local,beforeLocal+1,'同批父树新增与后代文本变更只扫描一次局部子树');
     name.firstChild.nodeValue='未知新装备';translateEdenPage(name.firstChild);
     assert.equal(name.dataset.zhxItem,undefined,'Vue 复用名称节点不能保留前一件装备的 Wiki 目标');
     translateEdenPage(null);assert.equal(title.textContent,'装备排行榜');

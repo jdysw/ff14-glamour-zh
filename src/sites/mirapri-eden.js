@@ -1,7 +1,7 @@
 /* @phase15-module-order:sites/mirapri-eden */
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
-import { SKIP_TAGS, localScope, _markScan } from '../core/dom.js';
+import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';
 import { createObserver } from '../core/observer.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM } from '../core/constants.js';
@@ -14,6 +14,7 @@ const SKIP = 'script,style,noscript,textarea,input,[contenteditable]:not([conten
   + '.image-container .overlay,.recipe-dialog-title-text,.recipe-dialog-user,.recipe-dialog-text,'
   + '.gallery-hero-text,.gallery-tile-title,.gallery-tile-img,.zhx-skip';
 const EQUIPMENT = '.v-data-table td,.v-list-item__title,.v-select__selection,#equipment-view h6';
+const ITEM_TARGET = 'a,.flex-grow-1,.v-data-table td,#equipment-view h6';
 const ITEM_URL = /^https:\/\/(?:jp|na|eu|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
 const known = raw => Object.hasOwn(DICT, 'eden:' + raw) ? DICT['eden:' + raw] : null;
 
@@ -233,18 +234,22 @@ function markEdenSearch(root) {
 }
 
 function updateEdenItemTarget(element) {
-  const href = element.getAttribute('href') || '';
-  const hash = ITEM_URL.exec(href)?.[1];
-  const zh = hash && resolveByHash(hash);
-  if (element.matches('a') && element.dataset.zhxItem && href !== WIKI_ITEM + encodeURIComponent(element.dataset.zhxItem))
-    delete element.dataset.zhxItem;
-  if (zh) {
-    element.dataset.zhxItem = zh;
-    element.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
-    element.setAttribute('title', '查看灰机 Wiki：' + zh);
+  if (!element.matches(ITEM_TARGET)) return;
+  if (element.matches('a')) {
+    const href = element.getAttribute('href') || '';
+    const hash = ITEM_URL.exec(href)?.[1];
+    const zh = hash && resolveByHash(hash);
+    if (element.dataset.zhxItem && href !== WIKI_ITEM + encodeURIComponent(element.dataset.zhxItem))
+      delete element.dataset.zhxItem;
+    if (zh) {
+      element.dataset.zhxItem = zh;
+      element.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
+      element.setAttribute('title', '查看灰机 Wiki：' + zh);
+    }
   }
+  if (!isRankingName(element) && !element.matches('.v-data-table td,#equipment-view h6')) return;
   const native = element.textContent.trim();
-  const item = (isRankingName(element) || element.matches('.v-data-table td,#equipment-view h6')) && resolveByName(native);
+  const item = resolveByName(native);
   if (native && element.matches('#equipment-view h6') && native !== element.dataset.zhxItem) element.dataset.zhxEdenNative = native;
   // 装备名才获得 Wiki 点击；下拉选项和筛选按钮继续由站点处理。
   if (item && !element.querySelector('button,input,select,[role="button"]')) element.dataset.zhxItem = item;
@@ -279,7 +284,7 @@ function translateEdenTitle() {
   if (title !== next) document.title = next;
 }
 
-function translateEdenPage(rootArg) {
+function translateEdenPage(rootArg, syncRecipes = true) {
   let root = rootArg || document.body;
   if (!root) return;
   if (root.nodeType === 1 && root.matches('input')) { markEdenSearch(root); return; }
@@ -302,7 +307,7 @@ function translateEdenPage(rootArg) {
     else translateEdenElement(walk.currentNode);
   }
   translateEdenTitle();
-  syncEdenRecipePanels();
+  if (syncRecipes) syncEdenRecipePanels();
 }
 
 function startEden() {
@@ -313,8 +318,10 @@ function startEden() {
     attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label', 'style', 'src', 'class'], debounce: 120,
     filter: edenMutationRelevant,
     handler(nodes, texts = []) {
+      const targets = dedupeByAncestor([...nodes, ...texts]
+        .map(node => node.nodeType === 3 ? node.parentElement : node).filter(Boolean));
+      for (const node of targets) safe(translateEdenPage, 'Eden 动态翻译')(node, false);
       syncEdenRecipePanels();
-      for (const node of [...nodes, ...texts]) safe(translateEdenPage, 'Eden 动态翻译')(node);
     },
   });
 }
