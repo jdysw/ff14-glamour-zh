@@ -15,6 +15,22 @@
 <i class="v-icon mdi mdi-menu">mdi-menu</i><span id="result"></span>
 </main>
 <script>
+window.__recipeRequests=0;
+window.__recipeData=[
+ {image_urls:['https://mirapri.ff14eden.work/img/recipe-one.jpg'],equipments:[{name:'カーフスキン・ライダースジャケット',colorNames:['ロームブラウン','ゴブリンブラウン']},{name:'エンドレスサマーグラス',colorNames:[]},{name:'エンドレスサマーグラス',colorNames:['スートブラック']},{name:'未知的测试装备',colorNames:[]}]},
+ {image_urls:['https://mirapri.ff14eden.work/img/recipe-two.jpg'],equipments:[{name:'ガラテアタイツ',colorNames:[]}]},
+ {image_urls:['https://mirapri.ff14eden.work/img/recipe-empty.jpg'],equipments:[]}
+];
+const nativeFetch=window.fetch.bind(window);
+window.fetch=(url,options)=>String(url).includes('/glamour/all_users_glamour.json')
+ ? (window.__recipeRequests++,new Promise(resolve=>{window.__recipeReply=()=>resolve(new Response(JSON.stringify(window.__recipeData),{status:200,headers:{'Content-Type':'application/json'}}));}))
+ : nativeFetch(url,options);
+window.__openRecipe=image=>{
+ const root=document.createElement('div');root.className='v-dialog v-dialog--active recipe-dialog-content';
+ root.innerHTML='<div class="recipe-dialog-card"><div class="dialog-image"><div class="v-image__image" style="height:80px"></div></div><div class="recipe-dialog-title-text">装備ランキング</div><div class="recipe-dialog-text">検索</div><div class="recipe-dialog-actions"><button>关闭</button></div></div>';
+ document.body.appendChild(root);window.__setRecipeImage(image);
+};
+window.__setRecipeImage=image=>{document.querySelector('.dialog-image .v-image__image').style.backgroundImage='url("'+image+'")';};
 window.__nativeQueries=[];window.__nativeClicks=0;window.__opened=[];window.open=(...args)=>window.__opened.push(args);
 document.querySelector('#search').addEventListener('input',event=>{
  const native=event.target.value;window.__nativeQueries.push(native);

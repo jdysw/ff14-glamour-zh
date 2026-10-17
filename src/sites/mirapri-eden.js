@@ -1,5 +1,5 @@
 /* @phase15-module-order:sites/mirapri-eden */
-import { DICT, DICT_COMMON } from '../core/dictionary.js';
+import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan } from '../core/dom.js';
 import { createObserver } from '../core/observer.js';
@@ -7,7 +7,7 @@ import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { safe } from '../core/runtime.js';
 
-export { trEden, translateEdenPage, startEden };
+export { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes };
 
 // 只改可见文本和显示属性，保留 Vue 节点、内部枚举和用户填写的值。
 const SKIP = 'script,style,noscript,textarea,input,[contenteditable]:not([contenteditable="false"]),.v-icon,canvas,'
@@ -16,6 +16,176 @@ const SKIP = 'script,style,noscript,textarea,input,[contenteditable]:not([conten
 const EQUIPMENT = '.v-data-table td,.v-list-item__title,.v-select__selection,#equipment-view h6';
 const ITEM_URL = /^https:\/\/(?:jp|na|eu|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
 const known = raw => Object.hasOwn(DICT, 'eden:' + raw) ? DICT['eden:' + raw] : null;
+
+const RECIPE_DATA = 'https://mirapri.ff14eden.work/glamour/all_users_glamour.json';
+const RECIPE_DIALOGS = '.v-dialog--active.recipe-dialog-content .recipe-dialog-card,.v-dialog--active.glamour-dialog-content .recipe-dialog-card';
+const RECIPE_PANEL = 'zhx-eden-recipe-items';
+let recipeRequest = null;
+const recipePanels = new WeakMap();
+
+// 原站也以 origin + pathname 对图片去重；尺寸、格式查询不改变作品身份。
+function edenImageKey(raw) {
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > 8192) return null;
+  try {
+    const url = new URL(raw, 'https://mirapri.ff14eden.work/');
+    return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url.origin + url.pathname : null;
+  } catch { return null; }
+}
+
+function recipeEquipment(row) {
+  if (!Array.isArray(row.equipments)) return [];
+  return row.equipments.slice(0, 80).filter(item => typeof item?.name === 'string' && item.name.trim() && item.name.length <= 160)
+    .map(item => ({name:item.name.trim(), colors:Array.isArray(item.colorNames)
+      ? item.colorNames.filter(color => typeof color === 'string' && color.trim() && color.length <= 80).slice(0,8).map(color => color.trim()) : []}));
+}
+
+function indexEdenRecipes(rows) {
+  if (!Array.isArray(rows)) throw new Error('Eden 投稿数据格式错误');
+  const index = new Map();
+  const signatures = new Map();
+  for (const row of rows) {
+    if (!Array.isArray(row?.image_urls)) continue;
+    const items = recipeEquipment(row);
+    const signature = JSON.stringify(items.map(item => JSON.stringify(item)).sort());
+    for (const image of row.image_urls) {
+      const key = edenImageKey(image);
+      if (!key) continue;
+      // 同图对应互相冲突的装备时不猜测；保留同名但染色不同的原始记录。
+      if (signatures.has(key) && signatures.get(key) !== signature) index.set(key, null);
+      else if (!signatures.has(key)) { signatures.set(key, signature); index.set(key, items); }
+    }
+  }
+  return index;
+}
+
+function recipeDataUrl() {
+  // 优先复用原站已加载的精确请求及浏览器缓存，不拦截 fetch/XHR。
+  const entries = globalThis.performance?.getEntriesByType?.('resource') || [];
+  for (const entry of [...entries].reverse()) {
+    try {
+      const url = new URL(entry.name);
+      const stamp = url.searchParams.get('timestamp');
+      if (url.origin + url.pathname === RECIPE_DATA && !url.username && !url.password && /^\d{10,16}$/.test(stamp || ''))
+        return RECIPE_DATA + '?timestamp=' + stamp;
+    } catch { /* 非 URL 的资源条目不参与匹配。 */ }
+  }
+  return RECIPE_DATA;
+}
+
+function loadEdenRecipes(refresh = false) {
+  if (!recipeRequest || refresh) {
+    const url = recipeDataUrl();
+    recipeRequest = fetch(url, {credentials:'omit', cache:refresh ? 'reload' : 'force-cache', signal:AbortSignal.timeout(45000)})
+      .then(response => { if (!response.ok) throw new Error('Eden HTTP ' + response.status); return response.json(); })
+      .then(indexEdenRecipes);
+  }
+  return recipeRequest;
+}
+
+function recipeImageKey(card) {
+  const image = card.querySelector('.dialog-image img');
+  const direct = image && edenImageKey(image.currentSrc || image.getAttribute('src'));
+  if (direct) return direct;
+  const layers = card.querySelectorAll('.dialog-image .v-image__image');
+  for (const layer of layers) {
+    const value = layer.style.backgroundImage;
+    const source = /^url\(["']?(.+?)["']?\)$/.exec(value || '')?.[1];
+    const key = source && edenImageKey(source);
+    if (key) return key;
+  }
+  return null;
+}
+
+function ensureRecipeStyle() {
+  if (document.getElementById('zhx-eden-recipe-style')) return;
+  const style = document.createElement('style');
+  style.id = 'zhx-eden-recipe-style';
+  style.textContent = '.recipe-dialog-card:has(>.zhx-eden-recipe-items){display:block!important;overflow-y:auto!important}'
+    + '.recipe-dialog-card:has(>.zhx-eden-recipe-items)>.recipe-dialog-actions{position:sticky;bottom:0;background:inherit;z-index:1}'
+    + '.zhx-eden-recipe-items{padding:12px 20px;border-top:1px solid #ddd;font:inherit}'
+    + '.zhx-eden-recipe-items h3{font-size:15px;margin:0 0 8px}.zhx-eden-recipe-items ul{list-style:none;margin:0;padding:0}'
+    + '.zhx-eden-recipe-items li{margin:8px 0;line-height:1.6;overflow-wrap:anywhere}.zhx-eden-recipe-items small{display:block;color:#666}'
+    + '.zhx-eden-recipe-items p{font-size:12px;margin:6px 0}.zhx-eden-recipe-items button{padding:4px 8px;border:1px solid #888;border-radius:4px;margin-top:6px}';
+  (document.head || document.documentElement).appendChild(style);
+}
+
+function recipeRows(items) {
+  return items?.map(item => ({...item, zh:resolveByName(item.name), colors:item.colors.map(color =>
+    resolveByName(color) || (Object.hasOwn(DICT_MIRAMIRU,color) ? DICT_MIRAMIRU[color] : color))}));
+}
+
+function appendRecipeItems(panel, rows) {
+  const list = document.createElement('ul');
+  for (const row of rows) {
+    const item = document.createElement('li');
+    const name = document.createElement(row.zh ? 'a' : 'span');
+    name.textContent = row.zh || row.name;
+    if (row.zh) { name.href = WIKI_ITEM + encodeURIComponent(row.zh); name.target = '_blank'; name.rel = 'nofollow noreferrer noopener'; }
+    item.appendChild(name);
+    if (row.zh && row.zh !== row.name) { const native = document.createElement('small'); native.textContent = row.name; item.appendChild(native); }
+    if (row.colors.length) { const dyes = document.createElement('small'); dyes.textContent = '染色：' + row.colors.join('／'); item.appendChild(dyes); }
+    list.appendChild(item);
+  }
+  panel.appendChild(list);
+}
+
+function renderRecipePanel(card, state) {
+  const panel = card.querySelector('.' + RECIPE_PANEL);
+  if (!panel) return;
+  const rows = recipeRows(state.items);
+  const signature = JSON.stringify([state.phase, rows]);
+  if (panel.dataset.zhxSignature === signature) return;
+  panel.dataset.zhxSignature = signature;
+  panel.replaceChildren();
+  const title = document.createElement('h3'); title.textContent = '投稿装备清单'; panel.appendChild(title);
+  const note = document.createElement('p');
+  if (rows?.length) { note.textContent = '来自本站投稿数据；点击中文装备名查看灰机 Wiki。'; panel.appendChild(note); appendRecipeItems(panel, rows); return; }
+  const messages = {loading:'正在加载投稿装备数据…', error:'装备数据暂时无法加载。'};
+  note.textContent = messages[state.phase] || (state.items === null ? '该图片关联的装备记录不一致，暂不生成链接。' : '这篇投稿未提供可匹配的装备清单。');
+  panel.appendChild(note);
+  if (state.phase === 'error' || state.phase === 'ready') {
+    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = '重新载入';
+    retry.addEventListener('click', event => { event.stopPropagation(); void loadEdenRecipes(true).catch(() => {}); syncEdenRecipePanels(); });
+    panel.appendChild(retry);
+  }
+}
+
+function beginRecipePanel(card, key) {
+  let panel = card.querySelector('.' + RECIPE_PANEL);
+  if (!panel) {
+    panel = document.createElement('section'); panel.className = RECIPE_PANEL + ' zhx-skip';
+    panel.setAttribute('aria-label','投稿装备清单'); panel.setAttribute('aria-live','polite');
+    card.insertBefore(panel,card.querySelector('.recipe-dialog-actions'));
+  }
+  const request = loadEdenRecipes();
+  const state = {key, request, phase:'loading', items:undefined};
+  recipePanels.set(card,state); renderRecipePanel(card,state);
+  const renderCurrent = () => {
+    if (recipePanels.get(card) === state && card.isConnected && card.closest('.v-dialog--active') && recipeImageKey(card) === key)
+      renderRecipePanel(card,state);
+  };
+  request.then(index => {state.items=index.get(key); state.phase='ready'; renderCurrent();},
+    () => {state.phase='error'; renderCurrent();});
+}
+
+function syncEdenRecipePanels() {
+  const cards = document.querySelectorAll(RECIPE_DIALOGS);
+  if (!cards.length) return;
+  ensureRecipeStyle();
+  for (const card of cards) {
+    const key = recipeImageKey(card);
+    if (!key) {card.querySelector('.'+RECIPE_PANEL)?.remove();recipePanels.delete(card);continue;}
+    const state = recipePanels.get(card);
+    if (!state || state.key !== key || state.request !== recipeRequest) beginRecipePanel(card,key);
+    else renderRecipePanel(card,state);
+  }
+}
+
+function edenMutationRelevant(mutation) {
+  if (mutation.type !== 'attributes' || !['class','style','src'].includes(mutation.attributeName)) return true;
+  return !!mutation.target.closest('.recipe-dialog-content,.glamour-dialog-content')
+    && !mutation.target.closest('.'+RECIPE_PANEL);
+}
 
 function trEden(text) {
   const raw = text?.trim();
@@ -130,6 +300,7 @@ function translateEdenPage(rootArg) {
     else translateEdenElement(walk.currentNode);
   }
   translateEdenTitle();
+  syncEdenRecipePanels();
 }
 
 function startEden() {
@@ -137,8 +308,10 @@ function startEden() {
   bindZhxItemClick('__zhxEdenItemClick');
   safe(translateEdenPage, 'Eden 首屏')();
   createObserver({ root: document.documentElement, characterData: true,
-    attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label'], debounce: 120,
+    attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label', 'style', 'src', 'class'], debounce: 120,
+    filter: edenMutationRelevant,
     handler(nodes, texts = []) {
+      syncEdenRecipePanels();
       for (const node of [...nodes, ...texts]) safe(translateEdenPage, 'Eden 动态翻译')(node);
     },
   });

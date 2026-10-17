@@ -2,43 +2,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {parseHTML, NodeFilter as DOMNodeFilter} from 'linkedom';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
-import { trEden, translateEdenPage, startEden } from '../../src/sites/mirapri-eden.js';
+import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
 
 test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容边界', () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver'].map(k=>[k,globalThis[k]]));
-  const make = (tag, classes = '', attrs = {}, value = '') => {
-    const node = {nodeType:1,tagName:tag.toUpperCase(),classes:classes.split(' '),dataset:{},style:{},children:[],parentElement:null,
-      get textContent(){return this.children.map(c=>c.nodeType===3?c.nodeValue:c.textContent).join('');},
-      set textContent(value){this.children=[{nodeType:3,nodeValue:value,parentElement:this}];},
-      getAttribute(k){return attrs[k]??null;},setAttribute(k,v){attrs[k]=v;},
-      matches(selector){return selector.split(',').some(s=>{s=s.trim();return s==='input'?tag==='input':s==='a'?tag==='a':s==='.v-data-table td'?tag==='td':s.startsWith('.')&&this.classes.includes(s.slice(1));});},
-      closest(selector){for(let p=this;p;p=p.parentElement)if(p.matches(selector))return p;return null;},
-      querySelectorAll(selector){return this.children.filter(c=>c.nodeType===1).flatMap(c=>[...(c.matches(selector)?[c]:[]),...c.querySelectorAll(selector)]);},
-      querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
-      appendChild(child){this.children.push(child);child.parentElement=this;return child;},
-    };
-    if(value)node.appendChild({nodeType:3,nodeValue:value});
-    return node;
-  };
   try {
-    const body=make('body');const head=make('head');const area=body.appendChild(make('div','input-area'));
-    const input=area.appendChild(make('input'));input.readOnly=false;input.type='text';
-    const title=body.appendChild(make('h1','','','装備ランキング'));
-    const name=body.appendChild(make('div','flex-grow-1',{},'テスト装備'));
-    const link=body.appendChild(make('a','',{href:'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/'}));
-    const authored=body.appendChild(make('div','recipe-dialog-text',{},'装備ランキング'));
-    const icon=body.appendChild(make('i','v-icon',{},'mdi-home'));
-    const option=body.appendChild(make('div','v-list-item__title',{},'テスト装備'));
-    globalThis.NodeFilter={SHOW_ELEMENT:1,SHOW_TEXT:4,FILTER_ACCEPT:1,FILTER_REJECT:2};
+    const {document:doc}=parseHTML('<html><head><title>PopularEquipment | FFXIV Mirapri Eden</title></head><body><div class="input-area"><input type="text"></div><h1>装備ランキング</h1><div class="flex-grow-1">テスト装備</div><a href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/"></a><div class="recipe-dialog-text">装備ランキング</div><i class="v-icon">mdi-home</i><div class="v-list-item__title">テスト装備</div></body></html>');
+    const input=doc.querySelector('input'),title=doc.querySelector('h1'),name=doc.querySelector('.flex-grow-1'),link=doc.querySelector('a');
+    const authored=doc.querySelector('.recipe-dialog-text'),icon=doc.querySelector('i'),option=doc.querySelector('.v-list-item__title');
+    globalThis.NodeFilter=DOMNodeFilter;
     globalThis.location={hash:'#/components/popular-equipment'};globalThis.window={__zhxTestSite:'eden'};
     let observer;
     globalThis.MutationObserver=class{constructor(cb){observer=cb;}observe(){}};
-    globalThis.document={body,head,documentElement:body,title:'PopularEquipment | FFXIV Mirapri Eden',
-      addEventListener(){},getElementById(){return null;},createElement:tag=>make(tag),
-      createTreeWalker(root,mask,filter){const all=[];const visit=n=>{for(const child of n.children||[]){if(filter.acceptNode(child)!==2){all.push(child);visit(child);}}};visit(root);let i=0;return{nextNode(){this.currentNode=all[i++];return!!this.currentNode;}};},
-    };
+    globalThis.document=doc;
     _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
     assert.equal(resolveByZh('测试装备'),'テスト装備','多语表中英文行在先时，Eden 搜索仍必须选日文');
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
@@ -53,11 +32,60 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
     assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
     assert.equal(typeof observer,'function');
-    name.children[0].nodeValue='未知新装备';translateEdenPage(name.children[0]);
+    name.firstChild.nodeValue='未知新装备';translateEdenPage(name.firstChild);
     assert.equal(name.dataset.zhxItem,undefined,'Vue 复用名称节点不能保留前一件装备的 Wiki 目标');
     translateEdenPage(null);assert.equal(title.textContent,'装备排行榜');
     translateEdenPage(authored);assert.equal(authored.textContent,'装備ランキング');
-    document.body=null;translateEdenPage();
+  } finally {
+    _applyV3({candidatePolicy:1});
+    for(const[k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
+  }
+});
+
+test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重试', async () => {
+  const previous=Object.fromEntries(['document','location','window','NodeFilter','fetch'].map(k=>[k,globalThis[k]]));
+  const a='https://mirapri.ff14eden.work/img/a.jpg',b='https://pbs.twimg.com/media/b.jpg';
+  const rows=[{image_urls:[a+'?name=large'],equipments:[{name:'テスト甲',colorNames:['スートブラック']},{name:'テスト甲',colorNames:[]}]},
+    {image_urls:[b],equipments:[{name:'テスト乙',colorNames:[]},{name:'<unknown>',colorNames:[]}]},
+    {image_urls:['https://example.test/empty.jpg'],equipments:[]}];
+  const index=indexEdenRecipes(rows);
+  assert.equal(edenImageKey(a+'?name=900x900&format=jpg#photo'),a);
+  for(const value of ['',null,'data:image/png;base64,abc','javascript:alert(1)','https://secret:token@example.test/a.jpg'])assert.equal(edenImageKey(value),null);
+  assert.equal(index.get(a).length,2,'同名但染色不同的记录不能合并丢失');
+  assert.equal(indexEdenRecipes([...rows,{image_urls:[a],equipments:[{name:'别的装备'}]}]).get(a),null);
+  assert.throws(()=>indexEdenRecipes({}),/格式/);
+  let requests=0,deliver,fail=false;const options=[];
+  const {document:doc}=parseHTML('<html><head></head><body><div class="v-dialog v-dialog--active recipe-dialog-content"><div class="recipe-dialog-card"><div class="dialog-image"><div class="v-image__image" id="media"></div></div><div class="recipe-dialog-title-text">装備ランキング</div><div class="recipe-dialog-actions"><button>关闭</button></div></div></div></body></html>');
+  const media=doc.querySelector('#media'),dialog=doc.querySelector('.v-dialog');
+  const settle=()=>new Promise(resolve=>setImmediate(resolve));
+  const move=async url=>{media.style.backgroundImage='url("'+url+'")';translateEdenPage();await settle();};
+  try {
+    Object.assign(globalThis,{document:doc,location:{hash:'#/'},window:{__zhxTestSite:'eden'},NodeFilter:DOMNodeFilter});
+    globalThis.fetch=(url,opt)=>{requests++;options.push(opt);if(fail)return Promise.resolve({ok:false,status:503});
+      const response={ok:true,json:async()=>rows};return requests===1?new Promise(resolve=>{deliver=()=>resolve(response);}):Promise.resolve(response);};
+    _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0'});
+    translateEdenPage();assert.equal(requests,0,'打开空弹窗不能匹配时不下载整份数据');
+    await move(a+'?format=png');assert.equal(requests,1);
+    await move(b);assert.equal(requests,1,'切换图片共享同一请求');
+    dialog.classList.remove('v-dialog--active');deliver();await settle();await settle();
+    dialog.classList.add('v-dialog--active');translateEdenPage();await settle();
+    let panel=doc.querySelector('.zhx-eden-recipe-items');
+    assert.equal(panel.querySelector('a').textContent,'测试乙');assert.ok(!panel.textContent.includes('测试甲'));
+    const wiki=new URL(panel.querySelector('a').getAttribute('href'));
+    assert.equal(wiki.origin,'https://ff14.huijiwiki.com');assert.equal(decodeURIComponent(wiki.pathname),'/wiki/物品:测试乙');
+    assert.ok(panel.textContent.includes('<unknown>'));assert.equal(panel.querySelector('unknown'),null,'未知名称只能作为文本显示');
+    await move(a);panel=doc.querySelector('.zhx-eden-recipe-items');
+    assert.equal(panel.querySelectorAll('a').length,2);assert.ok(panel.textContent.includes('煤烟黑'));
+    assert.equal(doc.querySelectorAll('.zhx-eden-recipe-items').length,1);assert.equal(doc.querySelector('.recipe-dialog-title-text').textContent,'装備ランキング');
+    await move('https://example.test/empty.jpg');assert.equal(panel.querySelectorAll('a').length,0);
+    assert.match(panel.textContent,/未提供/);assert.equal(requests,1);
+    await move('data:image/png;base64,abc');assert.equal(doc.querySelector('.zhx-eden-recipe-items'),null);
+    fail=true;await assert.rejects(loadEdenRecipes(true),/503/);await move(b);
+    panel=doc.querySelector('.zhx-eden-recipe-items');assert.match(panel.textContent,/无法加载/);
+    fail=false;panel.querySelector('button').click();await settle();await settle();
+    assert.equal(panel.querySelector('a').textContent,'测试乙');assert.equal(requests,3);
+    assert.ok(options.every(opt=>opt.credentials==='omit'));assert.equal(options.at(-1).cache,'reload');
+    translateEdenPage();await settle();assert.equal(requests,3);
   } finally {
     _applyV3({candidatePolicy:1});
     for(const[k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
