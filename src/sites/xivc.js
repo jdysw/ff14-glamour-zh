@@ -20,8 +20,9 @@ const EQUIPMENT_SLOTS = new Set(['Head', 'Body', 'Gloves', 'Legs', 'Feet', 'Face
 function trXivc(raw) {
   const text = typeof raw === 'string' ? raw.trim() : '';
   if (!text) return raw;
-  return (Object.hasOwn(DICT, 'xivc:' + text) ? DICT['xivc:' + text]
-    : Object.hasOwn(DICT_COMMON, text) ? DICT_COMMON[text] : null) || raw;
+  if (Object.hasOwn(DICT, 'xivc:' + text)) return DICT['xivc:' + text] || raw;
+  if (Object.hasOwn(DICT_COMMON, text)) return DICT_COMMON[text] || raw;
+  return raw;
 }
 
 function translateAttribute(raw, attr) {
@@ -187,8 +188,10 @@ function translateStaticText(scope) {
     const trimmed = raw.trim();
     const next = translatePresetText(trimmed);
     if (!trimmed || next === trimmed) continue;
-    const leading = raw.match(/^\s*/u)?.[0] || '';
-    const trailing = raw.match(/\s*$/u)?.[0] || '';
+    const start = raw.indexOf(trimmed);
+    const end = start + trimmed.length;
+    const leading = raw.slice(0, start);
+    const trailing = raw.slice(end);
     node.nodeValue = leading + next + trailing;
   }
 }

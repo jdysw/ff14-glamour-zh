@@ -273,7 +273,8 @@ test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预�
     + '<div class="item-card"><canvas></canvas><div class="item-card-name">English Test Gear</div></div>'
     + '<div class="item-card"><div class="item-card-name">Unknown Gear</div></div></div>'
     + '<div id="tab-customization"><label><input type="checkbox"> Male</label></div>'
-    + '<div id="tab-scene"><h3>Background</h3><button id="scene-reset">Reset scene</button></div>'
+    + '<div id="tab-scene"><h3>Background</h3><button id="scene-reset">Reset scene</button>'
+    + '<span id="spaced-static">  Reset scene  </span></div>'
     + '<div id="tab-saved"><div class="preset-name">English Test Gear</div><input id="import-file-input" value="玩家自填"></div>'
     + '<input id="item-search" placeholder="Search equipment..." title="Words match in any order. Use &quot;quotes&quot; for an exact phrase and -word to exclude." value="玩家输入"></div>'
     + '<div id="fps">60 FPS</div></body></html>');
@@ -302,6 +303,7 @@ test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预�
     assert.equal(dom.document.querySelector('#drawer-tabs button').textContent, '装备');
     assert.equal(dom.document.querySelector('#freecam-button').textContent, '自由视角');
     assert.equal(dom.document.querySelector('#freecam-button').title, '切换 WASD 自由视角');
+    assert.equal(dom.document.querySelector('#spaced-static').textContent, '  重置场景  ', '静态翻译保留首尾空白');
     assert.equal(dom.document.querySelector('#item-search').placeholder, '搜索装备……');
     assert.equal(dom.document.querySelector('#item-search').title, '关键词可按任意顺序匹配。用引号搜索完整词组，用 -词 排除关键词。');
     assert.equal(dom.document.querySelector('#item-search').value, '玩家输入', '搜索框值必须保留');
