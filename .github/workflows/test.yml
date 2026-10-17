@@ -181,11 +181,12 @@ jobs:
       - name: 上传汉化、审计与字体测试脚本
         uses: actions/upload-artifact@v4
         with:
-          name: miramiru-test-userscript
+          name: site-test-userscripts
           path: |
             dist/ff14-miramiru-zh-*-test.user.js
             dist/ff14-chinese-font-*-test.user.js
             dist/ff14-eden-zh-*-test.user.js
+            dist/ff14-xivc-zh-*-test.user.js
             tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js
           retention-days: 14
           if-no-files-found: error

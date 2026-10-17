@@ -12,6 +12,7 @@ import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ro
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
 import { startMiramiru, translateMiramiruPage } from '../sites/miramiru.js';
 import { startEden, translateEdenPage } from '../sites/mirapri-eden.js';
+import { startXivc, translateXivcPage } from '../sites/xivc.js';
 // 转发站点策略公共接口，同时继续由本模块负责七站启动。
 export { _siteIndexes, neededTables, onHost } from './site-policy.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
@@ -20,7 +21,7 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
   /* @zhixia:site-registry-start */
   /* ── Site Registry：站点启动行为与 DOM 适配器 ──────────────────
      域名、数据表、索引需求统一由 site-policy.js 提供，禁止在此重复维护。
-     本模块只绑定七站启动函数和页面生命周期回调；启动与数据策略分层后，
+     本模块只绑定站点启动函数和页面生命周期回调；启动与数据策略分层后，
      数据管理器不需要加载站点启动适配器。 */
   // 统一站点适配器工厂：七站标准接口——
   //   id / hosts / tables / indexes   配置面（Phase 3 约定）
@@ -127,6 +128,8 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
     }),
     createSiteAdapter({ id: 'eden', start: startEden, processRoot: translateEdenPage,
       onDataReady() { translateEdenPage(); }, onPageShow: translateEdenPage }),
+    createSiteAdapter({ id: 'xivc', start: startXivc, processRoot: translateXivcPage,
+      onDataReady() { translateXivcPage(); }, onPageShow: translateXivcPage }),
   ];
 
   // 只保留站点启动行为；站点选择和数据需求由纯策略模块负责。

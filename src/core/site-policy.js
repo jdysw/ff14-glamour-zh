@@ -13,6 +13,7 @@ const SITE_POLICIES = Object.freeze([
   { id: 'endcloset', hosts: ['end-closet.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
   { id: 'miramiru', hosts: ['miramiru.co'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
   { id: 'eden', hosts: ['mirapri.ff14eden.work'], dataSite: 'miramiru', tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
+  { id: 'xivc', hosts: ['xivc.app'], dataSite: 'miramiru', tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
 ]);
 // Eden 的制作器使用多语装备名，复用 Miramiru 的现有多语索引与缓存。
 // 应用站点与发布数据集分开，新增界面适配无需新增重复数据或改变现行清单。

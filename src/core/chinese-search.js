@@ -12,6 +12,7 @@ const SEARCH_SITES = Object.freeze({
   ec: { vueSelect: true },
   endcloset: { vueSelect: false },
   eden: { vueSelect: false },
+  xivc: { vueSelect: false },
 });
 let _activeSearchSiteId = null;
 
@@ -812,6 +813,7 @@ function isStandaloneSearchInput(input) {
   if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
   if (input.disabled || input.readOnly) return false;
   if (_activeSearchSiteId === 'eden') return input.dataset?.zhxEdenSearch === '1';
+  if (_activeSearchSiteId === 'xivc') return input.dataset?.zhxXivcSearch === '1';
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
   // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
   // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
@@ -900,7 +902,8 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
     // The EC vue-select model must remain synchronized with the dispatched
     // native search term. Silent delayed display restoration desynchronizes
     // its DOM value from Vue state and can override later user keystrokes.
-    if (!isECVueSearchInput(input) && _activeSearchSiteId !== 'eden') restoreStandaloneDisplay(input, shown, native);
+    if (!isECVueSearchInput(input) && _activeSearchSiteId !== 'eden' && _activeSearchSiteId !== 'xivc')
+      restoreStandaloneDisplay(input, shown, native);
     return true;
   } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
 }

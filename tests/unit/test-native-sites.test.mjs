@@ -1,4 +1,4 @@
-// 在 V8 LCOV 中执行七站真实模块的翻译/页面行为，不使用字符串执行替身。
+// 在 V8 LCOV 中执行真实站点模块的翻译/页面行为，不使用字符串执行替身。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,6 +7,7 @@ import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.
 import { _scanStats } from '../../src/core/dom.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
 import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
+import { startXivc, translateXivcPage, trXivc } from '../../src/sites/xivc.js';
 
 function createTestDom(markup) {
   const host=new TestWindow({url:'https://mirapri.ff14eden.work/'});
@@ -257,7 +258,185 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByZh } from '../../src/core/data-manager.js';
+import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data-manager.js';
+
+test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', async () => {
+  const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver','setTimeout','clearTimeout']
+    .map(key=>[key,globalThis[key]]));
+  const dom = createTestDom('<html><head></head><body><div id="app">'
+    + '<div id="top-left-controls"><button id="freecam-button" title="Toggle WASD freecam">Freecam</button></div>'
+    + '<div id="drawer"><div id="drawer-tabs"><button>Equipment</button><button>Saved</button></div>'
+    + '<div id="slot-list"><div class="slot-row"><div class="slot-name">Head</div><div class="slot-item">English Test Gear</div></div>'
+    + '<div class="slot-row"><div class="slot-name">Body</div><div class="slot-item">Empty</div></div>'
+    + '<div class="slot-row"><div class="slot-name">Gender</div><div class="slot-item">Male</div></div></div>'
+    + '<div id="item-grid"><div class="item-card unequip-card"><div class="item-card-name">Unequip</div></div>'
+    + '<div class="item-card"><canvas></canvas><div class="item-card-name">English Test Gear</div></div>'
+    + '<div class="item-card"><div class="item-card-name">Unknown Gear</div></div></div>'
+    + '<div id="tab-customization"><label><input type="checkbox"> Male</label></div>'
+    + '<div id="tab-scene"><h3>Background</h3><button id="scene-reset">Reset scene</button></div>'
+    + '<div id="tab-saved"><div class="preset-name">English Test Gear</div><input id="import-file-input" value="玩家自填"></div>'
+    + '<input id="item-search" placeholder="Search equipment..." title="Words match in any order. Use &quot;quotes&quot; for an exact phrase and -word to exclude." value="玩家输入"></div>'
+    + '<div id="fps">60 FPS</div></body></html>');
+  const roots = [];
+  let timers = [];
+  try {
+    globalThis.document = dom.document;
+    globalThis.location = dom.location;
+    globalThis.window = { __zhxTestSite: 'xivc' };
+    globalThis.NodeFilter = dom.NodeFilter;
+    globalThis.MutationObserver = class {
+      constructor(callback) { this.callback = callback; }
+      observe(root) { roots.push({ root, callback: this.callback }); }
+      disconnect() {}
+    };
+    globalThis.setTimeout = callback => { timers.push(callback); return timers.length; };
+    globalThis.clearTimeout = () => {};
+    _applyV3({ candidatePolicy:1, names:'English Test Gear\t测试装备\t1\t0\nSecond Test Gear\t第二件装备\t1\t0' });
+    assert.equal(resolveByName('Second Test Gear'), '第二件装备');
+    assert.equal(resolveByName('English Test Gear'), '测试装备');
+    assert.equal(trXivc('Search equipment...'), '搜索装备……');
+    let picks = 0;
+    const card = dom.document.querySelector('#item-grid .item-card:not(.unequip-card)');
+    card.addEventListener('click', () => picks++);
+    startXivc();
+    assert.equal(dom.document.querySelector('#drawer-tabs button').textContent, '装备');
+    assert.equal(dom.document.querySelector('#freecam-button').textContent, '自由视角');
+    assert.equal(dom.document.querySelector('#freecam-button').title, '切换 WASD 自由视角');
+    assert.equal(dom.document.querySelector('#item-search').placeholder, '搜索装备……');
+    assert.equal(dom.document.querySelector('#item-search').title, '关键词可按任意顺序匹配。用引号搜索完整词组，用 -词 排除关键词。');
+    assert.equal(dom.document.querySelector('#item-search').value, '玩家输入', '搜索框值必须保留');
+    assert.equal(dom.document.querySelector('#item-search').dataset.zhxXivcSearch, '1');
+    assert.equal(dom.document.querySelector('#item-grid .item-card:nth-child(2) .item-card-name')
+      .querySelector('.zhx-xivc-name').textContent, '测试装备');
+    assert.equal(dom.document.querySelector('#item-grid .item-card:nth-child(3) .item-card-name').textContent, 'Unknown Gear');
+    assert.equal(dom.document.querySelector('#item-grid .item-card:nth-child(3) .zhx-xivc-wiki'), null,
+      '未知装备名称不能猜 Wiki 链接');
+    assert.match(dom.document.querySelector('#slot-list .slot-item').textContent, /^测试装备Wiki$/);
+    assert.equal(decodeURIComponent(dom.document.querySelector('#slot-list .slot-item .zhx-xivc-wiki')?.getAttribute('href')),
+      'https://ff14.huijiwiki.com/wiki/物品:测试装备');
+    assert.equal(dom.document.querySelectorAll('#slot-list .slot-item .zhx-xivc-wiki').length, 1,
+      '空槽不生成 Wiki 链接');
+    assert.equal(dom.document.querySelector('#slot-list .slot-row:last-child .slot-item').textContent, '男性',
+      '非装备槽位只翻译常见选项文字');
+    assert.equal(dom.document.querySelector('#slot-list .slot-row:last-child .zhx-xivc-wiki'), null,
+      '非装备槽位不得猜装备 Wiki');
+    const slotItem = dom.document.querySelector('#slot-list .slot-item');
+    slotItem.textContent = 'Unknown Gear';
+    translateXivcPage(slotItem);
+    assert.equal(slotItem.querySelector('.zhx-xivc-wiki'), null,
+      '槽位节点复用为未知装备时清除旧 Wiki 目标');
+    slotItem.textContent = 'English Test Gear';
+    translateXivcPage(slotItem);
+    assert.equal(decodeURIComponent(slotItem.querySelector('.zhx-xivc-wiki')?.getAttribute('href')),
+      'https://ff14.huijiwiki.com/wiki/物品:测试装备', '槽位节点复用后更新 Wiki 目标');
+    assert.equal(dom.document.querySelector('#tab-saved .preset-name').textContent, 'English Test Gear',
+      '预设名称保持原样');
+    assert.equal(dom.document.querySelector('#tab-saved input').value, '玩家自填', '输入值保持原样');
+    assert.equal(dom.document.querySelector('#fps').textContent, '60 FPS', 'FPS 指示不参与汉化扫描');
+    card.querySelector('.zhx-xivc-name').dispatchEvent(new dom.window.MouseEvent('click', { bubbles:true }));
+    assert.equal(picks, 1, '汉化装备名称仍触发原生选取');
+    card.querySelector('.zhx-xivc-wiki').dispatchEvent(new dom.window.MouseEvent('click', { bubbles:true, cancelable:true }));
+    assert.equal(picks, 1, '独立 Wiki 入口不会触发原生试穿');
+
+    const gearName = card.querySelector('.item-card-name');
+    gearName.textContent = 'Second Test Gear';
+    translateXivcPage(gearName);
+    assert.equal(gearName.querySelector('.zhx-xivc-name')?.textContent, '第二件装备',
+      '复用装备卡后显示新装备名而不保留旧名');
+    assert.equal(decodeURIComponent(card.querySelector('.zhx-xivc-wiki')?.getAttribute('href')),
+      'https://ff14.huijiwiki.com/wiki/物品:第二件装备', '复用卡片时 Wiki 目标跟随新装备');
+    gearName.textContent = 'Unknown Gear';
+    translateXivcPage(gearName);
+    assert.equal(gearName.textContent, 'Unknown Gear', '未知复用名称保持站点原文');
+    assert.equal(card.querySelector('.zhx-xivc-wiki'), null, '未知复用名称清除旧 Wiki 目标');
+    gearName.innerHTML = 'English <mark>Test Gear</mark>';
+    translateXivcPage(gearName);
+    assert.equal(gearName.querySelector('.zhx-xivc-name')?.textContent, '测试装备',
+      '已翻译节点追加 direct text 与 mark 后从完整原名重新解析');
+    assert.equal(decodeURIComponent(card.querySelector('.zhx-xivc-wiki')?.getAttribute('href')),
+      'https://ff14.huijiwiki.com/wiki/物品:测试装备');
+    gearName.innerHTML = 'Second <mark>Test Gear</mark>';
+    translateXivcPage(gearName);
+    assert.equal(gearName.querySelector('.zhx-xivc-name')?.textContent, '第二件装备',
+      'Vue 复用标记文本后更新为另一已知装备');
+    gearName.innerHTML = 'Unknown <mark>Gear</mark><button type="button">Action</button>';
+    translateXivcPage(gearName);
+    assert.equal(gearName.querySelector('mark')?.textContent, 'Gear', '未知高亮名保留原始 mark');
+    assert.ok(gearName.querySelector('button'), '未知名称的原站按钮子节点不能被清除');
+    assert.equal(card.querySelector('.zhx-xivc-wiki'), null, '未知高亮名清除旧 Wiki 目标');
+
+    const drawerObserver = roots.find(entry => entry.root.id === 'drawer');
+    assert.ok(drawerObserver, '仅观察装备和设置侧栏，视口动画更新不触发扫描');
+    assert.ok(roots.every(entry => entry.root.id !== 'app' && entry.root !== dom.document.documentElement));
+
+    const searchInput = dom.document.querySelector('#item-search');
+    searchInput.setAttribute('placeholder', 'Search equipment...');
+    drawerObserver.callback([{ type:'attributes', attributeName:'placeholder', target:searchInput }]);
+    timers.shift()();
+    assert.equal(searchInput.dataset.zhxXivcSearch, '1',
+      '单独更新搜索提示属性时仍保留装备模式中文候选标记');
+
+    const grid = dom.document.getElementById('item-grid');
+    grid.innerHTML = '<div class="item-card unequip-card"><div class="item-card-name">Back</div></div>'
+      + '<div class="item-card unequip-card"><div class="item-card-name">No Dye</div></div>'
+      + '<div class="item-card"><div class="item-thumb"></div><div class="item-card-name">Soot Black</div></div>';
+    translateXivcPage(grid);
+    assert.equal(dom.document.querySelector('#item-search').dataset.zhxXivcSearch, undefined,
+      '共享装备筛选框切到染色时撤销中文装备搜索标记');
+    assert.equal(dom.document.querySelectorAll('#item-grid .zhx-xivc-wiki').length, 0,
+      '染剂卡和染色操作卡都不生成装备 Wiki 链接');
+    assert.deepEqual([...dom.document.querySelectorAll('#item-grid .unequip-card .item-card-name')]
+      .map(name => name.textContent), ['返回', '不染色'], '染色控制卡文案正确翻译');
+    assert.equal(dom.document.querySelector('#item-grid .item-card:last-child .item-card-name').textContent, '煤烟黑',
+      '染剂卡只使用精确染色词条翻译');
+    assert.equal(dom.document.querySelector('#item-grid .item-card:last-child .zhx-xivc-wiki'), null,
+      '煤烟黑作为染剂时不链接到同名物品');
+    grid.innerHTML = '<div class="item-card unequip-card"><div class="item-card-name">Unequip</div></div>'
+      + '<div class="item-card"><canvas></canvas><div class="item-card-name">English Test Gear</div></div>';
+    translateXivcPage(grid);
+    assert.equal(dom.document.querySelector('#item-search').dataset.zhxXivcSearch, '1',
+      '切回装备模式后恢复中文装备搜索标记');
+    assert.ok(dom.document.querySelector('#item-grid .zhx-xivc-wiki'), '切回装备模式后恢复已知装备链接');
+    assert.equal(dom.document.querySelector('#item-grid .unequip-card .item-card-name').textContent,
+      '卸下', '装备模式控制卡保留卸下语义');
+    const dynamicCard = dom.document.createElement('div');
+    dynamicCard.className = 'item-card';
+    dynamicCard.innerHTML = '<div class="item-card-name">English Test Gear</div>';
+    dom.document.getElementById('item-grid').appendChild(dynamicCard);
+    const dynamicText = dynamicCard.querySelector('.item-card-name').firstChild;
+    drawerObserver.callback([{ type:'childList', addedNodes:[dynamicText] }]);
+    timers.shift()();
+    assert.equal(dynamicCard.querySelector('.zhx-xivc-name').textContent, '测试装备',
+      '新加入的装备卡沿同一局部扫描路径翻译');
+    assert.ok(dynamicCard.querySelector('.zhx-xivc-wiki'));
+    timers = [];
+    const characterText = dom.document.createTextNode('');
+    dynamicCard.querySelector('.item-card-name').appendChild(characterText);
+    characterText.nodeValue = 'Second Test Gear';
+    drawerObserver.callback([{ type:'characterData', target:characterText }]);
+    timers.shift()();
+    assert.equal(dynamicCard.querySelector('.zhx-xivc-name')?.textContent, '第二件装备',
+      '纯 characterData 更新触发装备名与 Wiki 目标同步');
+    assert.equal(decodeURIComponent(dynamicCard.querySelector('.zhx-xivc-wiki')?.getAttribute('href')),
+      'https://ff14.huijiwiki.com/wiki/物品:第二件装备');
+    const textAddedCard = dom.document.createElement('div');
+    textAddedCard.className = 'item-card';
+    textAddedCard.innerHTML = '<div class="item-card-name">Second Test Gear</div>';
+    dom.document.getElementById('item-grid').appendChild(textAddedCard);
+    const addedText = textAddedCard.querySelector('.item-card-name').firstChild;
+    drawerObserver.callback([{ type:'childList', addedNodes:[addedText] }]);
+    timers.shift()();
+    assert.equal(textAddedCard.querySelector('.zhx-xivc-name')?.textContent, '第二件装备',
+      '单独加入的装备名称文本节点也走局部翻译');
+  } finally {
+    timers = [];
+    await dom.happyDOM.abort();
+    _applyV3({ candidatePolicy:1 });
+    for (const [key,value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
 
 function element(tagName, initial = {}) {
   const attrs = new Map(Object.entries(initial));

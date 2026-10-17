@@ -36,14 +36,15 @@ test('统一字体：重复调用幂等，head 缺失和样式被移除时仍能
   }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
 });
 
-test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () => {
+test('纯站点策略：站点配置、宿主边界和测试覆盖钩子', () => {
   const previousWindow = globalThis.window;
   const previousLocation = globalThis.location;
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'www.mirapri.com' };
-    assert.equal(SITE_POLICIES.length, 9);
-    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 9);
+    assert.equal(SITE_POLICIES.length, 10);
+    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 10);
+    assert.equal(DATA_POLICIES.length, 8);
     assert.equal(Object.isFrozen(SITE_POLICIES), true);
     assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
     assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
@@ -52,6 +53,15 @@ test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () =>
     assert.equal(findSitePolicy()?.id, 'mirapri');
     assert.deepEqual(neededTables(), ['items', 'dict']);
     assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
+
+    globalThis.location.hostname = 'xivc.app';
+    assert.equal(findSitePolicy()?.id, 'xivc');
+    assert.deepEqual(neededTables(), ['items', 'dict']);
+    assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
+    assert.equal(SITE_POLICIES.find(x => x.id === 'xivc')?.dataSite, 'miramiru');
+    assert.equal(DATA_POLICIES.some(x => x.id === 'xivc'), false);
+    globalThis.location.hostname = 'evilxivc.app';
+    assert.equal(findSitePolicy(), null);
 
     globalThis.location.hostname = 'not-matched.invalid';
     assert.equal(findSitePolicy(), null);

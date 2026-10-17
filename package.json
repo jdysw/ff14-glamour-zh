@@ -25,6 +25,7 @@
     "check:deps": "node build/verify-dependencies.mjs",
     "build:miramiru-test": "node build/build.mjs && node build/make-site-test.mjs miramiru",
     "build:eden-test": "node build/build.mjs && node build/make-site-test.mjs eden",
+    "build:xivc-test": "node build/build.mjs && node build/make-site-test.mjs xivc",
     "build:font-test": "node build/build.mjs && node build/make-font-test.mjs",
     "test:build": "node tests/run.mjs --suite=build",
     "test:experimental": "node tests/run.mjs --suite=experimental"

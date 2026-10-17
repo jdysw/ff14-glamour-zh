@@ -12,9 +12,10 @@ const siteId = process.argv[2];
 const sites = {
   miramiru: { label: 'Miramiru', host: 'miramiru.co', dataSite: 'miramiru' },
   eden: { label: 'Mirapri Eden', host: 'mirapri.ff14eden.work', dataSite: 'miramiru' },
+  xivc: { label: 'xivc.app', host: 'xivc.app', dataSite: 'miramiru' },
 };
 const site = Object.hasOwn(sites, siteId) ? sites[siteId] : null;
-if (!site) throw new Error('Specify site: miramiru or eden');
+if (!site) throw new Error('Specify site: miramiru, eden, or xivc');
 const { dataSite } = site;
 const dataDir = path.join(root, '.cache', siteId + '-test-data');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
