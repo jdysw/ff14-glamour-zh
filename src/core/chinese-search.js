@@ -860,7 +860,7 @@ function rewriteInputNatively(input, native) {
 // b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
 // 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
 function edenMakerNative(input, native) {
-  if (_activeSearchSiteId !== 'eden' || !input.closest?.('.v-combobox')) return native;
+  if (_activeSearchSiteId !== 'eden' || input.dataset?.zhxEdenMaker !== '1') return native;
   const shown = document.querySelector('#equipment-view h6[data-zhx-eden-native]')?.dataset.zhxEdenNative || '';
   // 站点制作器可能显示英文装备，而首页固定按日文检索。
   if (!/[a-z]/i.test(shown) || /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(shown)) return native;
@@ -874,7 +874,7 @@ function edenMakerNative(input, native) {
 }
 
 function commitEdenMakerCandidate(input, selectedNative) {
-  if (_activeSearchSiteId !== 'eden' || !selectedNative || !input.closest?.('.v-combobox')) return;
+  if (_activeSearchSiteId !== 'eden' || !selectedNative || input.dataset?.zhxEdenMaker !== '1') return;
   // Vuetify combobox 以回车提交选中值；候选点击需走同一原生事件。
   queueMicrotask(() => {
     if (input.isConnected) input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));

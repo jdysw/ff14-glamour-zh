@@ -44,15 +44,16 @@ function markEdenSearch(root) {
     const label = field?.querySelector('label')?.textContent.trim() || '';
     const global = input.closest('.input-area,.gallery-search');
     const equipment = /^(?:装備を検索する|search for equipment|搜索装备)$/i.test(label);
-    if (!global && !equipment) { delete input.dataset.zhxEdenSearch; continue; }
+    if (!global && !equipment) { delete input.dataset.zhxEdenSearch; delete input.dataset.zhxEdenMaker; continue; }
     input.dataset.zhxEdenSearch = '1';
+    if (equipment) input.dataset.zhxEdenMaker = '1';
+    else delete input.dataset.zhxEdenMaker;
     const hint = '搜索（支持中文装备名）';
     if (input.getAttribute('placeholder') !== hint) input.setAttribute('placeholder', hint);
   }
 }
 
-function translateEdenElement(element) {
-  if (element.closest(SKIP)) return;
+function updateEdenItemTarget(element) {
   const href = element.getAttribute('href') || '';
   const hash = ITEM_URL.exec(href)?.[1];
   const zh = hash && resolveByHash(hash);
@@ -69,6 +70,11 @@ function translateEdenElement(element) {
   // 装备名才获得 Wiki 点击；下拉选项和筛选按钮继续由站点处理。
   if (item && !element.querySelector('button,input,select,[role="button"]')) element.dataset.zhxItem = item;
   else if (element.dataset.zhxItem && !element.matches('a') && native !== element.dataset.zhxItem) delete element.dataset.zhxItem;
+}
+
+function translateEdenElement(element) {
+  if (element.closest(SKIP)) return;
+  updateEdenItemTarget(element);
   for (const attr of ['title', 'aria-label', 'alt', 'placeholder']) {
     const value = element.getAttribute(attr);
     if (!value) continue;
