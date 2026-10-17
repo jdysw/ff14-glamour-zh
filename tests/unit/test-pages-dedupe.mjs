@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { applyPagesDedupe, planPagesDedupe, verifyPagesDedupe } from '../../tools/data/dedupe-pages.mjs';
@@ -20,7 +20,7 @@ mkdirSync(v3, { recursive: true });
 try {
   const sites = {};
   const contents = new Map();
-  for (const policy of SITE_POLICIES) {
+  for (const policy of DATA_POLICIES) {
     const files = {};
     for (const name of requiredV3Files(policy)) {
       const ext = ['series', 'acl'].includes(name) ? 'txt' : 'tsv';
@@ -48,7 +48,7 @@ try {
   assert.equal(verifyV3Publish(v3).files, contents.size);
 
   const plan = planPagesDedupe(site);
-  const aliasCount = SITE_POLICIES.filter(policy => requiredV3Files(policy).includes('alias')).length;
+  const aliasCount = DATA_POLICIES.filter(policy => requiredV3Files(policy).includes('alias')).length;
   assert.equal(plan.routes.length, aliasCount - 1,
     '按照站点实际需求推导 alias 完全相同副本数量');
   assert.ok(plan.routes.every(route => route.source.endsWith('/alias.tsv') &&

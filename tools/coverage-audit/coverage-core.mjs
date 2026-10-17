@@ -1,5 +1,7 @@
 // Shared, deterministic primitives for coverage auditing (no browser/network required).
 // Keep all site-specific navigation heuristics here so local/cloud collectors agree.
+import { createRequire } from 'node:module';
+const manual = createRequire(import.meta.url)('../manual-coverage-audit/audit-core.js');
 const OMIT_PARAMS = /^(utm_|fbclid$|gclid$|ref$|source$|share$|session|token|nonce)/i;
 const DANGEROUS_PATH = /\/(login|logout|sign-?out|register|signup|delete|remove|checkout|account|settings|admin|api)(\/|$)/i;
 const ASSET_EXT = /\.(?:png|jpe?g|gif|svg|webp|css|js|xml|json|zip|pdf|woff2?|ico)$/i;
@@ -10,6 +12,7 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
     if (u.protocol !== 'https:') return null;
     if (!allowedHosts.includes(u.hostname)) return null;
     if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname)) return null;
+    if (u.hostname === 'mirapri.ff14eden.work') return manual.allowedRoute(u.href) ? manual.urlKey(u.href) : null;
     u.hash = '';
     u.username = '';
     u.password = '';
@@ -26,7 +29,9 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
 export function templateKey(url) {
   const u = new URL(url);
   const parts = [];
-  const originalParts = u.pathname.split('/').filter(Boolean);
+  const route = u.hostname === 'mirapri.ff14eden.work' ? u.hash.slice(1).split('?')[0] : u.pathname;
+  const originalParts = route.split('/').filter(Boolean);
+  if (u.hostname === 'mirapri.ff14eden.work' && originalParts[1] === 'gallery') originalParts[2] = ':user';
   // FFXIV Collection has root-level equipment detail slugs; do not count each gear as a new template.
   if (['www.ffxivcollection.com', 'weapon.ffxivcollection.com'].includes(u.hostname)
       && originalParts.length === 1 && /(?:-of-|-from-|-attire|-gearset)/i.test(originalParts[0])) {

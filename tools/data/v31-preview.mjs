@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { verifyV3Publish } from './verify-publish-contract.mjs';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
@@ -36,7 +36,7 @@ export function createV31Preview(v3Directory, previewDirectory) {
     return ref;
   };
   const sites = {};
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     const files = {};
     for (const name of requiredV3Files(site)) {
       files[name] = put(v3.sites[site.id].files[name], name);
@@ -86,7 +86,7 @@ export function verifyV31Preview(v3Directory, previewDirectory) {
     expected.add(newMeta.url);
     logicalBytes += original.length;
   };
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     for (const name of requiredV3Files(site)) {
       compare(legacy.manifest.sites[site.id].files[name], preview.sites[site.id].files[name], name);
     }
@@ -106,7 +106,7 @@ export function verifyV31Preview(v3Directory, previewDirectory) {
   const uniqueBytes = [...expected].reduce((sum, name) => sum + readObject(target, name).length, 0);
   return {
     schema: 31, sourceVersion: preview.source.version,
-    logicalFiles: [...SITE_POLICIES].reduce((n, site) => n + requiredV3Files(site).length, 1),
+    logicalFiles: [...DATA_POLICIES].reduce((n, site) => n + requiredV3Files(site).length, 1),
     uniqueObjects: expected.size, logicalBytes, uniqueBytes,
     reclaimableBytes: logicalBytes - uniqueBytes,
   };

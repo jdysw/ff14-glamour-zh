@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { verifyPagesDedupe } from './dedupe-pages.mjs';
 
@@ -19,7 +19,7 @@ export async function verifyPagesHttp(siteDirectory, origin) {
   assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname),
     'HTTP 回归只允许连接本地 Pages 开发服务');
   const manifest = JSON.parse(readFileSync(path.join(site, 'ff14/v3/manifest.json'), 'utf8'));
-  const metas = SITE_POLICIES.flatMap(policy =>
+  const metas = DATA_POLICIES.flatMap(policy =>
     requiredV3Files(policy).map(name => manifest.sites[policy.id].files[name]));
   metas.push(manifest.shared.dict);
   const paths = ['manifest.json', ...metas.map(meta => meta.url)];

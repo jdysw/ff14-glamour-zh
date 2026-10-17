@@ -67,7 +67,7 @@ console.log('console A:', c1.consoleLines.filter((l) => (l.includes('汉化') ||
 let aFail = 0;
 const aLinks = rA.blockLinks || [];
 const aHasDataDep = aLinks.some((x) => x.h.indexOf('eorzeacollection') >= 0 || x.h.indexOf('lookbook.ronkacloset') >= 0);
-if (rA.blockLinks !== null && aLinks.length >= 1 && aLinks.length <= 3 && !aHasDataDep) { console.log('✅ A1 降级形态：链接 ' + aLinks.length + ' 条、不含依赖数据的条目'); } else { console.log('❌ A1 降级形态不符', JSON.stringify(aLinks)); aFail++; }
+if (rA.blockLinks !== null && aLinks.length >= 1 && aLinks.length <= 4 && !aHasDataDep) { console.log('✅ A1 降级形态：链接 ' + aLinks.length + ' 条、不含依赖数据的条目'); } else { console.log('❌ A1 降级形态不符', JSON.stringify(aLinks)); aFail++; }
 const aErr = c1.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
 if (!aErr) { console.log('✅ A2 无 [TEST-INJECT] 错误'); } else { console.log('❌ A2 存在注入错误'); aFail++; }
 if (rA.reqUrls.length >= 1) { console.log('✅ A3 尝试过数据下载且未阻塞'); } else { console.log('❌ A3 未尝试数据下载'); aFail++; }
@@ -91,13 +91,14 @@ console.log(JSON.stringify(rB, null, 1));
 console.log('console B:', c2.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 900));
 // 场景 B：实际物品反查参数与图标可用性，不只检查链接数量。
 let bFail = 0;
-if (!rB.blockLinks || rB.blockLinks.length !== 6) { console.log('❌ B1 反查区块应含 6 条链接'); bFail++; } else { console.log('✅ B1 反查区块 6 条链接'); }
+if (!rB.blockLinks || rB.blockLinks.length !== 7) { console.log('❌ B1 反查区块应含 7 条链接'); bFail++; } else { console.log('✅ B1 反查区块 7 条链接'); }
 if (rB.hr !== true) { console.log('❌ B2 区块应含标题下分隔线（hr）'); bFail++; } else { console.log('✅ B2 区块含标题下分隔线（hr）'); }
 if (!rB.blockLinks?.some(a => a.h === 'https://miramiru.co/en/items/38171')) { console.log('❌ B3 Miramiru 未定位到当前物品'); bFail++; }
 const end = rB.blockLinks?.find(a => a.h.startsWith('https://end-closet.com/'));
 if (!end || new URL(end.h).searchParams.get('search') !== '트로이아 유격대 붕대') { console.log('❌ B4 End Closet 未使用当前装备韩文名'); bFail++; }
 if (!rB.blockLinks?.every(a => a.icon && a.localIcon)) { console.log('❌ B5 站点图标缺失、未解码或依赖远程请求'); bFail++; }
-console.log(bFail ? '场景 B 失败 ' + bFail + ' 项' : '场景 B 通过 5/5');
+if (!rB.blockLinks?.some(a => a.h === 'https://mirapri.ff14eden.work/#/?search=' + encodeURIComponent('トロイアン・レンジャーバンデージ'))) { console.log('❌ B6 Eden 未保留日文装备搜索词和 hash 路由'); bFail++; }
+console.log(bFail ? '场景 B 失败 ' + bFail + ' 项' : '场景 B 通过 6/6');
 await closePage(PORT, t2.target.id);
 
 // ============ 场景 C：非装备页（不应注入区块）============

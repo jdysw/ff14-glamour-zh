@@ -1,6 +1,6 @@
 /* @phase23-module-order:core/chinese-search */
 /* @phase23-order-link:core/chinese-search<-core/data-manager */
-import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh } from './data-manager.js';
+import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh, dataGetIndex } from './data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
 
 // 站点能力表：统一交互由 Core 调度；form 与 SPA 输入的提交路径各用原站行为。
@@ -11,6 +11,8 @@ const SEARCH_SITES = Object.freeze({
   collection: { vueSelect: false },
   ec: { vueSelect: true },
   endcloset: { vueSelect: false },
+  eden: { vueSelect: false },
+  xivc: { vueSelect: false },
 });
 let _activeSearchSiteId = null;
 
@@ -810,6 +812,8 @@ function isStandaloneSearchInput(input) {
   const type = String(input.getAttribute?.('type') || '').toLowerCase();
   if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
   if (input.disabled || input.readOnly) return false;
+  if (_activeSearchSiteId === 'eden') return input.dataset?.zhxEdenSearch === '1';
+  if (_activeSearchSiteId === 'xivc') return input.dataset?.zhxXivcSearch === '1';
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
   // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
   // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
@@ -857,6 +861,28 @@ function rewriteInputNatively(input, native) {
 
 // b 方案（2026-10-08）：点选候选后的「转换式搜索」——用原生名触发站点检索（派发 input），
 // 随后把输入框显示恢复为中文（静默设值，不再派发事件；若站点已改写则不动）。
+function edenMakerNative(input, native) {
+  if (_activeSearchSiteId !== 'eden' || input.dataset?.zhxEdenMaker !== '1') return native;
+  const shown = document.querySelector('#equipment-view h6[data-zhx-eden-native]')?.dataset.zhxEdenNative || '';
+  // 站点制作器可能显示英文装备，而首页固定按日文检索。
+  if (!/[a-z]/i.test(shown) || /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(shown)) return native;
+  const names = dataGetIndex('nameMap');
+  const zh = names?.[native];
+  if (!zh) return native;
+  for (const key in names) {
+    if (names[key] === zh && /[a-z]/i.test(key) && !/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(key)) return key;
+  }
+  return native;
+}
+
+function commitEdenMakerCandidate(input, selectedNative) {
+  if (_activeSearchSiteId !== 'eden' || !selectedNative || input.dataset?.zhxEdenMaker !== '1') return;
+  // Vuetify combobox 以回车提交选中值；候选点击需走同一原生事件。
+  queueMicrotask(() => {
+    if (input.isConnected) input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+  });
+}
+
 function convertStandaloneForSearch(input, allowPartial = false, selectedNative = null) {
   try {
     if (!input || input.isConnected === false || _composingInputs.has(input)) return false;
@@ -864,17 +890,20 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
     const query = normalizeSearchQuery(shown);
     if (query.length < 2 || !isChineseSearchQuery(query)) return false;
     const context = ecSearchContext(input);
-    const native = selectedNative
+    let native = selectedNative
       || (context ? ecScopedNative(query, input, allowPartial) : null)
       || (!context && isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
       || (!context ? resolveByZh(query) : null)
       || (!context && allowPartial ? resolvePartialByZh(query) : null);
+    native = edenMakerNative(input, native);
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
+    commitEdenMakerCandidate(input, selectedNative);
     // The EC vue-select model must remain synchronized with the dispatched
     // native search term. Silent delayed display restoration desynchronizes
     // its DOM value from Vue state and can override later user keystrokes.
-    if (!isECVueSearchInput(input)) restoreStandaloneDisplay(input, shown, native);
+    if (!isECVueSearchInput(input) && _activeSearchSiteId !== 'eden' && _activeSearchSiteId !== 'xivc')
+      restoreStandaloneDisplay(input, shown, native);
     return true;
   } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
 }

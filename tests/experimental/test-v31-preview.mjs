@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSyn
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
 import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
 import { SHARED_CANDIDATE_GROUPS } from '../../tools/data/verify-shared-candidates.mjs';
@@ -23,7 +23,7 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 function fixture(folder, version, changedSite = '') {
   mkdirSync(folder, { recursive: true });
   const sites = {};
-  for (const policy of SITE_POLICIES) {
+  for (const policy of DATA_POLICIES) {
     const files = {};
     for (const name of requiredV3Files(policy)) {
       const extension = ['series', 'acl'].includes(name) ? 'txt' : 'tsv';
@@ -73,7 +73,7 @@ try {
   assert.equal(assessment.scenarios.sevenSitesIsolatedCache.v31.requests,
     assessment.scenarios.sevenSitesIsolatedCache.v3.requests,
     '完全隔离缓存模型下不应凭空减少请求数');
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     assert.equal(assessment.perSiteCold[site.id].sameAssetRequests, true,
       '单站冷访问不能靠跨站去重减少文件请求');
     assert.equal(assessment.perSiteCold[site.id].sameAssetBytes, true,
@@ -85,7 +85,7 @@ try {
     '缺少真实浏览器和 CDN 验收时不得自动宣称已可上线');
   assert.equal(assessment.constraints.browserTimingMeasured, false);
   assert.equal(stats.uniqueObjects, new Set(
-    SITE_POLICIES.flatMap(site => Object.values(preview.sites[site.id].files).map(meta => meta.url))
+    DATA_POLICIES.flatMap(site => Object.values(preview.sites[site.id].files).map(meta => meta.url))
       .concat(preview.shared.dict.url)).size);
   assert.equal(preview.source.version, legacy.version);
   assert.equal(preview.shared.dict.url, v31ObjectUrl(legacy.shared.dict.sha256, 'json'));

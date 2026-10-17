@@ -1,6 +1,6 @@
 /* @phase15-module-order:core/v3-contract */
 // V3 文件路径、元数据与站点需求的纯契约：不读取网络、存储或 DOM。
-import { SITE_POLICIES } from './site-policy.js';
+import { DATA_POLICIES } from './site-policy.js';
 export { requiredV3Files, validV3FileMeta, validV3Manifest };
 
 // 允许的文件类型必须与 Python 生成器 build/make-runtime-data.py 一致。
@@ -53,7 +53,7 @@ function validV3Shared(shared) {
 function validV3Manifest(man) {
   if (man?.schema !== 3 || man.candidatePolicy !== 1
     || !man.sites || typeof man.sites !== 'object' || Array.isArray(man.sites)) return false;
-  const policies = new Map(SITE_POLICIES.map(site => [site.id, site]));
+  const policies = new Map(DATA_POLICIES.map(site => [site.id, site]));
   const entries = Object.entries(man.sites);
   if (!entries.length) return false;
   return entries.every(([siteId, entry]) => {

@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { auditStorage } from './audit-storage.mjs';
 import { verifyV31Preview } from './v31-preview.mjs';
 import { validV31Manifest } from './v31-contract.mjs';
@@ -35,7 +35,7 @@ function simulateVisits(siteOrder, manifest, metrics, sharedCache) {
   const visited = new Set();
   const steps = [];
   for (const siteId of siteOrder) {
-    const site = SITE_POLICIES.find(item => item.id === siteId);
+    const site = DATA_POLICIES.find(item => item.id === siteId);
     assert.ok(site, '未知站点：' + siteId);
     const entries = requestsFor(site, manifest, metrics);
     const cache = sharedCache ? visited : new Set();
@@ -88,7 +88,7 @@ export function evaluateV31(v3Directory, previewDirectory) {
     item.path, { bytes: item.bytes, gzipBytes: item.gzipBytes, brotliBytes: item.brotliBytes },
   ]));
   const v31Metrics = new Map();
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     for (const [name, meta] of Object.entries(next.sites[site.id].files)) {
       const oldRef = legacy.sites[site.id].files[name];
       const metric = v3Metrics.get(oldRef.url);
@@ -98,7 +98,7 @@ export function evaluateV31(v3Directory, previewDirectory) {
   }
   v31Metrics.set(next.shared.dict.url, v3Metrics.get(legacy.shared.dict.url));
 
-  const order = SITE_POLICIES.map(item => item.id);
+  const order = DATA_POLICIES.map(item => item.id);
   const oldManifest = manifestCost(readFileSync(path.join(source, 'manifest.json')));
   const newManifest = manifestCost(readFileSync(path.join(previewDir, 'manifest.v31.json')));
   const oldShared = simulateVisits(order, legacy, v3Metrics, true);

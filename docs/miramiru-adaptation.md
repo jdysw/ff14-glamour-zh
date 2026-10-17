@@ -23,7 +23,7 @@
 
 运行 `npm run build:miramiru-test` 生成 `dist/ff14-miramiru-zh-1.4.5-test.user.js`。
 
-在 Tampermonkey 或 Violentmonkey 的导入／安装文件功能中选择该文件，然后打开 <https://miramiru.co/en>。测试版使用独立脚本名称与 namespace，仅在 Miramiru 运行；内置本次生成的压缩 V3 数据快照，不请求未上线的数据、不读写正式版 GM 缓存，也不写 localStorage。修改适配器或词典后需重新生成测试脚本。正式版支持上线后请停用测试版，避免两个脚本同时处理页面。PR 的 Integration B 检查成功后，也可下载 `miramiru-test-userscript` 工件；生成产物不提交到源码仓库。
+在 Tampermonkey 或 Violentmonkey 的导入／安装文件功能中选择该文件，然后打开 <https://miramiru.co/en>。测试版使用独立脚本名称与 namespace，仅在 Miramiru 运行；内置本次生成的压缩 V3 数据快照，不请求未上线的数据、不读写正式版 GM 缓存，也不写 localStorage。修改适配器或词典后需重新生成测试脚本。正式版支持上线后请停用测试版，避免两个脚本同时处理页面。PR 的 Integration B 检查成功后，也可下载 `site-test-userscripts` 工件；生成产物不提交到源码仓库。
 
 ## 发布边界
 

@@ -147,7 +147,7 @@ export function cloudScanPlan(site, opts = {}) {
 // ---------- 报告合并 ----------
 export function loadResults(dir = CACHE_DIR) {
   if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset|miramiru)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
+  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset|miramiru|eden)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
   const results = [];
   for (const f of files) {
     try { const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (d.site && (d.items || d.pages)) results.push(d); } catch (e) { console.error('[audit] 跳过损坏缓存:', f, e.message); }

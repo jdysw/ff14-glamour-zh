@@ -5,9 +5,10 @@
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
-    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru'
+    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden','xivc.app':'xivc'
   });
   const FORMAT = 'zhx-manual-audit-v2';
+  const XIVC_EQUIPMENT_SLOTS = new Set(['Head','Body','Gloves','Legs','Feet','Facewear','头部','身体','手套','腿部','脚部','面饰']);
   const AUTHORED = {
     mirapri: ['#gallery article .article-info .title','#gallery article h2.title',
       '#gallery article figure','#gallery article img[alt]',
@@ -21,7 +22,8 @@
     collection: ['.user-post-title','.post-content','.author-description'],
     fc: ['.comment-content','.comment-body','.user-content','.post-author'],
     wiki: ['.comment-content','.user-profile','.mw-userpage-content'],
-    miramiru: ['a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]']
+    miramiru: ['a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'],
+    xivc: ['.preset-name']
   };
   const AD_RE = /(adsbygoogle|ad-slot|adunit|ad-container|affiliate|amazon|rakuten|aswift|sponsored)/i;
   const USER_RE = /(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body|content)|nickname|username|player-name|user-content|creator-description)/i;
@@ -34,7 +36,9 @@
   function urlKey(raw) {
     const u = new URL(raw);
     if(u.protocol !== 'https:' || !SITES[u.hostname]) throw new Error('unsupported https site');
-    u.hash='';u.username='';u.password='';
+    const route = u.hostname==='mirapri.ff14eden.work' ? edenRoute(u) : '';
+    u.hash=route;u.username='';u.password='';
+    if(u.hostname==='xivc.app'){u.search='';u.hash='';}
     for(const k of [...u.searchParams.keys()]){
       if(/^(utm_|fbclid$|gclid$|ref$|source$|share$|session|token|nonce|access|secret|auth|pass|email|sid$|code$|q$|query$|search$)/i.test(k))u.searchParams.delete(k);
     }
@@ -63,7 +67,28 @@
     if(/^\/(?:en\/|ko\/|ja\/)?(?:about|faq|collection)\/?$/.test(path)&&el.closest?.('main'))return 'ui';
     return null;
   }
-  function allowedRoute(url){try{return !ROUTE_BLOCK.test(new URL(url).pathname)}catch{return false}}
+  function edenRoute(u){
+    const route=u.hash.split('?')[0].replace(/^#/, '') || '/';
+    return /^\/(?:components\/(?:popular-equipment|glamour-recipe-maker|dye-finder|help|q&a|policy|contest|gallery\/[\w-]{1,85}))?\/?$/.test(route)?route:'';
+  }
+  function edenScope(el){
+    if(el.closest?.('.image-container .overlay,.recipe-dialog-title-text,.recipe-dialog-user,.recipe-dialog-text,.gallery-hero-text,.gallery-tile-title,.gallery-tile-img'))return 'user';
+    if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
+    return null;
+  }
+  function xivcScope(el){
+    if(el.closest?.('.preset-name'))return 'user';
+    if(el.closest?.('#item-grid .item-card-name'))return 'item';
+    const slotItem=el.closest?.('#slot-list .slot-row > .slot-item');
+    if(slotItem){
+      const label=slotItem.parentElement?.querySelector('.slot-name');
+      const slot=label?.dataset?.zhxXivcNative||label?.textContent?.trim();
+      return XIVC_EQUIPMENT_SLOTS.has(slot)?'item':'ui';
+    }
+    if(el.closest?.('.unequip-card,.preset-actions'))return 'ui';
+    return null;
+  }
+  function allowedRoute(url){try{const u=new URL(url);const site=siteFor(url);return !ROUTE_BLOCK.test(u.pathname)&&(site!=='eden'||!!edenRoute(u))&&(site!=='xivc'||u.pathname==='/')}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
   function classifyContext(el,kind,site,url){
@@ -78,7 +103,7 @@
     const link=el.closest?.('a[href]');
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):null;
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='xivc'?xivcScope(el):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
@@ -214,7 +239,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;

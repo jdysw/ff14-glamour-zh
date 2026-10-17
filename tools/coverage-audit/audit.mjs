@@ -31,6 +31,11 @@ export const DIST_FILE = path.join(REPO_ROOT, 'dist', 'ff14-glamour-zh.greasyfor
 
 // ---------- 站点配置 ----------
 export const SITES = {
+  eden: {name:'eden',label:'Mirapri Eden',host:'mirapri.ff14eden.work',channel:'local',pages:[
+    {id:'home',url:'https://mirapri.ff14eden.work/#/',type:'home'},
+    {id:'ranking',url:'https://mirapri.ff14eden.work/#/components/popular-equipment',type:'list'},
+    {id:'maker',url:'https://mirapri.ff14eden.work/#/components/glamour-recipe-maker',type:'list'},
+  ]},
   miramiru: {
     name: 'miramiru', label: 'Miramiru（三语幻化站）', host: 'miramiru.co', channel: 'local',
     pages: [
@@ -201,8 +206,9 @@ for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-end
     }
   } catch (e) { throw new Error('无法读取汉化权威词典 ' + name + ': ' + e.message); }
 }
-const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru'})
+const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru',eden:'main'})
   .map(([site,name])=>[site,new Set(Object.entries({...KANJI_DICTIONARIES.get('dict-common'),...KANJI_DICTIONARIES.get('dict-'+name)})
+    .map(([source,zh])=>[site==='eden'&&source.startsWith('eden:')?source.slice(5):source,zh])
     .filter(([source,zh])=>/^[\u3400-\u9fff]{2,30}$/.test(source)&&source!==zh&&/^[\u3400-\u9fff]/.test(zh)).map(([source])=>source))]));
 
 // ---------- 残留检测 ----------

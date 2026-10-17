@@ -119,10 +119,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return m;
   }
 
-  // names 文本 → {原生名: 候选允许标记('1'/'0'/'')}——行级、首见记录。
-  // 仅用于智能候选：只有明确允许的装备、时尚配饰、鸟甲进入倒排。
-  function _v3Glam(txt) {
-    const m = Object.create(null);
+  // names 同时驱动多语解析、候选策略和展示分组。一次拆行构建三张表，
+  // 保留每个索引原有的首行/严格校验规则，避免大文件重复 split。
+  function _v3Names(txt) {
+    const names = Object.create(null);
+    const glam = Object.create(null);
+    const slots = Object.create(null);
     let sawRow = false;
     for (const ln of String(txt || '').split('\n')) {
       if (!ln) continue;
@@ -130,22 +132,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (!p[0]) continue;
       if (p.length !== 4 || !['0', '1'].includes(p[2].trim()) || !/^[0-5]$/.test(p[3].trim())) return null;
       sawRow = true;
-      if (m[p[0]] === undefined) m[p[0]] = p[2].trim();
+      if (names[p[0]] === undefined) {
+        names[p[0]] = p[1];
+        glam[p[0]] = p[2].trim();
+        slots[p[0]] = Number(p[3].trim());
+      }
     }
-    return sawRow ? m : null;
-  }
-
-  // names 第四列为 EquipSlotCategory 派生的展示组（0头 1身 2手 3腿 4脚 5其余）。
-  // 只使用当前四列文件声明的分组，不从译名猜测分类。
-  function _v3SearchSlots(txt) {
-    const slots = Object.create(null);
-    for (const ln of String(txt || '').split('\n')) {
-      if (!ln) continue;
-      const p = ln.split('\t');
-      if (p.length < 4 || !p[0] || slots[p[0]] !== undefined) continue;
-      slots[p[0]] = Number(p[3].trim());
-    }
-    return slots;
+    return sawRow ? { names, glam, slots } : null;
   }
 
   // V3 数据直接映射为运行时索引；模块内状态由本 IIFE 共享。
@@ -154,9 +147,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
-      const names = take('names') || Object.create(null);
-      const glam = typeof files.names === 'string' ? _v3Glam(files.names) : Object.create(null);
-      if (!glam) return false;
+      const parsedNames = typeof files.names === 'string'
+        ? _v3Names(files.names)
+        : { names: Object.create(null), glam: Object.create(null), slots: Object.create(null) };
+      if (!parsedNames) return false;
+      const { names, glam, slots } = parsedNames;
       const hash = take('hash') || Object.create(null);
       const ecid = take('ecid') || Object.create(null);
       const ko = take('ko') || Object.create(null);
@@ -178,7 +173,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       _irAliasMap = ali;
       _irDupMap = dup;
       _irGlamMap = glam || Object.create(null);
-      _irSearchSlotByNative = _v3SearchSlots(files.names);
+      _irSearchSlotByNative = slots;
       _irCandidatePolicy = 1;
       SERIES_TEXT = files.series ? '\n' + files.series : '';
       ACL_CFC_TEXT = files.acl ? '\n' + files.acl : '';
@@ -459,7 +454,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
-    const site = findSite();
+    const policy = findSite();
+    const site = policy?.dataSite ? { ...policy, id: policy.dataSite } : policy;
     if (!site?.id) return false;
     const sourceBefore = { ..._dlStats };
     try {
@@ -596,10 +592,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
+  function _irAddEdenJapaneseNames(out, kind, names, glam) {
+    if (typeof window === 'undefined' || findSite()?.id !== 'eden') return;
+    for (const [native, zh] of Object.entries(names || {})) {
+      if (glam?.[native] === '1' && /[\u3040-\u30ff\u3400-\u9fff]/u.test(native) && !/[\uac00-\ud7af]/u.test(native))
+        _irSearchPut(out, zh, native, 0, kind);
+    }
+  }
+
   function _irBuildSearchFromNames(names, ali, glam) {
     const out = Object.create(null);
     const kind = Object.create(null);
     if (_irCandidatePolicy !== 1) return { map: out, kind };
+    // 多语名称均可翻译；Eden 首页候选先登记日文，避免英文查询无结果。
+    _irAddEdenJapaneseNames(out, kind, names, glam);
     for (const [native, zh] of Object.entries(names || {})) {
       if (glam?.[native] !== '1') continue;   // 仅明确允许的装备、时尚配饰、鸟甲进入中文候选
       _irSearchPut(out, zh, native, 0, kind);

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import {
-  SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost,
+  SITE_POLICIES, DATA_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost,
 } from '../../src/core/site-policy.js';
 import {
   CACHE_CAP_LOOKUP, _cacheReg, _shortestStr, _countIncludes,
@@ -36,14 +36,15 @@ test('统一字体：重复调用幂等，head 缺失和样式被移除时仍能
   }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
 });
 
-test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () => {
+test('纯站点策略：站点配置、宿主边界和测试覆盖钩子', () => {
   const previousWindow = globalThis.window;
   const previousLocation = globalThis.location;
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'www.mirapri.com' };
-    assert.equal(SITE_POLICIES.length, 8);
-    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 8);
+    assert.equal(SITE_POLICIES.length, 10);
+    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 10);
+    assert.equal(DATA_POLICIES.length, 8);
     assert.equal(Object.isFrozen(SITE_POLICIES), true);
     assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
     assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
@@ -52,6 +53,15 @@ test('纯站点策略：七站配置、宿主边界和测试覆盖钩子', () =>
     assert.equal(findSitePolicy()?.id, 'mirapri');
     assert.deepEqual(neededTables(), ['items', 'dict']);
     assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
+
+    globalThis.location.hostname = 'xivc.app';
+    assert.equal(findSitePolicy()?.id, 'xivc');
+    assert.deepEqual(neededTables(), ['items', 'dict']);
+    assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
+    assert.equal(SITE_POLICIES.find(x => x.id === 'xivc')?.dataSite, 'miramiru');
+    assert.equal(DATA_POLICIES.some(x => x.id === 'xivc'), false);
+    globalThis.location.hostname = 'evilxivc.app';
+    assert.equal(findSitePolicy(), null);
 
     globalThis.location.hostname = 'not-matched.invalid';
     assert.equal(findSitePolicy(), null);
@@ -275,7 +285,7 @@ test('原生 DOM 工具：祖先去重、局部根和查询计数', () => {
 
 
 test('原生 V3 契约：站点表一致、固定路径和异常元数据不得进入下载器', () => {
-  for (const policy of SITE_POLICIES) {
+  for (const policy of DATA_POLICIES) {
     const required = requiredV3Files(policy);
     assert.ok(required.length >= 2 && required.every(name =>
       ['names', 'alias', 'dup', 'hash', 'ecid', 'ko', 'series', 'acl'].includes(name)));
@@ -445,6 +455,19 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     assert.equal(dataGetStatus().origin, 'cache', '相同版本优先复用已验证的 GM 文件缓存');
     assert.equal(requests, beforeWarmLoad + 1,
       '手动刷新只检查 manifest，不应重新下载相同散列的四个站点文件与词典');
+
+    globalThis.window.__zhxTestSite = 'eden';
+    const edenManifest=JSON.parse(gm.get('zhx.v3.manifest').split('\n').slice(1).join('\n'));
+    edenManifest.sites.miramiru={files:Object.fromEntries(Object.entries(edenManifest.sites.mirapri.files)
+      .map(([name,meta])=>[name,{...meta,url:meta.url.replace('mirapri/','miramiru/')}]))};
+    gm.set('zhx.v3.manifest',Date.now()+'\n'+JSON.stringify(edenManifest));
+    for(const[key,value]of gm)if(key.startsWith('zhx.v3.f.mirapri.'))gm.set(key.replace('.mirapri.','.miramiru.'),value);
+    const beforeEden=requests;
+    assert.equal(await _ensureTryV3(),true);
+    assert.equal(resolveByName('English Test Gear'),'测试第二版');
+    assert.equal(dataGetStatus().site,'eden');
+    assert.equal(requests,beforeEden,'Eden 直接复用现有多语数据集，不请求未发布的 eden 路径');
+    globalThis.window.__zhxTestSite = 'mirapri';
 
     invalidManifest = true;
     dataInvalidate();

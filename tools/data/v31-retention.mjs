@@ -6,13 +6,13 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 import { validV31Manifest } from './v31-contract.mjs';
 import { validateIsolatedOutput } from './v31-output-guard.mjs';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const resourceRefs = manifest => [
-  ...SITE_POLICIES.flatMap(site => Object.values(manifest.sites[site.id].files)),
+  ...DATA_POLICIES.flatMap(site => Object.values(manifest.sites[site.id].files)),
   manifest.shared.dict,
 ];
 

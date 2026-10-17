@@ -1,5 +1,5 @@
 /* @phase15-module-order:core/site-policy */
-export { SITE_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost };
+export { SITE_POLICIES, DATA_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost };
 // 站点数据需求与宿主匹配属于纯配置，不依赖翻译器、数据加载器或 DOM 适配器。
 // 数据层通过本模块查询当前站点，避免反向引入启动适配器而形成循环依赖。
 /* @zhixia:site-policy-start */
@@ -12,7 +12,12 @@ const SITE_POLICIES = Object.freeze([
   { id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'] },
   { id: 'endcloset', hosts: ['end-closet.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
   { id: 'miramiru', hosts: ['miramiru.co'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
+  { id: 'eden', hosts: ['mirapri.ff14eden.work'], dataSite: 'miramiru', tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
+  { id: 'xivc', hosts: ['xivc.app'], dataSite: 'miramiru', tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
 ]);
+// Eden 的制作器使用多语装备名，复用 Miramiru 的现有多语索引与缓存。
+// 应用站点与发布数据集分开，新增界面适配无需新增重复数据或改变现行清单。
+const DATA_POLICIES = Object.freeze(SITE_POLICIES.filter(site => !site.dataSite));
 
 // 必须精确匹配主域或子域，不能让 evilmirapri.com 绕过宿主限制。
 const onHost = (host, domain) => host === domain || host.endsWith('.' + domain);
@@ -24,7 +29,7 @@ function findSitePolicy() {
     const selected = SITE_POLICIES.find(policy => policy.id === forced);
     if (selected) return selected;
   }
-  const host = location.hostname;
+  const host = typeof location === 'undefined' ? '' : location.hostname || '';
   return SITE_POLICIES.find(policy => policy.hosts.some(domain => onHost(host, domain))) || null;
 }
 

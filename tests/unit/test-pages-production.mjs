@@ -1,7 +1,7 @@
 // 通过真实 V3 七站文件形状和可控 HTTP 响应验证线上探针；严格保留 SHA/字节/路径断言。
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { verifyProductionV3, verifyProductionWithRetry } from '../../tools/data/verify-pages-production.mjs';
@@ -10,7 +10,7 @@ const origin = 'https://zhixia-data.pages.dev/';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const assets = new Map();
 const sites = {};
-for (const site of SITE_POLICIES) {
+for (const site of DATA_POLICIES) {
   const files = {};
   for (const name of requiredV3Files(site)) {
     const ext = ['series', 'acl'].includes(name) ? 'txt' : 'tsv';

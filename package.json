@@ -23,13 +23,16 @@
     "version:check": "node build/version.mjs --check",
     "version:sync": "node build/version.mjs",
     "check:deps": "node build/verify-dependencies.mjs",
-    "build:miramiru-test": "node build/build.mjs && node build/make-miramiru-test.mjs",
+    "build:miramiru-test": "node build/build.mjs && node build/make-site-test.mjs miramiru",
+    "build:eden-test": "node build/build.mjs && node build/make-site-test.mjs eden",
+    "build:xivc-test": "node build/build.mjs && node build/make-site-test.mjs xivc",
     "build:font-test": "node build/build.mjs && node build/make-font-test.mjs",
     "test:build": "node tests/run.mjs --suite=build",
     "test:experimental": "node tests/run.mjs --suite=experimental"
   },
   "devDependencies": {
     "acorn": "^8.19.0",
+    "happy-dom": "^21.0.3",
     "rollup": "^4.64.0"
   }
 }
