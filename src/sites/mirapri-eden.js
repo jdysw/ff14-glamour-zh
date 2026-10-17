@@ -233,20 +233,22 @@ function markEdenSearch(root) {
   }
 }
 
+function updateEdenOfficialLink(element) {
+  const href = element.getAttribute('href') || '';
+  const hash = ITEM_URL.exec(href)?.[1];
+  const zh = hash && resolveByHash(hash);
+  if (element.dataset.zhxItem && href !== WIKI_ITEM + encodeURIComponent(element.dataset.zhxItem))
+    delete element.dataset.zhxItem;
+  if (zh) {
+    element.dataset.zhxItem = zh;
+    element.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
+    element.setAttribute('title', '查看灰机 Wiki：' + zh);
+  }
+}
+
 function updateEdenItemTarget(element) {
   if (!element.matches(ITEM_TARGET)) return;
-  if (element.matches('a')) {
-    const href = element.getAttribute('href') || '';
-    const hash = ITEM_URL.exec(href)?.[1];
-    const zh = hash && resolveByHash(hash);
-    if (element.dataset.zhxItem && href !== WIKI_ITEM + encodeURIComponent(element.dataset.zhxItem))
-      delete element.dataset.zhxItem;
-    if (zh) {
-      element.dataset.zhxItem = zh;
-      element.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
-      element.setAttribute('title', '查看灰机 Wiki：' + zh);
-    }
-  }
+  if (element.matches('a')) updateEdenOfficialLink(element);
   if (!isRankingName(element) && !element.matches('.v-data-table td,#equipment-view h6')) return;
   const native = element.textContent.trim();
   const item = resolveByName(native);
