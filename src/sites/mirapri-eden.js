@@ -36,6 +36,13 @@ function isRankingName(element) {
     && element.matches('.flex-grow-1');
 }
 
+function isEdenEquipmentSearch(input, label) {
+  if (/^(?:装備を検索する|search for equipment|搜索装备)$/i.test(label)) return true;
+  // Vuetify solo 输入框在开始输入后会移除 label，仍按实测容器识别。
+  return /^#\/components\/glamour-recipe-maker(?:\/|\?|$)/.test(location.hash)
+    && !!input.closest('main .v-toolbar .v-autocomplete');
+}
+
 function markEdenSearch(root) {
   const fields = root.matches?.('input') ? [root] : root.querySelectorAll('input');
   for (const input of fields) {
@@ -43,7 +50,7 @@ function markEdenSearch(root) {
     const field = input.closest('.v-input');
     const label = field?.querySelector('label')?.textContent.trim() || '';
     const global = input.closest('.input-area,.gallery-search');
-    const equipment = /^(?:装備を検索する|search for equipment|搜索装备)$/i.test(label);
+    const equipment = isEdenEquipmentSearch(input, label);
     if (!global && !equipment) { delete input.dataset.zhxEdenSearch; delete input.dataset.zhxEdenMaker; continue; }
     input.dataset.zhxEdenSearch = '1';
     if (equipment) input.dataset.zhxEdenMaker = '1';

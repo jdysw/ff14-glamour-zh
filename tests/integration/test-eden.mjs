@@ -33,7 +33,7 @@ try {
  assert.equal(await c.eval(`document.querySelector('#search').value`),'カーフスキン・ライダースジャケット','Vue 搜索模型与可见值保持同步，不能定时回写中文');
  await c.eval(`document.querySelector('#search').value='小牛皮骑手外套';document.querySelector('#search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));`);
  await sleep(200);assert.equal(await c.eval(`document.querySelector('#result').textContent`),'FOUND');
- await c.eval(`{const el=document.querySelector('#maker-search');el.focus();el.value='小牛皮骑手外套';el.dispatchEvent(new Event('input',{bubbles:true}));}`);
+ await c.eval(`{location.hash='#/components/glamour-recipe-maker';const el=document.querySelector('#maker-search');el.focus();el.value='小牛皮骑手外套';el.dispatchEvent(new Event('input',{bubbles:true}));}`);
  await sleep(500);
  await c.eval(`{const option=[...document.querySelectorAll('button[data-zhx-index]')].find(e=>e.textContent.includes('小牛皮骑手外套'));option.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));}`);
  await sleep(200);
