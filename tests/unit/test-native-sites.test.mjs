@@ -45,7 +45,7 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
 test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重试', async () => {
   const previous=Object.fromEntries(['document','location','window','NodeFilter','fetch'].map(k=>[k,globalThis[k]]));
   const a='https://mirapri.ff14eden.work/img/a.jpg',b='https://pbs.twimg.com/media/b.jpg';
-  const rows=[{image_urls:[a+'?name=large'],equipments:[{name:'テスト甲',colorNames:['スートブラック']},{name:'テスト甲',colorNames:[]}]},
+  const rows=[{image_urls:[a+'?name=large'],equipments:[{name:'テスト甲',colorNames:['スートブラック']},{name:'テスト甲',colorNames:[]},{name:'テスト甲',colorNames:['スートブラック']}]},
     {image_urls:[b],equipments:[{name:'テスト乙',colorNames:[]},{name:'<unknown>',colorNames:[]}]},
     {image_urls:['https://example.test/empty.jpg'],equipments:[]}];
   const index=indexEdenRecipes(rows);

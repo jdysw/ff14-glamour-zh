@@ -34,9 +34,11 @@ function edenImageKey(raw) {
 
 function recipeEquipment(row) {
   if (!Array.isArray(row.equipments)) return [];
-  return row.equipments.slice(0, 80).filter(item => typeof item?.name === 'string' && item.name.trim() && item.name.length <= 160)
+  const items = row.equipments.slice(0, 80).filter(item => typeof item?.name === 'string' && item.name.trim() && item.name.length <= 160)
     .map(item => ({name:item.name.trim(), colors:Array.isArray(item.colorNames)
       ? item.colorNames.filter(color => typeof color === 'string' && color.trim() && color.length <= 80).slice(0,8).map(color => color.trim()) : []}));
+  const seen = new Set();
+  return items.filter(item => {const key=JSON.stringify(item);const fresh=!seen.has(key);seen.add(key);return fresh;});
 }
 
 function indexEdenRecipes(rows) {
@@ -76,7 +78,7 @@ function loadEdenRecipes(refresh = false) {
   if (!recipeRequest || refresh) {
     const url = recipeDataUrl();
     recipeRequest = fetch(url, {credentials:'omit', cache:refresh ? 'reload' : 'force-cache', signal:AbortSignal.timeout(45000)})
-      .then(response => { if (!response.ok) throw new Error('Eden HTTP ' + response.status); return response.json(); })
+      .then(response => { if (!response.ok) { throw new Error('Eden HTTP ' + response.status); } return response.json(); })
       .then(indexEdenRecipes);
   }
   return recipeRequest;
@@ -176,7 +178,7 @@ function syncEdenRecipePanels() {
     const key = recipeImageKey(card);
     if (!key) {card.querySelector('.'+RECIPE_PANEL)?.remove();recipePanels.delete(card);continue;}
     const state = recipePanels.get(card);
-    if (!state || state.key !== key || state.request !== recipeRequest) beginRecipePanel(card,key);
+    if (state?.key !== key || state?.request !== recipeRequest) beginRecipePanel(card,key);
     else renderRecipePanel(card,state);
   }
 }

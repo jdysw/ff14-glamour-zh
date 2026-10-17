@@ -57,6 +57,7 @@ try {
  await c.eval(`window.__setRecipeImage('https://mirapri.ff14eden.work/img/recipe-one.jpg?format=jpg')`);await sleep(300);
  recipe=await c.eval(`(()=>{const p=document.querySelector('.zhx-eden-recipe-items');return {text:p.textContent,links:[...p.querySelectorAll('a')].map(a=>a.textContent)}})()`);
  assert.equal(recipe.links.filter(text=>text==='永夏墨镜').length,2,'同件装备的不同染色保留两条');
+ assert.equal(recipe.links.filter(text=>text==='小牛皮骑手外套').length,1,'完全重复的装备和染色仅显示一条');
  assert.ok(recipe.text.includes('沃土棕')&&recipe.text.includes('哥布林'));
  assert.ok(recipe.text.includes('未知的测试装备'));assert.ok(!recipe.links.includes('未知的测试装备'));
  assert.equal(await c.eval(`document.querySelector('.v-dialog .recipe-dialog-title-text').textContent`),'装備ランキング');

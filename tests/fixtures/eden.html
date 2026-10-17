@@ -21,6 +21,7 @@ window.__recipeData=[
  {image_urls:['https://mirapri.ff14eden.work/img/recipe-two.jpg'],equipments:[{name:'ガラテアタイツ',colorNames:[]}]},
  {image_urls:['https://mirapri.ff14eden.work/img/recipe-empty.jpg'],equipments:[]}
 ];
+window.__recipeData[0].equipments.push({name:'カーフスキン・ライダースジャケット',colorNames:['ロームブラウン','ゴブリンブラウン']});
 const nativeFetch=window.fetch.bind(window);
 window.fetch=(url,options)=>String(url).includes('/glamour/all_users_glamour.json')
  ? (window.__recipeRequests++,new Promise(resolve=>{window.__recipeReply=()=>resolve(new Response(JSON.stringify(window.__recipeData),{status:200,headers:{'Content-Type':'application/json'}}));}))
