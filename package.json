@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "acorn": "^8.19.0",
-    "linkedom": "^0.18.13",
+    "happy-dom": "^21.0.3",
     "rollup": "^4.64.0"
   }
 }

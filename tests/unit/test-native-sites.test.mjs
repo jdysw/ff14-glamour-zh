@@ -2,18 +2,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {parseHTML, NodeFilter as DOMNodeFilter} from 'linkedom';
+import {Window as TestWindow} from 'happy-dom';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
 import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
 
-test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容边界', () => {
+function createTestDom(markup) {
+  const host=new TestWindow({url:'https://mirapri.ff14eden.work/'});
+  host.document.write(markup);
+  return host;
+}
+
+test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容边界', async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver'].map(k=>[k,globalThis[k]]));
+  let dom;
   try {
-    const {document:doc}=parseHTML('<html><head><title>PopularEquipment | FFXIV Mirapri Eden</title></head><body><div class="input-area"><input type="text"></div><h1>装備ランキング</h1><div class="flex-grow-1">テスト装備</div><a href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/"></a><div class="recipe-dialog-text">装備ランキング</div><i class="v-icon">mdi-home</i><div class="v-list-item__title">テスト装備</div></body></html>');
+    dom=createTestDom('<html><head><title>PopularEquipment | FFXIV Mirapri Eden</title></head><body><div class="input-area"><input type="text"></div><h1>装備ランキング</h1><div class="flex-grow-1">テスト装備</div><a href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/"></a><div class="recipe-dialog-text">装備ランキング</div><i class="v-icon">mdi-home</i><div class="v-list-item__title">テスト装備</div></body></html>');
+    const doc=dom.document;
     const input=doc.querySelector('input'),title=doc.querySelector('h1'),name=doc.querySelector('.flex-grow-1'),link=doc.querySelector('a');
     const authored=doc.querySelector('.recipe-dialog-text'),icon=doc.querySelector('i'),option=doc.querySelector('.v-list-item__title');
-    globalThis.NodeFilter=DOMNodeFilter;
+    globalThis.NodeFilter=dom.NodeFilter;
     globalThis.location={hash:'#/components/popular-equipment'};globalThis.window={__zhxTestSite:'eden'};
     let observer;
     globalThis.MutationObserver=class{constructor(cb){observer=cb;}observe(){}};
@@ -37,6 +45,7 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     translateEdenPage(null);assert.equal(title.textContent,'装备排行榜');
     translateEdenPage(authored);assert.equal(authored.textContent,'装備ランキング');
   } finally {
+    await dom?.happyDOM.abort();
     _applyV3({candidatePolicy:1});
     for(const[k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
   }
@@ -55,12 +64,13 @@ test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重
   assert.equal(indexEdenRecipes([...rows,{image_urls:[a],equipments:[{name:'别的装备'}]}]).get(a),null);
   assert.throws(()=>indexEdenRecipes({}),/格式/);
   let requests=0,deliver,fail=false;const options=[];
-  const {document:doc}=parseHTML('<html><head></head><body><div class="v-dialog v-dialog--active recipe-dialog-content"><div class="recipe-dialog-card"><div class="dialog-image"><div class="v-image__image" id="media"></div></div><div class="recipe-dialog-title-text">装備ランキング</div><div class="recipe-dialog-actions"><button>关闭</button></div></div></div></body></html>');
+  const dom=createTestDom('<html><head></head><body><div class="v-dialog v-dialog--active recipe-dialog-content"><div class="recipe-dialog-card"><div class="dialog-image"><div class="v-image__image" id="media"></div></div><div class="recipe-dialog-title-text">装備ランキング</div><div class="recipe-dialog-actions"><button>关闭</button></div></div></div></body></html>');
+  const doc=dom.document;
   const media=doc.querySelector('#media'),dialog=doc.querySelector('.v-dialog');
   const settle=()=>new Promise(resolve=>setImmediate(resolve));
   const move=async url=>{media.style.backgroundImage='url("'+url+'")';translateEdenPage();await settle();};
   try {
-    Object.assign(globalThis,{document:doc,location:{hash:'#/'},window:{__zhxTestSite:'eden'},NodeFilter:DOMNodeFilter});
+    Object.assign(globalThis,{document:doc,location:{hash:'#/'},window:{__zhxTestSite:'eden'},NodeFilter:dom.NodeFilter});
     globalThis.fetch=(url,opt)=>{requests++;options.push(opt);if(fail)return Promise.resolve({ok:false,status:503});
       const response={ok:true,json:async()=>rows};return requests===1?new Promise(resolve=>{deliver=()=>resolve(response);}):Promise.resolve(response);};
     _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0'});
@@ -87,6 +97,7 @@ test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重
     assert.ok(options.every(opt=>opt.credentials==='omit'));assert.equal(options.at(-1).cache,'reload');
     translateEdenPage();await settle();assert.equal(requests,3);
   } finally {
+    await dom.happyDOM.abort();
     _applyV3({candidatePolicy:1});
     for(const[k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
   }

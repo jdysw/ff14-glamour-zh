@@ -83,29 +83,6 @@ jobs:
           if-no-files-found: warn
 
       # PR 分支单独统计本次改动引起的 Sonar 告警，避免与历史 main 告警混淆。
-      # SCA 详情需要项目身份，公开 issues API 无法说明依赖门禁的原因。
-      - name: 导出当前 PR 依赖风险
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          curl --fail --silent --show-error --get \
-            --header "Authorization: Bearer ${SONAR_TOKEN}" \
-            --header "Accept: application/json" \
-            --data-urlencode "component=jdysw_ff14-glamour-zh" \
-            --data-urlencode "pullRequest=${SONAR_PR_NUMBER}" \
-            --data-urlencode "riskType=VULNERABILITY" \
-            "https://api.sonarcloud.io/sca/risk-reports" > sonar-dependency-risks.json
-          jq . sonar-dependency-risks.json
-      - name: 上传当前 PR 依赖风险
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonar-dependency-risks
-          path: sonar-dependency-risks.json
-          if-no-files-found: warn
-
       - name: 导出当前 PR 未解决 Sonar 告警
         if: ${{ github.event_name == 'pull_request' }}
         env:
