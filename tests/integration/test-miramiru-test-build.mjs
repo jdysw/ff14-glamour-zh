@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { repoRoot,fixtureUrl } from '../helpers/paths.mjs';
 import {newPage,closePage,sleep} from '../helpers/cdp.mjs';
 
-execFileSync(process.execPath, ['build/make-miramiru-test.mjs'], { cwd: repoRoot, stdio: 'pipe' });
+execFileSync(process.execPath, ['build/make-site-test.mjs', 'miramiru'], { cwd: repoRoot, stdio: 'pipe' });
 const version = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version;
 const file = path.join(repoRoot, 'dist', `ff14-miramiru-zh-${version}-test.user.js`);
 const source = fs.readFileSync(file, 'utf8');

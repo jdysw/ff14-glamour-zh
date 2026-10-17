@@ -3,7 +3,7 @@ import { findPython } from '../../build/python.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES, SITE_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
 import { RUNTIME_DICT_LAYERS, validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
@@ -16,12 +16,16 @@ const python = [
   'print(json.dumps(generator.SITE_FILES, ensure_ascii=False))',
 ].join(';');
 const published = JSON.parse(execFileSync(findPython(), ['-c', python], { cwd: root, encoding: 'utf8' }));
-assert.equal(SITE_POLICIES.length, 8);
-assert.deepEqual(Object.keys(published).sort(), SITE_POLICIES.map(site => site.id).sort(),
+assert.equal(DATA_POLICIES.length, 8);
+assert.deepEqual(Object.keys(published).sort(), DATA_POLICIES.map(site => site.id).sort(),
   'Python 发布器与 JavaScript 应用层必须服务相同七站');
-for (const site of SITE_POLICIES) {
+for (const site of DATA_POLICIES) {
   assert.deepEqual([...requiredV3Files(site)].sort(), [...published[site.id]].sort(),
     site.id + ' 必需 V3 数据文件与生成器输出必须严格一致');
+}
+for (const site of SITE_POLICIES.filter(site => site.dataSite)) {
+  assert.deepEqual([...requiredV3Files(site)].sort(), [...published[site.dataSite]].sort(),
+    site.id + ' 复用的数据集必须满足其全部索引需求');
 }
 
 const sha = 'a'.repeat(64);

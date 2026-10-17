@@ -1,0 +1,48 @@
+// Eden 的用户结果：中文候选触发原生搜索、Wiki 目标、动态更新与用户内容保护。
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {newPage,closePage,sleep} from '../helpers/cdp.mjs';
+import {fixtureUrl,repoRoot} from '../helpers/paths.mjs';
+execFileSync(process.execPath,['build/make-site-test.mjs','eden'],{cwd:repoRoot,stdio:'pipe'});
+const version=JSON.parse(fs.readFileSync(new URL('../../package.json',import.meta.url),'utf8')).version;
+const source=fs.readFileSync(new URL(`../../dist/ff14-eden-zh-${version}-test.user.js`,import.meta.url),'utf8');
+const port=Number(process.env.ZHX_CDP_PORT||9223);
+const page=await newPage(port,fixtureUrl('eden.html'));
+const c=page.cdp;
+try {
+ await c.eval(`window.__zhxTestSite='eden';window.__realStorageCalls=0;for(const name of ['GM_getValue','GM_setValue','GM_listValues','GM_deleteValue'])window[name]=()=>{window.__realStorageCalls++;throw Error('Real storage forbidden')};`);
+ await c.eval(source);await sleep(1000);
+ assert.equal(await c.eval(`document.querySelector('h1').textContent`),'最新幻化搭配');
+ assert.equal(await c.eval(`document.querySelector('#gear').textContent`),'小牛皮骑手外套');
+ assert.equal(await c.eval(`document.querySelector('#maker-name').textContent`),'小牛皮骑手外套');
+ assert.equal(await c.eval(`document.querySelector('#official').getAttribute('href')`),'https://ff14.huijiwiki.com/wiki/物品:'+encodeURIComponent('小牛皮骑手外套'));
+ const protectedText=await c.eval(`[...document.querySelectorAll('.overlay .text,.recipe-dialog-title-text,.recipe-dialog-user,.recipe-dialog-text,.gallery-hero-text')].map(e=>e.textContent)`);
+ assert.deepEqual(protectedText,['装備ランキング','検索','ログイン','装備ランキング','装備ランキング']);
+ assert.equal(await c.eval(`document.querySelector('#title').value`),'検索');
+ assert.equal(await c.eval(`document.querySelector('input[type=hidden]').value`),'lalafell');
+ await c.eval(`document.querySelector('#gear').click();document.querySelector('#native-button').click();document.querySelector('#native-option').click()`);
+ assert.equal(await c.eval(`window.__nativeClicks`),2,'原生筛选和选项继续触发自身处理');
+ assert.ok((await c.eval(`window.__opened[0][0]`)).endsWith(encodeURIComponent('小牛皮骑手外套')));
+ await c.eval(`const el=document.querySelector('#search');el.focus();el.value='小牛皮骑手外套';el.dispatchEvent(new Event('input',{bubbles:true}));`);
+ await sleep(600);
+ assert.ok((await c.eval(`[...document.querySelectorAll('button[data-zhx-index]')].map(e=>e.textContent).join(' ')`)).includes('小牛皮骑手外套'));
+ await c.eval(`const option=[...document.querySelectorAll('button[data-zhx-index]')].find(e=>e.textContent.includes('小牛皮骑手外套'));option.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));`);
+ await sleep(1600);
+ assert.equal(await c.eval(`document.querySelector('#result').textContent`),'FOUND');
+ assert.equal(await c.eval(`document.querySelector('#search').value`),'カーフスキン・ライダースジャケット','Vue 搜索模型与可见值保持同步，不能定时回写中文');
+ await c.eval(`document.querySelector('#search').value='小牛皮骑手外套';document.querySelector('#search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));`);
+ await sleep(200);assert.equal(await c.eval(`document.querySelector('#result').textContent`),'FOUND');
+ await c.eval(`{const el=document.querySelector('#maker-search');el.focus();el.value='小牛皮骑手外套';el.dispatchEvent(new Event('input',{bubbles:true}));}`);
+ await sleep(500);
+ await c.eval(`{const option=[...document.querySelectorAll('button[data-zhx-index]')].find(e=>e.textContent.includes('小牛皮骑手外套'));option.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));}`);
+ await sleep(200);
+ assert.equal(await c.eval(`window.__makerQuery`),"Calfskin Rider's Jacket",'英文制作器的原生搜索词必须使用英文名称');
+ assert.equal(await c.eval(`window.__makerCommitted`),"Calfskin Rider's Jacket",'候选点击需提交 Vuetify 原生 combobox');
+ await c.eval(`document.querySelector('#gear').textContent='未知新装备';document.querySelector('#official').setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/');`);
+ await sleep(400);
+ assert.equal(await c.eval(`document.querySelector('#gear').dataset.zhxItem`),undefined);
+ assert.equal(await c.eval(`document.querySelector('#official').dataset.zhxItem`),undefined,'复用官方装备链接时清除旧 Wiki 点击目标');
+ assert.equal(await c.eval(`window.__realStorageCalls`),0,'下载测试版只能使用自身内存缓存');
+ console.log('PASS Eden UI, privacy, native controls, Chinese candidate/Enter, Vue state and reused item nodes');
+} finally {await closePage(port,page.target.id);}

@@ -26,6 +26,7 @@
 | [Ronka LookBook](https://lookbook.ronkacloset.com) | 韩服幻化网站 |
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
 | [Miramiru](https://miramiru.co/en) | 幻化展示站（英／日／韩界面、装备和染剂汉化，装备名称跳转灰机 Wiki） |
+| [Mirapri Eden](https://mirapri.ff14eden.work/) | 幻化搭配、装备排行与制作器（日／英界面汉化、装备 Wiki 跳转、中文装备搜索） |
 | [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 
@@ -44,7 +45,7 @@
 
 - 汉化后的装备名 / 染剂名**支持点击** → 跳转灰机 wiki 查国服译名与获取途径。
 - 灰机 wiki 物品页会多出「幻化反查」区块 → 一键跳去对应幻化站看同款穿搭。
-- 反查区块包含光之收藏家、MIRAPRI SNAP、Eorzea Collection、Ronka LookBook、Miramiru 和 End Closet，各链接前显示站点图标。缺少对应物品 ID 或名称映射时只显示有效入口。
+- 反查区块包含光之收藏家、MIRAPRI SNAP、Eorzea Collection、Ronka LookBook、Miramiru、End Closet 和 Mirapri Eden，各链接前显示站点图标。缺少对应物品 ID 或名称映射时只显示有效入口。
 - 在支持的装备搜索框输入**国服中文装备名或其中的连续词组**，可查看可幻化装备、时尚配饰和鸟甲的双语候选；正式名和中文别名均支持中间包含匹配。按回车、使用站点原有搜索按钮或点击候选，都会按站点需要转换为原生名称并显示中文；输入停顿不会自动搜索。智能候选按照头部、身体、手部、腿部、脚部、其余部位排序（同部位按匹配相关度）；移动端支持触屏滚动与渐进加载。
 - 数据首次加载及更新时需要联网。成功缓存后会按每日规则检查更新；日常使用无需手动操作。
 
@@ -75,15 +76,15 @@
 ### 目录结构
 
 ```
-dict/                  八站界面词典（改词编辑对应 JSON）
+dict/                  界面词典（Eden 独立前缀词条放在 dict-main.json）
 data/                  权威物品与副本数据
 src/main.js            userscript 入口
 src/core/              核心数据、词典与翻译模块
-src/sites/             八站适配器（七个幻化站与灰机 wiki）
+src/sites/             九站适配器（八个幻化站与灰机 wiki）
 build/                 构建、校验与数据生成脚本
 .github/workflows/     测试、发布与数据站部署
 tests/                 单元、集成、在线与基准测试
-tools/coverage-audit/  八站汉化覆盖审计工具
+tools/coverage-audit/  汉化覆盖审计工具
 ```
 
 src/main.js、src/core/、src/sites/ 是唯一代码源码。dict/*.json 是界面词典源；data/ff14-items.tsv 是九列物品表，其中 glam 列包含候选标记。候选分类依据 IsGlamorous、EquipSlotCategory 和 ItemAction：可幻化装备按装备槽判定，ItemAction 20086 为时尚配饰，1013 为鸟甲。
@@ -91,6 +92,8 @@ src/main.js、src/core/、src/sites/ 是唯一代码源码。dict/*.json 是界�
 ### 数据与发布
 
 只维护当前脚本与当前 V3 数据格式，不再分发旧版数据、不迁移旧缓存。清单必须使用 candidatePolicy=1、声明 SHA-256 与 bytes，名称数据必须有四列，共享词典必须包含完整八层。旧格式会被拒绝并重新获取当前数据；已经缓存的当前格式仍可离线使用。
+
+Eden 复用 Miramiru 的多语数据集与缓存；其界面词条使用 `eden:` 前缀隔离，保存在现有 main 层。九个应用站点对应八个发布数据集，不额外分发相同的物品数据，也不增加词典层。
 
 数据站由 deploy-data 工作流构建为纯静态站点，只部署 `/ff14/v3/`。旧 V2 入口及专用 Functions 已删除，未提供的数据路径使用站点的 404 页面。无需维护双版本分发或旧版脚本兼容方案。
 

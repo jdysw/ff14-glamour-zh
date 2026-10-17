@@ -1,6 +1,6 @@
 // V3.1 内容寻址预览契约：仅服务隔离验证，不参与现有生产脚本构建。
 // V3 的有效性与路径安全仍由原有 v3-contract 独立维护。
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 
 export const V31_SCHEMA = 31;
@@ -42,9 +42,9 @@ export function validV31Manifest(manifest) {
     || !/^[a-f0-9]{12}$/.test(manifest.source.version)
     || !SHA256.test(manifest.source.manifestSha256)
     || !plainObject(manifest.sites)) return false;
-  const siteNames = SITE_POLICIES.map(site => site.id);
+  const siteNames = DATA_POLICIES.map(site => site.id);
   if (!exactKeys(manifest.sites, siteNames)) return false;
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     const entry = manifest.sites[site.id];
     const expected = requiredV3Files(site);
     if (!exactKeys(entry, ['files']) || !exactKeys(entry.files, expected)) return false;

@@ -57,9 +57,9 @@ test('真实中文搜索模块：输入筛选、查询判定和 URL 保留有效
 });
 
 test('真实站点注册：七站生命周期、异常隔离与域名识别', () => {
-  assert.equal(SITE_REGISTRY.length, 8);
+  assert.equal(SITE_REGISTRY.length, 9);
   assert.deepEqual(SITE_REGISTRY.map(row => row.id),
-    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru']);
+    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'eden']);
   const events = [];
   const adapter = createSiteAdapter({
     id: 'mirapri',

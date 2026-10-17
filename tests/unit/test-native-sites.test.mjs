@@ -4,6 +4,65 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
+import { trEden, translateEdenPage, startEden } from '../../src/sites/mirapri-eden.js';
+
+test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容边界', () => {
+  const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver'].map(k=>[k,globalThis[k]]));
+  const make = (tag, classes = '', attrs = {}, value = '') => {
+    const node = {nodeType:1,tagName:tag.toUpperCase(),classes:classes.split(' '),dataset:{},style:{},children:[],parentElement:null,
+      get textContent(){return this.children.map(c=>c.nodeType===3?c.nodeValue:c.textContent).join('');},
+      set textContent(value){this.children=[{nodeType:3,nodeValue:value,parentElement:this}];},
+      getAttribute(k){return attrs[k]??null;},setAttribute(k,v){attrs[k]=v;},
+      matches(selector){return selector.split(',').some(s=>{s=s.trim();return s==='input'?tag==='input':s==='a'?tag==='a':s==='.v-data-table td'?tag==='td':s.startsWith('.')&&this.classes.includes(s.slice(1));});},
+      closest(selector){for(let p=this;p;p=p.parentElement)if(p.matches(selector))return p;return null;},
+      querySelectorAll(selector){return this.children.filter(c=>c.nodeType===1).flatMap(c=>[...(c.matches(selector)?[c]:[]),...c.querySelectorAll(selector)]);},
+      querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
+      appendChild(child){this.children.push(child);child.parentElement=this;return child;},
+    };
+    if(value)node.appendChild({nodeType:3,nodeValue:value});
+    return node;
+  };
+  try {
+    const body=make('body');const head=make('head');const area=body.appendChild(make('div','input-area'));
+    const input=area.appendChild(make('input'));input.readOnly=false;input.type='text';
+    const title=body.appendChild(make('h1','','','装備ランキング'));
+    const name=body.appendChild(make('div','flex-grow-1',{},'テスト装備'));
+    const link=body.appendChild(make('a','',{href:'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/'}));
+    const authored=body.appendChild(make('div','recipe-dialog-text',{},'装備ランキング'));
+    const icon=body.appendChild(make('i','v-icon',{},'mdi-home'));
+    const option=body.appendChild(make('div','v-list-item__title',{},'テスト装備'));
+    globalThis.NodeFilter={SHOW_ELEMENT:1,SHOW_TEXT:4,FILTER_ACCEPT:1,FILTER_REJECT:2};
+    globalThis.location={hash:'#/components/popular-equipment'};globalThis.window={__zhxTestSite:'eden'};
+    let observer;
+    globalThis.MutationObserver=class{constructor(cb){observer=cb;}observe(){}};
+    globalThis.document={body,head,documentElement:body,title:'PopularEquipment | FFXIV Mirapri Eden',
+      addEventListener(){},getElementById(){return null;},createElement:tag=>make(tag),
+      createTreeWalker(root,mask,filter){const all=[];const visit=n=>{for(const child of n.children||[]){if(filter.acceptNode(child)!==2){all.push(child);visit(child);}}};visit(root);let i=0;return{nextNode(){this.currentNode=all[i++];return!!this.currentNode;}};},
+    };
+    _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
+    assert.equal(resolveByZh('测试装备'),'テスト装備','多语表中英文行在先时，Eden 搜索仍必须选日文');
+    assert.equal(trEden('Equipment Ranking'),'装备排行榜');
+    assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
+    assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
+    assert.equal(trEden('不认识的玩家标题'),'不认识的玩家标题');
+    startEden();
+    assert.equal(title.textContent,'装备排行榜');assert.equal(name.textContent,'测试装备');
+    assert.equal(name.dataset.zhxItem,'测试装备');assert.equal(option.textContent,'测试装备');
+    assert.equal(option.dataset.zhxItem,undefined,'原生装备选项不劫持为 Wiki 点击');
+    assert.ok(link.getAttribute('href').endsWith(encodeURIComponent('测试装备')));
+    assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
+    assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
+    assert.equal(typeof observer,'function');
+    name.children[0].nodeValue='未知新装备';translateEdenPage(name.children[0]);
+    assert.equal(name.dataset.zhxItem,undefined,'Vue 复用名称节点不能保留前一件装备的 Wiki 目标');
+    translateEdenPage(null);assert.equal(title.textContent,'装备排行榜');
+    translateEdenPage(authored);assert.equal(authored.textContent,'装備ランキング');
+    document.body=null;translateEdenPage();
+  } finally {
+    _applyV3({candidatePolicy:1});
+    for(const[k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}
+  }
+});
 
 test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
   const locales = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-locales.json', import.meta.url), 'utf8'));
@@ -115,7 +174,7 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3 } from '../../src/core/data-manager.js';
+import { _applyV3, resolveByZh } from '../../src/core/data-manager.js';
 
 function element(tagName, initial = {}) {
   const attrs = new Map(Object.entries(initial));

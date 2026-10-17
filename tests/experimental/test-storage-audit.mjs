@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
 import { requiredV3Files } from '../../src/core/v3-contract.js';
 import { auditStorage } from '../../tools/data/audit-storage.mjs';
@@ -14,7 +14,7 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 try {
   const sites = {};
   let physicalFileCount = 0;
-  for (const policy of SITE_POLICIES) {
+  for (const policy of DATA_POLICIES) {
     const files = {};
     for (const name of requiredV3Files(policy)) {
       const suffix = name === 'series' || name === 'acl' ? 'txt' : 'tsv';
@@ -40,7 +40,7 @@ try {
   const report = auditStorage(directory);
   assert.equal(report.total.files, physicalFileCount + 1);
   // 根据真实站点策略派生预期：Wiki 等站点可能不需要 alias，不能硬编码七份。
-  const aliasSites = SITE_POLICIES.filter(policy => requiredV3Files(policy).includes('alias'));
+  const aliasSites = DATA_POLICIES.filter(policy => requiredV3Files(policy).includes('alias'));
   assert.ok(aliasSites.length > 1, '测试夹具必须具有跨站重复资源');
   assert.equal(report.total.files - report.total.uniqueBlobs, aliasSites.length - 1,
     '重复内容计数必须与站点声明的文件需求相符');

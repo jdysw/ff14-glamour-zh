@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
 import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 import { verifyV3Publish } from './verify-publish-contract.mjs';
@@ -19,7 +19,7 @@ const byUrl = (a, b) => a.url < b.url ? -1 : a.url > b.url ? 1 : 0;
 
 function listedFiles(manifest) {
   const files = [];
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     for (const name of requiredV3Files(site)) {
       files.push(manifest.sites[site.id].files[name]);
     }
@@ -86,7 +86,7 @@ export function verifyPagesDedupe(siteDirectory) {
   const manifest = JSON.parse(readFileSync(path.join(v3, 'manifest.json'), 'utf8'));
   assert.ok(validV3Manifest(manifest), '去重后 V3 manifest 结构非法');
   assert.equal(manifest.candidatePolicy, 1, '去重目录必须使用当前装备候选策略');
-  assert.deepEqual(Object.keys(manifest.sites).sort(), SITE_POLICIES.map(x => x.id).sort(),
+  assert.deepEqual(Object.keys(manifest.sites).sort(), DATA_POLICIES.map(x => x.id).sort(),
     '去重目录必须保留完整七站');
   const dictionary = JSON.parse(readFileSync(path.join(v3, 'dict.json'), 'utf8'));
   assert.ok(validRuntimeDictionary(dictionary), '去重目录的共享词典结构非法');

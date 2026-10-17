@@ -11,6 +11,7 @@ import { startMirapri, translatePage } from '../sites/mirapri.js';
 import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ronka.js';
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
 import { startMiramiru, translateMiramiruPage } from '../sites/miramiru.js';
+import { startEden, translateEdenPage } from '../sites/mirapri-eden.js';
 // 转发站点策略公共接口，同时继续由本模块负责七站启动。
 export { _siteIndexes, neededTables, onHost } from './site-policy.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
@@ -124,6 +125,8 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
       onDataReady() { translateMiramiruPage(); },
       onPageShow: translateMiramiruPage,
     }),
+    createSiteAdapter({ id: 'eden', start: startEden, processRoot: translateEdenPage,
+      onDataReady() { translateEdenPage(); }, onPageShow: translateEdenPage }),
   ];
 
   // 只保留站点启动行为；站点选择和数据需求由纯策略模块负责。

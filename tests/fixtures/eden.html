@@ -1,0 +1,27 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><title>GlamourRecipe | FFXIV Mirapri Eden</title>
+<body><nav><a href="#/">ミラプリレシピ</a><a href="#/components/popular-equipment">装備ランキング</a></nav>
+<main><h1>新着ミラプリレシピ</h1>
+<div class="input-area"><div class="v-input"><label for="search">検索</label><input id="search" type="text"></div></div>
+<div class="v-input"><label for="race">種族</label><input id="race" readonly type="text"><input type="hidden" value="lalafell"></div>
+<div class="image-container"><div class="overlay"><div class="text">装備ランキング</div></div></div>
+<div class="recipe-dialog-title-text">検索</div><div class="recipe-dialog-user">ログイン</div><div class="recipe-dialog-text">装備ランキング</div>
+<div class="gallery-hero-text">装備ランキング</div>
+<div class="v-data-table"><table><thead><tr><th>装備名</th></tr></thead><tbody><tr><td id="gear">カーフスキン・ライダースジャケット</td><td><button id="native-button">この装備のレシピを検索する</button></td></tr></tbody></table></div>
+<a id="official" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/42e00aa7e7a/">装備</a>
+<section id="equipment-view"><h6 id="maker-name">Calfskin Rider's Jacket</h6><h4>Gladiator's Arm</h4></section>
+<div class="v-input v-combobox"><label for="maker-search">Search for Equipment</label><input id="maker-search" type="text"></div>
+<div role="listbox"><div class="v-list-item__title" id="native-option">カーフスキン・ライダースジャケット</div></div>
+<input id="title" placeholder="タイトル（任意）" value="検索"><textarea>ログイン</textarea>
+<i class="v-icon mdi mdi-menu">mdi-menu</i><span id="result"></span>
+</main>
+<script>
+window.__nativeQueries=[];window.__nativeClicks=0;window.__opened=[];window.open=(...args)=>window.__opened.push(args);
+document.querySelector('#search').addEventListener('input',event=>{
+ const native=event.target.value;window.__nativeQueries.push(native);
+ queueMicrotask(()=>{event.target.value=native;document.querySelector('#result').textContent=native==='カーフスキン・ライダースジャケット'?'FOUND':'EMPTY';});
+});
+document.querySelector('#native-button').addEventListener('click',()=>window.__nativeClicks++);
+document.querySelector('#native-option').addEventListener('click',()=>window.__nativeClicks++);
+document.querySelector('#maker-search').addEventListener('input',event=>window.__makerQuery=event.target.value);
+document.querySelector('#maker-search').addEventListener('keydown',event=>{if(event.key==='Enter')window.__makerCommitted=event.target.value;});
+</script></body></html>

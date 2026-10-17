@@ -77,7 +77,8 @@ const SUITES = {
     "integration/test-miramiru-test-build.mjs",
     "integration/test-miramiru-audit.mjs",
     "integration/test-miramiru-filters.mjs",
-    "integration/test-standalone-search.mjs"
+    "integration/test-standalone-search.mjs",
+    "integration/test-eden.mjs"
   ],
   "build": [
     "build/test-pipeline.mjs"

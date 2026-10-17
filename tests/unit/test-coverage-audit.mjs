@@ -24,7 +24,10 @@ assert.equal(classify('투영 콘테스트',{ui:true}),'real');
 assert.equal(classify('染色',{site:'collection',ui:true}),'ok','Miramiru terminology must not mark another site as untranslated');
 assert.equal(classify('染色',{site:'miramiru',ui:true}),'real');
 
-assert.equal(Object.keys(SITES).length, 8, 'all seven active adapters must be audited');
+assert.ok(SITES.eden, 'Eden 的 hash 路由业务页必须可审计');
+assert.equal(classify('検索',{site:'eden',ui:true}),'real');
+assert.equal(normalizeSiteUrl('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private', 'https://mirapri.ff14eden.work/', ['mirapri.ff14eden.work']), 'https://mirapri.ff14eden.work/#/components/popular-equipment');
+assert.notEqual(templateKey('https://mirapri.ff14eden.work/#/'),templateKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));
 assert.ok(SITES.endcloset, 'EndCloset must not be omitted');
 assert.equal(classify('検索', { site: 'endcloset', ui: true }), 'real');
 assert.equal(classify('検索中', { site: 'endcloset', ui: true }), 'real', 'load EndCloset kanji UI dictionary');

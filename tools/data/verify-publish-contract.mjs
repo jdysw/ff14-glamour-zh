@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
 
@@ -15,7 +15,7 @@ export function verifyV3Publish(directory) {
   assert.ok(validV3Manifest(manifest), 'manifest 不满足客户端所接受的 V3 契约');
   assert.equal(manifest.candidatePolicy, 1, '新发布必须包含当前装备候选策略');
   assert.match(manifest.version, /^[a-f0-9]{12}$/, '生成版本必须是 12 位十六进制');
-  assert.deepEqual(Object.keys(manifest.sites).sort(), SITE_POLICIES.map(site => site.id).sort(),
+  assert.deepEqual(Object.keys(manifest.sites).sort(), DATA_POLICIES.map(site => site.id).sort(),
     '数据站必须输出七站完整文件清单');
 
   let fileCount = 0;
@@ -32,7 +32,7 @@ export function verifyV3Publish(directory) {
     fileCount++;
     totalBytes += buffer.byteLength;
   }
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     const files = manifest.sites[site.id].files;
     assert.deepEqual(Object.keys(files).sort(), requiredV3Files(site).sort(),
       site.id + ' 数据文件必须与当前脚本的查询需求完全一致');
@@ -43,7 +43,7 @@ export function verifyV3Publish(directory) {
   const dictionary = JSON.parse(readFileSync(path.join(base, 'dict.json'), 'utf8'));
   assert.ok(validRuntimeDictionary(dictionary),
     '共享词典必须包含当前八层、字符串译文且不能包含原型特殊键');
-  return { sites: SITE_POLICIES.length, files: fileCount, bytes: totalBytes, version: manifest.version };
+  return { sites: DATA_POLICIES.length, files: fileCount, bytes: totalBytes, version: manifest.version };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

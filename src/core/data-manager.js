@@ -459,7 +459,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
-    const site = findSite();
+    const policy = findSite();
+    const site = policy?.dataSite ? { ...policy, id: policy.dataSite } : policy;
     if (!site?.id) return false;
     const sourceBefore = { ..._dlStats };
     try {
@@ -600,6 +601,14 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const out = Object.create(null);
     const kind = Object.create(null);
     if (_irCandidatePolicy !== 1) return { map: out, kind };
+    // Eden 的首页按日文装备名搜索，制作器却可能显示英文名称。
+    // 多语名称均可翻译，但候选先登记日文，避免提交英文后首页搜不到结果。
+    if (typeof window !== 'undefined' && findSite()?.id === 'eden') {
+      for (const [native, zh] of Object.entries(names || {})) {
+        if (glam?.[native] === '1' && /[\u3040-\u30ff\u3400-\u9fff]/u.test(native) && !/[\uac00-\ud7af]/u.test(native))
+          _irSearchPut(out, zh, native, 0, kind);
+      }
+    }
     for (const [native, zh] of Object.entries(names || {})) {
       if (glam?.[native] !== '1') continue;   // 仅明确允许的装备、时尚配饰、鸟甲进入中文候选
       _irSearchPut(out, zh, native, 0, kind);

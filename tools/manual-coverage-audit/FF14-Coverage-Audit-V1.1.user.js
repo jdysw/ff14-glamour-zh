@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3.3
+// @version      1.3.4
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -12,6 +12,7 @@
 // @match        https://end-closet.com/*
 // @match        https://ff14.huijiwiki.com/*
 // @match        https://miramiru.co/*
+// @match        https://mirapri.ff14eden.work/*
 // @noframes
 // @run-at       document-start
 // @grant        GM_getValue
@@ -26,7 +27,7 @@
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
-    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru'
+    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden'
   });
   const FORMAT = 'zhx-manual-audit-v2';
   const AUTHORED = {
@@ -55,7 +56,8 @@
   function urlKey(raw) {
     const u = new URL(raw);
     if(u.protocol !== 'https:' || !SITES[u.hostname]) throw new Error('unsupported https site');
-    u.hash='';u.username='';u.password='';
+    const route = u.hostname==='mirapri.ff14eden.work' ? edenRoute(u) : '';
+    u.hash=route;u.username='';u.password='';
     for(const k of [...u.searchParams.keys()]){
       if(/^(utm_|fbclid$|gclid$|ref$|source$|share$|session|token|nonce|access|secret|auth|pass|email|sid$|code$|q$|query$|search$)/i.test(k))u.searchParams.delete(k);
     }
@@ -84,7 +86,16 @@
     if(/^\/(?:en\/|ko\/|ja\/)?(?:about|faq|collection)\/?$/.test(path)&&el.closest?.('main'))return 'ui';
     return null;
   }
-  function allowedRoute(url){try{return !ROUTE_BLOCK.test(new URL(url).pathname)}catch{return false}}
+  function edenRoute(u){
+    const route=u.hash.split('?')[0].replace(/^#/, '') || '/';
+    return /^\/(?:components\/(?:popular-equipment|glamour-recipe-maker|dye-finder|help|q&a|policy|contest|gallery\/[\w-]{1,85}))?\/?$/.test(route)?route:'';
+  }
+  function edenScope(el){
+    if(el.closest?.('.image-container .overlay,.recipe-dialog-title-text,.recipe-dialog-user,.recipe-dialog-text,.gallery-hero-text,.gallery-tile-title,.gallery-tile-img'))return 'user';
+    if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
+    return null;
+  }
+  function allowedRoute(url){try{const u=new URL(url);return !ROUTE_BLOCK.test(u.pathname)&&(siteFor(url)!=='eden'||!!edenRoute(u))}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
   function classifyContext(el,kind,site,url){
@@ -99,7 +110,7 @@
     const link=el.closest?.('a[href]');
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):null;
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
@@ -235,7 +246,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
@@ -539,7 +550,7 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.3.3. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit v1.3.4. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -646,7 +657,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.3',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.4',baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -712,7 +723,7 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.toolVersion='1.3.3';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  out.toolVersion='1.3.4';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }

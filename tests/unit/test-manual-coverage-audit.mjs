@@ -9,6 +9,10 @@ assert.throws(()=>C.readAudit({format:'zhx-manual-audit-v1',pages:{}}),/zhx-manu
 assert.equal(C.urlKey('https://mirapri.com/posts?token=x&sort=recent#i'),'https://mirapri.com/posts/?sort=recent');
 assert.equal(C.allowedRoute('https://mirapri.com/login'),false);
 assert.equal(C.siteFor('https://end-closet.com/detail/abc'),'endcloset');
+assert.equal(C.siteFor('https://mirapri.ff14eden.work/#/'),'eden');
+assert.equal(C.urlKey('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private&token=secret'),'https://mirapri.ff14eden.work/#/components/popular-equipment');
+assert.notEqual(C.urlKey('https://mirapri.ff14eden.work/#/'),C.urlKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));
+assert.equal(C.allowedRoute('https://mirapri.ff14eden.work/#/components/profile'),false);
 for(const [url,lang] of [['https://miramiru.co/','ja'],['https://miramiru.co/en','en'],['https://miramiru.co/ko/mirapuri/abc','ko']]){
   assert.equal(C.siteFor(url),'miramiru');assert.equal(C.pageLanguage(url),lang);
 }

@@ -185,6 +185,7 @@ jobs:
           path: |
             dist/ff14-miramiru-zh-*-test.user.js
             dist/ff14-chinese-font-*-test.user.js
+            dist/ff14-eden-zh-*-test.user.js
             tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js
           retention-days: 14
           if-no-files-found: error

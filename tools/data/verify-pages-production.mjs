@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { SITE_POLICIES } from '../../src/core/site-policy.js';
+import { DATA_POLICIES } from '../../src/core/site-policy.js';
 import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
 import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
 
@@ -47,13 +47,13 @@ export async function verifyProductionV3(originValue = DEFAULT_ORIGIN, transport
   assert.ok(validV3Manifest(manifest), '线上 manifest 不符合原 V3 严格路径契约');
   assert.equal(manifest.candidatePolicy, 1, '线上 manifest 缺少当前装备候选策略');
   assert.match(manifest.version, /^[a-f0-9]{12}$/, '线上 manifest.version 格式不正确');
-  assert.deepEqual(Object.keys(manifest.sites).sort(), SITE_POLICIES.map(x => x.id).sort(),
+  assert.deepEqual(Object.keys(manifest.sites).sort(), DATA_POLICIES.map(x => x.id).sort(),
     '线上必须完整提供当前契约的全部站点数据声明');
   assert.ok(manifest.shared?.dict, '线上必须提供 dict.json');
 
   let files = 0;
   let bytesChecked = 0;
-  for (const site of SITE_POLICIES) {
+  for (const site of DATA_POLICIES) {
     for (const name of requiredV3Files(site)) {
       const meta = manifest.sites[site.id].files[name];
       const bytes = await httpBytes(origin, meta.url, transport);

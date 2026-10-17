@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru]
+        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
