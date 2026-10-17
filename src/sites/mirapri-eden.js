@@ -204,6 +204,16 @@ function trEden(text) {
   return value ? text.replace(raw, value) : text;
 }
 
+function contextualEdenEditorLabel(element, raw) {
+  const label = raw.trim();
+  if (label === 'Range') {
+    if (element.closest('.tui-image-editor-menu-rotate .tui-image-editor-range-wrap')) return '角度';
+    if (element.closest('.tui-image-editor-menu-draw .tui-image-editor-range-wrap')) return '线宽';
+  }
+  if (label === 'Stroke' && element.closest('.tui-image-editor-menu-shape .tui-image-editor-range-wrap')) return '描边宽度';
+  return null;
+}
+
 function isRankingName(element) {
   return /^#\/components\/popular-equipment\/?(?:\?|$)/.test(location.hash)
     && element.matches('.flex-grow-1');
@@ -216,21 +226,47 @@ function isEdenEquipmentSearch(input, label) {
     && !!input.closest('main .v-toolbar .v-autocomplete');
 }
 
-function markEdenSearch(root) {
-  const fields = root.matches?.('input') ? [root] : root.querySelectorAll('input');
-  for (const input of fields) {
-    if (input.readOnly || input.type === 'hidden') continue;
-    const field = input.closest('.v-input');
-    const label = field?.querySelector('label')?.textContent.trim() || '';
-    const global = input.closest('.input-area,.gallery-search');
-    const equipment = isEdenEquipmentSearch(input, label);
-    if (!global && !equipment) { delete input.dataset.zhxEdenSearch; delete input.dataset.zhxEdenMaker; continue; }
-    input.dataset.zhxEdenSearch = '1';
-    if (equipment) input.dataset.zhxEdenMaker = '1';
-    else delete input.dataset.zhxEdenMaker;
-    const hint = '搜索（支持中文装备名）';
-    if (input.getAttribute('placeholder') !== hint) input.setAttribute('placeholder', hint);
+function translateEdenAttributes(element) {
+  for (const attr of ['title', 'aria-label', 'alt', 'placeholder', 'tooltip-content']) {
+    const value = element.getAttribute(attr);
+    if (!value) continue;
+    const next = trEden(value);
+    if (next !== value) element.setAttribute(attr, next);
   }
+}
+
+function markEdenSearchInput(input) {
+  if (input.readOnly || input.type === 'hidden') return;
+  const field = input.closest('.v-input');
+  const label = field?.querySelector('label')?.textContent.trim() || '';
+  const global = input.closest('.input-area,.gallery-search');
+  const equipment = isEdenEquipmentSearch(input, label);
+  if (!global && !equipment) { delete input.dataset.zhxEdenSearch; delete input.dataset.zhxEdenMaker; return; }
+  input.dataset.zhxEdenSearch = '1';
+  if (equipment) input.dataset.zhxEdenMaker = '1';
+  else delete input.dataset.zhxEdenMaker;
+  const hint = '搜索（支持中文装备名）';
+  if (input.getAttribute('placeholder') !== hint) input.setAttribute('placeholder', hint);
+}
+
+function markEdenSearch(root) {
+  const fields = root.matches?.('input,textarea') ? [root] : root.querySelectorAll('input,textarea');
+  for (const input of fields) {
+    // Static hints are UI; keep typed values and controls inside authored/explicitly skipped content intact.
+    if (input.matches('.zhx-skip,[contenteditable]:not([contenteditable="false"])') || input.parentElement?.closest(SKIP)) continue;
+    translateEdenAttributes(input);
+    if (input.tagName === 'TEXTAREA') continue;
+    translateEdenEditorButtonValue(input);
+    markEdenSearchInput(input);
+  }
+}
+
+function translateEdenEditorButtonValue(input) {
+  if (!input.matches('.tui-image-editor-container input[type="button"],.tui-image-editor-container input[type="submit"],.tui-image-editor-container input[type="reset"]')) return;
+  const value = input.value;
+  if (!value) return;
+  const next = trEden(value);
+  if (next !== value) input.value = next;
 }
 
 function updateEdenOfficialLink(element) {
@@ -261,12 +297,7 @@ function updateEdenItemTarget(element) {
 function translateEdenElement(element) {
   if (element.closest(SKIP)) return;
   updateEdenItemTarget(element);
-  for (const attr of ['title', 'aria-label', 'alt', 'placeholder']) {
-    const value = element.getAttribute(attr);
-    if (!value) continue;
-    const next = trEden(value);
-    if (next !== value) element.setAttribute(attr, next);
-  }
+  translateEdenAttributes(element);
 }
 
 function translateEdenText(node) {
@@ -275,7 +306,9 @@ function translateEdenText(node) {
   const raw = node.nodeValue;
   const item = element.closest(EQUIPMENT + ',#equipment-view button') || (isRankingName(element) && element);
   const name = item && resolveByName(raw.trim());
-  const next = name ? raw.replace(raw.trim(), name) : trEden(raw);
+  const contextual = contextualEdenEditorLabel(element, raw);
+  const translated = name || contextual;
+  const next = translated ? raw.replace(raw.trim(), translated) : trEden(raw);
   if (raw !== next) node.nodeValue = next;
 }
 
@@ -289,7 +322,7 @@ function translateEdenTitle() {
 function translateEdenPage(rootArg, syncRecipes = true) {
   let root = rootArg || document.body;
   if (!root) return;
-  if (root.nodeType === 1 && root.matches('input')) { markEdenSearch(root); return; }
+  if (root.nodeType === 1 && root.matches('input,textarea')) { markEdenSearch(root); return; }
   if (root.nodeType === 3) {
     // 名称节点可能由 Vue 替换，先更新其所属元素上的装备目标。
     root = root.parentElement;
@@ -317,7 +350,7 @@ function startEden() {
   bindZhxItemClick('__zhxEdenItemClick');
   safe(translateEdenPage, 'Eden 首屏')();
   createObserver({ root: document.documentElement, characterData: true,
-    attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label', 'style', 'src', 'class'], debounce: 120,
+    attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label', 'tooltip-content', 'style', 'src', 'class'], debounce: 120,
     filter: edenMutationRelevant,
     handler(nodes, texts = []) {
       const targets = dedupeByAncestor([...nodes, ...texts]

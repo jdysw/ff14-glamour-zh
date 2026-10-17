@@ -18,7 +18,7 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver'].map(k=>[k,globalThis[k]]));
   let dom;
   try {
-    dom=createTestDom('<html><head><title>PopularEquipment | FFXIV Mirapri Eden</title></head><body><div class="input-area"><input type="text"></div><h1>装備ランキング</h1><div class="flex-grow-1">テスト装備</div><a href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/"></a><div class="recipe-dialog-text">装備ランキング</div><i class="v-icon">mdi-home</i><div class="v-list-item__title">テスト装備</div></body></html>');
+    dom=createTestDom('<html><head><title>PopularEquipment | FFXIV Mirapri Eden</title></head><body><div class="input-area"><input type="text"></div><h1>装備ランキング</h1><div class="flex-grow-1">テスト装備</div><a href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/"></a><div class="recipe-dialog-text">装備ランキング</div><div class="recipe-dialog-text"><input id="protected-title" placeholder="タイトル（任意）" value="投稿タイトル"></div><div class="zhx-skip"><input id="skipped-title" placeholder="タイトル（任意）" value="保留内容"></div><input id="title" placeholder="タイトル（任意）" value="検索"><textarea id="remarks" placeholder="備考（任意）">玩家输入</textarea><div class="tui-image-editor-menu-crop"><ul class="tui-image-editor-submenu-item"><li class="tie-crop-preset-button"><label>Custom</label></li><li class="tie-crop-button action"><label>Apply</label></li></ul></div><div class="tui-image-editor-menu-rotate"><ul class="tui-image-editor-submenu-item"><li class="tui-image-editor-range-wrap"><label>Range</label></li></ul></div><div class="tui-image-editor-menu-draw"><ul class="tui-image-editor-submenu-item"><li class="tui-image-editor-range-wrap"><label>Range</label></li></ul></div><div class="tui-image-editor-menu-shape"><ul class="tui-image-editor-submenu-item"><li class="tui-image-editor-range-wrap"><label>Stroke</label></li></ul></div><li id="tooltip" tooltip-content="Crop"></li><button class="tui-image-editor-download-btn">Download</button><div class="tui-image-editor-container"><input id="detail" type="button" value="Detail"></div><div class="v-list-item__title">テスト装備</div><i class="v-icon">mdi-home</i></body></html>');
     const doc=dom.document;
     const input=doc.querySelector('input'),title=doc.querySelector('h1'),name=doc.querySelector('.flex-grow-1'),link=doc.querySelector('a');
     const authored=doc.querySelector('.recipe-dialog-text'),icon=doc.querySelector('i'),option=doc.querySelector('.v-list-item__title');
@@ -38,6 +38,18 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(trEden('不认识的玩家标题'),'不认识的玩家标题');
     startEden();
     assert.equal(title.textContent,'装备排行榜');assert.equal(name.textContent,'测试装备');
+    assert.equal(doc.querySelector('#title').placeholder,'标题（可选）');assert.equal(doc.querySelector('#title').value,'検索','静态提示翻译不能覆盖玩家输入值');
+    assert.equal(doc.querySelector('#remarks').placeholder,'备注（可选）');assert.equal(doc.querySelector('#remarks').value,'玩家输入','多行输入值保持原样');
+    assert.equal(doc.querySelector('#protected-title').placeholder,'タイトル（任意）','投稿内容中的输入属性仍受保护');
+    assert.equal(doc.querySelector('#skipped-title').placeholder,'タイトル（任意）','显式跳过子树保持原样');
+    assert.equal(doc.querySelector('.tie-crop-preset-button label').textContent,'自定义');
+    assert.equal(doc.querySelector('.tie-crop-button label').textContent,'应用');
+    assert.equal(doc.querySelector('.tui-image-editor-menu-rotate .tui-image-editor-range-wrap label').textContent,'角度');
+    assert.equal(doc.querySelector('.tui-image-editor-menu-draw .tui-image-editor-range-wrap label').textContent,'线宽');
+    assert.equal(doc.querySelector('.tui-image-editor-menu-shape .tui-image-editor-range-wrap label').textContent,'描边宽度');
+    assert.equal(doc.querySelector('.tui-image-editor-download-btn').textContent,'下载');
+    assert.equal(doc.querySelector('#tooltip').getAttribute('tooltip-content'),'裁剪');
+    assert.equal(doc.querySelector('#detail').value,'详细','只翻译图编固定的 input button 标签');
     assert.equal(name.dataset.zhxItem,'测试装备');assert.equal(option.textContent,'测试装备');
     assert.equal(option.dataset.zhxItem,undefined,'原生装备选项不劫持为 Wiki 点击');
     assert.ok(link.getAttribute('href').endsWith(encodeURIComponent('测试装备')));
@@ -49,8 +61,9 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
     assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
     assert.equal(typeof observer,'function');
-    const added=doc.createElement('div'),child=doc.createElement('div');child.className='v-list-item__title';child.textContent='placeholder';
-    added.appendChild(child);doc.body.appendChild(added);child.firstChild.nodeValue='テスト装備';
+    const added=doc.createElement('div'),child=doc.createElement('div'),dynamicInput=doc.createElement('input'),dynamicEditor=doc.createElement('div');child.className='v-list-item__title';child.textContent='placeholder';
+    dynamicInput.value='編集中のタイトル';dynamicEditor.className='tui-image-editor-container tui-image-editor-menu-shape';dynamicEditor.setAttribute('tooltip-content','Shape');dynamicEditor.innerHTML='<ul class="tui-image-editor-submenu-item"><li class="tie-shape-button"><label>Circle</label></li></ul><input type="button" value="Detail">';
+    added.append(child,dynamicInput,dynamicEditor);doc.body.appendChild(added);child.firstChild.nodeValue='テスト装備';
     const beforeLocal=_scanStats.local;
     observer([
       {type:'childList',addedNodes:[added]},
@@ -58,7 +71,19 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     ]);
     await new Promise(resolve=>setTimeout(resolve,150));
     assert.equal(child.textContent,'测试装备','混合变更批次仍翻译新增子树中的装备文本');
+    assert.equal(dynamicEditor.querySelector('label').textContent,'圆形','动态插入的真实 TUI 子菜单结构也翻译');
+    assert.equal(dynamicEditor.getAttribute('tooltip-content'),'形状','动态插入的工具提示属性也翻译');
+    assert.equal(dynamicEditor.querySelector('input[type=button]').value,'详细','动态插入的固定图编按钮值也翻译');
     assert.equal(_scanStats.local,beforeLocal+1,'同批父树新增与后代文本变更只扫描一次局部子树');
+    dynamicEditor.setAttribute('tooltip-content','Rotate');
+    observer([{type:'attributes',attributeName:'tooltip-content',target:dynamicEditor}]);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    assert.equal(dynamicEditor.getAttribute('tooltip-content'),'旋转','工具切换时观察 tooltip-content 属性');
+    dynamicInput.setAttribute('placeholder','タイトル（任意）');
+    observer([{type:'attributes',attributeName:'placeholder',target:dynamicInput}]);
+    await new Promise(resolve=>setTimeout(resolve,150));
+    assert.equal(dynamicInput.placeholder,'标题（可选）','动态提示属性变化后重用同一局部扫描处理');
+    assert.equal(dynamicInput.value,'編集中のタイトル','动态提示更新不能覆盖用户输入');
     name.firstChild.nodeValue='未知新装备';translateEdenPage(name.firstChild);
     assert.equal(name.dataset.zhxItem,undefined,'Vue 复用名称节点不能保留前一件装备的 Wiki 目标');
     translateEdenPage(null);assert.equal(title.textContent,'装备排行榜');
