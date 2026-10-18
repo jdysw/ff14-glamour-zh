@@ -61,7 +61,7 @@ try {
   await c.eval(`document.querySelector('#item-grid .item-card:nth-child(2) .zhx-xivc-wiki').click()`);
   assert.equal(await c.eval('window.__nativePickCount'),1,'独立 Wiki 点击不会触发父卡原生选取');
 
-  await c.eval(`(()=>{const input=document.querySelector('#item-search');input.focus();input.value=${JSON.stringify(zh)};input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await c.callFn(function(value){const input=document.querySelector('#item-search');input.focus();input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}))},[zh]);
   const suggestionDeadline=Date.now()+5000;
   while(Date.now()<suggestionDeadline&&!(await c.eval(`(()=>{const list=document.querySelector('#zhx-chinese-suggest-list');return list&&!list.hidden&&list.querySelector('button[data-zhx-index]')})()`)))await sleep(25);
   const candidate=await c.eval(`(()=>{const b=document.querySelector('#zhx-chinese-suggest-list button[data-zhx-index]');return b?.textContent||''})()`);
