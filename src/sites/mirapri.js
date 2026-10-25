@@ -7,7 +7,6 @@ export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translat
 
 
   // 部分匹配（长句、带变量文本、placeholder）
-/* @phase15-module-order:sites/mirapri */
   const PATTERNS = [
     [/ユーザーの皆さまにMIRAPRI SNAPを快適にご利用いただくため、/g, '为了让各位用户更舒适地使用 MIRAPRI SNAP，'],
     [/」をご一読いただき、お守りいただきますよう、ご協力をお願いいたします。/g, '」，并请遵守其中的规定。'],

@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/storage */
 export { _storeNorm, storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync };
 
 

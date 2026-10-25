@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/xivc */
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { dedupeByAncestor, localScope, _markScan } from '../core/dom.js';

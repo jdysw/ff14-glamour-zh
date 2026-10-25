@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/targets */
 import { createObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { ensureTables, resolve, resolveByName } from './data-manager.js';

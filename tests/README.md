@@ -9,11 +9,11 @@
 | `npm run test:integration` | 完整脚本在 Chrome 夹具上的用户行为 |
 | `npm run test:coverage` | native 测试，同时生成真实 V8 / LCOV |
 | `npm run test:build` | 构建可重现、篡改词典被拒绝、重新生成能够修复 |
-| `npm run test:experimental` | 未上线的 V3.1 原型及存储／基准报告工具 |
+| `npm run test:experimental` | 显式运行存储审计和基准报告工具的回归 |
 | `npm run test:live` | 显式运行真站检查，需要网络，可能受 403／反爬影响 |
 | `npm run test:bench` | 性能测量 |
 
-CI 的 build job 生成待测产物并验证可重现性，后续单元／浏览器任务下载同一份产物。Node 回归与 native 覆盖率各运行一次，浏览器按 `wiki`、`sites` 两个明确套件分组。实验原型不进日常回归；数据基线工作流在对应变更时单独执行它们。外站审计工作流仅手动触发，仍严格保留受阻页面和失败状态。
+CI 的 build job 生成待测产物并验证可重现性，后续单元／浏览器任务下载同一份产物。Node 回归与 native 覆盖率各运行一次，浏览器按 `wiki`、`sites` 两个明确套件分组。数据基线工作流只验证现行 V3 的发布完整性、存储审计和 Pages 去重路径；未投产的 V3.1 原型已移除。外站审计工作流仅手动触发，仍严格保留受阻页面和失败状态。
 
 ## 选择测试
 
@@ -44,4 +44,6 @@ Chrome 默认使用隔离的 9223 端口，runner 只关闭自己启动的实例
 - 把完整词典复制成期待表，再逐条断言同一份译文。少量独立样本代表边界，实际漏翻交给真实页面审计。
 - 为覆盖率数字重复执行同一批浏览器场景。独立安装包只检查内置数据和缓存隔离，不再重跑完整三语功能测试。
 
-本次审查范围、删并理由和验证记录见 [测试体系审查](../docs/test-system-review-20261015.md)。
+站点测试包可用 `build:miramiru-test`、`build:eden-test`、`build:xivc-test` 生成；`build:font-test` 只测试共用字体。产物带当前 package 版本，正式版支持后停用独立测试版。
+
+临时日志、扫描结果与报告放在 `tests/.cache/` 或 `.cache/`，不把一次性验收记录提交成维护文档。可执行夹具和 `tests/benchmark/baseline/` 是回归输入，继续保留。

@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/endcloset */
 import { DICT_ENDCLOSET } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';

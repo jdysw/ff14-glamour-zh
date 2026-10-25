@@ -6,7 +6,7 @@
  *   node tools/coverage-audit/audit.mjs scan --site ec --pages home,glamours
  *   node tools/coverage-audit/audit.mjs scan --site mirapri --channel cloud
  *   node tools/coverage-audit/audit.mjs scan --all --channel auto
- *   node tools/coverage-audit/audit.mjs report --out docs/audit-20261008.md
+ *   node tools/coverage-audit/audit.mjs report --out tests/.cache/coverage-audit/report.md
  *
  * 通道：
  *   local — 本机 headless Chrome CDP（9223，复用 tests/helpers）

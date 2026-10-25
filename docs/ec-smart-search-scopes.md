@@ -30,7 +30,7 @@
 
 - 鸟甲：`xivapi/ffxiv-datamining/csv/en/Item.csv` 配合 `ItemAction.csv`，按 Action 类型筛选。
 - 面饰：`xivapi/ffxiv-datamining/csv/en/Glasses.csv` 与 `thewakingsands/ffxiv-datamining-cn/Glasses.csv`，使用 Row ID 配对并按 Style 去重。
-- 当前静态快照为 **104 个鸟甲相关物品、61 个基础面饰类型**。游戏更新后可执行以下命令再提交受版本控制的差异：
+- 静态分类由生成器维护。游戏更新后执行以下命令，并审查受版本控制的数据差异：
 
 ```bash
 python3 tools/update-ec-search-categories.py \

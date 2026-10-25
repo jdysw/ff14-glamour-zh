@@ -1,6 +1,7 @@
 /* FF14 manual coverage audit - shared pure logic (Node and userscript). */
 (function (global) {
   'use strict';
+  const TOOL_VERSION = '1.3.5';
   const SITES = Object.freeze({
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
@@ -239,7 +240,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;

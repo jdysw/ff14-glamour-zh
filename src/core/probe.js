@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/probe */
 import { _domStats } from './targets.js';
 import { cacheInfo } from './cache.js';
 import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';

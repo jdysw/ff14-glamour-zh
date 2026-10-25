@@ -6,7 +6,7 @@
 `/gearset/<slug>` 套装链接的标题文本与对应详情页标题。原始 `href`、用户幻化投稿、
 装备部件译名与其他页面的搜索逻辑均不受目录翻译影响。
 
-## 自动化规则（PR #44 起）
+## 套装推导规则
 
 过去的规则是“人工登记英文系列 + 实际职能，再组合国服系列译名和职能译名”，未登记的新套装始终英文。现在采取**官方数据自动推导为主、人工特例兜底**：
 
@@ -71,17 +71,12 @@ EC 的饰品系列目录与 Gearsets 是两套独立页面：列表页常显示 
 
 ## 自动化覆盖审计
 
-运行 `python3 tools/audit-ec-gearsets.py --report docs/ec-gearsets-coverage-report.md`，可重复分析全量国服物品命名模式；详见 [完整扫描报告](ec-gearsets-coverage-report.md)。截至本次审计，官方英中数据有 **50,471 条**，其中英文套装包式物品 **831 条**，中文为「套装／装束」的 **651 条**；以往忽略的**单款套装包 590 条**、**孤立括号变体 3 条**属于自动化补全重点。余下中文不符合服装包后缀的 **180 条**包含家具、零件、普通单件防具，不能盲目进入 Gearsets 目录。
+运行 `python3 tools/audit-ec-gearsets.py --report .cache/reports/ec-gearsets.md`，可从当前 `data/ff14-items.tsv` 重新生成命名覆盖报告。报告是临时审计产物，不提交固定统计快照。
 
-需要区分三个指标：**官方游戏物品中英映射覆盖、脚本能否生成 EC 搜索关键词、EC 网站上确实存在可显示的 Gearset 页面**。前两项可自动验证，第三项不能仅从游戏物品表推断，仍需实际网站确认。
+区分三个指标：官方游戏物品中英映射覆盖、能否生成 EC 搜索关键词、EC 网站上确实存在对应页面。前两项可自动验证，第三项仍需实际网站确认；不依据历史统计数量承诺完整覆盖。
 
 ## 仍需手动复核
 
 历史分页数量庞大，此目录不是全站套装完整清单；Cloudflare/WAF 可能妨碍
 CI 从真实页面获取 DOM。本次的源码与离线单元测试验证并不能替代
 真实浏览器的完整分页回归。未核实内容不视作已经汉化。
-
-## 可选外部资料与 API
-
-- [FFXIV Text Search Engine](https://github.com/lisongxuan/FFXIV-Text-Search-Engine) 提供剧情／游戏文本跨语种搜索。其开源后端是 Flask-RESTful，API 路由含 `/versions`、`/strict_exact_data_by_data`、`/multi_language_data_by_data` 等；前端配置的后端地址为 `https://ffxivapis.arkady14.fun`。可用于人工核对游戏用词，但**未验证其在线接口稳定性、调用限制或装备套装数据完整性**，不作为玩家脚本的运行时强依赖。
-- [XIVAPI V2 中文部署](https://xivapi-v2.xivcdn.com/zh-cn/docs/guides/search/) 具备公开文档的 `/api/search` 游戏数据搜索接口，是后续离线数据构建／缺漏核验可选来源。现阶段优先使用仓库内可版本化的 `data/ff14-items.tsv`，保证国服正式译名来源一致。

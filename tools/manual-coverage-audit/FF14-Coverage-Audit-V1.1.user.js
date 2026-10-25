@@ -24,6 +24,7 @@
 /* FF14 manual coverage audit - shared pure logic (Node and userscript). */
 (function (global) {
   'use strict';
+  const TOOL_VERSION = '1.3.5';
   const SITES = Object.freeze({
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
@@ -262,7 +263,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
@@ -566,7 +567,7 @@
   global.ZHXSearchAudit = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* FF14 manual browser audit v1.3.5. Bundled after audit-core.js + search-diagnostics.js. */
+/* FF14 manual browser audit. Bundled after audit-core.js + search-diagnostics.js. */
 (function(){
 'use strict';
 const C=globalThis.ZHXAuditCore;
@@ -673,7 +674,7 @@ function collect(){
   return items;
 }
 function cleanURL(){return C.urlKey(location.href)}
-function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:'1.3.5',baselines:{},pages:{},settings:{}}}
+function blank(){return {format:'zhx-manual-audit-v2',createdAt:clock(),toolVersion:C.TOOL_VERSION,baselines:{},pages:{},settings:{}}}
 async function get(k,d){try{return await GM_getValue(k,d)}catch{return d}}
 async function set(k,v){return GM_setValue(k,v)}
 async function load(){
@@ -739,7 +740,7 @@ async function exportJSON(){
   for(const row of [...Object.values(out.baselines),...Object.values(out.pages)]){
     if(Array.isArray(row.items))row.items=row.items.map(item=>C.sanitizeItem(item,includeUser));
   }
-  out.toolVersion='1.3.5';out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
+  out.toolVersion=C.TOOL_VERSION;out.exportedAt=clock();out.exportOptions={includeUserContent:includeUser};
   download(JSON.stringify(out,null,2),'ff14-audit-v1.3-'+clock().replace(/[:.]/g,'-')+'.json');
   say('已导出 '+Object.keys(out.pages).length+' 个快照 / '+searchEvents+' 条搜索事件；'+(includeUser?'包含玩家内容，请审查隐私。':'玩家内容已默认脱敏。'));
 }

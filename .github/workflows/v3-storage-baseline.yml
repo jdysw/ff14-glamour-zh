@@ -6,7 +6,6 @@ on:
     paths:
       - 'tools/data/**'
       - 'tests/experimental/test-storage-audit.mjs'
-      - 'tests/experimental/test-v31-preview.mjs'
       - 'tests/unit/test-shared-candidates.mjs'
       - 'tests/unit/test-pages-assets.mjs'
       - 'build/make-runtime-data.py'
@@ -52,33 +51,6 @@ jobs:
           node tools/data/verify-shared-candidates.mjs --dir site/ff14/v3
           node tools/data/verify-pages-assets.mjs --dir site
           node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
-      - name: V3.1 隔离原型与旧 V3 回退验证
-        run: |
-          node tests/experimental/test-v31-preview.mjs
-          node tools/data/v31-preview.mjs --dir site/ff14/v3 --out build/.cache/v31-preview | tee v31-preview-summary.log
-      - name: 第四阶段逐站冷启动与七站共享缓存模型验证
-        run: |
-          node tools/data/v31-evaluate.mjs \
-            --dir site/ff14/v3 \
-            --preview build/.cache/v31-preview \
-            --out v31-phase4-evaluation.json
-          node --input-type=module -e '
-            import { readFileSync } from "node:fs";
-            import assert from "node:assert/strict";
-            const r = JSON.parse(readFileSync("v31-phase4-evaluation.json", "utf8"));
-            // 数据源合法变化时应重新测量，不能把历史基准数当成永久期待值。
-            assert.ok(r.storage.v3LogicalFiles > 0);
-            assert.ok(r.storage.v31Objects > 0);
-            assert.ok(r.storage.v31Objects <= r.storage.v3LogicalFiles);
-            assert.equal(r.storage.v3LogicalBytes,
-              r.storage.v31UniqueBytes + r.storage.duplicateBytesRemovedInPreview);
-            assert.equal(r.scenarios.sevenSitesIsolatedCache.v3.requests,
-              r.scenarios.sevenSitesIsolatedCache.v31.requests);
-            assert.ok(r.scenarios.sevenSitesSharedCache.v31.requests
-              < r.scenarios.sevenSitesSharedCache.v3.requests);
-            assert.equal(r.decision.readyForProduction, false);
-            console.log("✅ 第四阶段真实 V3/V3.1 存储与访问模型核对通过");
-          '
       # 不发布 Cloudflare：模拟与正式部署相同的完整 V3 校验 → 去重流程。
       - name: V3 旧 URL 透明去重与 Pages 产物验收
         run: |
@@ -129,20 +101,6 @@ jobs:
           path: |
             site/_redirects
             pages-dedupe-summary.log
-          if-no-files-found: error
-      - name: 上传第四阶段对照与生产决策报告
-        uses: actions/upload-artifact@v4
-        with:
-          name: v31-phase4-evaluation
-          path: v31-phase4-evaluation.json
-          if-no-files-found: error
-      - name: 上传 V3.1 实物原型（仅 CI 工件，绝不部署）
-        uses: actions/upload-artifact@v4
-        with:
-          name: v31-isolated-preview
-          path: |
-            build/.cache/v31-preview/
-            v31-preview-summary.log
           if-no-files-found: error
       - name: 上传原始报告（不上传数据源）
         uses: actions/upload-artifact@v4

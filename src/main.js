@@ -1,4 +1,3 @@
-/* @phase15-module-order:main */
 import './core/probe.js';
 import { ensureTables } from './core/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';

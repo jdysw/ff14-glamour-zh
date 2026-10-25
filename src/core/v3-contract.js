@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/v3-contract */
 // V3 文件路径、元数据与站点需求的纯契约：不读取网络、存储或 DOM。
 import { DATA_POLICIES } from './site-policy.js';
 export { requiredV3Files, validV3FileMeta, validV3Manifest };

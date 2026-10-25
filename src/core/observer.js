@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/observer */
 import { dedupeByAncestor } from './dom.js';
 import { _perfNow, _zhxErr } from './runtime.js';
 export { _obsStats, createObserver };

@@ -107,7 +107,7 @@ Eden 与 xivc.app 复用 Miramiru 的多语数据集与缓存；界面词条分�
 
 ```bash
 npm ci
-bash build.sh
+npm run build
 npm test
 ```
 
@@ -117,9 +117,10 @@ npm test
 
 - 修改代码只编辑 `src/` 模块；构建不会覆盖模块源码。
 - 修改界面词编辑 `dict/*.json`，不要手改 `src/core/dictionary.js` 中自动生成的词典块。
-- 修改物品数据后运行 `python3 build/rebuild-db.py` 和 `bash build.sh` 校验。
+- 修改物品数据后运行 `python3 build/rebuild-db.py` 和 `npm run build` 校验。
 - `dist/` 是本地构建产物，不提交；构建会校验词典、版本和发布产物。
-- 模块架构的历史与进度记录见 [重构计划](docs/v1.4-refactor-plan.md) 和 [重构进度](docs/v1.4-progress.md)。
+- `src/` 明确使用原生 ESM。构建按真实依赖图检查语法、依赖方向和循环，由 Rollup 裁剪未使用代码；不再维护迁移期的模块顺序快照或注释锚点检查。
+- 维护说明见 [架构边界](docs/architecture.md)、[中文搜索](docs/chinese-search.md) 和 [V3 数据存储与发布](docs/data-storage-optimization.md)。
 
 </details>
 

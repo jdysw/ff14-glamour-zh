@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/huiji-wiki */
 import { resolveEcId, resolveKo } from '../core/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';

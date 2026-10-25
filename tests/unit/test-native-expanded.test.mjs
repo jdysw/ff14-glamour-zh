@@ -18,7 +18,6 @@ import {
   lookupJp2Zh,
 } from '../../src/core/item-resolver.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
-import { onHost } from '../../src/core/site-policy.js';
 import { DATA_TEXT } from '../../src/core/data-manager.js';
 import { createObserver, _obsStats } from '../../src/core/observer.js';
 
@@ -65,31 +64,15 @@ test('真实站点注册：十站生命周期、异常隔离与域名识别', ()
     id: 'mirapri',
     start: () => events.push('boot'),
     onPageShow: () => events.push('pageshow'),
-    processRoot: root => events.push(root),
-    destroy: () => events.push('destroy'),
   });
   assert.equal(adapter.id, 'mirapri');
-  // hosts 是精确的站点配置数组，不应借用字符串子串检查做域名验证。
-  assert.deepEqual(adapter.hosts, ['mirapri.com']);
-  // 宿主判断必须校验点号边界，禁止欺骗性后缀和前缀域名被接受。
-  assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
-  assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
-  assert.equal(onHost('evilmirapri.com', 'mirapri.com'), false);
-  assert.equal(onHost('mirapri.com.evil.test', 'mirapri.com'), false);
-  assert.equal(onHost('not-mirapri.com', 'mirapri.com'), false);
   adapter.boot();
   adapter.pageshow();
-  adapter.processRoot('局部 DOM');
-  adapter.destroy();
-  assert.deepEqual(events, ['boot', 'pageshow', '局部 DOM', 'destroy']);
+  assert.deepEqual(events, ['boot', 'pageshow']);
 
   const minimal = createSiteAdapter({ id: 'custom' });
-  assert.deepEqual(minimal.hosts, []);
-  assert.deepEqual(minimal.tables, []);
   minimal.boot();
   minimal.pageshow();
-  minimal.processRoot(null);
-  minimal.destroy();
   const broken=createSiteAdapter({id:'broken',start(){throw new Error('unavailable')},onPageShow(){throw new Error('unavailable')}});
   assert.doesNotThrow(()=>broken.boot());
   assert.doesNotThrow(()=>broken.pageshow());

@@ -18,7 +18,6 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
    * 站为 WordPress 服务端渲染（jQuery 增强），observer 覆盖筛选/懒加载。
    */
 
-/* @phase15-module-order:sites/ffxiv-collection */
   const ACL_DECOR_HEAD = /^[\s\u00a0※◆■□●○▼▽☆★]+/;
   const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]{1,64}$/;
   const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;

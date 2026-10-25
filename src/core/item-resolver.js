@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/item-resolver */
 import { CACHE_CAP_LOOKUP, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
 import { resolveByName } from './data-manager.js';
 // 仅转发其他模块拥有的符号，避免在此建立多余的本地绑定。

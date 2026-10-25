@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/runtime */
 export { ERR_LOG_CAP, __zhxBootAt, __zhxMark, registerProbeMark, _errLog, _perfNow, _zhxErr, safe };
 
   /* @zhixia:core-runtime-start */

@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/dict-contract */
 // 词典结构的纯契约，由数据发布器与浏览器运行时共享。
 export { RUNTIME_DICT_LAYERS, validRuntimeDictionary };
 

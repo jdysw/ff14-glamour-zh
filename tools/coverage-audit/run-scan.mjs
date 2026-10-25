@@ -5,7 +5,7 @@
  * 用法：
  *   node tools/coverage-audit/run-scan.mjs --site fc --pages home,equip
  *   node tools/coverage-audit/run-scan.mjs --all --channel auto
- *   node tools/coverage-audit/run-scan.mjs --report --out docs/audit-xxx.md
+ *   node tools/coverage-audit/run-scan.mjs --report
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -181,7 +181,7 @@ async function main() {
   if (hasFlag('--help') || args.length === 0) { usage(); process.exit(args.length ? 0 : 2); }
 
   if (hasFlag('--report')) {
-    const out = getArg('--out') || path.join(REPO_ROOT, 'docs', 'coverage-audit-report.md');
+    const out = getArg('--out') || path.join(CACHE_DIR, 'coverage-audit-report.md');
     const results = loadResults();
     if (results.length === 0) {
       console.error('没有可合并的扫描结果，请先运行 scan。缓存目录: ' + CACHE_DIR);
@@ -321,7 +321,7 @@ async function main() {
     try { chrome.stop(); } catch (e) {}
   }
 
-  console.log('\n扫描完成。可运行: node tools/coverage-audit/run-scan.mjs --report --out docs/coverage-audit-report.md');
+  console.log('\n扫描完成。可运行: node tools/coverage-audit/run-scan.mjs --report');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))

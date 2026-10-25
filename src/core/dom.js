@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/dom */
 export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn, ensureChineseFont };
 
 

@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/dictionary */
 import { _zhxErr } from './runtime.js';
 import { cacheReset } from './cache-primitives.js';
 import { validRuntimeDictionary } from './dict-contract.js';

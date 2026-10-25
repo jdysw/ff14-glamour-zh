@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/miramiru */
 import { DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
