@@ -2,7 +2,7 @@
 """Audit EC Gearsets coverage opportunities in the existing official item TSV.
 
 Read-only source analyzer: never invent EC /gearset URLs. Run:
-    python3 tools/audit-ec-gearsets.py --report docs/ec-gearsets-coverage-report.md
+    python3 tools/audit-ec-gearsets.py --report .cache/reports/ec-gearsets.md
 """
 import argparse
 from collections import defaultdict

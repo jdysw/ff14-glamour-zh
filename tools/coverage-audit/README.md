@@ -20,7 +20,7 @@
     python3 tools/coverage-audit/cloud-audit.py --site ec
 
     # 将每 URL 的最新成功或失败结果汇总成 Markdown
-    node tools/coverage-audit/run-scan.mjs --report --out docs/coverage-audit-report.md
+    node tools/coverage-audit/run-scan.mjs --report
 
     # 离线测试，不要求真实站点网络可达
     node tests/run.mjs test-coverage-audit

@@ -1,7 +1,7 @@
 name: Test
 
 # v1.4 Phase 17：CI 测试工作流（与本地同一入口，命令全部可本地复跑）。
-# 覆盖：数据文件结构校验 → 构建（build.sh 全链，含版本同步与词典三方核验）→
+# 覆盖：数据文件结构校验 → 构建（含版本同步与词典三方核验）→
 #       产物语法检查 → 生成物一致性（构建后工作区应无差异）→ 单元 + 集成（离线夹具）测试。
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
       - name: 数据文件校验
         run: npm run validate:data
 
-      - name: 构建（build.sh 全链）
+      - name: 构建与校验
         run: npm run build
 
       - name: 产物语法检查

@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/ronka */
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';

@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/constants */
 export { DATA_BASE_V3, WIKI_ITEM, ZHX_WIKI_ICON };
 
 

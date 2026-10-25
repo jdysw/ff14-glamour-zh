@@ -1,21 +1,32 @@
-# 架构与构建边界
+# 架构与维护边界
 
-当前实现基于主分支 1.4.4，保留 EC 套装 / 分类搜索、V3 严格数据契约、缓存刷新、Pages 透明去重和真实原生覆盖率。各阶段设计详见 `phase3-architecture-and-test-isolation.md`、`phase4-quality-governance.md` 和 `phase5-data-script-audit.md`。
+生产脚本保留十站现有功能，十个应用站点对应八个发布数据集。版本以 package.json 为准；当前协议与发布流程见 [V3 数据存储与发布](data-storage-optimization.md)。
 
-`src/` 是唯一业务源码，Rollup 仅打包。`site-policy.js` 是纯站点策略；`v3-contract.js` 负责文件需求、路径与摘要契约；`data-manager.js` 管数据和就绪状态；`cache-primitives.js` 提供不依赖站点的缓存基础能力。站点模块保持各自翻译和 DOM 生命周期。
+## 运行时
 
-多站共享的跳过标签由 `dom.js` 拥有；物品点击和样式由 `item-links.js` 拥有。原生测试仍能通过站点的转发接口验证这些真实函数。Core 中文搜索对 EC 的依赖限于既有套装目录查询能力，不启动站点生命周期。
+- `main.js` 编排数据预加载、中文字体、站点启动与 bfcache 恢复。
+- `site-policy.js` 是宿主、表和索引需求的唯一配置来源；`site-registry.js` 只负责实际使用的启动、数据就绪和页面恢复回调，并隔离单站错误。
+- `v3-contract.js` 和 `dict-contract.js` 验证现行清单、文件路径和完整词典。`data-manager.js`、`http.js`、`storage.js` 处理加载、校验、持久化提交和失败恢复。
+- `cache-primitives.js` 提供有界缓存与失效能力；站点模块保留各自的 DOM、语言和原生事件差异。
+- `chinese-search.js` 使用当前页面的检索范围和原生输入／提交事件；EC 套装目录查询保持明确的站点专属能力，具体见 [中文搜索](chinese-search.md)。
+- 字体规则由 `dom.js` 统一拥有，不下载外部字体，也不改变字号、粗细、代码和图标字体。
+
+用户内容、输入值、预设和 Canvas 不参与通用文本翻译。Wiki 点击不能替代原生筛选、装备选择或试穿操作。
 
 ## 构建
 
-`npm run build` 调用跨平台 `build/build.mjs`；`build.sh` 是便捷包装。构建顺序为版本同步、词典再生、源码 / 依赖门禁、语法检查、Rollup、产物顺序 / 标记校验、两路词典一致性与版本一致性。Python 自动检测，也可通过 `PYTHON_BIN` 指定。
+`src/` 明确使用原生 ESM；`npm run build` 与 `bash build.sh` 共用 `build/build.mjs`，没有另一条构建实现。Python 可通过 `PYTHON_BIN` 指定。
 
-一次性切分、接口生成和块索引迁移脚本已删除。当前仍在使用的产物顺序快照与标记校验保留，避免破坏主分支的测试契约。不得恢复反向生成源码或人为顺序 import。
+构建同步版本、再生词典，使用 Acorn 检查真实模块语法、依赖方向和循环，再用 Rollup 打包并裁剪未使用代码；随后验证最终脚本语法、内嵌／源 JSON／发布 JSON 的词典一致性与版本。测试还会实际篡改产物，验证拒绝损坏及可重现构建。
 
-词典工具只支持当前对象声明，以及源码对 JSON 源 / 发布 JSON 两种校验。修改词条仍只编辑 `dict/*.json`，生成块由构建维护。
+不维护固定输出顺序快照、迁移锚点验证器或未投产的另一套数据协议。旧片段测试仍使用的区段标记保留在源码，不承担生产执行职责。
 
-## 验证与发布
+## 修改和验证
 
-使用 `npm test`、`npm run test:coverage` 和 `npm run check:deps` 验证行为、真实 V8 源码覆盖率及模块依赖。浏览器夹具和原生测试均保留最新主分支的范围；Windows 使用目录 junction 验证同一符号链接安全边界，测试文本比较统一处理换行格式。
+只编辑 `src/`、`dict/` 与权威数据源，不手改生成词典块。验证入口见 [测试说明](../tests/README.md)。手动和自动汉化审计分别见 [手动审计](../tools/manual-coverage-audit/README.md) 与 [自动审计](../tools/coverage-audit/README.md)。
 
-版本继续保持 1.4.4。合并 main 不自动创建发行版，发版仍由维护者手动触发；数据站部署保留主分支的完整性检查及平台资源上限。
+构建产物、临时扫描报告和日志放在 `dist/` 或 `.cache/`，不提交过期快照。测试夹具和性能基准仍是可执行回归的输入，不能按“历史记录”删除。
+
+合并不自动创建脚本发行版；数据站按现有部署工作流执行。清单、摘要、字节数和平台路径验证仍是发布前提。
+
+站点维护说明：[Miramiru](miramiru-adaptation.md)、[Mirapri Eden](mirapri-eden-adaptation.md)、[xivc](xivc-adaptation.md)。

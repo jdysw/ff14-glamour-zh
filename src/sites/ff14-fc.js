@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/ff14-fc */
 import { FC_ROLE_ZH, _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, resolveByHash } from '../core/data-manager.js';

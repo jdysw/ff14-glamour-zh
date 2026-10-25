@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/item-links */
 import { WIKI_ITEM } from './constants.js';
 export { bindZhxItemClick, ensureZhxItemStyle };
 

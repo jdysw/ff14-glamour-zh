@@ -86,7 +86,6 @@ const SUITES = {
   ],
   "experimental": [
     "experimental/test-storage-audit.mjs",
-    "experimental/test-v31-preview.mjs",
     "experimental/test-bench-report.mjs"
   ],
   "live": [

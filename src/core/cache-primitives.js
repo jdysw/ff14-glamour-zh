@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/cache-primitives */
 // 通用缓存状态、失效注册表与纯字符串算法；禁止依赖业务数据或站点模块。
 export { CACHE_CAP_LOOKUP, DAY_MS, _cacheReg, _en2zhCache, _countIncludes, _lcs90, _shortestStr, cacheGuard, cacheRegister, cacheReset };
 

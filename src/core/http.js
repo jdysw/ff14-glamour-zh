@@ -1,4 +1,3 @@
-/* @phase15-module-order:core/http */
 export { httpGet };
 
 

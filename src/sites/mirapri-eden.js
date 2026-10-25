@@ -1,4 +1,3 @@
-/* @phase15-module-order:sites/mirapri-eden */
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';

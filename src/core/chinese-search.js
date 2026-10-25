@@ -1,5 +1,3 @@
-/* @phase23-module-order:core/chinese-search */
-/* @phase23-order-link:core/chinese-search<-core/data-manager */
 import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh, dataGetIndex } from './data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
 
