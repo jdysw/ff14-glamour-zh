@@ -215,7 +215,7 @@ async function main() {
   if (!siteArg) { usage(); process.exit(2); }
 
   const sites = siteArg === 'all' ? Object.keys(SITES) : [siteArg];
-  const header = fs.readFileSync(path.join(REPO_ROOT, 'build/userscript-header.txt'), 'utf8');
+  const header = fs.readFileSync(path.join(REPO_ROOT, 'build/userscript/userscript-header.txt'), 'utf8');
   // Never claim host coverage on a host where the released userscript cannot run.
   for (const site of sites) {
     const cfg = SITES[site];

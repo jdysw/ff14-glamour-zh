@@ -1,5 +1,5 @@
-import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
-import { resolveByHash, resolveByName } from '../core/data-manager.js';
+import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/data/dictionary.js';
+import { resolveByHash, resolveByName } from '../core/data/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';

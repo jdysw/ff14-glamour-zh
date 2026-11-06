@@ -4,7 +4,7 @@
 
 ## 当前实现
 
-- `build/make-runtime-data.py` 生成站点所需数据与清单。
+- `build/data/make-runtime-data.py` 从 `data/source/` 和 `data/dictionaries/` 生成站点数据与清单，默认输出到 `.cache/runtime-v3/`。
 - `tools/data/verify-publish-contract.mjs` 校验全部必需文件、SHA-256、字节长度、UTF-8 和共享词典结构。
 - `tools/data/verify-shared-candidates.mjs` 验证共享候选数据一致性。
 - `tools/data/verify-pages-assets.mjs` 检查部署目录的静态资源大小和路径边界。
@@ -17,7 +17,7 @@
 ## 存储审计与验证
 
 ```bash
-python3 .github/deploy/prepare.py
+python3 build/data/prepare-pages.py
 node tools/data/verify-publish-contract.mjs --dir site/ff14/v3
 node tools/data/audit-storage.mjs --dir site/ff14/v3 --out storage-baseline.json
 node tools/data/dedupe-pages.mjs --site site

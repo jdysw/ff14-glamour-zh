@@ -21,7 +21,7 @@ import {currentDictionaryText} from '../helpers/current-dictionary.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from '../helpers/paths.mjs';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 
 let pass = 0;
 let fail = 0;
@@ -33,7 +33,7 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
 // 从三个规范模块提取对应代码段，避免依赖打包产物的文本顺序。
-const DICT_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/dictionary.js'), 'utf8');
+const DICT_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/data/dictionary.js'), 'utf8');
 const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache.js'), 'utf8');
 const PRIMITIVE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 

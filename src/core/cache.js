@@ -1,6 +1,6 @@
 import { CACHE_CAP_LOOKUP, _cacheReg, _en2zhCache, _lcs90, cacheGuard, cacheRegister } from './cache-primitives.js';
-import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data-manager.js';
-import { DICT_FC, dictGetRevision } from './dictionary.js';
+import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data/data-manager.js';
+import { DICT_FC, dictGetRevision } from './data/dictionary.js';
 // 无本地调用方的基础层符号直接转发，保留旧模块的导出接口。
 export { DAY_MS, _countIncludes, _shortestStr, cacheReset } from './cache-primitives.js';
 export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKUP, _allKeysCache, _cacheReg, _fcSubstrCache, _getFCSubstrKeys, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll, _itemPfxCache, _itemPfxGroup, _lcs90, _ronkaCacheN, _seriesMap, _seriesPfxCache, _seriesPfxCollect, cacheGuard, cacheInfo, cacheRegister, ronkaItemLookup };

@@ -1,19 +1,20 @@
 # 测试
 
-先运行 `npm run build`，再运行 `npm test`。默认执行离线 Node 行为测试和 Chrome 夹具测试，不访问真实站点。
+先运行 `npm run build`，再运行 `npm test`。默认用构建后的用户脚本在离线 Chromium 夹具上验证用户流程。
 
 | 命令 | 目的 |
 | --- | --- |
-| `npm test` | 默认离线回归：unit + native + integration |
-| `npm run test:unit` | Node 回归，包含直接导入生产模块的 native 测试 |
-| `npm run test:integration` | 完整脚本在 Chrome 夹具上的用户行为 |
+| `npm test` / `npm run test:e2e` | 离线浏览器端到端回归 |
+| `npm run test:e2e-tools` | 按需验证探测、审计和独立测试安装包 |
+| `npm run test:contracts` | V3 数据加载、分类及部署契约 |
+| `npm run test:unit` | 按需运行既有 Node 行为回归 |
 | `npm run test:coverage` | native 测试，同时生成真实 V8 / LCOV |
 | `npm run test:build` | 构建可重现、篡改词典被拒绝、重新生成能够修复 |
 | `npm run test:experimental` | 显式运行存储审计和基准报告工具的回归 |
 | `npm run test:live` | 显式运行真站检查，需要网络，可能受 403／反爬影响 |
 | `npm run test:bench` | 性能测量 |
 
-CI 的 build job 生成待测产物并验证可重现性，后续单元／浏览器任务下载同一份产物。Node 回归与 native 覆盖率各运行一次，浏览器按 `wiki`、`sites` 两个明确套件分组。数据基线工作流只验证现行 V3 的发布完整性、存储审计和 Pages 去重路径；未投产的 V3.1 原型已移除。外站审计工作流仅手动触发，仍严格保留受阻页面和失败状态。
+CI 构建一次待测产物，`wiki` 和 `sites` 两组浏览器流程复用该产物。构建和数据契约检查独立验证可重现性、损坏输入和 V3 发布边界。源码覆盖率只采集一次，同一提交的 Sonar 扫描复用该 LCOV 报告。外站审计和性能测量按需运行。
 
 ## 选择测试
 
@@ -21,7 +22,7 @@ CI 的 build job 生成待测产物并验证可重现性，后续单元／浏览
 node tests/run.mjs --list
 node tests/run.mjs --suite=wiki
 node tests/run.mjs --suite=sites
-node tests/run.mjs integration/test-miramiru
+node tests/run.mjs e2e/test-miramiru
 ```
 
 按完整路径或唯一文件名精确匹配，不再使用子串。名字不存在或同时命中离线／在线文件时直接报错，防止多跑、漏跑和意外联网。单项耗时记录在 `tests/.cache/logs/last-summary.json`。
@@ -33,7 +34,7 @@ Chrome 默认使用隔离的 9223 端口，runner 只关闭自己启动的实例
 - 从实际故障、用户动作或对外协议出发，断言可观察结果。例如中文搜索保留筛选、向原站派发原文、输入框仍显示中文。
 - 保留失败分支：HTTP 响应体超时、存储拒绝、损坏缓存、未知物品、慢页面、用户内容保护。
 - 运行时只测试当前数据格式；旧清单、旧缓存与缺层词典只保留“必须拒绝”的输入反例，不再维持旧版成功迁移路径。
-- 同一行为跨站点用数据矩阵；站点独有的 Vue 控件、Wiki 慢加载等单独验证。
+- 同一行为跨站点用数据矩阵。站点独有的 Vue 控件、Wiki 慢加载等单独验证。浏览器用例等待实际 DOM 或事件，固定等待只用于模拟延迟或验证一段时间内保持不变的行为。
 - 优先直接导入生产模块。旧提取式测试仍有独立故障场景的暂时保留，逐步迁移；不把它们当真实源码覆盖率。
 - 静态结构、版本和词典一致性由正式构建检查负责。测试补充“故意破坏后应失败”等行为反例。
 

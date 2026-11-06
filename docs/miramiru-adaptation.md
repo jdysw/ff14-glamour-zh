@@ -8,7 +8,7 @@
 - 翻译异步内容、提示属性和复用节点；数据就绪和 bfcache 恢复时补扫。当前不接入公共中文搜索。
 - 玩家创作、可编辑内容和未知装备不猜译。中文字体由公共层提供，保留原布局和图标。
 
-词典源为 `dict/dict-miramiru.json`。Miramiru 发布多语 V3 数据；Eden 和 xivc 复用该数据集，不额外分发同一份物品索引。
+词典源为 `data/dictionaries/dict-miramiru.json`。Miramiru 发布多语 V3 数据；Eden 和 xivc 复用该数据集，不额外分发同一份物品索引。
 
 ## 本地测试
 

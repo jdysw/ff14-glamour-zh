@@ -1,6 +1,6 @@
 import { createTranslationObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
-import { ensureTables, resolve, resolveByName } from './data-manager.js';
+import { ensureTables, resolve, resolveByName } from './data/data-manager.js';
 import { localScope, queryIn } from './dom.js';
 import { _perfNow, safe } from './runtime.js';
 export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMENT_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, translateEarlyEquipment, translateKnownEquipmentText, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };

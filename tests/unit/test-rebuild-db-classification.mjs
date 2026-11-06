@@ -1,5 +1,5 @@
 import { findPython } from '../../build/python.mjs';
-// Classification data contract for build/rebuild-db.py.
+// Classification data contract for build/data/rebuild-db.py.
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';

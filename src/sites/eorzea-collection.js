@@ -1,7 +1,7 @@
-import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
+import { DICT_EC, dictGetRevision } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
-import { dataGetIndex } from '../core/data-manager.js';
+import { dataGetIndex } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
@@ -139,7 +139,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     'Form-fitting': '修身',
     'Oversized': '大码',
   });
-  // 这些译名核对自 data/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
+  // 这些译名核对自 data/source/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
   // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
   const EC_GEARSET_NAME_EXTRAS = Object.freeze({
     'Graffiti Neotunic': '涂鸦新式上衣套装',

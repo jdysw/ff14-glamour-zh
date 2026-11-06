@@ -18,7 +18,7 @@ import {
   lookupJp2Zh,
 } from '../../src/core/item-resolver.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
-import { DATA_TEXT } from '../../src/core/data-manager.js';
+import { DATA_TEXT } from '../../src/core/data/data-manager.js';
 import { createObserver, createTranslationObserver, observeUntilDomReady, _obsStats } from '../../src/core/observer.js';
 
 const input = attrs => ({

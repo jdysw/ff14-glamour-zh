@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const dict = name => JSON.parse(fs.readFileSync(path.join(root,'dict',name),'utf8')).entries;
+const dict = name => JSON.parse(fs.readFileSync(path.join(root,'data','dictionaries',name),'utf8')).entries;
 const DICT = { ...dict('dict-common.json'), ...dict('dict-main.json') };
 const src = fs.readFileSync(path.join(root,'src/sites/mirapri.js'),'utf8')
   .split('\n').filter(line => !/^import |^export /.test(line)).join('\n');

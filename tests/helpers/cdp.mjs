@@ -72,6 +72,15 @@ export class CDP {
     }
     return r.result ? r.result.value : undefined;
   }
+  async waitFor(expr, timeout = 15000) {
+    const deadline = performance.now() + timeout;
+    do {
+      const value = await this.eval(expr);
+      if (value) return value;
+      await sleep(50);
+    } while (performance.now() < deadline);
+    throw new Error('页面条件等待超时: ' + expr);
+  }
   async callFn(fnSource, args = [], { awaitPromise = true } = {}) {
     const f = await this.send('Runtime.evaluate', {
       expression: `(${fnSource})`, returnByValue: false, timeout: 120000,

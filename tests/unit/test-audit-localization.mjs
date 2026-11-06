@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 function dictionary(name) {
-  return JSON.parse(fs.readFileSync(path.join(root, 'dict', name), 'utf8')).entries;
+  return JSON.parse(fs.readFileSync(path.join(root, 'data', 'dictionaries', name), 'utf8')).entries;
 }
 function adapter(file, names, deps) {
   const src = fs.readFileSync(path.join(root, 'src/sites', file), 'utf8')

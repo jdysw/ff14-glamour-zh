@@ -2,7 +2,7 @@
 // 校验中文输入法组合态、候选空态、视口滚动、GET 与 React 独立框事件。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { _applyV3, dataInvalidate } from '../../src/core/data-manager.js';
+import { _applyV3, dataInvalidate } from '../../src/core/data/data-manager.js';
 import { handleChineseSearchSubmit, startChineseSearch } from '../../src/core/chinese-search.js';
 
 const original = new Map([

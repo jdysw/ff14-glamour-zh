@@ -1,5 +1,5 @@
 import './core/probe.js';
-import { ensureTables } from './core/data-manager.js';
+import { ensureTables } from './core/data/data-manager.js';
 import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';

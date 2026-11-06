@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { requiredV3Files } from '../../src/core/v3-contract.js';
+import { requiredV3Files } from '../../src/core/data/v3-contract.js';
 import { verifyPagesDedupe } from './dedupe-pages.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');

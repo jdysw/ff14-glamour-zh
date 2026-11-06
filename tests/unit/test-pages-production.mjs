@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
-import { requiredV3Files } from '../../src/core/v3-contract.js';
+import { RUNTIME_DICT_LAYERS } from '../../src/core/data/dict-contract.js';
+import { requiredV3Files } from '../../src/core/data/v3-contract.js';
 import { verifyProductionV3, verifyProductionWithRetry } from '../../tools/data/verify-pages-production.mjs';
 
 const origin = 'https://zhixia-data.pages.dev/';

@@ -4,13 +4,13 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DATA_POLICIES, SITE_POLICIES } from '../../src/core/site-policy.js';
-import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
-import { RUNTIME_DICT_LAYERS, validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/data/v3-contract.js';
+import { RUNTIME_DICT_LAYERS, validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const python = [
   'import json,importlib.util',
-  "spec=importlib.util.spec_from_file_location('v3gen', 'build/make-runtime-data.py')",
+  "spec=importlib.util.spec_from_file_location('v3gen', 'build/data/make-runtime-data.py')",
   'generator=importlib.util.module_from_spec(spec)',
   'spec.loader.exec_module(generator)',
   'print(json.dumps(generator.SITE_FILES, ensure_ascii=False))',

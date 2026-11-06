@@ -1,4 +1,4 @@
-import { resolveEcId, resolveKo } from '../core/data-manager.js';
+import { resolveEcId, resolveKo } from '../core/data/data-manager.js';
 import { createObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountReverseBlock, _removeOldStarlight, _slotFromInfobox, _slotFromList, _slotHit, blockByTitle, eorzeaLink, getItemId, getItemZhName, getJapaneseName, getSlot, injectWikiButton, m_last, startWiki, wikiReverseItems };

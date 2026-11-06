@@ -6,8 +6,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
-import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
+import { requiredV3Files, validV3Manifest } from '../../src/core/data/v3-contract.js';
 
 export function verifyV3Publish(directory) {
   const base = path.resolve(directory);

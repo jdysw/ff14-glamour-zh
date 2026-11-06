@@ -1,12 +1,12 @@
 // tests/run.mjs — 统一测试入口（v1.4 Phase 1）
 // 用法：
-//   npm test                                  # = --suite=unit,native,integration（离线，推荐）
+//   npm test                                  # = --suite=e2e（默认离线浏览器回归）
 //   node tests/run.mjs --suite=unit           # 纯 Node 单元测试（秒级，无需 Chrome）
-//   node tests/run.mjs --suite=integration    # 离线夹具集成测试（自动确保 headless Chrome）
+//   node tests/run.mjs --suite=e2e            # 离线浏览器用户流程（自动确保 headless Chrome）
 //   node tests/run.mjs --suite=live           # 真站连通测试（需要外网）
 //   node tests/run.mjs --suite=build          # 构建重现与破坏性反例（无 Chrome）
 //   node tests/run.mjs --suite=benchmark      # 基准测试（耗时较长）
-//   node tests/run.mjs --suite=all            # unit + native + integration + live
+//   node tests/run.mjs --suite=all            # unit + native + e2e + e2e-tools + live
 //   node tests/run.mjs test-wiki test-ec      # 按精确名称选择（不再隐式扩展）
 //   node tests/run.mjs --list                 # 列出全部测试
 // 环境变量：ZHX_CDP_PORT（默认 9223）| ZHX_TEST_TIMEOUT_MS（默认 320000）| ZHX_TEST_QUIET=1（不实时透传）
@@ -61,25 +61,34 @@ const SUITES = {
     "unit/test-native-source.test.mjs",
     "unit/test-native-targets.test.mjs"
   ],
-  "integration": [
-    "integration/test-wiki.mjs",
-    "integration/test-wiki-slow.mjs",
-    "integration/test-wiki-fallback.mjs",
-    "integration/test-index-scope.mjs",
-    "integration/test-ec.mjs",
-    "integration/test-mirapri.mjs",
-    "integration/test-chinese-search-submit.mjs",
-    "integration/test-fc-search-candidates.mjs",
-    "integration/test-ec-search-inline.mjs",
-    "integration/test-probe.mjs",
-    "integration/test-chinese-font.mjs",
-    "integration/test-miramiru.mjs",
-    "integration/test-miramiru-test-build.mjs",
-    "integration/test-miramiru-audit.mjs",
-    "integration/test-miramiru-filters.mjs",
-    "integration/test-standalone-search.mjs",
-    "integration/test-eden.mjs",
-    "integration/test-xivc.mjs"
+  "e2e": [
+    "e2e/test-wiki.mjs",
+    "e2e/test-wiki-slow.mjs",
+    "e2e/test-wiki-fallback.mjs",
+    "e2e/test-index-scope.mjs",
+    "e2e/test-ec.mjs",
+    "e2e/test-mirapri.mjs",
+    "e2e/test-chinese-search-submit.mjs",
+    "e2e/test-fc-search-candidates.mjs",
+    "e2e/test-ec-search-inline.mjs",
+    "e2e/test-chinese-font.mjs",
+    "e2e/test-miramiru.mjs",
+    "e2e/test-miramiru-filters.mjs",
+    "e2e/test-standalone-search.mjs",
+    "e2e/test-eden.mjs",
+    "e2e/test-xivc.mjs"
+  ],
+  "e2e-tools": [
+    "e2e/test-probe.mjs",
+    "e2e/test-miramiru-test-build.mjs",
+    "e2e/test-miramiru-audit.mjs"
+  ],
+  "contracts": [
+    "unit/test-v3-contract.mjs",
+    "unit/test-runtime-v3.mjs",
+    "unit/test-data-refresh.mjs",
+    "unit/test-rebuild-db-classification.mjs",
+    "unit/test-data-deploy.mjs"
   ],
   "build": [
     "build/test-pipeline.mjs"
@@ -107,20 +116,21 @@ const SUITES = {
     "benchmark/bench-lifecycle.mjs"
   ]
 };
-SUITES.wiki = SUITES.integration.filter(file => /test-wiki|test-index-scope/.test(file));
-SUITES.sites = SUITES.integration.filter(file => !SUITES.wiki.includes(file));
+SUITES.integration = SUITES.e2e;
+SUITES.wiki = SUITES.e2e.filter(file => /test-wiki|test-index-scope/.test(file));
+SUITES.sites = SUITES.e2e.filter(file => !SUITES.wiki.includes(file));
 
 const args = process.argv.slice(2);
 const opts = { suites: [], names: [], list: false };
 for (const a of args) {
   if (a.startsWith('--suite=')) opts.suites.push(...a.slice('--suite='.length).split(',').map((s) => s.trim()).filter(Boolean));
   else if (a === '--list') opts.list = true;
-  else if (!a.startsWith('--')) opts.names.push(a);
+  else if (!a.startsWith('--')) opts.names.push(a.replace(/^integration\//, 'e2e/'));
 }
 
 function allFiles() {
   const out = [];
-  for (const dir of ['unit', 'integration', 'live', 'benchmark', 'build', 'experimental']) {
+  for (const dir of ['unit', 'e2e', 'live', 'benchmark', 'build', 'experimental']) {
     const d = path.join(__dirname, dir);
     if (!fs.existsSync(d)) continue;
     for (const f of fs.readdirSync(d).sort()) {
@@ -154,9 +164,9 @@ if (opts.names.length) {
 } else if (opts.suites.length) {
   const set = new Set();
   const expand = (s) => {
-    if (s === 'all') return ['unit', 'native', 'integration', 'live'].flatMap(expand);
+    if (s === 'all') return ['unit', 'native', 'e2e', 'e2e-tools', 'live'].flatMap(expand);
     if (!SUITES[s]) {
-      console.error(`未知套件：${s}（可用：unit,native,integration,wiki,sites,build,experimental,live,benchmark,all）`);
+      console.error(`未知套件：${s}（可用：${Object.keys(SUITES).join(', ')}, all）`);
       process.exit(2);
     }
     return SUITES[s];
@@ -164,7 +174,7 @@ if (opts.names.length) {
   for (const s of opts.suites) for (const f of expand(s)) set.add(f);
   files = [...set];
 } else {
-  files = [...SUITES.unit, ...SUITES.native, ...SUITES.integration];
+  files = [...SUITES.e2e];
 }
 
 if (opts.list) {
@@ -214,7 +224,7 @@ function runOne(abs, logFile) {
 }
 
 // 需要 Chrome 的套件先确保 CDP 就绪（build-idempotent 为纯 Node，不需要）
-const needsChrome = files.some((f) => /^(integration|live|benchmark)\//.test(f));
+const needsChrome = files.some((f) => /^(e2e|live|benchmark)\//.test(f));
 let chrome = null;
 if (needsChrome) {
   try {

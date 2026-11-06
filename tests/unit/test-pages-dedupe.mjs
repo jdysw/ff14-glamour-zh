@@ -6,8 +6,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path from 'node:path';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { RUNTIME_DICT_LAYERS } from '../../src/core/dict-contract.js';
-import { requiredV3Files } from '../../src/core/v3-contract.js';
+import { RUNTIME_DICT_LAYERS } from '../../src/core/data/dict-contract.js';
+import { requiredV3Files } from '../../src/core/data/v3-contract.js';
 import { applyPagesDedupe, planPagesDedupe, verifyPagesDedupe } from '../../tools/data/dedupe-pages.mjs';
 import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 

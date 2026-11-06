@@ -1,4 +1,4 @@
-import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh, dataGetIndex } from './data-manager.js';
+import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh, dataGetIndex } from './data/data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
 
 // 站点能力表：统一交互由 Core 调度；form 与 SPA 输入的提交路径各用原站行为。

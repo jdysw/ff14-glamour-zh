@@ -8,7 +8,7 @@ const source = fs.readFileSync(new URL('../../src/sites/endcloset.js', import.me
   .replace(/export\s*\{[^}]*\};/s, '');
 let observer;
 const ctx = vm.createContext({
-  DICT_ENDCLOSET: JSON.parse(fs.readFileSync(new URL('../../dict/dict-endcloset.json', import.meta.url), 'utf8')).entries,
+  DICT_ENDCLOSET: JSON.parse(fs.readFileSync(new URL('../../data/dictionaries/dict-endcloset.json', import.meta.url), 'utf8')).entries,
   resolveByName: (name) => ({ '메이드 드레스': '女仆礼服' })[name] || null,
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'TEXTAREA']),
   NodeFilter: { FILTER_REJECT: 2, FILTER_ACCEPT: 1, SHOW_TEXT: 4, SHOW_ELEMENT: 1 },

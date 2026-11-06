@@ -251,14 +251,14 @@ import {
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
   fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode,
 } from '../../src/sites/ff14-fc.js';
-import { DICT_FC } from '../../src/core/dictionary.js';
+import { DICT_FC } from '../../src/core/data/dictionary.js';
 
-import { DICT_ACL } from '../../src/core/dictionary.js';
+import { DICT_ACL } from '../../src/core/data/dictionary.js';
 import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data-manager.js';
+import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data/data-manager.js';
 
 test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver','setTimeout','clearTimeout']

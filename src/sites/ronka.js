@@ -1,7 +1,7 @@
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
-import { DICT_RONKA } from '../core/dictionary.js';
+import { DICT_RONKA } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';

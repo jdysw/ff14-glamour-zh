@@ -1,8 +1,8 @@
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
-import { DATA_TEXT } from '../core/data-manager.js';
-import { DICT_ACL } from '../core/dictionary.js';
+import { DATA_TEXT } from '../core/data/data-manager.js';
+import { DICT_ACL } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';

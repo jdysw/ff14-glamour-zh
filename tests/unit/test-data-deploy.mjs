@@ -9,15 +9,17 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ff14-data-deploy-'));
 const deploy = path.join(root, '.github', 'deploy');
-const copyNames = ['prepare.py', 'index.html', '404.html', '_headers'];
+const copyNames = ['index.html', '404.html', '_headers'];
 
 try {
   const deployDir = path.join(temp, '.github', 'deploy');
-  const buildDir = path.join(temp, 'build');
+  const buildDir = path.join(temp, 'build', 'data');
   const out = path.join(temp, 'site');
   fs.mkdirSync(deployDir, { recursive: true });
   fs.mkdirSync(buildDir, { recursive: true });
   for (const name of copyNames) fs.copyFileSync(path.join(deploy, name), path.join(deployDir, name));
+  const prepare = path.join(buildDir, 'prepare-pages.py');
+  fs.copyFileSync(path.join(root, 'build', 'data', 'prepare-pages.py'), prepare);
 
   fs.writeFileSync(path.join(buildDir, 'make-runtime-data.py'), [
     'import pathlib, sys',
@@ -31,7 +33,7 @@ try {
   fs.mkdirSync(path.dirname(stale), { recursive: true });
   fs.writeFileSync(stale, 'stale V2 payload');
 
-  const prep = spawnSync(process.env.PYTHON || findPython(), [path.join(deployDir, 'prepare.py')], {
+  const prep = spawnSync(process.env.PYTHON || findPython(), [prepare], {
     cwd: temp,
     encoding: 'utf8',
   });
@@ -59,10 +61,11 @@ try {
   // 真实部署依赖变更必须触发部署；不能出现修好了验证器却没有更新线上文件的情况。
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-data.yml'), 'utf8');
   for (const dependency of [
+    'data/source/**', 'data/dictionaries/**', 'build/data/**', '.github/deploy/**',
     'tools/data/dedupe-pages.mjs', 'tools/data/verify-publish-contract.mjs',
     'tools/data/verify-shared-candidates.mjs', 'tools/data/verify-pages-assets.mjs',
-    'tools/data/verify-pages-production.mjs', 'src/core/v3-contract.js',
-    'src/core/dict-contract.js', 'src/core/site-policy.js', '.github/workflows/deploy-data.yml',
+    'tools/data/verify-pages-production.mjs', 'src/core/data/v3-contract.js',
+    'src/core/data/dict-contract.js', 'src/core/site-policy.js', '.github/workflows/deploy-data.yml',
   ]) {
     assert.ok(workflow.includes("      - '" + dependency + "'"),
       '数据发布依赖变化必须触发 GitHub Actions：' + dependency);

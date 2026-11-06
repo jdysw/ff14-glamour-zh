@@ -8,9 +8,10 @@ on:
       - 'tests/experimental/test-storage-audit.mjs'
       - 'tests/unit/test-shared-candidates.mjs'
       - 'tests/unit/test-pages-assets.mjs'
-      - 'build/make-runtime-data.py'
-      - 'data/**'
-      - 'dict/**'
+      - 'build/data/**'
+      - 'data/source/**'
+      - 'data/dictionaries/**'
+      - '.github/deploy/**'
       - '.github/workflows/v3-storage-baseline.yml'
   workflow_dispatch:
 
@@ -40,7 +41,7 @@ jobs:
       - name: 生成真实 V3 产物
         env:
           FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
-        run: python3 .github/deploy/prepare.py
+        run: python3 build/data/prepare-pages.py
       - name: 运行存储审计及基准报告
         run: |
           node tests/experimental/test-storage-audit.mjs

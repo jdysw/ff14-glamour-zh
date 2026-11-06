@@ -199,7 +199,7 @@ const KNOWN_KANJI_UI = new Set();
 const KANJI_DICTIONARIES = new Map();
 for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-endcloset', 'dict-miramiru']) {
   try {
-    const dict = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'dict', name + '.json'), 'utf8'));
+    const dict = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'data', 'dictionaries', name + '.json'), 'utf8'));
     KANJI_DICTIONARIES.set(name,dict.entries || {});
     for (const [foreign, zh] of Object.entries(dict.entries || {})) {
       if (/^[\u3400-\u9fff]{2,30}$/.test(foreign) && foreign !== zh && /^[\u3400-\u9fff]/.test(zh)) KNOWN_KANJI_UI.add(foreign);

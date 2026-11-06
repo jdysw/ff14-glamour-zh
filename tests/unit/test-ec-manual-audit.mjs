@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const entries = name => JSON.parse(fs.readFileSync(path.join(root, 'dict', name), 'utf8')).entries;
+const entries = name => JSON.parse(fs.readFileSync(path.join(root, 'data', 'dictionaries', name), 'utf8')).entries;
 const DICT_EC = { ...entries('dict-common.json'), ...entries('dict-ec.json') };
 const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection.js'), 'utf8')
   .split('\n').filter(line => !/^import |^export /.test(line)).join('\n');

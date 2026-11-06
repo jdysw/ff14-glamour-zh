@@ -37,12 +37,12 @@ const required = [
   'src/core/site-policy.js',
   'src/core/cache-primitives.js',
   'src/core/runtime.js',
-  'src/core/http.js',
-  'src/core/storage.js',
+  'src/core/data/http.js',
+  'src/core/data/storage.js',
   'src/core/dom.js',
-  'src/core/v3-contract.js',
-  'src/core/dict-contract.js',
-  'src/core/data-manager.js',
+  'src/core/data/v3-contract.js',
+  'src/core/data/dict-contract.js',
+  'src/core/data/data-manager.js',
 ];
 for (const source of required) {
   const section = records.find(part => part.split('\n').some(line => line.replaceAll('\\', '/').trim() === 'SF:' + source));

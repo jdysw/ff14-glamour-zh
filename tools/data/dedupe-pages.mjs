@@ -7,8 +7,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { requiredV3Files, validV3Manifest } from '../../src/core/data/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 import { verifyV3Publish } from './verify-publish-contract.mjs';
 import { verifyPagesAssets } from './verify-pages-assets.mjs';
 

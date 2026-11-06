@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { repoRoot } from '../helpers/paths.mjs';
 
-const source = fs.readFileSync(path.join(repoRoot, 'src/core/http.js'), 'utf8');
+const source = fs.readFileSync(path.join(repoRoot, 'src/core/data/http.js'), 'utf8');
 const start = source.indexOf('  let _httpFreshSequence = 0;');
 const end = source.indexOf('  /* @zhixia:core-http-end */', start);
 assert.ok(start >= 0 && end > start, 'HTTP adapter source markers must exist');

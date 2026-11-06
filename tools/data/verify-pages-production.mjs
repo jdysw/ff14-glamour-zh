@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { DATA_POLICIES } from '../../src/core/site-policy.js';
-import { requiredV3Files, validV3Manifest } from '../../src/core/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { requiredV3Files, validV3Manifest } from '../../src/core/data/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const utf8 = new TextDecoder('utf-8', { fatal: true });

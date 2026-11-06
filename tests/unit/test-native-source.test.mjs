@@ -13,13 +13,13 @@ import {
 import {
   ERR_LOG_CAP, _errLog, _zhxErr, safe, registerProbeMark, __zhxMark,
 } from '../../src/core/runtime.js';
-import { httpGet } from '../../src/core/http.js';
-import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
-import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady, _ensureTryV3 } from '../../src/core/data-manager.js';
+import { httpGet } from '../../src/core/data/http.js';
+import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/data/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
+import { dataGetStatus, ensureTables, dataInvalidate, resolveByName, onTablesReady, _ensureTryV3 } from '../../src/core/data/data-manager.js';
 import {
   _storeNorm, storeGetAsync, storeSetAsync, storeListAsync, storeDeleteAsync,
-} from '../../src/core/storage.js';
+} from '../../src/core/data/storage.js';
 import {
   dedupeByAncestor, localScope, queryIn, _scanStats, ensureChineseFont,
 } from '../../src/core/dom.js';

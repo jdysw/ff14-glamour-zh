@@ -1,7 +1,7 @@
 import { _domStats } from './targets.js';
 import { cacheInfo } from './cache.js';
-import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from './data-manager.js';
-import { DICT_LAYERS } from './dictionary.js';
+import { DATA_TEXT, DATA_VER, _dlStats, _irStats, dataGetIndex, resolveKo } from './data/data-manager.js';
+import { DICT_LAYERS } from './data/dictionary.js';
 import { _scanStats } from './dom.js';
 import { _obsStats } from './observer.js';
 import { __zhxBootAt, _errLog, _perfNow, registerProbeMark } from './runtime.js';

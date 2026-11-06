@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const loadEntries = name => JSON.parse(fs.readFileSync(path.join(root, 'dict', name), 'utf8')).entries;
+const loadEntries = name => JSON.parse(fs.readFileSync(path.join(root, 'data', 'dictionaries', name), 'utf8')).entries;
 const DICT_EC = { ...loadEntries('dict-common.json'), ...loadEntries('dict-ec.json') };
 
 const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection.js'), 'utf8');
@@ -146,11 +146,11 @@ assert.equal(tr('Legend Crafted Glamour'), null, '无国服核验译名的套装
 assert.equal(tr("Prishe's Healing"), null, '未收录的职业变体不能虚构套装');
 
 // 独立从国服物品表核对新增的系列译名，不用维护代码中的映射反向生成预期。
-// Runtime V3 `build/make-runtime-data.py` preserves the FIRST valid English
+// Runtime V3 `build/data/make-runtime-data.py` preserves the FIRST valid English
 // entry, not Map(last-write-wins). Mirror production precisely: duplicate
 // names in the canonical TSV can have different Chinese aliases later on.
 const officialRows = new Map();
-for (const line of fs.readFileSync(path.join(root, 'data/ff14-items.tsv'), 'utf8').split('\n')) {
+for (const line of fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n')) {
   const row = line.split('\t');
   if (row.length < 3) continue;
   const [zh, en] = [row[1], row[2]];

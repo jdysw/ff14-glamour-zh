@@ -53,9 +53,9 @@ FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足
 
 | 分类 | 修改位置 |
 |---|---|
-| 新增 UI 词条 | dict/dict-*.json |
+| 新增 UI 词条 | data/dictionaries/dict-*.json |
 | 词条已存在但未被匹配 | src/sites/*.js 或 DOM 采集逻辑 |
-| 装备、染剂、副本、职业术语 | 官方国服译名 / data/ff14-items.tsv |
+| 装备、染剂、副本、职业术语 | 官方国服译名 / data/source/ff14-items.tsv |
 | 新 DOM 节点漏翻 | 对应站点适配器和观察器 |
 | 子域名不运行脚本 | @match、Site Registry、SITES 三方校验 |
 | 玩家投稿或广告 | 不自动翻译，按上下文记录豁免 |
