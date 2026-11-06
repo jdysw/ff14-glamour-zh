@@ -14,13 +14,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!text) return text;
     const t = text.trim();
     if (!t) return text;
-    if (t.length > 90) return text;          // 长句多为用户描述，不动
     if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
     const hit = DICT_EC[t];
     if (hit) {
       const i = text.indexOf(t);
       return text.slice(0, i) + hit + text.slice(i + t.length);
     }
+    if (t.length > 90) return text;          // 长句只接受已收录的完整译文
     // 纯英文短串（字母开头，含有限符号）→ 查主表/染剂表拿国服中文名
     if (/^[A-Za-z]/.test(t) && /^[A-Za-z0-9'\-.,:&!? ()（）]+$/.test(t)) {
       const zhName = tryEnToZh(t);
@@ -35,6 +35,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   const PATTERNS_EC = [
+    [/^(\s*)in The Firmament (\(X:\s*\d+(?:\.\d+)?\s+Y:\s*\d+(?:\.\d+)?\))(\s*)$/i, '$1位于天穹街 $2$3'],
     // 面饰页动态文案
     [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
     [/^—\s{0,8}Next\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 下一个' + (DICT_EC[x] || x) + ' —'],

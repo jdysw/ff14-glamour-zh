@@ -40,11 +40,12 @@ const dumpBlock = `(() => {
   let otherLinks = null;
   for (const bl of document.querySelectorAll('.ff14-content-box-block')) {
     const tt = bl.querySelector('.ff14-content-box-block--title');
-    if (tt && tt.textContent.trim() === '其他站点链接') {
+    if (tt && tt.textContent.trim() === '数据库链接') {
       otherLinks = [...bl.querySelectorAll('li a')].map((a) => a.getAttribute('href'));
     }
   }
-  return { blockLinks: lis, hr: b ? !!b.querySelector('hr') : null, otherLinks, done: document.documentElement.dataset.zhixiaWikiDone || '', reqUrls: (window.__reqLog || []) };
+  return { blockLinks: lis, title: b?.querySelector('.ff14-content-box-block--title')?.textContent,
+    hr: b ? !!b.querySelector('hr') : null, otherLinks, done: document.documentElement.dataset.zhixiaWikiDone || '', reqUrls: (window.__reqLog || []) };
 })()`;
 
 // ============ 场景 A：数据不可用 ============
@@ -92,7 +93,7 @@ console.log('console B:', c2.consoleLines.filter((l) => (l.includes('汉化') ||
 // 场景 B：实际物品反查参数与图标可用性，不只检查链接数量。
 let bFail = 0;
 if (!rB.blockLinks || rB.blockLinks.length !== 7) { console.log('❌ B1 反查区块应含 7 条链接'); bFail++; } else { console.log('✅ B1 反查区块 7 条链接'); }
-if (rB.hr !== true) { console.log('❌ B2 区块应含标题下分隔线（hr）'); bFail++; } else { console.log('✅ B2 区块含标题下分隔线（hr）'); }
+if (rB.title !== '幻化反查链接' || rB.hr !== true) { console.log('❌ B2 反查区块标题或分隔线错误'); bFail++; } else { console.log('✅ B2 反查区块标题和分隔线正确'); }
 if (!rB.blockLinks?.some(a => a.h === 'https://miramiru.co/en/items/38171')) { console.log('❌ B3 Miramiru 未定位到当前物品'); bFail++; }
 const end = rB.blockLinks?.find(a => a.h.startsWith('https://end-closet.com/'));
 if (!end || new URL(end.h).searchParams.get('search') !== '트로이아 유격대 붕대') { console.log('❌ B4 End Closet 未使用当前装备韩文名'); bFail++; }
@@ -116,11 +117,11 @@ await sleep(6000);
 const rC = await c3.eval(dumpBlock);
 console.log(JSON.stringify(rC, null, 1));
 console.log('console C:', c3.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 700));
-// 场景 C 断言：非装备页不得注入反查区块、不得改动「其他站点链接」
+// 场景 C 断言：非装备物品页只改数据库区块标题，保留原链接。
 let cFail = 0;
 if (rC.blockLinks !== null) { console.log('❌ C1 非装备页不应注入反查区块'); cFail++; } else { console.log('✅ C1 非装备页未注入反查区块'); }
 const olC = rC.otherLinks || [];
-if (!olC.some((h) => /risingstones/.test(h))) { console.log('❌ C2 光之收藏家链接被误删'); cFail++; } else { console.log('✅ C2 「其他站点链接」保持原样'); }
+if (!olC.some((h) => /risingstones/.test(h))) { console.log('❌ C2 数据库区块未改名或原链接被误删'); cFail++; } else { console.log('✅ C2 数据库区块改名并保留原链接'); }
 console.log(cFail ? '场景 C 失败 ' + cFail + ' 项' : '场景 C 通过 2/2');
 await closePage(PORT, t3.target.id);
 process.exitCode = aFail + bFail + cFail ? 1 : 0;

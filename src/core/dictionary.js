@@ -1963,6 +1963,20 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'Tradable': '可交易',
     'Weapons': '武器',
     'with a recipe level': '配方等级',
+    'Accessory': '配饰',
+    'All DPS': '所有输出职业',
+    'Domed Parasols': '圆顶阳伞',
+    'Enie': '艾妮',
+    'Glamours using this accessory': '使用此配饰的幻化',
+    'Mark as Owned': '标记为已拥有',
+    'More Parasols': '更多阳伞',
+    'Parasol': '阳伞',
+    'Parasol Image': '阳伞图片',
+    'Similar accessories': '相似配饰',
+    'Sky Blue Parasol Icon': '天蓝阳伞图标',
+    'Skybuilders\' Scrips': '天穹街振兴票',
+    '- awarded by participating in the fêtes in the Firmament': '－参与天穹街庆典可获得',
+    'The perfect accessory to protect you from the summer sun, spring showers, and birds seeking to relieve themselves.': '夏日遮阳、春雨挡雨，还能防止鸟粪落到身上，是一件实用的配饰。',
   };
 
   /* =====================================================================

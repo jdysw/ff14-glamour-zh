@@ -256,7 +256,7 @@ import { DICT_FC } from '../../src/core/dictionary.js';
 import { DICT_ACL } from '../../src/core/dictionary.js';
 import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
-  blockByTitle, wikiReverseItems, _buildReverseBlock,
+  blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
 import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data-manager.js';
 
@@ -623,6 +623,109 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
     _applyV3({ candidatePolicy: 1 });
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
+  }
+});
+
+test('灰机 Wiki 面部配饰：解锁道具反查 EC 面饰详情', async () => {
+  const originalDocument = globalThis.document;
+  const dom = createTestDom(`
+    <h1 id="firstHeading"><span class="mw-page-title-main">面部配饰：窄框眼镜</span></h1>
+    <div class="infobox"><div class="infobox-item--name-category">杂货</div></div>
+    <div class="ff14-content-box-block">
+      <div class="ff14-content-box-block--title">其他站点链接</div>
+      <ul><li><a href="https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid=45006">光之收藏家</a></li></ul>
+    </div>
+  `);
+  try {
+    globalThis.document = dom.document;
+    injectWikiButton();
+    injectWikiButton();
+    assert.equal(document.querySelectorAll('.zhixia-reverse-block').length, 1);
+    const links = [...document.querySelectorAll('.zhixia-reverse-block a')].map(a => a.href);
+    assert.deepEqual(links, ['https://ffxiv.eorzeacollection.com/facewear/slim-frame-glasses']);
+    assert.ok(blockByTitle('数据库链接').querySelector('a[href*="equipmentid=45006"]'));
+
+    document.querySelector('.mw-page-title-main').textContent = '面部配饰：暂无站点收录';
+    injectWikiButton();
+    assert.equal(document.querySelector('.zhixia-reverse-block'), null);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    await dom.happyDOM.close();
+  }
+});
+
+test('灰机 Wiki 重排外链：人偶兵装原生条目随反查区块重建保留', async () => {
+  const originalDocument = globalThis.document;
+  const dom = createTestDom(`
+    <h1 id="firstHeading">物品:雪崩斗手上衣</h1>
+    <div class="infobox"><div class="infobox-item--name-category">身体防具</div></div>
+    <div class="ff14-content-box-block">
+      <div class="ff14-content-box-block--title">其他站点链接</div>
+      <ul>
+        <li><a href="https://garlandtools.cn/db/#item/52323">Garland Data</a></li>
+        <li><a href="https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid=52323">光之收藏家</a></li>
+        <li id="android">
+          <a href="https://ff14android.huijiwiki.com/wiki/Item:52323"><img alt="Icon ff14android.png"></a>
+          <a href="https://ff14android.huijiwiki.com/wiki/Item:52323">人偶兵装使用说明书</a>
+        </li>
+      </ul>
+    </div>
+  `);
+  try {
+    globalThis.document = dom.document;
+    const android = document.querySelector('#android');
+    injectWikiButton();
+    injectWikiButton();
+    const database = blockByTitle('数据库链接');
+    const reverse = blockByTitle('幻化反查链接');
+    assert.equal(database.nextElementSibling, reverse);
+    assert.deepEqual([...database.querySelectorAll('li')].map(li => li.textContent), ['Garland Data']);
+    const [starlight, moved] = reverse.querySelectorAll('li');
+    assert.equal(starlight.textContent, '光之收藏家');
+    assert.equal(moved, android);
+    assert.equal(moved.querySelectorAll('a').length, 2);
+    assert.equal(moved.querySelector('a.external, a:last-child').href, 'https://ff14android.huijiwiki.com/wiki/Item:52323');
+    assert.equal(document.querySelectorAll('.zhixia-reverse-block').length, 1);
+
+    document.querySelector('.infobox-item--name-category').textContent = '套装';
+    injectWikiButton();
+    assert.deepEqual([...blockByTitle('幻化反查链接').querySelectorAll('li')], [android]);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    await dom.happyDOM.close();
+  }
+});
+
+test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () => {
+  const originalDocument = globalThis.document;
+  const dom = createTestDom(`
+    <h1 id="firstHeading"><span class="mw-page-title-main">海岛开拓者装甲</span></h1>
+    <div class="infobox"><div class="infobox-item--name-category">杂货</div></div>
+  `);
+  try {
+    globalThis.document = dom.document;
+    const title = document.querySelector('.mw-page-title-main');
+    const links = () => [...document.querySelectorAll('.zhixia-reverse-block a')].map(a => a.href);
+    injectWikiButton();
+    assert.deepEqual(links(), [
+      'https://ffxiv.eorzeacollection.com/companion-glamours?headPiece=88',
+      'https://ffxiv.eorzeacollection.com/companion-glamours?bodyPiece=88',
+      'https://ffxiv.eorzeacollection.com/companion-glamours?legsPiece=88',
+    ]);
+
+    title.textContent = '航空兜帽';
+    injectWikiButton();
+    assert.deepEqual(links(), ['https://ffxiv.eorzeacollection.com/companion-glamours?headPiece=18']);
+
+    title.textContent = '阿马罗装备的修复素材';
+    injectWikiButton();
+    assert.deepEqual(links(), []);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    await dom.happyDOM.close();
   }
 });
 

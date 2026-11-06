@@ -48,7 +48,143 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     '盾': 'offhandPiece',
     '时尚配饰': 'fashionPiece',
     '面饰': 'facePiece',
+    '面部配饰': 'facePiece',
   };
+
+  // EC 面饰目录使用独立详情页，解锁道具的物品 ID 不能用于筛选。
+  const EC_FACEWEAR_SLUGS = new Map([
+    ['椭圆眼镜', 'oval-spectacles'],
+    ['金边墨镜', 'shaded-spectacles'],
+    ['经典眼镜', 'classic-spectacles'],
+    ['玫瑰色眼镜', 'rose-colored-spectacles'],
+    ['基础款眼镜', 'simple-spectacles'],
+    ['单眼镜', 'monocle'],
+    ['现代鼻眼镜', 'contemporary-pince-nez'],
+    ['无框眼镜', 'rimless-glasses'],
+    ['粗框眼镜', 'thick-rimmed-glasses'],
+    ['艺术眼镜', 'minstrels-spectacles'],
+    ['鼻眼镜', 'pince-nez'],
+    ['作业眼镜', 'magnifiers'],
+    ['黄铜护目镜', 'brass-goggles'],
+    ['下框眼镜', 'under-rim-glasses'],
+    ['椭圆读书眼镜', 'oval-reading-glasses'],
+    ['典雅无框眼镜', 'elegant-rimless-glasses'],
+    ['猫眼眼镜', 'cat-eye-glasses'],
+    ['窄框眼镜', 'slim-frame-glasses'],
+    ['阅读眼镜', 'reading-glasses'],
+  ]);
+  const FACEWEAR_PREFIX = /^面部配饰\s*[:：]\s*/;
+
+  // EC 同伴幻化筛选目录与国服物品表按英文名精确匹配。
+  // 同名的 EC 重复记录使用其主编号（与 XIVApiId 一致的记录）。
+  const EC_BARDING_IDS = new Map([
+    ["碧海陆行鸟半装甲", 2],
+    ["碧海陆行鸟装甲", 3],
+    ["碧海陆行鸟武装甲", 4],
+    ["密林陆行鸟半装甲", 6],
+    ["密林陆行鸟装甲", 7],
+    ["密林陆行鸟武装甲", 8],
+    ["黄沙陆行鸟半装甲", 10],
+    ["黄沙陆行鸟装甲", 11],
+    ["黄沙陆行鸟武装甲", 12],
+    ["斯莱普尼尔装甲", 16],
+    ["贝希摩斯装甲", 17],
+    ["航空兜帽", 18],
+    ["陆行鸟黑魔装甲", 19],
+    ["陆行鸟王装甲", 20],
+    ["星芒装甲", 21],
+    ["利维亚桑装甲", 22],
+    ["光之鸟甲", 23],
+    ["拉姆装甲", 25],
+    ["羽饰装甲", 26],
+    ["怪诞装甲", 27],
+    ["希瓦装甲", 28],
+    ["胜负师装甲", 29],
+    ["情人装甲", 30],
+    ["崇山陆行鸟半装甲", 31],
+    ["崇山陆行鸟装甲", 32],
+    ["俾斯麦装甲", 33],
+    ["罗波那装甲", 34],
+    ["贵族装甲", 35],
+    ["正教装甲", 36],
+    ["高地装甲", 37],
+    ["野玫瑰装甲", 38],
+    ["圆桌装甲", 39],
+    ["萨菲洛特装甲", 40],
+    ["猎蛋人装甲", 41],
+    ["东方装甲", 42],
+    ["竞赛装甲", 43],
+    ["邪龙装甲", 44],
+    ["管家装甲", 45],
+    ["索菲娅装甲", 46],
+    ["女仆装甲", 47],
+    ["曼德维尔女仆装甲", 48],
+    ["天使装甲", 49],
+    ["恶魔装甲", 50],
+    ["祖尔宛装甲", 51],
+    ["须佐之男装甲", 52],
+    ["峻岭陆行鸟装甲", 53],
+    ["吉祥天女装甲", 54],
+    ["远东装甲", 55],
+    ["东洋装甲", 56],
+    ["哪吒装甲", 57],
+    ["神龙装甲", 58],
+    ["伊克西翁装甲", 59],
+    ["赤红装甲", 60],
+    ["白虎装甲", 61],
+    ["防雨装甲", 62],
+    ["月读装甲", 63],
+    ["朱雀装甲", 64],
+    ["武士装甲", 65],
+    ["青龙装甲", 66],
+    ["保镖装甲", 67],
+    ["缇坦妮雅装甲", 68],
+    ["无瑕灵君装甲", 69],
+    ["舞者装甲", 70],
+    ["影渊装甲", 71],
+    ["哈迪斯装甲", 72],
+    ["圣人装甲", 73],
+    ["红宝石神兵装甲", 74],
+    ["机工士装甲", 75],
+    ["真·光之鸟甲", 76],
+    ["绿宝石神兵装甲", 77],
+    ["天佑装甲", 78],
+    ["博兹雅装甲", 79],
+    ["钻石神兵装甲", 80],
+    ["永暗装甲", 81],
+    ["圣光装甲", 82],
+    ["邮差装甲", 83],
+    ["萨维奈装甲", 84],
+    ["蓝羽装甲", 85],
+    ["饿狼装甲", 86],
+    ["煞风装甲", 87],
+    ["海岛开拓者装甲", 88],
+    ["炀火装甲", 89],
+    ["亚拉戈装甲", 90],
+    ["高贝扎装甲", 91],
+    ["猫耳装甲", 92],
+    ["泽罗姆斯装甲", 93],
+    ["旅行者装甲", 94],
+    ["图拉尔冒险装甲", 95],
+    ["艳翼蛇鸟装甲", 96],
+    ["雷转质装甲", 97],
+    ["野地装甲", 98],
+    ["永恒装甲", 100],
+    ["星芒市场装甲", 101],
+    ["女王骑士装甲", 104],
+    ["死暗装甲", 105],
+    ["朝圣装甲", 106],
+    ["狂奔装甲", 107],
+    ["宇宙探索装甲", 108],
+    ["虚王装甲", 109],
+    ["野餐装甲", 110],
+  ]);
+  const EC_HEAD_ONLY_BARDINGS = new Set([18, 20, 26]);
+  const EC_BARDING_SLOTS = [
+    ['headPiece', '头部'],
+    ['bodyPiece', '身体'],
+    ['legsPiece', '腿部'],
+  ];
 
   // EC 的部位筛选用的是它自己的装备 ID（不是 wiki 的物品 ID），
   // EC 装备 ID 从内嵌主表第 4 列读取（中文名 -> EC_ID，由离线采集写入），
@@ -67,12 +203,12 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
 
   // 按标题找区块：同名多份时优先返回「当前端可见」的一份，
   // 避免把反查块插进被 CSS 隐藏的副本（手机端不可见 bug 的根因）
-  function blockByTitle(title) {
+  function blockByTitle(...titles) {
     const blocks = document.querySelectorAll('.ff14-content-box-block');
     let firstAny = null;
     for (const b of blocks) {
       const t = b.querySelector('.ff14-content-box-block--title');
-      if (!(t && t.textContent.trim() === title)) continue;
+      if (!t || !titles.includes(t.textContent.trim())) continue;
       if (!firstAny) firstAny = b;
       if (_visible(b)) return b;
     }
@@ -165,6 +301,11 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     return null;
   }
   function getSlot() {
+    // Wiki 可将面部配饰解锁道具归入杂货，此时由物品名识别。
+    const zh = getItemZhName();
+    if (FACEWEAR_PREFIX.test(zh)) return { key: 'facePiece', label: '面部配饰' };
+    const bardingId = EC_BARDING_IDS.get(zh);
+    if (bardingId) return { key: 'barding', label: '陆行鸟装甲', bardingId };
     let r = _slotHit(document.querySelector('.infobox-item--name-category'));
     if (r) return r;
     try { r = _slotFromList(document.querySelectorAll('[class*="name-category"]')); } catch (e) { /* 忽略：类名变体查询失败——继续兜底扫描 */ }
@@ -174,11 +315,15 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   }
 
   // → Eorzea Collection「已筛好这件装备」的搜索页（零网络：本地表直查）
-  function eorzeaLink(cb) {
-    const slot = getSlot();
+  function eorzeaLink(cb, slot = getSlot()) {
     if (!slot) { cb(null); return; }
     const zh = getItemZhName();
     if (!zh) { cb(null); return; }
+    if (slot.key === 'facePiece') {
+      const slug = EC_FACEWEAR_SLUGS.get(zh.replace(FACEWEAR_PREFIX, ''));
+      cb(slug ? { href: new URL('/facewear/' + slug, EC_BASE).href, why: slot.label + ' · ' + zh } : null);
+      return;
+    }
     const ecId = resolveEcId(zh);
     if (!ecId) { cb(null); return; }
     cb({ href: EC_BASE + encodeURIComponent('filter[' + slot.key + ']') + '=' + ecId,
@@ -186,8 +331,20 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   }
 
   // 一条一行；只有能构造有效装备反查地址的站点才显示。
-  function wikiReverseItems() {
+  function wikiReverseItems(slot = getSlot()) {
+    if (slot?.key === 'barding') {
+      const slots = EC_HEAD_ONLY_BARDINGS.has(slot.bardingId) ? EC_BARDING_SLOTS.slice(0, 1) : EC_BARDING_SLOTS;
+      return slots.map(([key, label]) => [
+        new URL('/companion-glamours?' + key + '=' + slot.bardingId, EC_BASE).href,
+        'Eorzea Collection 陆行鸟幻化（' + label + '）',
+        'ec',
+      ]);
+    }
     const items = [];
+    if (slot?.key === 'facePiece') {
+      eorzeaLink((ec) => { if (ec) items.push([ec.href, 'Eorzea Collection', 'ec']); }, slot);
+      return items;
+    }
     // 1) 光之收藏家（国服，已迁入石之家幻化版块；物品 ID 取自页面内 Garland / 光之收藏家链接）
     const id = getItemId();
     if (id) items.push(['https://ff14risingstones.web.sdo.com/pc/index.html#/search?equipmentid=' + id + '&section=glamour', '光之收藏家', 'starlight']);
@@ -195,17 +352,17 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     // 2) 日服幻化站（mirapri，关键词=日文名）
     const jp = getJapaneseName();
     const nm = jp || zh;
-    if (nm) items.push([MIRAPRI_BASE + '?keyword=' + encodeURIComponent(nm), '日服幻化站（MIRAPRI SNAP）', 'mirapri']);
-    if (jp) items.push(['https://mirapri.ff14eden.work/#/?search=' + encodeURIComponent(jp), '幻化搭配站（Mirapri Eden）', 'eden']);
+    if (nm) items.push([MIRAPRI_BASE + '?keyword=' + encodeURIComponent(nm), 'MIRAPRI SNAP', 'mirapri']);
+    if (jp) items.push(['https://mirapri.ff14eden.work/#/?search=' + encodeURIComponent(jp), 'Mirapri Eden', 'eden']);
     // 3) 国际服幻化站（Eorzea Collection，内嵌表直查，零网络）
-    eorzeaLink((ec) => { if (ec) items.push([ec.href, '国际服幻化站（Eorzea Collection）', 'ec']); });
+    eorzeaLink((ec) => { if (ec) items.push([ec.href, 'Eorzea Collection', 'ec']); }, slot);
     // 4) 韩服幻化站（Ronka LookBook，关键词=韩文名，由中文名反查）
     const ko = resolveKo(zh);
-    if (ko) items.push([RONKA_BASE + '?keyword=' + encodeURIComponent(ko), '韩服幻化站（Ronka LookBook）', 'ronka']);
+    if (ko) items.push([RONKA_BASE + '?keyword=' + encodeURIComponent(ko), 'Ronka LookBook', 'ronka']);
     // Miramiru 使用游戏物品 ID；End Closet 的原生穿搭搜索使用韩文装备名，
     // 其 /items/:id 实际为穿搭文档详情，不能将游戏 ID 拼到该路径。
-    if (id) items.push([MIRAMIRU_BASE + id, '幻化展示站（Miramiru）', 'miramiru']);
-    if (ko) items.push([ENDCLOSET_BASE + encodeURIComponent(ko), '韩服幻化站（End Closet）', 'endcloset']);
+    if (id) items.push([MIRAMIRU_BASE + id, 'Miramiru', 'miramiru']);
+    if (ko) items.push([ENDCLOSET_BASE + encodeURIComponent(ko), 'End Closet', 'endcloset']);
     return items;
   }
 
@@ -221,12 +378,16 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     }
   }
 
+  function findAndroidLink(block) {
+    return block?.querySelector('a[href^="https://ff14android.huijiwiki.com/"], a[href^="//ff14android.huijiwiki.com/"]');
+  }
+
   function _buildReverseBlock(items) {
     const block = document.createElement('div');
     block.className = 'ff14-content-box-block zhixia-reverse-block';
     const title = document.createElement('div');
     title.className = 'ff14-content-box-block--title';
-    title.textContent = '幻化装备反查链接';
+    title.textContent = '幻化反查链接';
     block.appendChild(title);
     // 与「其他站点链接」等灰机原生区块同款：标题下一道分隔线（hr）
     block.appendChild(document.createElement('hr'));
@@ -265,7 +426,7 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   }
 
   function _mountReverseBlock(block, src) {
-    // 位置：「其他站点链接」之后；无该区块时退回 infobox / 正文顶
+    // 位置：「数据库链接」之后；无该区块时退回 infobox / 正文顶
     // （双份结构下取当前端可见的那份，避免插进隐藏副本）
     if (src?.parentElement) {
       src.parentElement.insertBefore(block, src.nextSibling);
@@ -281,24 +442,38 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   }
 
   function injectWikiButton() {
-    // 幂等重建：数据晚到时刷新会先移除上一版区块再重建
+    const path = globalThis.location?.pathname || '';
+    if (path.startsWith('/wiki/') && !/^\/wiki\/(?:物品|道具|Item)[:：]/i.test(decodeURIComponent(path))) return;
+
+    const src = blockByTitle('其他站点链接', '数据库链接');
+    const sourceTitle = src?.querySelector('.ff14-content-box-block--title');
+    if (sourceTitle && sourceTitle.textContent.trim() !== '数据库链接') sourceTitle.textContent = '数据库链接';
+
+    // 数据晚到时从旧反查区块取回已经移走的原生条目。
     const prev = document.querySelector('.zhixia-reverse-block');
-    if (prev) prev.remove();
+    const androidLink = findAndroidLink(src) || findAndroidLink(prev);
+    const slot = getSlot();
+    const items = slot ? wikiReverseItems(slot) : [];
+    if (!items.length && !androidLink) {
+      prev?.remove();
+      return;
+    }
 
-    // 仅在装备页注入：页面 infobox 部位类目须属于幻化装备（与 EC 链接同一判定）。
-    // 非装备页（消耗品/素材/家具/任务/NPC 等）直接退出——既不注入反查区块，
-    // 也不改动「其他站点链接」。
-    if (!getSlot()) return;
-
-    // 原「其他站点链接」列表里的光之收藏家移除（新块内已有，避免重复）
-    const src = blockByTitle('其他站点链接');
-    _removeOldStarlight(src);
-
-    // 「幻化装备反查链接」区块（与「其他站点链接」同款式：区块 + 标题 + 列表，一行一条）
-    const items = wikiReverseItems();
-    if (!items.length) return;
     const block = _buildReverseBlock(items);
     _mountReverseBlock(block, src);
+    const hasStarlight = items[0]?.[2] === 'starlight';
+    if (hasStarlight) _removeOldStarlight(src);
+    if (androidLink) {
+      const list = block.querySelector('ul');
+      // 原生 li 同时包含图标链接和文字链接，整行移走以保留两者。
+      let row = androidLink.closest('li');
+      if (!row) {
+        row = document.createElement('li');
+        row.appendChild(androidLink);
+      }
+      list.insertBefore(row, list.children[hasStarlight ? 1 : 0] || null);
+    }
+    prev?.remove();
     document.documentElement.dataset.zhixiaWikiDone = '1';
   }
 
@@ -322,5 +497,5 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     [1500, 4000, 8000, 15000, 22000, 30000].forEach((ms) => setTimeout(attempt, ms));
     // v1.4 Phase 7：经统一观察器（debounce 由统一层管理；尝试次数守卫仍在 attempt 内）
     createObserver({ debounce: 1200, handler: () => attempt() });
-    // 数据就绪刷新「幻化装备反查链接」区块由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
+    // 数据就绪刷新「幻化反查链接」区块由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

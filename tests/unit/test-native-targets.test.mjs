@@ -206,6 +206,16 @@ test('Targets 全局 Wiki 链接捕获：外服装备打开 Wiki，站点原生�
     assert.equal(e.stopped, true);
     assert.ok(navigations[0][0].includes(encodeURIComponent('散列优先译名')));
 
+    const shop = fixture('A', 'English Gear', {
+      attributes: { href: '/lodestone/playguide/db/shop/abc123' },
+    });
+    const shopLabel = fixture('B', 'English Gear', {
+      closest: selector => selector.startsWith('a[href') ? shop : null,
+    });
+    const shopClick = event(shopLabel);
+    callback(shopClick);
+    assert.equal(shopClick.prevented, false);
+
     const native = fixture('BUTTON', 'Search', {
       closest: selector => selector.includes('button, input, select') ? {} : null,
     });

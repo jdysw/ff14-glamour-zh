@@ -56,9 +56,17 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
       id: 'ec',
       start() { startEC(); startItems(); },
       onDataReady() {
-        safe(translateECPage, 'EC 补扫')();
-        // 自动推导的套装名要等 V3 nameMap 加载，浏览器标题也需在此时补翻译。
-        safe(translateECTitle, 'EC 数据就绪页面标题')();
+        const rescan = () => {
+          safe(translateECPage, 'EC 补扫')();
+          // 自动推导的套装名要等 V3 nameMap 加载，浏览器标题也需补翻译。
+          safe(translateECTitle, 'EC 数据就绪页面标题')();
+        };
+        // 先让物品链接的就绪回调完成，再在渲染机会之后补扫整页。
+        if (document.visibilityState === 'visible' && typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => setTimeout(rescan, 0));
+        } else {
+          setTimeout(rescan, 0);
+        }
       },
       onPageShow() {
         safe(translateECPage, 'pageshow')();

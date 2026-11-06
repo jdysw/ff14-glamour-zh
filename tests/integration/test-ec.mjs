@@ -1,8 +1,9 @@
 // EC 夹具测试：物品翻译链 5 条通道（链接/纯文本/卡片/染剂/占位符）
 // 预置 items 缓存 → 快速路径（零网络）→ 数据就绪 → applyItemZh 全链路
 import fs from 'node:fs';
+import http from 'node:http';
 import { newPage, closePage, sleep } from '../helpers/cdp.mjs';
-import { seedV3Browser } from '../helpers/v3-cache.mjs';
+import { seedV3Browser, v3CacheEntries } from '../helpers/v3-cache.mjs';
 import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
 
 const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
@@ -42,6 +43,11 @@ const dump = `(() => {
     link: a ? { text: (a.textContent || '').trim(), href: a.getAttribute('href') } : null,
     plain: pal ? { tag: pal.tagName, text: (pal.textContent || '').trim(), href: pal.getAttribute('href') } : null,
     card: card ? { text: (card.textContent || '').trim(), flag: card.dataset.zhixiaCard || '' } : null,
+    barding: document.querySelector('.list-item-title')?.textContent.trim(),
+    shop: (() => {
+      const label = document.querySelector('.has-text-currency-name');
+      return { label: label?.textContent.trim(), href: label?.closest('a')?.href };
+    })(),
     dyes: [...document.querySelectorAll('div.tag, span.tag')].map((d) => (d.textContent || '').trim()),
     ph: ph ? ph.getAttribute('placeholder') : null,
     attrs: (() => { const n = document.querySelector('img.nav-ic'); return n ? { alt: n.getAttribute('alt'), aria: n.getAttribute('aria-label'), title: n.getAttribute('title') } : null; })(),
@@ -62,22 +68,47 @@ await c.eval("window.__zhxTestSite = 'ec';");
 await seedV3Browser(c, 'ec');
 await c.eval("window.__zhxTestTables = ['items'];" );
 await c.eval(gmStub);
+await c.eval(`(() => {
+  const extra = document.createElement('p');
+  extra.id = 'ec-rescan-order';
+  extra.textContent = 'Troian Field Dressing of Aiming';
+  document.querySelector('main').appendChild(extra);
+  const gear = document.querySelector('a.eorzeadb_link');
+  const observer = new MutationObserver(() => {
+    if (gear.textContent.trim() !== '特罗亚精准缠头巾') return;
+    window.__zhxEquipmentBeforeRescan = extra.textContent === 'Troian Field Dressing of Aiming';
+    observer.disconnect();
+  });
+  observer.observe(gear, { childList: true, characterData: true, subtree: true });
+})()`);
 await c.eval(wrap(GF));
 await sleep(9000);
 const r = await c.eval(dump);
 console.log('\n--- 结果 ---');
 console.log(JSON.stringify(r, null, 1));
 
-// Phase 20：卡片点击 → 灰机 wiki（window.open 捕获；zhApplyCards 绑定）
-await c.eval(`(() => {
+// 验证卡片及鸟甲名称点击，以及独立的 EC 站内反查按钮。
+const nativeFilterAllowed = await c.eval(`(() => {
   window.__opened = [];
   window.open = (u) => { window.__opened.push(String(u)); return null; };
   const card = document.querySelector('p.title.has-text-text.is-5');
   if (card) card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-  return 1;
+  document.querySelector('.list-item-title').click();
+  const filter = document.querySelector('.list-item-controls a');
+  let allowed = false;
+  filter.addEventListener('click', (event) => {
+    allowed = !event.defaultPrevented;
+    event.preventDefault();
+  }, { once: true });
+  filter.click();
+  return allowed && filter.getAttribute('href') === '/companion-glamours?headPiece=88';
 })()`);
 await sleep(600);
 const opened = await c.eval(`window.__opened || []`);
+const rescanOrder = await c.eval(`({
+  equipmentFirst: window.__zhxEquipmentBeforeRescan,
+  bulkText: document.querySelector('#ec-rescan-order').textContent,
+})`);
 
 console.log('\n--- 断言 ---');
 const checks = [
@@ -96,6 +127,14 @@ const checks = [
   ['⑧ alt 属性 → 加载中…', r.attrs && r.attrs.alt === '加载中…', JSON.stringify(r.attrs)],
   ['⑨ aria-label 属性 → 第 2 页', r.attrs && r.attrs.aria === '第 2 页', JSON.stringify(r.attrs)],
   ['⑩ title 属性 → 5 点赞', r.attrs && r.attrs.title === '5 点赞', JSON.stringify(r.attrs)],
+  ['鸟甲名称 → 中文', r.barding === '海岛开拓者装甲', r.barding],
+  ['鸟甲名称点击 → 灰机 wiki', opened.length === 2 &&
+    opened[1] === 'https://ff14.huijiwiki.com/wiki/物品:' + encodeURIComponent('海岛开拓者装甲'), opened],
+  ['鸟甲站内反查按钮保留原行为', nativeFilterAllowed, nativeFilterAllowed],
+  ['货币名称汉化并保留商店链接', r.shop?.label === '天穹街振兴票' &&
+    r.shop?.href === 'https://na.finalfantasyxiv.com/lodestone/playguide/db/shop/1bb8b3193e9', r.shop],
+  ['装备链接先翻译，随后完成全页补扫', rescanOrder.equipmentFirst === true &&
+    rescanOrder.bulkText === ZH, rescanOrder],
 ];
 let pass = 0;
 for (const [name, ok, got] of checks) {
@@ -105,4 +144,123 @@ for (const [name, ok, got] of checks) {
 console.log(`\n${pass}/${checks.length} 通过`);
 console.log('\nconsole:', c.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 900));
 await closePage(PORT, t.target.id);
-process.exitCode = pass === checks.length ? 0 : 1;
+
+// 真实新文档注入：词库请求挂起时，首轮界面翻译仍应在 DOMContentLoaded 完成。
+const early = await newPage(PORT);
+let earlyPassed = false;
+try {
+  await early.cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    window.__zhxTestSite = 'ec';
+    window.GM_getValue = () => {
+      window.__zhxPrefetchState ??= document.readyState;
+      return null;
+    };
+    window.GM_xmlhttpRequest = (request) => {
+      window.__zhxFailData = () => request.onerror();
+    };
+    ${wrap(GF)}
+    document.addEventListener('DOMContentLoaded', () => {
+      window.__zhxEarlySnapshot = {
+        placeholder: document.querySelector('input').placeholder,
+        prefetchState: window.__zhxPrefetchState,
+        waitingForData: typeof window.__zhxFailData === 'function',
+        visible: getComputedStyle(document.body).visibility === 'visible'
+          && getComputedStyle(document.body).display !== 'none',
+      };
+    }, { once: true });
+  ` });
+  const loaded = new Promise(resolve => early.cdp.on('Page.loadEventFired', resolve));
+  await early.cdp.send('Page.navigate', { url: FIXTURE });
+  await loaded;
+  const snapshot = await early.cdp.eval('window.__zhxEarlySnapshot');
+  const afterFailure = await early.cdp.eval(`(async () => {
+    window.__zhxFailData?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return document.querySelector('input').placeholder;
+  })()`);
+  earlyPassed = GF.includes('@run-at       document-start')
+    && snapshot?.prefetchState === 'loading' && snapshot.waitingForData
+    && snapshot.placeholder === '按标题搜索' && snapshot.visible
+    && afterFailure === '按标题搜索';
+  console.log(earlyPassed ? '✅ 文档开始预取，DOM 就绪即汉化；词库失败时保留界面翻译'
+    : '❌ 早期启动或词库失败回退异常', snapshot, afterFailure);
+} finally {
+  await closePage(PORT, early.target.id);
+}
+
+// 保持 defer 脚本挂起，验证完整装备名能在 DOMContentLoaded 之前翻译。
+let unblock;
+const gate = new Promise(resolve => { unblock = resolve; });
+const server = http.createServer(async (req, res) => {
+  if (req.url === '/gate.js') {
+    await gate;
+    res.writeHead(200, { 'Content-Type': 'application/javascript' }).end('');
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(`
+    <!doctype html><script defer src="/gate.js"></script>
+    <a id="first" class="eorzeadb_link">Troian Field Dressing of Aiming</a>
+    <a id="split" class="eorzeadb_link" href="https://eu.finalfantasyxiv.com/lodestone/playguide/db/item/0000c0de7ff/">Troian Field</a>
+    <div class="v-select"><a id="option" class="eorzeadb_link">Troian Field Dressing of Aiming</a></div>
+  `);
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+let streaming;
+let streamingPassed = false;
+try {
+  streaming = await newPage(PORT);
+  const { cdp } = streaming;
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    window.__zhxTestSite = 'ec';
+    const local = new Map(Object.entries(${JSON.stringify(v3CacheEntries('ec'))}));
+    window.GM_getValue = (key, fallback) => local.get(key) ?? fallback;
+    window.addEventListener('DOMContentLoaded', () => { window.__fixtureDomReady = true; });
+    ${wrap(GF)}
+  ` });
+  await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + server.address().port + '/glamour/339340' });
+  const waitForTranslation = selector => cdp.callFn(`async function (selector, name) {
+    for (let i = 0; i < 80; i++) {
+      if (document.querySelector(selector)?.textContent === name) return true;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return false;
+  }`, [selector, ZH]);
+  const first = await waitForTranslation('#first');
+  const partial = await cdp.eval(`(() => {
+    const split = document.querySelector('#split');
+    const before = split.textContent;
+    split.firstChild.appendData(' Dressing of Aiming');
+    return before;
+  })()`);
+  const completed = await waitForTranslation('#split');
+  const state = await cdp.eval(`({
+    ready: Boolean(window.__fixtureDomReady),
+    option: document.querySelector('#option').textContent,
+    href: document.querySelector('#split').getAttribute('href'),
+  })`);
+  unblock();
+  const loaded = await cdp.eval(`(async () => {
+    for (let i = 0; i < 80 && !window.__fixtureDomReady; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    const link = document.createElement('a');
+    link.id = 'after-ready';
+    link.className = 'eorzeadb_link';
+    link.textContent = 'Troian Field Dressing of Aiming';
+    document.body.appendChild(link);
+    return Boolean(window.__fixtureDomReady);
+  })()`);
+  const afterReady = await waitForTranslation('#after-ready');
+  streamingPassed = first && partial === 'Troian Field' && completed && !state.ready
+    && state.option === 'Troian Field Dressing of Aiming' && state.href === WIKI && loaded && afterReady;
+  console.log(streamingPassed ? '✅ 装备完整出现即翻译，筛选项安全，DOM 就绪后常规翻译接续'
+    : '❌ 早期装备翻译失败', { first, partial, completed, ...state, loaded, afterReady });
+} finally {
+  unblock();
+  if (streaming) await closePage(PORT, streaming.target.id);
+  await new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+}
+process.exitCode = pass === checks.length && earlyPassed && streamingPassed ? 0 : 1;

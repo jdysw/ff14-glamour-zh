@@ -116,7 +116,7 @@ export { __zhxDiagRecord, __zhxDictChars, __zhxMark, __zhxProbeBtnCss, __zhxProb
       W.id = T(() => getItemId() || 'null');
       W.ko = T(() => { const z = getItemZhName(); const k = z ? resolveKo(z) : null; return k || 'null'; });
       W.blocks = T(() => document.querySelectorAll('.ff14-content-box-block').length);
-      W.src = T(() => !!blockByTitle('其他站点链接'));
+      W.src = T(() => !!blockByTitle('其他站点链接', '数据库链接'));
       W.lang = T(() => !!blockByTitle('各语言名称'));
       W.infobox = T(() => document.querySelectorAll('.infobox, [class*="infobox"]').length);
       W.h1 = T(() => { const h = document.querySelector('#firstHeading'); return h ? String(h.innerText || '').split('\n')[0].slice(0, 40) : 'no-h1'; });
