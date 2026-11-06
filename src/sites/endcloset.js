@@ -1,6 +1,6 @@
 import { DICT_ENDCLOSET } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
@@ -193,7 +193,7 @@ function startEndCloset() {
   safe(translateEndClosetPage, 'EndCloset 全扫')();
   safe(translateEndClosetTitle, 'EndCloset 标题')();
   // React SPA：childList + characterData（三语文本节点更新频繁）
-  createObserver({
+  createTranslationObserver({
     root: document.documentElement,
     characterData: true,
     attributes: true,

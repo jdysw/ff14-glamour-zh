@@ -409,13 +409,21 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     assert.equal(probes(),beforeProbe+1,'A stale bundle gets one immediate manifest recheck');
     assert.equal(JSON.parse(gm.get('zhx.v3.manifest').split('\n').slice(1).join('\n')).version,'contract-2');
 
-    // An incorrect future timestamp must not suppress normal update probes.
+    // An incorrect future timestamp must trigger a background probe while
+    // the current page continues to use its complete, verified cache.
     const cached=gm.get('zhx.v3.manifest').split('\n').slice(1).join('\n');
+    const previousNamesKey = 'zhx.v3.f.mirapri.names.' + bundle().manifest.sites.mirapri.files.names.sha256;
     gm.set('zhx.v3.manifest',(Date.now()+86400000)+'\n'+cached);
     beforeProbe=probes();version=1;
     assert.equal(await _ensureTryV3(),true);
-    assert.equal(resolveByName('English Test Gear'),'测试第一版');
+    assert.equal(resolveByName('English Test Gear'),'测试第二版');
     assert.equal(probes(),beforeProbe+1);
+    for (let i = 0; i < 100 && gm.has(previousNamesKey); i++) {
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(JSON.parse(gm.get('zhx.v3.manifest').split('\n')[1]).version, 'contract-1');
+    assert.equal(gm.has(previousNamesKey), false, '后台提交后清理被替换的旧文件');
+    assert.equal(resolveByName('English Test Gear'), '测试第二版', '后台更新不改变当前页索引');
     assert.ok(resourceRequests.every(request=>request.headers?.['Cache-Control']?.includes('no-cache')),
       'Metadata probes and cache-miss downloads must bypass stale HTTP responses');
 
@@ -425,7 +433,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
     const committed=gm.get('zhx.v3.manifest');
     const write=globalThis.GM_setValue,transport=globalThis.GM_xmlhttpRequest;
     globalThis.GM_setValue=()=>false;version=2;
-    assert.equal(await _ensureTryV3(),true);
+    assert.equal(await _ensureTryV3(false, true),true);
     assert.equal(resolveByName('English Test Gear'),'测试第二版','Valid downloads remain usable in memory');
     assert.equal(gm.get('zhx.v3.manifest'),committed,'Failed writes must not publish new cache metadata');
     globalThis.GM_setValue=write;

@@ -17,7 +17,7 @@ const captured = [];
 const stubs = {
   DICT_EC, document, dictGetRevision: () => 0, dataGetIndex: () => null,
   tryEnToZh: () => null,
-  createObserver: opts => { captured.push(opts); return { disconnect() {} }; },
+  createTranslationObserver: opts => { captured.push(opts); return { disconnect() {} }; },
   queryIn: (scope, selector) => body.items.filter(node => node.hasAttribute(selector.slice(1, -1))),
   localScope: node => node || null, _zhixiaTitleKeep: titleKeep,
   _markScan: () => {}, safe: fn => fn, SKIP_TAGS: new Set(), EC_ITEM_SKIP_SEL: '.item-only',

@@ -1,6 +1,6 @@
-import { dedupeByAncestor } from './dom.js';
-import { _perfNow, _zhxErr } from './runtime.js';
-export { _obsStats, createObserver };
+import { dedupeByAncestor, localScope } from './dom.js';
+import { _perfNow, _zhxErr, safe } from './runtime.js';
+export { _obsStats, createObserver, createTranslationObserver, observeUntilDomReady };
 
 
   /* @zhixia:core-observer-start */
@@ -25,6 +25,7 @@ export { _obsStats, createObserver };
   function createObserver(opts) {
     const o = opts || {};
     const debounce = o.debounce || 350;
+    let fastUntil = o.fastStart ? null : 0;
     const floodLimit = o.floodLimit || 800;
     const maxPending = Math.max(floodLimit + 1, floodLimit * 2);
     const root = o.root || document.body || document.documentElement;
@@ -88,6 +89,8 @@ export { _obsStats, createObserver };
         floodRescheduled = true;
       }
       if (timer !== null || (!pending.length && !pendingCD.length && !hitCD)) return;
+      fastUntil ??= _perfNow() + 600;
+      const delay = !flood && _perfNow() < fastUntil ? Math.min(16, debounce) : debounce;
       timer = setTimeout(() => {
         timer = null;
         if (stopped) return;
@@ -103,7 +106,7 @@ export { _obsStats, createObserver };
         const dt = _perfNow() - t0;
         _obsStats.ms += dt;
         if (dt > _obsStats.maxMs) _obsStats.maxMs = dt;
-      }, debounce);
+      }, delay);
     });
     const subscription = { childList: true, subtree: true };
     if (o.characterData) subscription.characterData = true;
@@ -126,3 +129,40 @@ export { _obsStats, createObserver };
   }
 
   /* @zhixia:core-observer-end */
+
+  // 优先合并首批轻量翻译，启动窗口结束后沿用各站的常规延迟。
+  function createTranslationObserver(opts) {
+    return createObserver({ ...opts, fastStart: true });
+  }
+
+  // 解析期间只处理已就绪的、由站点声明安全的局部节点。
+  function observeUntilDomReady(ready, selector, translate) {
+    let parsing = true;
+    let observer;
+    document.addEventListener('DOMContentLoaded', () => {
+      parsing = false;
+      observer?.disconnect();
+    }, { once: true });
+
+    const collectRoots = (records) => {
+      const roots = [];
+      for (const record of records) {
+        const changed = record.type === 'characterData' ? [record.target] : record.addedNodes;
+        for (const node of changed) {
+          const element = localScope(node);
+          if (!element || !document.body?.contains(element)) continue;
+          const match = element.closest(selector);
+          if (match || node.nodeType === 1) roots.push(match || element);
+        }
+      }
+      return dedupeByAncestor(roots);
+    };
+    void ready.then(safe((readyToTranslate) => {
+      if (!parsing || !readyToTranslate) return;
+      observer = new MutationObserver(safe((records) => {
+        for (const root of collectRoots(records)) translate(root);
+      }, '首批节点局部翻译'));
+      observer.observe(document, { childList: true, characterData: true, subtree: true });
+      if (document.body) translate(document.body);
+    }, '首批节点翻译'));
+  }

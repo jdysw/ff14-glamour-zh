@@ -53,6 +53,7 @@ function fakeEl(over = {}) {
   const el = {
     dataset: over.dataset || {},
     textContent: over.text ?? '',
+    getAttribute: (name) => name === 'href' ? over.href ?? null : null,
     classList: {
       contains: (c) => cls.has(c),
       add: (c) => cls.add(c),
@@ -96,13 +97,14 @@ function buildTargets(doc) {
 console.log('\n── A：全页采集（四类 target 与字段）──');
 const spanInA = fakeEl({ text: 'Ao Dai' });
 const a1 = fakeEl({ text: 'Ao Dai', qs: (s) => (s === 'span' ? spanInA : null) });
+const shop = fakeEl({ text: 'Ao Dai', href: 'https://na.finalfantasyxiv.com/lodestone/playguide/db/shop/abc123' });
 const sp1 = fakeEl({ text: '纯文本名' });
 const card1 = fakeEl({ text: 'Card Name' });
 const tag1 = fakeEl({ text: '\u2B24 Ink Blue' });   // ⬤ Ink Blue
 {
   const doc = {
     querySelectorAll: (sel) => {
-      if (sel === SEL) return [a1];
+      if (sel === SEL) return [a1, shop];
       if (sel === PLAIN) return [sp1];
       if (sel === CARD) return [card1];
       if (sel === TAG) return [tag1];

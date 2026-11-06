@@ -1,7 +1,7 @@
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { safe } from '../core/runtime.js';
@@ -348,7 +348,7 @@ function startEden() {
   ensureZhxItemStyle('zhx-eden-item-style');
   bindZhxItemClick('__zhxEdenItemClick');
   safe(translateEdenPage, 'Eden 首屏')();
-  createObserver({ root: document.documentElement, characterData: true,
+  createTranslationObserver({ root: document.documentElement, characterData: true,
     attributes: true, attributeFilter: ['href', 'title', 'alt', 'placeholder', 'aria-label', 'tooltip-content', 'style', 'src', 'class'], debounce: 120,
     filter: edenMutationRelevant,
     handler(nodes, texts = []) {

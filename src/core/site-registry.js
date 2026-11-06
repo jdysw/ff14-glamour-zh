@@ -1,7 +1,8 @@
-import { onTablesReady } from './data-manager.js';
+import { dataGetStatus, ensureTables, onTablesReady } from './data-manager.js';
+import { observeUntilDomReady } from './observer.js';
 import { findSitePolicy } from './site-policy.js';
 import { _zhxErr, safe } from './runtime.js';
-import { applyItemZh, startItems } from './targets.js';
+import { applyItemZh, EARLY_EQUIPMENT_SEL, startItems, translateEarlyEquipment, translateKnownEquipmentText } from './targets.js';
 import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
 import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-collection.js';
@@ -14,6 +15,8 @@ import { startEden, translateEdenPage } from '../sites/mirapri-eden.js';
 import { startXivc, translateXivcPage } from '../sites/xivc.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
 
+const FC_EARLY_EQUIPMENT = 'a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/playguide/db/item/"]';
+const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name)';
 
   /* @zhixia:site-registry-start */
   /* ── Site Registry：站点启动行为与 DOM 适配器 ──────────────────
@@ -26,6 +29,12 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
     const c = cfg || {};
     return {
       id: c.id,
+      prepare() {
+        const early = c.early;
+        if (!early || (early.matches && !early.matches(location.pathname))) return;
+        const ready = ensureTables().then(() => dataGetStatus().state === 'ready');
+        observeUntilDomReady(ready, early.selector, early.translate);
+      },
       boot() {
         // Phase 18：适配器入口错误边界——单站启动失败不影响脚本其余部分（其余站点/兜底/探测照常）
         if (typeof c.start === 'function') { try { c.start(); } catch (e) { _zhxErr('boot:' + (c.id || 'site'), e); } }
@@ -49,16 +58,30 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
     // （注册顺序 = 匹配优先级，保持 Phase 3 金标准不变）
     createSiteAdapter({
       id: 'mirapri',
+      early: { selector: EARLY_EQUIPMENT_SEL, translate: translateEarlyEquipment },
       start() { startMirapri(); startItems(); },
       onPageShow() { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); },
     }),
     createSiteAdapter({
       id: 'ec',
+      early: {
+        selector: EARLY_EQUIPMENT_SEL,
+        matches: path => /^\/glamour\/\d+(?:\/|$)/.test(path),
+        translate: translateEarlyEquipment,
+      },
       start() { startEC(); startItems(); },
       onDataReady() {
-        safe(translateECPage, 'EC 补扫')();
-        // 自动推导的套装名要等 V3 nameMap 加载，浏览器标题也需在此时补翻译。
-        safe(translateECTitle, 'EC 数据就绪页面标题')();
+        const rescan = () => {
+          safe(translateECPage, 'EC 补扫')();
+          // 自动推导的套装名要等 V3 nameMap 加载，浏览器标题也需补翻译。
+          safe(translateECTitle, 'EC 数据就绪页面标题')();
+        };
+        // 先让物品链接的就绪回调完成，再在渲染机会之后补扫整页。
+        if (document.visibilityState === 'visible' && typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => setTimeout(rescan, 0));
+        } else {
+          setTimeout(rescan, 0);
+        }
       },
       onPageShow() {
         safe(translateECPage, 'pageshow')();
@@ -75,6 +98,10 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
     }),
     createSiteAdapter({
       id: 'fc',
+      early: {
+        selector: FC_EARLY_EQUIPMENT,
+        translate: root => translateKnownEquipmentText(root, FC_EARLY_EQUIPMENT, translateFCPage),
+      },
       start() { startFC(); },
       onDataReady() { safe(translateFCPage, 'FC 补扫')(); safe(translateFCTitle, 'FC 标题')(); safe(fixFCMenu, 'FC 菜单')(); safe(bindFCBanners, 'FC 横幅')(); },
       onPageShow() { safe(translateFCPage, 'pageshow')(); },
@@ -87,6 +114,10 @@ export { SITE_REGISTRY, createSiteAdapter, findSite };
     }),
     createSiteAdapter({
       id: 'collection',
+      early: {
+        selector: ACL_EARLY_EQUIPMENT,
+        translate: root => translateKnownEquipmentText(root, ACL_EARLY_EQUIPMENT, translateACLPage),
+      },
       start() { startACL(); },
       onDataReady() { safe(translateACLPage, 'ACL 补扫')(); safe(translateACLTitle, 'ACL 标题')(); },
       onPageShow() { safe(translateACLPage, 'pageshow')(); },

@@ -140,15 +140,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return sawRow ? { names, glam, slots } : null;
   }
 
+  function _validateV3Payload(files) {
+    if (files.candidatePolicy !== 1) return null;
+    if (files.dict && !validRuntimeDictionary(JSON.parse(files.dict))) return null;
+    return typeof files.names === 'string'
+      ? _v3Names(files.names)
+      : { names: Object.create(null), glam: Object.create(null), slots: Object.create(null) };
+  }
+
   // V3 数据直接映射为运行时索引；模块内状态由本 IIFE 共享。
   function _applyV3(files) {
-    if (files.candidatePolicy !== 1) return false;
     // 取值包装拆为局部函数（仅降复杂度；取值顺序与语义不变）
     const take = (key, multi) => (files[key] ? _v3Pairs(files[key], multi) : null);
     try {
-      const parsedNames = typeof files.names === 'string'
-        ? _v3Names(files.names)
-        : { names: Object.create(null), glam: Object.create(null), slots: Object.create(null) };
+      const parsedNames = _validateV3Payload(files);
       if (!parsedNames) return false;
       const { names, glam, slots } = parsedNames;
       const hash = take('hash') || Object.create(null);
@@ -156,11 +161,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const ko = take('ko') || Object.create(null);
       const ali = take('alias', true) || Object.create(null);
       const dup = take('dup', true) || Object.create(null);
-      // 词典结构必须先于任何索引提交验证，防止无效共享文件导致部分数据发布。
-      if (files.dict) {
-        const runtimeDict = JSON.parse(files.dict);
-        if (!validRuntimeDictionary(runtimeDict)) return false;
-      }
       _replaceMap(nameMap, names);
       _replaceMap(itemHash, hash);
       _irSearchByZh = null;
@@ -271,20 +271,30 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return validV3Manifest(man);
   }
 
-  async function fetchManifest() {
-    _manifestNetworkAttempted = true;
-    _manifestNeedsCommit = false;
-    _manifestRejected = false;
+  async function _requestV3Manifest() {
     let txt = null;
     try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, { fresh: true }); }
     catch (e) { txt = null; /* 请求失败时由 loadManifest 决定是否复用旧清单 */ }
     if (typeof txt !== 'string' || !txt) return null;
     try {
       const manifest = JSON.parse(txt);
-      if (_validV3Manifest(manifest)) { _manifestNeedsCommit = true; return manifest; }
+      if (_validV3Manifest(manifest)) return manifest;
     } catch (e) { /* manifest 解析或 schema/policy 校验失败 */ }
-    _manifestRejected = true;
     return false;
+  }
+
+  async function fetchManifest() {
+    _manifestNetworkAttempted = true;
+    _manifestNeedsCommit = false;
+    _manifestRejected = false;
+    const manifest = await _requestV3Manifest();
+    _manifestNeedsCommit = Boolean(manifest);
+    _manifestRejected = manifest === false;
+    return manifest;
+  }
+
+  function _freshV3Manifest(snapshot) {
+    return snapshot.manT > 0 && Date.now() - snapshot.manT < DAY_MS && _validV3Manifest(snapshot.man);
   }
 
   // 缓存优先 → 必要时网络（站点是否在列由 _ensureTryV3 统一判断）
@@ -293,13 +303,11 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _manifestNetworkAttempted = false;
     if (force) return await fetchManifest();
     const c = await readCachedManifest();
-    const fresh = !!(c.manT && (Date.now() - c.manT < DAY_MS));
-    const valid = _validV3Manifest(c.man);
-    if (!refresh && valid && fresh) return c.man;
+    if (!refresh && _freshV3Manifest(c)) return c.man;
     const latest = await fetchManifest();
     if (latest === false) return null;
     if (latest) return latest;
-    return valid ? c.man : null;
+    return _validV3Manifest(c.man) ? c.man : null;
   }
 
   // 站点文件并行获取（含共享词库）
@@ -326,15 +334,16 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
   // 任何一步失败或缺文件均返回 false；调用方保持安全空索引。
-  async function _commitV3Bundle(staged, manifest, siteId, commitSnapshot, commitManifest) {
+  async function _commitV3Bundle(staged, manifest, siteId, commitSnapshot, commitManifest, canPublish) {
     for (const [key, value] of staged) {
       if (!await storeSetAsync(key, value)) return false;
     }
     const value = String(Date.now()) + '\n' + JSON.stringify(manifest);
+    if (canPublish && !await canPublish()) return false;
     if (commitSnapshot && !await storeSetAsync('zhx.v3.manifest.' + siteId, value)) {
       return false;
     }
-    if (commitManifest && !await storeSetAsync('zhx.v3.manifest', value)) {
+    if (commitManifest && ((canPublish && !await canPublish()) || !await storeSetAsync('zhx.v3.manifest', value))) {
       return false;
     }
     return true;
@@ -395,8 +404,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   async function _readPreviousV3Manifest(siteId) {
-    const siteSnapshot = await readCachedManifest(siteId);
-    const globalSnapshot = await readCachedManifest();
+    const [siteSnapshot, globalSnapshot] = await Promise.all([
+      readCachedManifest(siteId),
+      readCachedManifest(),
+    ]);
     const siteSnapshotValid = _validV3Manifest(siteSnapshot.man);
     const previous = siteSnapshotValid ? siteSnapshot : globalSnapshot;
     return { siteSnapshot, siteSnapshotValid, globalSnapshot, previous, previousValid: _validV3Manifest(previous.man) };
@@ -411,12 +422,18 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return _validV3Manifest(manifest) ? manifest : null;
   }
 
-  async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed, generation = _ensureGeneration) {
+  async function _readV3Bundle(site, manifest, need, force, staged, networkAllowed) {
     const selected = _manifestSiteFiles(manifest, site, need);
     if (!selected) return null;
     const files = await fetchStationFiles(site.id, selected.names, selected.sm, selected.sharedDict, force, staged, networkAllowed);
-    if (!allFilesReady(selected.names, files, selected.sharedDict) || generation !== _ensureGeneration) return null;
+    if (!allFilesReady(selected.names, files, selected.sharedDict)) return null;
     files.candidatePolicy = manifest.candidatePolicy;
+    return files;
+  }
+
+  async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed, generation = _ensureGeneration) {
+    const files = await _readV3Bundle(site, manifest, need, force, staged, networkAllowed);
+    if (!files || generation !== _ensureGeneration) return null;
     return _applyV3(files) ? { files } : null;
   }
 
@@ -452,6 +469,56 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return committed;
   }
 
+  async function _refreshV3Cache(site, need, snapshots, globalFresh, generation) {
+    const manifest = globalFresh ? snapshots.globalSnapshot.man : await _requestV3Manifest();
+    if (!manifest || generation !== _ensureGeneration) return;
+    const staged = new Map();
+    const files = await _readV3Bundle(site, manifest, need, false, staged, true);
+    if (!files || generation !== _ensureGeneration || !_validateV3Payload(files)) return;
+
+    // 后台只发布已校验的缓存。手动刷新或其他页面提交新清单后，放弃旧写入。
+    const canPublish = async () => {
+      if (generation !== _ensureGeneration) return false;
+      const current = await _readPreviousV3Manifest(site.id);
+      return generation === _ensureGeneration && ['globalSnapshot', 'siteSnapshot'].every(key => {
+        const snapshot = current[key];
+        const initial = snapshots[key];
+        return snapshot.man?.version === manifest.version ||
+          (snapshot.manT === initial.manT && snapshot.man?.version === initial.man?.version);
+      });
+    };
+    if (!await _commitV3Bundle(staged, manifest, site.id, true, !globalFresh, canPublish)) return;
+    if (!await canPublish()) return;
+    // 仅淘汰已知旧清单的文件，避免误删其他页面刚写入的文件。
+    const stale = _v3SiteCacheStaleFromManifest(site.id, snapshots.previous.man, manifest);
+    await Promise.all([...stale].map(key => storeDeleteAsync(key)));
+  }
+
+  function _recordV3Ready(manifest, origin) {
+    if (manifest.version) DATA_VER = String(manifest.version);
+    _dataLoadOrigin = origin;
+    _dataLoadState = 'ready';
+    return true;
+  }
+
+  async function _tryCachedV3(site, need, snapshots, generation) {
+    if (!snapshots.previousValid) return false;
+    const globalFresh = _freshV3Manifest(snapshots.globalSnapshot);
+    const siteBehind = snapshots.siteSnapshotValid
+      && snapshots.siteSnapshot.manT <= snapshots.globalSnapshot.manT
+      && snapshots.siteSnapshot.man?.version !== snapshots.globalSnapshot.man?.version;
+    const manifest = snapshots.previous.man;
+    const cached = await _tryV3Bundle(site, manifest, need, false, null, false, generation);
+    if (!cached) return false;
+
+    if (siteBehind) _dlStats.fallback++;
+    if (!globalFresh || siteBehind || !snapshots.siteSnapshotValid) {
+      void _refreshV3Cache(site, need, snapshots, globalFresh, generation)
+        .catch(error => _zhxErr('v3cacheRefresh', error));
+    }
+    return _recordV3Ready(manifest, siteBehind ? 'fallback' : 'cache');
+  }
+
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
     const policy = findSite();
     const site = policy?.dataSite ? { ...policy, id: policy.dataSite } : policy;
@@ -459,18 +526,20 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const sourceBefore = { ..._dlStats };
     try {
       const snapshots = await _readPreviousV3Manifest(site.id);
+      const need = neededTables();
+      if (!force && !refreshManifest && await _tryCachedV3(site, need, snapshots, generation)) return true;
+      if (generation !== _ensureGeneration) return false;
       const manifest = await _selectV3Manifest(force, refreshManifest, snapshots);
       if (!manifest || generation !== _ensureGeneration) return false;
       const staged = new Map();
-      const result = await _tryV3WithCachedFallback(site, manifest, neededTables(), force, snapshots, staged, generation);
+      const result = await _tryV3WithCachedFallback(site, manifest, need, force, snapshots, staged, generation);
       if (!result.loaded || generation !== _ensureGeneration) return false;
       if (!result.fromSnapshot) await _commitV3Selection(site.id, result.manifest, snapshots, force, staged);
-      if (result.manifest.version) DATA_VER = String(result.manifest.version);
-      if (_dlStats.fallback > sourceBefore.fallback) _dataLoadOrigin = 'fallback';
-      else if (_dlStats.net > sourceBefore.net) _dataLoadOrigin = 'network';
-      else _dataLoadOrigin = 'cache';
-      _dataLoadState = 'ready';
-      return true;
+      if (generation !== _ensureGeneration) return false;
+      let origin = 'cache';
+      if (_dlStats.fallback > sourceBefore.fallback) origin = 'fallback';
+      else if (_dlStats.net > sourceBefore.net) origin = 'network';
+      return _recordV3Ready(result.manifest, origin);
     } catch (e) {
       _zhxErr('v3', e);
       return false;

@@ -1,7 +1,7 @@
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByName } from '../core/data-manager.js';
 import { dedupeByAncestor, localScope, _markScan } from '../core/dom.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { WIKI_ITEM } from '../core/constants.js';
 import { safe } from '../core/runtime.js';
 
@@ -278,7 +278,7 @@ function startXivc() {
   for (const selector of UI_ROOTS) {
     const root = document.querySelector(selector);
     if (!root) continue;
-    createObserver({
+    createTranslationObserver({
       root,
       debounce: 180,
       characterData: true,

@@ -26,6 +26,6 @@
 // @grant        GM.listValues
 // @grant        GM.deleteValue
 // @connect      zhixia-data.pages.dev
-// @run-at       document-idle
+// @run-at       document-start
 // @noframes
 // ==/UserScript==

@@ -1,7 +1,7 @@
 import { DICT_MIRAMIRU } from '../core/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { WIKI_ITEM } from '../core/constants.js';
 
@@ -171,7 +171,7 @@ function translateMiramiruTitle() {
 
 function startMiramiru() {
   safe(translateMiramiruPage, 'Miramiru 首屏')();
-  createObserver({
+  createTranslationObserver({
     root: document.documentElement,
     characterData: true,
     attributes: true,

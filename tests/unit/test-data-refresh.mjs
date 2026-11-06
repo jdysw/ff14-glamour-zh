@@ -79,6 +79,139 @@ function network(getVersion) {
   };
 }
 
+function seedExpired(store, bundle) {
+  const cached = String(Date.now() - 2 * 86400000) + '\n' + JSON.stringify(bundle.manifest);
+  store.set('zhx.v3.manifest', cached);
+  store.set('zhx.v3.manifest.mirapri', cached);
+  for (const [name, text] of Object.entries(bundle.files)) {
+    const hash = bundle.manifest.sites.mirapri.files[name].sha256;
+    store.set('zhx.v3.f.mirapri.' + name + '.' + hash, hash + '\n' + text);
+  }
+}
+
+function cachedVersion(store) {
+  return JSON.parse(store.get('zhx.v3.manifest').split('\n')[1]).version;
+}
+
+// 完整的热缓存无需重写文件或枚举存储键，页面在校验后直接使用它。
+{
+  let requests = 0;
+  const { api, store } = buildHarness(async () => { requests++; throw new Error('unexpected network'); });
+  seedExpired(store, makeBundle(1));
+  for (const key of ['zhx.v3.manifest', 'zhx.v3.manifest.mirapri']) {
+    store.set(key, Date.now() + '\n' + JSON.stringify(makeBundle(1).manifest));
+  }
+  let writes = 0;
+  let enumerations = 0;
+  const set = store.set.bind(store);
+  const keys = store.keys.bind(store);
+  store.set = (key, value) => { writes++; return set(key, value); };
+  store.keys = () => { enumerations++; return keys(); };
+  await api.ensureTables();
+  assert.equal(api.resolveByName('English One'), '中文甲');
+  assert.equal(api.dataGetStatus().origin, 'cache');
+  assert.deepEqual({ requests, writes, enumerations }, { requests: 0, writes: 0, enumerations: 0 });
+}
+
+async function waitFor(condition) {
+  for (let i = 0; i < 100; i++) {
+    if (condition()) return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.ok(condition(), '后台缓存更新未完成');
+}
+
+// 过期的完整词库先解锁翻译；后台下载完成并校验后才更新持久清单。
+{
+  const manifestGate = deferred();
+  const namesGate = deferred();
+  const newer = makeBundle(2);
+  let requested = 0;
+  let waitingForNames = false;
+  const { api, store, errors } = buildHarness(async url => {
+    if (url.endsWith('/manifest.json')) {
+      requested++;
+      return manifestGate.promise;
+    }
+    if (url.endsWith('/names.tsv')) {
+      waitingForNames = true;
+      return namesGate.promise;
+    }
+    return network(() => 2)(url);
+  });
+  seedExpired(store, makeBundle(1));
+  const statuses = [];
+  api.onTablesReady(status => statuses.push(status));
+  await api.ensureTables();
+  assert.equal(requested, 1);
+  assert.equal(api.resolveByName('English One'), '中文甲');
+  assert.equal(statuses[0].version, 'unit-v1');
+  assert.equal(statuses[0].origin, 'cache');
+  manifestGate.resolve(JSON.stringify(newer.manifest));
+  await waitFor(() => waitingForNames);
+  assert.equal(cachedVersion(store), 'unit-v1', '未收齐新版文件时必须保留旧清单');
+  namesGate.resolve(newer.files.names);
+  await waitFor(() => cachedVersion(store) === 'unit-v2');
+  assert.equal(statuses.length, 1, '后台更新不应触发当前页重翻');
+  assert.equal(api.resolveByName('English One'), '中文甲');
+
+  const reopened = buildHarness(async url => assert.fail('重新打开应零网络命中新版：' + url));
+  for (const [key, value] of store) reopened.store.set(key, value);
+  await reopened.api.ensureTables();
+  assert.equal(reopened.api.resolveByName('English Two'), '中文乙');
+  assert.equal(reopened.api.dataGetStatus().origin, 'cache');
+  assert.deepEqual(errors, []);
+  assert.deepEqual(reopened.errors, []);
+}
+
+// 新版即使通过哈希，也必须满足运行时名称格式才能替换旧清单。
+{
+  const newer = makeBundle(2);
+  newer.files.names = 'English Two\t中文乙\t1\n';
+  const meta = newer.manifest.sites.mirapri.files.names;
+  meta.sha256 = sha(newer.files.names);
+  meta.bytes = Buffer.byteLength(newer.files.names);
+  let verifiedNewNames = false;
+  const crypto = { subtle: { digest(_algorithm, bytes) {
+    const digest = createHash('sha256').update(bytes).digest();
+    if (digest.toString('hex') === meta.sha256) verifiedNewNames = true;
+    return Promise.resolve(digest);
+  } } };
+  const { api, store, errors } = buildHarness(async url => {
+    if (url.endsWith('/manifest.json')) return JSON.stringify(newer.manifest);
+    const name = /\/mirapri\/(names|hash|alias|dup)\.tsv$/.exec(url)?.[1];
+    assert.ok(name, 'unexpected remote file: ' + url);
+    return newer.files[name];
+  }, ['items'], crypto);
+  seedExpired(store, makeBundle(1));
+  await api.ensureTables();
+  await waitFor(() => verifiedNewNames);
+  assert.equal(cachedVersion(store), 'unit-v1');
+  assert.equal(api.resolveByName('English One'), '中文甲');
+  assert.deepEqual(errors, []);
+}
+
+// 同页手动刷新优先于旧的后台请求。
+{
+  const background = deferred();
+  let manifests = 0;
+  const { api, store, errors } = buildHarness(async url => {
+    if (url.endsWith('/manifest.json') && ++manifests === 1) return background.promise;
+    return network(() => 2)(url);
+  });
+  seedExpired(store, makeBundle(1));
+  await api.ensureTables();
+  api.dataInvalidate();
+  await api.ensureTables();
+  assert.equal(manifests, 2);
+  assert.equal(api.dataGetStatus().version, 'unit-v2');
+  background.resolve(JSON.stringify(makeBundle(1).manifest));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cachedVersion(store), 'unit-v2');
+  assert.equal(api.resolveByName('English Two'), '中文乙');
+  assert.deepEqual(errors, []);
+}
+
 // 刷新会产生新的就绪代际：旧索引立即失效，
 // 原有订阅者应在数据重新就绪时再次收到通知。
 {

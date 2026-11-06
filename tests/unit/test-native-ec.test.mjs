@@ -102,6 +102,36 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
   });
 });
 
+test('EC 阳伞详情：配饰导航、获取方式、图片说明和页面标题', () => {
+  const parent = element('DIV');
+  const icon = element('IMG', { alt: 'Sky Blue Parasol Icon', title: 'All DPS' });
+  const doc = {
+    title: 'Parasol | Eorzea Collection',
+    body: element('BODY'),
+    querySelectorAll: selector => ['[alt]', '[title]'].includes(selector) ? [icon] : [],
+  };
+  withGlobals({ document: doc, location: { pathname: '/fashion-accessory/parasol' } }, () => {
+    for (const [source, expected] of [
+      ['— Next Accessory —', '— 下一个配饰 —'],
+      ['— Similar accessories —', '— 相似配饰 —'],
+      ['Mark as Owned', '标记为已拥有'],
+      ["Skybuilders' Scrips", '天穹街振兴票'],
+      ['  in The Firmament (X:12.0 Y:14.0)  ', '  位于天穹街 (X:12.0 Y:14.0)  '],
+      ['The perfect accessory to protect you from the summer sun, spring showers, and birds seeking to relieve themselves.',
+        '夏日遮阳、春雨挡雨，还能防止鸟粪落到身上，是一件实用的配饰。'],
+    ]) {
+      const node = { nodeType: 3, nodeValue: source, parentElement: parent };
+      trimECNode(node);
+      assert.equal(node.nodeValue, expected);
+    }
+    translateECAttrs();
+    assert.equal(icon.getAttribute('alt'), '天蓝阳伞图标');
+    assert.equal(icon.getAttribute('title'), '所有输出职业');
+    translateECTitle();
+    assert.equal(doc.title, '阳伞 | Eorzea Collection');
+  });
+});
+
 test('EC Gearsets H1 拆分后缀：保留原版式并避免套装重复翻译', () => {
   const sourceName = 'Phantom Vision Fending';
   const zhName = ecGearsetDisplayName(sourceName);

@@ -1,9 +1,9 @@
-import { createObserver } from './observer.js';
+import { createTranslationObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { ensureTables, resolve, resolveByName } from './data-manager.js';
 import { localScope, queryIn } from './dom.js';
 import { _perfNow, safe } from './runtime.js';
-export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
+export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMENT_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, translateEarlyEquipment, translateKnownEquipmentText, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
 
   // 装备链查找属于 DOM 目标处理，不应放在所有模块共用的基础运行时。
@@ -26,6 +26,9 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   // wrapping an option as a wiki link or hijacking its click breaks v-model.
   const EC_SEARCH_OPTION_SEL = '.v-select, .vs__dropdown-menu, .vs__dropdown-option, ' +
     '[data-zhx-chinese-suggest]';
+  const EC_SHOP_PATH = '/playguide/db/shop/';
+  const EC_ITEM_LINK_SEL = 'a.eorzeadb_link';
+  const EC_PLAIN_ITEM_SEL = 'span[class*="has-text-rarity-"]';
 
   function isECSearchOption(el) {
     return !!el?.closest?.(EC_SEARCH_OPTION_SEL);
@@ -47,7 +50,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   // type：item / plain-item / card / dye（EC 物品链；其他站按需扩展）
   // 全页（root 缺省）：仅 document.querySelectorAll；
   // 局部（root 为元素）：先 matches 自身、再子树，与旧 *In 版逐字一致。
-  function collectTargets(root) {
+  function collectTargets(root, equipmentOnly = false) {
     const local = root != null;
     const scope = local ? root : document;
     const list = [];
@@ -62,8 +65,9 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
     // 四类采集拆为局部函数（仅降复杂度；判定、顺序与产物逐字不变）
     const pushItems = () => {
       // item：装备链接（两站均用 eorzeadb_link 标记）
-      for (const a of scan('a.eorzeadb_link')) {
-        if (isECSearchOption(a) || a.classList.contains('zhixia-item-zh')) continue;
+      for (const a of scan(EC_ITEM_LINK_SEL)) {
+        if (isECSearchOption(a) || a.getAttribute('href')?.includes(EC_SHOP_PATH) ||
+            a.classList.contains('zhixia-item-zh')) continue;
         const el = a.querySelector('span') || a;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 2 || name.length > 48) continue;
@@ -73,7 +77,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
     };
     const pushPlainItems = () => {
       // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
-      for (const sp of scan('span[class*="has-text-rarity-"]')) {
+      for (const sp of scan(EC_PLAIN_ITEM_SEL)) {
         if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')) continue;
         const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
@@ -106,8 +110,10 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
     };
     pushItems();
     pushPlainItems();
-    pushCards();
-    pushDyes();
+    if (!equipmentOnly) {
+      pushCards();
+      pushDyes();
+    }
 
     return list;
   }
@@ -145,17 +151,20 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   }
   /* @zhixia:core-targets-end */
 
+  const EARLY_EQUIPMENT_SEL = EC_ITEM_LINK_SEL + ', ' + EC_PLAIN_ITEM_SEL;
 
-  // EC 列表页（面饰 / 时尚配饰 / 陆行鸟 / 时尚趋势）的装备名是纯文本卡片标题，
-  // 外层 <a> 指向 EC 站内页：这里把标题换成国服中文名，点标题直接去灰机 wiki。
+  // EC 的卡片标题及同伴幻化详情里的鸟甲名由物品链接管。
+  // 鸟甲只接管名称，旁边的按钮仍用于 EC 站内反查。
   const EC_CARD_SEL = 'p.title.has-text-text.is-5, p.title.has-text-text,' +
-                      ' h3[class*="has-text-rarity-"], h4[class*="has-text-rarity-"], h3.minititle';
+                      ' h3[class*="has-text-rarity-"], h4[class*="has-text-rarity-"], h3.minititle,' +
+                      ' .list-item:has(> .list-item-controls a[href^="/companion-glamours?"])' +
+                      ' > .list-item-content > .list-item-title';
 
   // 文本链需避让的「物品链管辖」选择器：这些元素内的文本由 zhApply / zhApplyPlain /
   // zhApplyCards 处理（链接改写 / 包装成 a / 打点标记），文本链若抢先翻译会让物品链
   // 拿不到原文而跳过（历史缺陷：EC 站装备链接点击不跳 wiki）。注意本常量引用
   // EC_CARD_SEL，只能在 4053 行（其定义）之后使用——调用均发生在脚本分发阶段，安全。
-  const EC_ITEM_SKIP_SEL = 'a.eorzeadb_link, span[class*="has-text-rarity-"], ' + EC_CARD_SEL;
+  const EC_ITEM_SKIP_SEL = `a.eorzeadb_link:not([href*="${EC_SHOP_PATH}"]), span[class*="has-text-rarity-"], ` + EC_CARD_SEL;
 
   function zhApplyCards(targets) {
     targets.forEach((t) => {
@@ -258,6 +267,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
       const el0 = e.target;
       if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)) return;
       const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
+      if (a?.getAttribute('href')?.includes(EC_SHOP_PATH)) return;
       let probe = a || el0;
       let guard = 0;
       let zh = null;
@@ -291,12 +301,26 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
     safe(applyPlaceholder, 'placeholder')();
   }
 
+  function translateEarlyEquipment(root) {
+    // 解析器仍在填充节点时，只处理已经完整匹配的装备名。
+    const targets = collectTargets(root, true).filter(t => t.type !== 'item' || resolveByName(t.text));
+    dispatchTargets(targets, EC_ITEMS_APPLY);
+  }
+
+  function translateKnownEquipmentText(root, selector, translate) {
+    for (const element of queryIn(root, selector)) {
+      const text = element.firstChild;
+      if (text?.nodeType === 3 && !text.nextSibling && resolveByName(text.nodeValue.trim())) translate(text);
+    }
+  }
+
   function startItems() {
+    safe(applyPlaceholder, 'placeholder')();
     void ensureTables().then(safe(() => {
       safe(bindGlobalWikiJump, 'wikiJump')();
       applyItemZh();
       // 局部：新增节点收窄到 subtree，避免全页重查（与全页同一条 Target Pipeline）
-      createObserver({ debounce: 400, handler(nodes) {
+      createTranslationObserver({ debounce: 400, handler(nodes) {
         for (const n of nodes) {
           if (n.nodeType === 1) safe(processRoot, 'EC 物品局部')(n, { applyMap: EC_ITEMS_APPLY });
         }
