@@ -1,9 +1,9 @@
-import { createObserver } from './observer.js';
+import { createTranslationObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
-import { dataGetStatus, ensureTables, resolve, resolveByName } from './data-manager.js';
-import { dedupeByAncestor, localScope, queryIn } from './dom.js';
+import { ensureTables, resolve, resolveByName } from './data-manager.js';
+import { localScope, queryIn } from './dom.js';
 import { _perfNow, safe } from './runtime.js';
-export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startEarlyECItems, startItems, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
+export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMENT_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, translateEarlyEquipment, translateKnownEquipmentText, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
 
   // 装备链查找属于 DOM 目标处理，不应放在所有模块共用的基础运行时。
@@ -151,6 +151,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
   }
   /* @zhixia:core-targets-end */
 
+  const EARLY_EQUIPMENT_SEL = EC_ITEM_LINK_SEL + ', ' + EC_PLAIN_ITEM_SEL;
 
   // EC 的卡片标题及同伴幻化详情里的鸟甲名由物品链接管。
   // 鸟甲只接管名称，旁边的按钮仍用于 EC 站内反查。
@@ -300,39 +301,17 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
     safe(applyPlaceholder, 'placeholder')();
   }
 
-  function startEarlyECItems() {
-    if (!/^\/glamour\/\d+(?:\/|$)/.test(location.pathname)) return;
-    let loading = true;
-    let observer;
-    document.addEventListener('DOMContentLoaded', () => {
-      loading = false;
-      observer?.disconnect();
-    }, { once: true });
+  function translateEarlyEquipment(root) {
+    // 解析器仍在填充节点时，只处理已经完整匹配的装备名。
+    const targets = collectTargets(root, true).filter(t => t.type !== 'item' || resolveByName(t.text));
+    dispatchTargets(targets, EC_ITEMS_APPLY);
+  }
 
-    const equipment = EC_ITEM_LINK_SEL + ', ' + EC_PLAIN_ITEM_SEL;
-    const translate = (root) => {
-      // 解析器仍在填充节点时，只处理已经完整匹配的装备名。
-      const targets = collectTargets(root, true).filter(t => t.type !== 'item' || resolveByName(t.text));
-      dispatchTargets(targets, EC_ITEMS_APPLY);
-    };
-    void ensureTables().then(safe(() => {
-      if (!loading || dataGetStatus().state !== 'ready') return;
-      observer = new MutationObserver(safe((records) => {
-        const roots = [];
-        for (const record of records) {
-          const changed = record.type === 'characterData' ? [record.target] : record.addedNodes;
-          for (const node of changed) {
-            const element = localScope(node);
-            if (!element || !document.body?.contains(element)) continue;
-            const item = element.closest(equipment);
-            if (item || node.nodeType === 1) roots.push(item || element);
-          }
-        }
-        for (const root of dedupeByAncestor(roots)) translate(root);
-      }, 'EC 首批装备局部翻译'));
-      observer.observe(document, { childList: true, characterData: true, subtree: true });
-      if (document.body) translate(document.body);
-    }, 'EC 首批装备翻译'));
+  function translateKnownEquipmentText(root, selector, translate) {
+    for (const element of queryIn(root, selector)) {
+      const text = element.firstChild;
+      if (text?.nodeType === 3 && !text.nextSibling && resolveByName(text.nodeValue.trim())) translate(text);
+    }
   }
 
   function startItems() {
@@ -341,7 +320,7 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, PLACEHOLDER, _
       safe(bindGlobalWikiJump, 'wikiJump')();
       applyItemZh();
       // 局部：新增节点收窄到 subtree，避免全页重查（与全页同一条 Target Pipeline）
-      createObserver({ debounce: 400, handler(nodes) {
+      createTranslationObserver({ debounce: 400, handler(nodes) {
         for (const n of nodes) {
           if (n.nodeType === 1) safe(processRoot, 'EC 物品局部')(n, { applyMap: EC_ITEMS_APPLY });
         }

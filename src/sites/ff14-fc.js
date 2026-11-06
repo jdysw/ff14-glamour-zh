@@ -4,7 +4,7 @@ import { _tablesReady, resolveByHash } from '../core/data-manager.js';
 import { DICT_FC } from '../core/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
@@ -447,7 +447,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     bindFCWikiJump();
     safe(fixFCMenu, 'FC 菜单')();
     safe(bindFCBanners, 'FC 横幅')();
-    createObserver({ debounce: 300, handler(nodes) {
+    createTranslationObserver({ debounce: 300, handler(nodes) {
       for (const n of nodes) {
         safe(translateFCPage, 'FC 局部')(n);
         safe(fixFCMenu, 'FC 菜单')(n);

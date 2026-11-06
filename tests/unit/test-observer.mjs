@@ -104,6 +104,24 @@ function buildObs(env) {
 
 const mkNode = (parent = null, extra = {}) => ({ nodeType: 1, parentNode: parent, ...extra });
 
+console.log('\n── 启动窗口：轻量首批优先，随后恢复常规延迟 ──');
+{
+  const env = makeEnv();
+  let now = 0;
+  env._perfNow = () => now;
+  const api = buildObs(env);
+  api.createObserver({ fastStart: true, debounce: 300, floodLimit: 3, handler() {} });
+  const mo = FakeMO.last;
+  now = 2000;
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  eq('延迟挂载的轻量首批也在 16 ms 调度', runTimer().ms, 16);
+  mo.trigger([{ type: 'childList', addedNodes: Array.from({ length: 4 }, () => mkNode()) }]);
+  eq('启动期洪峰仍用常规延迟', runTimer().ms, 300);
+  now = 2601;
+  mo.trigger([{ type: 'childList', addedNodes: [mkNode()] }]);
+  eq('启动期结束恢复站点延迟', runTimer().ms, 300);
+}
+
 // ═════════════════════════ 开始 ═════════════════════════════════
 
 console.log('\n── A：基础调度（1 node / root / 默认关闭 characterData / disconnect）──');

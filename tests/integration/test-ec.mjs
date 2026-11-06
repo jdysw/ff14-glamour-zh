@@ -188,43 +188,56 @@ try {
   await closePage(PORT, early.target.id);
 }
 
-// 保持 defer 脚本挂起，验证完整装备名能在 DOMContentLoaded 之前翻译。
-let unblock;
-const gate = new Promise(resolve => { unblock = resolve; });
-const server = http.createServer(async (req, res) => {
-  if (req.url === '/gate.js') {
-    await gate;
-    res.writeHead(200, { 'Content-Type': 'application/javascript' }).end('');
-    return;
-  }
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(`
-    <!doctype html><script defer src="/gate.js"></script>
-    <a id="first" class="eorzeadb_link">Troian Field Dressing of Aiming</a>
-    <a id="split" class="eorzeadb_link" href="https://eu.finalfantasyxiv.com/lodestone/playguide/db/item/0000c0de7ff/">Troian Field</a>
-    <div class="v-select"><a id="option" class="eorzeadb_link">Troian Field Dressing of Aiming</a></div>
-  `);
-});
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-let streaming;
-let streamingPassed = false;
-try {
-  streaming = await newPage(PORT);
-  const { cdp } = streaming;
-  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.__zhxTestSite = 'ec';
-    const local = new Map(Object.entries(${JSON.stringify(v3CacheEntries('ec'))}));
-    window.GM_getValue = (key, fallback) => local.get(key) ?? fallback;
-    window.addEventListener('DOMContentLoaded', () => { window.__fixtureDomReady = true; });
-    ${wrap(GF)}
-  ` });
-  await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + server.address().port + '/glamour/339340' });
-  const waitForTranslation = selector => cdp.callFn(`async function (selector, name) {
+// 保持 defer 脚本挂起，使用各站真实样式的节点验证共享提前观察器。
+async function withParsingSite(site, markup, verify) {
+  let unblock;
+  const gate = new Promise(resolve => { unblock = resolve; });
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/gate.js') {
+      await gate;
+      res.writeHead(200, { 'Content-Type': 'application/javascript' }).end('');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      .end('<!doctype html><script defer src="/gate.js"></script>' + markup);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  let streaming;
+  try {
+    streaming = await newPage(PORT);
+    const { cdp } = streaming;
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+      window.__zhxTestSite = ${JSON.stringify(site)};
+      window.__zhxDiagOn = true;
+      const local = new Map(Object.entries(${JSON.stringify(v3CacheEntries(site))}));
+      window.GM_getValue = (key, fallback) => local.get(key) ?? fallback;
+      window.addEventListener('DOMContentLoaded', () => { window.__fixtureDomReady = true; });
+      ${wrap(GF)}
+    ` });
+    await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + server.address().port + '/glamour/339340' });
+    const waitForTranslation = (selector, name = ZH) => cdp.callFn(`async function (selector, name) {
     for (let i = 0; i < 80; i++) {
       if (document.querySelector(selector)?.textContent === name) return true;
       await new Promise(resolve => setTimeout(resolve, 25));
     }
     return false;
-  }`, [selector, ZH]);
+    }`, [selector, name]);
+    return await verify(cdp, waitForTranslation, unblock);
+  } finally {
+    unblock();
+    if (streaming) await closePage(PORT, streaming.target.id);
+    await new Promise(resolve => {
+      server.close(resolve);
+      server.closeAllConnections();
+    });
+  }
+}
+
+const streamingPassed = await withParsingSite('ec', `
+  <a id="first" class="eorzeadb_link">Troian Field Dressing of Aiming</a>
+  <a id="split" class="eorzeadb_link" href="https://eu.finalfantasyxiv.com/lodestone/playguide/db/item/0000c0de7ff/">Troian Field</a>
+  <div class="v-select"><a id="option" class="eorzeadb_link">Troian Field Dressing of Aiming</a></div>
+`, async (cdp, waitForTranslation, unblock) => {
   const first = await waitForTranslation('#first');
   const partial = await cdp.eval(`(() => {
     const split = document.querySelector('#split');
@@ -251,16 +264,45 @@ try {
     return Boolean(window.__fixtureDomReady);
   })()`);
   const afterReady = await waitForTranslation('#after-ready');
-  streamingPassed = first && partial === 'Troian Field' && completed && !state.ready
+  const ok = first && partial === 'Troian Field' && completed && !state.ready
     && state.option === 'Troian Field Dressing of Aiming' && state.href === WIKI && loaded && afterReady;
-  console.log(streamingPassed ? '✅ 装备完整出现即翻译，筛选项安全，DOM 就绪后常规翻译接续'
+  console.log(ok ? '✅ 装备完整出现即翻译，筛选项安全，DOM 就绪后常规翻译接续'
     : '❌ 早期装备翻译失败', { first, partial, completed, ...state, loaded, afterReady });
-} finally {
-  unblock();
-  if (streaming) await closePage(PORT, streaming.target.id);
-  await new Promise(resolve => {
-    server.close(resolve);
-    server.closeAllConnections();
+  return ok;
+});
+
+const japanese = 'トロイアン・レンジャーバンデージ';
+let sharedPassed = true;
+for (const [site, markup] of [
+  ['mirapri', `<a id="first" class="eorzeadb_link">${japanese}</a>`],
+  ['fc', `<a id="first" href="/equipment/38171/">${japanese}</a>`],
+  ['collection', `<div class="item-name"><p id="first">${japanese}</p></div>`],
+]) {
+  const ok = await withParsingSite(site, markup, async (cdp, waitForTranslation) => {
+    return await waitForTranslation('#first') && await cdp.eval('!window.__fixtureDomReady');
   });
+  console.log(`${ok ? '✅' : '❌'} ${site} 装备名在 DOMContentLoaded 前翻译`);
+  sharedPassed &&= ok;
 }
-process.exitCode = pass === checks.length && earlyPassed && streamingPassed ? 0 : 1;
+
+const spaPassed = await withParsingSite('miramiru', '<div id="first">Kupo Jacket</div>',
+  async (cdp, waitForTranslation, unblock) => {
+    const before = await cdp.eval(`(async () => {
+      for (let i = 0; i < 80; i++) {
+        if (window.__zhxDiagRecord?.().marks.ready && document.querySelector('#first')) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      return {
+        dataReady: Boolean(window.__zhxDiagRecord?.().marks.ready),
+        domReady: Boolean(window.__fixtureDomReady),
+        name: document.querySelector('#first')?.textContent,
+      };
+    })()`);
+    unblock();
+    const after = await waitForTranslation('#first', '库啵外套');
+    const ok = before.dataReady && !before.domReady && before.name === 'Kupo Jacket' && after;
+    console.log(ok ? '✅ Miramiru 等正常启动后再翻译服务器节点'
+      : '❌ Miramiru 启动边界不符', { before, after });
+    return ok;
+  });
+process.exitCode = pass === checks.length && earlyPassed && streamingPassed && sharedPassed && spaPassed ? 0 : 1;

@@ -4,7 +4,6 @@ import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';
 import { ensureChineseFont } from './core/dom.js';
-import { startEarlyECItems } from './core/targets.js';
 
 
 
@@ -31,7 +30,7 @@ import { startEarlyECItems } from './core/targets.js';
     }
   };
   if (document.readyState === 'loading') {
-    if (__site?.id === 'ec') safe(startEarlyECItems, 'EC 提前翻译装备')();
+    if (__site) safe(() => __site.prepare(), '提前翻译装备')();
     document.addEventListener('DOMContentLoaded', bootWhenReady, { once: true });
   } else {
     bootWhenReady();

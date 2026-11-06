@@ -19,7 +19,7 @@ import {
 } from '../../src/core/item-resolver.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
 import { DATA_TEXT } from '../../src/core/data-manager.js';
-import { createObserver, _obsStats } from '../../src/core/observer.js';
+import { createObserver, createTranslationObserver, observeUntilDomReady, _obsStats } from '../../src/core/observer.js';
 
 const input = attrs => ({
   className: attrs.className ?? '',
@@ -197,7 +197,7 @@ test('真实 MutationObserver：批次去重、文字变动、异常隔离和销
     await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(batches.length, 1, '销毁后不得再次调度回调');
 
-    const next = createObserver({handler:() => { throw new Error('预期观察回调异常'); },debounce:1});
+    const next = createTranslationObserver({handler:() => { throw new Error('预期观察回调异常'); },debounce:1});
     assert.equal(observers.length, 2);
     observers[1].emit([{ type: 'childList', addedNodes: [child] }]);
     await new Promise(resolve => setTimeout(resolve, 25));
@@ -208,5 +208,49 @@ test('真实 MutationObserver：批次去重、文字变动、异常隔离和销
     if (oldDocument === undefined) delete globalThis.document;
     else globalThis.document = oldDocument;
     console.warn = oldWarn;
+  }
+});
+
+test('共享提前观察器：处理已就绪节点，DOM 就绪后关闭', async () => {
+  const previous = { document: globalThis.document, MutationObserver: globalThis.MutationObserver };
+  const body = { contains: node => node !== outside };
+  const outside = { nodeType: 1 };
+  const item = { nodeType: 1, closest: () => item };
+  let fireReady;
+  let observer;
+  let stopCount = 0;
+  const translated = [];
+  try {
+    globalThis.document = { body, addEventListener(name, cb) {
+      assert.equal(name, 'DOMContentLoaded');
+      fireReady = cb;
+    } };
+    globalThis.MutationObserver = class {
+      constructor(callback) { observer = callback; }
+      observe(root, opts) {
+        assert.equal(root, document);
+        assert.equal(opts.characterData, true);
+      }
+      disconnect() { stopCount++; }
+    };
+    observeUntilDomReady(Promise.resolve(true), 'a', root => translated.push(root));
+    await Promise.resolve();
+    observer([
+      { type: 'childList', addedNodes: [outside, item] },
+      { type: 'characterData', target: { nodeType: 3, parentElement: item } },
+    ]);
+    assert.deepEqual(translated, [body, item]);
+    fireReady();
+    assert.equal(stopCount, 1);
+
+    observeUntilDomReady(Promise.resolve(false), 'a', root => translated.push(root));
+    fireReady();
+    await Promise.resolve();
+    assert.deepEqual(translated, [body, item]);
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[name];
+      else globalThis[name] = value;
+    }
   }
 });

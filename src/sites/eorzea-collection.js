@@ -2,7 +2,7 @@ import { DICT_EC, dictGetRevision } from '../core/dictionary.js';
 import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
 import { dataGetIndex } from '../core/data-manager.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
 export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
@@ -865,7 +865,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     safe(translateECPage, 'EC 全扫')();
     safe(translateECTitle, 'EC 页面标题')();
     safe(bindECPieceTiles, 'EC 部位图')();
-    createObserver({
+    createTranslationObserver({
       root: document.documentElement,
       debounce: 300,
       attributes: true,

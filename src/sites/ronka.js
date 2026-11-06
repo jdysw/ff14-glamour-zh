@@ -3,7 +3,7 @@ import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
 
@@ -203,7 +203,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     safe(translateRonkaPage, 'Ronka 全扫')();
     safe(translateRonkaTitle, 'Ronka 标题')();
     // v1.4 Phase 7：经统一观察器（本站必须保留 characterData——韩文文本变更很常见）
-    createObserver({
+    createTranslationObserver({
       root: document.documentElement,
       characterData: true,
       filter: (m) => !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),

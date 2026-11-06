@@ -5,7 +5,8 @@
 ## 运行时
 
 - `main.js` 编排数据预加载、中文字体、站点启动与 bfcache 恢复。
-- `site-policy.js` 是宿主、表和索引需求的唯一配置来源；`site-registry.js` 只负责实际使用的启动、数据就绪和页面恢复回调，并隔离单站错误。
+- `site-policy.js` 是宿主、表和索引需求的唯一配置来源。`site-registry.js` 注册解析期间的提前翻译、正常启动、数据就绪和页面恢复回调，并隔离单站错误。
+- `observer.js` 统一提前翻译和动态批处理。支持提前翻译的站点声明可安全处理的装备节点。各汉化站在正常启动后优先处理首批小量变更，随后恢复各站的常规延迟。
 - `v3-contract.js` 和 `dict-contract.js` 验证现行清单、文件路径和完整词典。`data-manager.js`、`http.js`、`storage.js` 处理加载、校验、持久化提交和失败恢复。
 - `cache-primitives.js` 提供有界缓存与失效能力；站点模块保留各自的 DOM、语言和原生事件差异。
 - `chinese-search.js` 使用当前页面的检索范围和原生输入／提交事件；EC 套装目录查询保持明确的站点专属能力，具体见 [中文搜索](chinese-search.md)。

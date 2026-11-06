@@ -1,7 +1,7 @@
 export { SKIP_TAGS } from '../core/dom.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { DICT } from '../core/dictionary.js';
-import { createObserver } from '../core/observer.js';
+import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translateMirapriTitle };
 
@@ -126,7 +126,7 @@ export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translat
   function startMirapri() {
     safe(translatePage, 'mirapri 全扫')();
     // Handle newly added UI plus attributes refreshed by PJAX/Turbo widgets.
-    createObserver({
+    createTranslationObserver({
       root: document.documentElement,
       attributes: true,
       attributeFilter: MIRAPRI_TRANSLATABLE_ATTRS,
