@@ -501,6 +501,24 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return true;
   }
 
+  async function _tryCachedV3(site, need, snapshots, generation) {
+    if (!snapshots.previousValid) return false;
+    const globalFresh = _freshV3Manifest(snapshots.globalSnapshot);
+    const siteBehind = snapshots.siteSnapshotValid
+      && snapshots.siteSnapshot.manT <= snapshots.globalSnapshot.manT
+      && snapshots.siteSnapshot.man?.version !== snapshots.globalSnapshot.man?.version;
+    const manifest = snapshots.previous.man;
+    const cached = await _tryV3Bundle(site, manifest, need, false, null, false, generation);
+    if (!cached) return false;
+
+    if (siteBehind) _dlStats.fallback++;
+    if (!globalFresh || siteBehind || !snapshots.siteSnapshotValid) {
+      void _refreshV3Cache(site, need, snapshots, globalFresh, generation)
+        .catch(error => _zhxErr('v3cacheRefresh', error));
+    }
+    return _recordV3Ready(manifest, siteBehind ? 'fallback' : 'cache');
+  }
+
   async function _ensureTryV3(force = false, refreshManifest = false, generation = _ensureGeneration) {
     const policy = findSite();
     const site = policy?.dataSite ? { ...policy, id: policy.dataSite } : policy;
@@ -509,21 +527,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     try {
       const snapshots = await _readPreviousV3Manifest(site.id);
       const need = neededTables();
-      const globalFresh = _freshV3Manifest(snapshots.globalSnapshot);
-      const siteBehind = snapshots.siteSnapshotValid
-        && snapshots.siteSnapshot.manT <= snapshots.globalSnapshot.manT
-        && snapshots.siteSnapshot.man?.version !== snapshots.globalSnapshot.man?.version;
-      if (!force && !refreshManifest && snapshots.previousValid) {
-        const cached = await _tryV3Bundle(site, snapshots.previous.man, need, false, null, false, generation);
-        if (cached) {
-          if (siteBehind) _dlStats.fallback++;
-          if (!globalFresh || siteBehind || !snapshots.siteSnapshotValid) {
-            void _refreshV3Cache(site, need, snapshots, globalFresh, generation)
-              .catch(error => _zhxErr('v3cacheRefresh', error));
-          }
-          return _recordV3Ready(snapshots.previous.man, siteBehind ? 'fallback' : 'cache');
-        }
-      }
+      if (!force && !refreshManifest && await _tryCachedV3(site, need, snapshots, generation)) return true;
       if (generation !== _ensureGeneration) return false;
       const manifest = await _selectV3Manifest(force, refreshManifest, snapshots);
       if (!manifest || generation !== _ensureGeneration) return false;
@@ -532,8 +536,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (!result.loaded || generation !== _ensureGeneration) return false;
       if (!result.fromSnapshot) await _commitV3Selection(site.id, result.manifest, snapshots, force, staged);
       if (generation !== _ensureGeneration) return false;
-      const origin = _dlStats.fallback > sourceBefore.fallback ? 'fallback'
-        : _dlStats.net > sourceBefore.net ? 'network' : 'cache';
+      let origin = 'cache';
+      if (_dlStats.fallback > sourceBefore.fallback) origin = 'fallback';
+      else if (_dlStats.net > sourceBefore.net) origin = 'network';
       return _recordV3Ready(result.manifest, origin);
     } catch (e) {
       _zhxErr('v3', e);
