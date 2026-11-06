@@ -13,7 +13,7 @@ const ctx = vm.createContext({
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'TEXTAREA']),
   NodeFilter: { FILTER_REJECT: 2, FILTER_ACCEPT: 1, SHOW_TEXT: 4, SHOW_ELEMENT: 1 },
   document: { title: '', documentElement: {}, createTreeWalker: () => ({ nextNode: () => false }) },
-  createObserver: (options) => { observer = options; },
+  createTranslationObserver: (options) => { observer = options; },
   safe: (fn) => fn,
   _markScan: () => {}, localScope: (root) => root,
   ensureZhxItemStyle: () => {}, bindZhxItemClick: () => {}, startChineseSearch: () => {},

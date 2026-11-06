@@ -10,7 +10,7 @@ const DICT = { ...dict('dict-common.json'), ...dict('dict-main.json') };
 const src = fs.readFileSync(path.join(root,'src/sites/mirapri.js'),'utf8')
   .split('\n').filter(line => !/^import |^export /.test(line)).join('\n');
 const document = { title:'ファッションチェック | MIRAPRI SNAP', documentElement:{} };
-const exposed = new Function('DICT','document','createObserver','safe','_markScan','localScope','NodeFilter',
+const exposed = new Function('DICT','document','createTranslationObserver','safe','_markScan','localScope','NodeFilter',
   src + '\nreturn {tr,trNode,trEl,translatePage,translateMirapriTitle,startMirapri};')
   (DICT,document,()=>({disconnect(){}}),fn=>fn,()=>{},root=>root,
     {FILTER_REJECT:2,FILTER_ACCEPT:1,SHOW_TEXT:4,SHOW_ELEMENT:1});
