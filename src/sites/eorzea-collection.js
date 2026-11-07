@@ -112,7 +112,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // 且译名可由国服物品表核验的系列；未知套装仍保留英文，避免猜译。
   // 为避免把不存在的角色套装列为搜索候选，每个系列单独声明实际职能。
   const EC_GEARSET_ROLES = ['Fending', 'Maiming', 'Striking', 'Scouting', 'Aiming', 'Casting', 'Healing'];
-  const EC_GEARSET_ROLE_SERIES = [
+  const EC_GEARSET_ROLE_SERIES = new Map([
     ['Phantom Vision', EC_GEARSET_ROLES],
     ["Vana'dielian", EC_GEARSET_ROLES],
     ['Praemagitek', EC_GEARSET_ROLES],
@@ -122,7 +122,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     ["Prishe's", ['Striking']],
     ['Mayakov', ['Scouting', 'Aiming']],
     ['Orastery', ['Casting', 'Healing']],
-  ];
+  ]);
   const EC_GEARSET_SINGLE_SERIES = new Set([
     "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
     'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
@@ -526,8 +526,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   function ecAccessorySeriesZh(native) {
     // DICT_EC also contains UI labels like "Other" and "Browse All"; they
     // must never be mistaken for verified accessory series names.
-    const verified = EC_GEARSET_SINGLE_SERIES.has(native)
-      || EC_GEARSET_ROLE_SERIES.some(([series]) => series === native);
+    const verified = EC_GEARSET_SINGLE_SERIES.has(native) || EC_GEARSET_ROLE_SERIES.has(native);
     const known = verified ? ecGearsetSeriesZh(native) : null;
     if (known && /[\u3400-\u9fff]/u.test(known)) {
       return known.replace(/(?:装备)?(?:套装|装束)$/u, '') || known;
