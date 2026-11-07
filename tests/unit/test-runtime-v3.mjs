@@ -2,7 +2,7 @@ import { findPython } from '../../build/python.mjs';
 // tests/unit/test-runtime-v3.mjs — Phase 12：Runtime Data v3（生成器产物 + v3-only 运行时加载）
 //
 // 目的：
-//   A. 校验 build/make-runtime-data.py 的产物（data/v3/）：manifest 结构、
+//   A. 校验 build/data/make-runtime-data.py 的产物（.cache/runtime-v3/）：manifest 结构、
 //      逐文件 sha256/bytes、names 去重与染剂回退、站点清单、Phase 13 语言裁剪
 //      （各站 names/dup 仅含其翻译链语言：ja 表无韩文、en 表无韩文/假名、ko 表无假名）。
 //   B. 用桩装配 data-manager 段，钉死 v3 加载路径：成功应用（含缓存写入）、
@@ -28,22 +28,22 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 
-// 每次测试都从当前源码生成独立 V3 fixture，避免复用旧 data/v3 产物。
+// 每次测试都从当前源码生成独立 V3 fixture，避免复用旧 .cache/runtime-v3 产物。
 const tmp = mkdtempSync(join(tmpdir(), 'zhx-v3-test-'));
-execFileSync(findPython(), ['build/make-runtime-data.py', '--out', tmp],
+execFileSync(findPython(), ['build/data/make-runtime-data.py', '--out', tmp],
   { cwd: fileURLToPath(ROOT), stdio: 'pipe' });
 process.once('exit', () => { try { rmSync(tmp, { recursive: true, force: true }); } catch {} });
 const V3_DIR = new URL('file://' + tmp + '/');
 
 // ══════════ A. 生成器产物校验 ══════════
-console.log('\n── A. 生成器产物（data/v3/）──');
+console.log('\n── A. 生成器产物（.cache/runtime-v3/）──');
 
 const manifestPath = new URL('manifest.json', V3_DIR);
 ok('A1 manifest.json 存在', existsSync(manifestPath));
@@ -164,7 +164,7 @@ ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publish
 {
   const names = new Map(readFileSync(new URL('endcloset/names.tsv', V3_DIR), 'utf8')
     .split('\n').filter(Boolean).map((line) => line.split('\t').slice(0, 2)));
-  const items = readFileSync(new URL('data/ff14-items.tsv', ROOT), 'utf8');
+  const items = readFileSync(new URL('data/source/ff14-items.tsv', ROOT), 'utf8');
   const item = items.split('\n').map((line) => line.split('\t'))
     .find((row) => row[1] === '女仆围裙装');
   ok('End Closet 真实装备含韩英日三个名称映射', !!item
@@ -237,7 +237,7 @@ console.log('\n── B. 运行时 v3 加载 ──');
 const DIST_TEXT = [
   'src/core/cache-primitives.js',
   'src/core/cache.js',
-  'src/core/data-manager.js',
+  'src/core/data/data-manager.js',
 ].map(file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8')).join('\n');
 
 function sliceAll(s, tag) {
@@ -329,7 +329,7 @@ function buildDM(world) {
   return fn(...NAMES.map((n) => world.args[n]));
 }
 
-// 准备：从 data/v3 读入 mirapri 全部文件 + shared dict（真 sha）
+// 准备：从 .cache/runtime-v3 读入 mirapri 全部文件 + shared dict（真 sha）
 const siteFiles = {};
 {
   const files = man.sites.mirapri.files;

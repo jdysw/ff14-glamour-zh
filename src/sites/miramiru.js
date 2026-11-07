@@ -1,5 +1,5 @@
-import { DICT_MIRAMIRU } from '../core/dictionary.js';
-import { resolveByHash, resolveByName } from '../core/data-manager.js';
+import { DICT_MIRAMIRU } from '../core/data/dictionary.js';
+import { resolveByHash, resolveByName } from '../core/data/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';

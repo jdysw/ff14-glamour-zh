@@ -1,7 +1,7 @@
 import { FC_ROLE_ZH, _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
-import { _tablesReady, resolveByHash } from '../core/data-manager.js';
-import { DICT_FC } from '../core/dictionary.js';
+import { _tablesReady, resolveByHash } from '../core/data/data-manager.js';
+import { DICT_FC } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';

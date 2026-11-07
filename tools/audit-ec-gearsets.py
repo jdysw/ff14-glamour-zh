@@ -56,7 +56,7 @@ def report(rows):
     lines = [
         "# EC Gearsets 命名结构数据覆盖审计",
         "",
-        "该报告由 `data/ff14-items.tsv` 自动统计，**只是国服物品数据，不代表 EC 实际存在所有对应套装**。",
+        "该报告由 `data/source/ff14-items.tsv` 自动统计，**只是国服物品数据，不代表 EC 实际存在所有对应套装**。",
         "最终页面存在性应根据 EC 官方页面或其真实链接另行核验。",
         "",
         "## 规模与风险",
@@ -108,7 +108,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    rows = official_rows(ROOT / "data" / "ff14-items.tsv")
+    rows = official_rows(ROOT / "data" / "source" / "ff14-items.tsv")
     out = args.report if args.report.is_absolute() else ROOT / args.report
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report(rows), encoding="utf-8")

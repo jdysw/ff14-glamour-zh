@@ -7,7 +7,7 @@
 - `main.js` 编排数据预加载、中文字体、站点启动与 bfcache 恢复。
 - `site-policy.js` 是宿主、表和索引需求的唯一配置来源。`site-registry.js` 注册解析期间的提前翻译、正常启动、数据就绪和页面恢复回调，并隔离单站错误。
 - `observer.js` 统一提前翻译和动态批处理。支持提前翻译的站点声明可安全处理的装备节点。各汉化站在正常启动后优先处理首批小量变更，随后恢复各站的常规延迟。
-- `v3-contract.js` 和 `dict-contract.js` 验证现行清单、文件路径和完整词典。`data-manager.js`、`http.js`、`storage.js` 处理加载、校验、持久化提交和失败恢复。
+- `src/core/data/` 维护词典、清单契约、网络读取、缓存提交与失败恢复。
 - `cache-primitives.js` 提供有界缓存与失效能力；站点模块保留各自的 DOM、语言和原生事件差异。
 - `chinese-search.js` 使用当前页面的检索范围和原生输入／提交事件；EC 套装目录查询保持明确的站点专属能力，具体见 [中文搜索](chinese-search.md)。
 - 字体规则由 `dom.js` 统一拥有，不下载外部字体，也不改变字号、粗细、代码和图标字体。
@@ -16,7 +16,9 @@
 
 ## 构建
 
-`src/` 明确使用原生 ESM；`npm run build` 与 `bash build.sh` 共用 `build/build.mjs`，没有另一条构建实现。Python 可通过 `PYTHON_BIN` 指定。
+`src/` 明确使用原生 ESM；`npm run build` 与 `bash build.sh` 共用 `build/userscript/build.mjs`，没有另一条构建实现。Python 可通过 `PYTHON_BIN` 指定。
+
+`build/userscript/` 负责用户脚本打包与版本校验。`build/data/` 消费 `data/source/` 和 `data/dictionaries/` 中的权威输入，生成 V3 数据和部署目录。默认本地数据产物在 `.cache/runtime-v3/`，发布产物在 `site/ff14/v3/`。
 
 构建同步版本、再生词典，使用 Acorn 检查真实模块语法、依赖方向和循环，再用 Rollup 打包并裁剪未使用代码；随后验证最终脚本语法、内嵌／源 JSON／发布 JSON 的词典一致性与版本。测试还会实际篡改产物，验证拒绝损坏及可重现构建。
 

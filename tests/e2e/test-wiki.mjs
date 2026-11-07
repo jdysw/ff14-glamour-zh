@@ -1,0 +1,131 @@
+// wiki 反查块夹具测试 v2：
+//  A 数据不可用（阻断数据站）→ 优雅降级 2 项
+//  B 数据预置（缓存命中）→ 4 项齐 + 零网络
+// v1.4 Phase 3：测试 hook 已内建于 src（__zhxTestSite 指定站点 / __zhxTestTables 覆写表清单）
+import fs from 'node:fs';
+import { newPage, closePage } from '../helpers/cdp.mjs';
+import { readDist, itemsTsvPath, fixtureUrl, cachePath } from '../helpers/paths.mjs';
+import { seedV3Browser } from '../helpers/v3-cache.mjs';
+
+const PORT = Number(process.env.ZHX_CDP_PORT || 9223);
+const FIXTURE = fixtureUrl('wiki-item.html');
+
+const s = readDist();
+fs.writeFileSync(cachePath('gf-wiki-test.user.js'), s);
+const GF = s;
+console.log('测试副本已生成（hook 已内建于 src）');
+
+const gmStub = `(() => {
+  if (window.__gmStub) return;
+  window.__gmStub = true;
+  const P = 'gm:';
+  window.__reqLog = [];
+  window.GM_getValue = (k, d) => { try { const v = localStorage.getItem(P + k); return v == null ? d : v; } catch (e) { return d; } };
+  window.GM_setValue = (k, v) => { try { localStorage.setItem(P + k, String(v)); } catch (e) { window.__setFail = (window.__setFail || 0) + 1; } };
+  window.GM_xmlhttpRequest = (opt) => {
+    window.__reqLog.push(opt.url);
+    fetch(opt.url).then((r) => r.text().then((t) => { try { opt.onload && opt.onload({ status: r.status, responseText: t }); } catch (e) {} }))
+      .catch((e) => { try { opt.onerror && opt.onerror(e); } catch (e2) {} });
+  };
+})();`;
+
+const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[TEST-INJECT]', e && e.message); } })();`;
+
+const dumpBlock = `(() => {
+  const b = document.querySelector('.zhixia-reverse-block');
+  const lis = b ? [...b.querySelectorAll('li a')].map((a) => ({ t: a.textContent, h: a.getAttribute('href'),
+    icon: a.firstElementChild?.tagName === 'IMG' && a.firstChild === a.firstElementChild
+      && a.firstElementChild.complete && a.firstElementChild.naturalWidth > 0,
+    localIcon: a.firstElementChild?.getAttribute('src')?.startsWith('data:image/png;base64,') })) : null;
+  let otherLinks = null;
+  for (const bl of document.querySelectorAll('.ff14-content-box-block')) {
+    const tt = bl.querySelector('.ff14-content-box-block--title');
+    if (tt && tt.textContent.trim() === '数据库链接') {
+      otherLinks = [...bl.querySelectorAll('li a')].map((a) => a.getAttribute('href'));
+    }
+  }
+  return { blockLinks: lis, title: b?.querySelector('.ff14-content-box-block--title')?.textContent,
+    hr: b ? !!b.querySelector('hr') : null, otherLinks, done: document.documentElement.dataset.zhixiaWikiDone || '', reqUrls: (window.__reqLog || []) };
+})()`;
+
+// ============ 场景 A：数据不可用 ============
+console.log('\n===== 场景 A：数据不可用（阻断数据站）=====');
+const t1 = await newPage(PORT, FIXTURE);
+const c1 = t1.cdp;
+await c1.send('Network.enable');
+await c1.send('Network.setBlockedURLs', { urls: ['*zhixia-data.pages.dev*'] });
+await c1.waitFor("document.querySelector('#firstHeading, .infobox')");
+await c1.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
+await c1.eval("window.__zhxTestSite = 'wiki';");
+await c1.eval("window.__zhxTestTables = ['items'];");
+await c1.eval(gmStub);
+await c1.eval(wrap(GF));
+await c1.waitFor("document.querySelector('.zhixia-reverse-block') && window.__reqLog.length > 0");
+const rA = await c1.eval(dumpBlock);
+console.log(JSON.stringify(rA, null, 1));
+console.log('console A:', c1.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 700));
+// 场景 A 断言（Phase 20）：数据不可用 → 优雅降级（区块保留可用条目、不含依赖本地数据的条目、不阻塞）
+let aFail = 0;
+const aLinks = rA.blockLinks || [];
+const aHasDataDep = aLinks.some((x) => x.h.indexOf('eorzeacollection') >= 0 || x.h.indexOf('lookbook.ronkacloset') >= 0);
+if (rA.blockLinks !== null && aLinks.length >= 1 && aLinks.length <= 4 && !aHasDataDep) { console.log('✅ A1 降级形态：链接 ' + aLinks.length + ' 条、不含依赖数据的条目'); } else { console.log('❌ A1 降级形态不符', JSON.stringify(aLinks)); aFail++; }
+const aErr = c1.consoleLines.some((l) => l.includes('[TEST-INJECT]'));
+if (!aErr) { console.log('✅ A2 无 [TEST-INJECT] 错误'); } else { console.log('❌ A2 存在注入错误'); aFail++; }
+if (rA.reqUrls.length >= 1) { console.log('✅ A3 尝试过数据下载且未阻塞'); } else { console.log('❌ A3 未尝试数据下载'); aFail++; }
+console.log(aFail ? '场景 A 失败 ' + aFail + ' 项' : '场景 A 通过 3/3');
+await closePage(PORT, t1.target.id);
+
+// ============ 场景 B：预置数据、零网络 ============
+console.log('\n===== 场景 B：预置 items 缓存（零网络路径）=====');
+const itemsTsv = fs.readFileSync(itemsTsvPath, 'utf8');
+const t2 = await newPage(PORT, FIXTURE);
+const c2 = t2.cdp;
+await c2.waitFor("document.querySelector('#firstHeading, .infobox')");
+await c2.eval("window.__zhxTestSite = 'wiki';");
+await seedV3Browser(c2, 'wiki');
+await c2.eval("window.__zhxTestTables = ['items'];" );
+await c2.eval(gmStub);
+await c2.eval(wrap(GF));
+await c2.waitFor(`(() => {
+  const links = [...document.querySelectorAll('.zhixia-reverse-block li a')];
+  return links.length === 7 && links.every(a => a.firstElementChild?.complete);
+})()`);
+const rB = await c2.eval(dumpBlock);
+console.log(JSON.stringify(rB, null, 1));
+console.log('console B:', c2.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 900));
+// 场景 B：实际物品反查参数与图标可用性，不只检查链接数量。
+let bFail = 0;
+if (!rB.blockLinks || rB.blockLinks.length !== 7) { console.log('❌ B1 反查区块应含 7 条链接'); bFail++; } else { console.log('✅ B1 反查区块 7 条链接'); }
+if (rB.title !== '幻化反查链接' || rB.hr !== true) { console.log('❌ B2 反查区块标题或分隔线错误'); bFail++; } else { console.log('✅ B2 反查区块标题和分隔线正确'); }
+if (!rB.blockLinks?.some(a => a.h === 'https://miramiru.co/en/items/38171')) { console.log('❌ B3 Miramiru 未定位到当前物品'); bFail++; }
+const end = rB.blockLinks?.find(a => a.h.startsWith('https://end-closet.com/'));
+if (!end || new URL(end.h).searchParams.get('search') !== '트로이아 유격대 붕대') { console.log('❌ B4 End Closet 未使用当前装备韩文名'); bFail++; }
+if (!rB.blockLinks?.every(a => a.icon && a.localIcon)) { console.log('❌ B5 站点图标缺失、未解码或依赖远程请求'); bFail++; }
+if (!rB.blockLinks?.some(a => a.h === 'https://mirapri.ff14eden.work/#/?search=' + encodeURIComponent('トロイアン・レンジャーバンデージ'))) { console.log('❌ B6 Eden 未保留日文装备搜索词和 hash 路由'); bFail++; }
+console.log(bFail ? '场景 B 失败 ' + bFail + ' 项' : '场景 B 通过 6/6');
+await closePage(PORT, t2.target.id);
+
+// ============ 场景 C：非装备页（不应注入区块）============
+console.log('\n===== 场景 C：非装备页（消耗品——不应出现反查块）=====');
+const FIXTURE_NON = fixtureUrl('wiki-nonitem.html');
+const t3 = await newPage(PORT, FIXTURE_NON);
+const c3 = t3.cdp;
+await c3.waitFor("document.querySelector('#firstHeading, .infobox')");
+await c3.eval("window.__zhxTestSite = 'wiki';");
+await seedV3Browser(c3, 'wiki');
+await c3.eval("window.__zhxTestTables = ['items'];");
+await c3.eval('window.__zhxDiagOn = true;');
+await c3.eval(gmStub);
+await c3.eval(wrap(GF));
+await c3.waitFor("Object.hasOwn(window.__zhxDiagRecord?.().marks || {}, 'ready')");
+const rC = await c3.eval(dumpBlock);
+console.log(JSON.stringify(rC, null, 1));
+console.log('console C:', c3.consoleLines.filter((l) => (l.includes('汉化') || l.includes('幻化') || l.includes('TEST'))).join(' | ').slice(0, 700));
+// 场景 C 断言：非装备物品页只改数据库区块标题，保留原链接。
+let cFail = 0;
+if (rC.blockLinks !== null) { console.log('❌ C1 非装备页不应注入反查区块'); cFail++; } else { console.log('✅ C1 非装备页未注入反查区块'); }
+const olC = rC.otherLinks || [];
+if (!olC.some((h) => /risingstones/.test(h))) { console.log('❌ C2 数据库区块未改名或原链接被误删'); cFail++; } else { console.log('✅ C2 数据库区块改名并保留原链接'); }
+console.log(cFail ? '场景 C 失败 ' + cFail + ' 项' : '场景 C 通过 2/2');
+await closePage(PORT, t3.target.id);
+process.exitCode = aFail + bFail + cFail ? 1 : 0;

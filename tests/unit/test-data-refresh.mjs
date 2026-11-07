@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, webcrypto } from 'node:crypto';
 import { repoRoot } from '../helpers/paths.mjs';
-import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/dict-contract.js';
+import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
+import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 
-const source = fs.readFileSync(path.join(repoRoot, 'src/core/data-manager.js'), 'utf8');
+const source = fs.readFileSync(path.join(repoRoot, 'src/core/data/data-manager.js'), 'utf8');
 const implementation = source.split('\n')
   .filter((line) => !/^import\s/.test(line) && !/^export\s*\{/.test(line))
   .join('\n');

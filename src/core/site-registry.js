@@ -1,4 +1,4 @@
-import { dataGetStatus, ensureTables, onTablesReady } from './data-manager.js';
+import { dataGetStatus, ensureTables, onTablesReady } from './data/data-manager.js';
 import { observeUntilDomReady } from './observer.js';
 import { findSitePolicy } from './site-policy.js';
 import { _zhxErr, safe } from './runtime.js';

@@ -80,18 +80,21 @@
 ### 目录结构
 
 ```
-dict/                  界面词典（Eden 独立前缀词条放在 dict-main.json）
-data/                  权威物品与副本数据
+data/source/           权威物品、套装与副本数据
+data/dictionaries/     人工维护的界面词典
 src/main.js            userscript 入口
-src/core/              核心数据、词典与翻译模块
+src/core/              共享运行时、翻译与搜索
+src/core/data/         词库、缓存读写和 V3 协议
 src/sites/             十站适配器（九个幻化站与灰机 wiki）
-build/                 构建、校验与数据生成脚本
+build/userscript/      脚本打包、版本同步与构建校验
+build/data/            源数据维护、V3 生成与 Pages 组装
 .github/workflows/     测试、发布与数据站部署
-tests/                 单元、集成、在线与基准测试
+tests/e2e/             离线浏览器用户流程与工具验证
+tests/unit/            数据契约与按需的源码回归
 tools/coverage-audit/  汉化覆盖审计工具
 ```
 
-src/main.js、src/core/、src/sites/ 是唯一代码源码。dict/*.json 是界面词典源；data/ff14-items.tsv 是九列物品表，其中 glam 列包含候选标记。候选分类依据 IsGlamorous、EquipSlotCategory 和 ItemAction：可幻化装备按装备槽判定，ItemAction 20086 为时尚配饰，1013 为鸟甲。
+`data/dictionaries/*.json` 是界面词典源。`data/source/ff14-items.tsv` 是九列物品表，其中 glam 列包含候选标记。可幻化装备按 IsGlamorous 和装备槽判定，ItemAction 20086 为时尚配饰，1013 为鸟甲。
 
 ### 数据与发布
 
@@ -103,7 +106,7 @@ Eden 与 xivc.app 复用 Miramiru 的多语数据集与缓存；界面词条分�
 
 ### 构建与发布
 
-需要 Node.js 22 或更新版本。克隆仓库后先安装依赖，再构建和运行默认离线套件：
+需要 Node.js 22 或更新版本。克隆仓库后先安装依赖，再构建和运行默认的离线浏览器端到端测试。
 
 ```bash
 npm ci
@@ -116,8 +119,8 @@ npm test
 ### 维护约定
 
 - 修改代码只编辑 `src/` 模块；构建不会覆盖模块源码。
-- 修改界面词编辑 `dict/*.json`，不要手改 `src/core/dictionary.js` 中自动生成的词典块。
-- 修改物品数据后运行 `python3 build/rebuild-db.py` 和 `npm run build` 校验。
+- 修改界面词编辑 `data/dictionaries/*.json`，构建会同步 `src/core/data/dictionary.js` 中的词典块。
+- 修改物品数据后运行 `python3 build/data/rebuild-db.py` 和 `npm run build` 校验。
 - `dist/` 是本地构建产物，不提交；构建会校验词典、版本和发布产物。
 - `src/` 明确使用原生 ESM。构建按真实依赖图检查语法、依赖方向和循环，由 Rollup 裁剪未使用代码；不再维护迁移期的模块顺序快照或注释锚点检查。
 - 维护说明见 [架构边界](docs/architecture.md)、[中文搜索](docs/chinese-search.md) 和 [V3 数据存储与发布](docs/data-storage-optimization.md)。

@@ -18,8 +18,8 @@ tests/.cache/
 # 数据重建下载缓存（不入库）
 build/.cache/
 
-# 数据站部署产物（.github/deploy/prepare.py 生成）
+# 数据站部署产物（build/data/prepare-pages.py 生成）
 site/
 
-# Runtime Data v3 生成产物（build/make-runtime-data.py 生成；部署时在 CI / prepare 内重建）
+# 迁移前的本地 V3 产物仍忽略。当前生成器默认写入 .cache/runtime-v3/
 data/v3/

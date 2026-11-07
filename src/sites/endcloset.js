@@ -1,5 +1,5 @@
-import { DICT_ENDCLOSET } from '../core/dictionary.js';
-import { resolveByName } from '../core/data-manager.js';
+import { DICT_ENDCLOSET } from '../core/data/dictionary.js';
+import { resolveByName } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';

@@ -12,7 +12,7 @@ process.once('exit', () => { try { fs.rmSync(CACHE_DIR, { recursive: true, force
 function ensureGenerated() {
   if (fs.existsSync(CACHE_DIR)) fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
-  execFileSync(findPython(), ['build/make-runtime-data.py', '--out', CACHE_DIR], {
+  execFileSync(findPython(), ['build/data/make-runtime-data.py', '--out', CACHE_DIR], {
     cwd: repoRoot, stdio: 'pipe', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
   });
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {analyzeDependencies,verifyDependencies} from '../../build/verify-dependencies.mjs';
+import {analyzeDependencies,verifyDependencies} from '../../build/userscript/verify-dependencies.mjs';
 
 assert.deepEqual(verifyDependencies().errors, [], 'Production ESM must satisfy the build dependency rules');
 const fixture = files => new Map(Object.entries(files).map(([file,imports]) =>

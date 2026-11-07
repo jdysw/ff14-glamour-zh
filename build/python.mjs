@@ -40,7 +40,11 @@ export function findPython() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = spawnSync(findPython(), process.argv.slice(2), { stdio: 'inherit', windowsHide: true });
+  const result = spawnSync(findPython(), process.argv.slice(2), {
+    stdio: 'inherit',
+    windowsHide: true,
+    env: { PYTHONIOENCODING: 'utf-8', ...process.env },
+  });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 }

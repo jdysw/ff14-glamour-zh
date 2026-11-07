@@ -3,27 +3,23 @@ name: Deploy data station
 # 当 V3 canonical 数据、生成器、词典或部署配置变化时，自动组装并部署到 Cloudflare Pages。
 # 也可在 Actions 页面手动触发（workflow_dispatch）。
 # 依赖 repo secrets：CLOUDFLARE_API_TOKEN（仅 Pages 读写权限）、CLOUDFLARE_ACCOUNT_ID。
-# 部署前校验 canonical 数据结构；prepare.py 清理 site/ 后仅生成 V3。
+# 部署前校验 canonical 数据结构；prepare-pages.py 清理 site/ 后仅生成 V3。
 
 on:
   push:
     branches: [main]
     paths:
-      - 'data/ff14-items.tsv'
-      - 'data/ff14-series.txt'
-      - 'data/acl-cfc.txt'
-      - 'dict/**'
-      - 'build/make-runtime-data.py'
-      - 'build/make_dict_json.py'
-      - 'build/validate-data.py'
+      - 'data/source/**'
+      - 'data/dictionaries/**'
+      - 'build/data/**'
       # 发布链/契约的修复必须真正触发部署，不能被 paths 过滤悄悄跳过。
       - 'tools/data/dedupe-pages.mjs'
       - 'tools/data/verify-publish-contract.mjs'
       - 'tools/data/verify-shared-candidates.mjs'
       - 'tools/data/verify-pages-assets.mjs'
       - 'tools/data/verify-pages-production.mjs'
-      - 'src/core/v3-contract.js'
-      - 'src/core/dict-contract.js'
+      - 'src/core/data/v3-contract.js'
+      - 'src/core/data/dict-contract.js'
       - 'src/core/site-policy.js'
       - '.github/workflows/deploy-data.yml'
       - '.github/deploy/**'
@@ -44,7 +40,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 数据文件校验（结构完整性）
-        run: python3 build/validate-data.py
+        run: python3 build/data/validate-data.py
 
       - name: 获取固定版本的权威装备部位数据（FFXIV Item.csv）
         env:
@@ -71,7 +67,7 @@ jobs:
       - name: Assemble site
         env:
           FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
-        run: python3 .github/deploy/prepare.py
+        run: python3 build/data/prepare-pages.py
 
       - name: Node 22（数据与脚本端统一契约）
         uses: actions/setup-node@v4

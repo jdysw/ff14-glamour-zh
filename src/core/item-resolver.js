@@ -1,8 +1,8 @@
 import { CACHE_CAP_LOOKUP, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
-import { resolveByName } from './data-manager.js';
+import { resolveByName } from './data/data-manager.js';
 // 仅转发其他模块拥有的符号，避免在此建立多余的本地绑定。
 export { _en2zhCache } from './cache.js';
-export { tryEnToZh } from './data-manager.js';
+export { tryEnToZh } from './data/data-manager.js';
 export { _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries };
 
 

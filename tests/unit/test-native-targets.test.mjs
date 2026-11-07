@@ -2,7 +2,7 @@
 // 不通过 new Function 拼接源码，也不改写只读生产模块状态。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { _applyV3, dataInvalidate, resolveByName } from '../../src/core/data-manager.js';
+import { _applyV3, dataInvalidate, resolveByName } from '../../src/core/data/data-manager.js';
 import {
   collectTargets, dispatchTargets, processRoot, _domStats,
   EC_CARD_SEL, EC_ITEMS_APPLY, lookupZh, applyPlaceholder,

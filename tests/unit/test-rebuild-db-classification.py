@@ -7,11 +7,11 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('rebuild_db', ROOT / 'build' / 'rebuild-db.py')
+spec = importlib.util.spec_from_file_location('rebuild_db', ROOT / 'build' / 'data' / 'rebuild-db.py')
 rebuild = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rebuild)
 
-slot_spec = importlib.util.spec_from_file_location('make_runtime_data', ROOT / 'build' / 'make-runtime-data.py')
+slot_spec = importlib.util.spec_from_file_location('make_runtime_data', ROOT / 'build' / 'data' / 'make-runtime-data.py')
 runtime_data = importlib.util.module_from_spec(slot_spec)
 slot_spec.loader.exec_module(runtime_data)
 

@@ -28,7 +28,7 @@
 ## 译名依据与覆盖
 
 - 英文套装名及实际出现的职能组合：Eorzea Collection [Gearsets](https://ffxiv.eorzeacollection.com/gearsets)，包含较早分页。
-- 中文译名：仓库 `data/ff14-items.tsv` 中的国服装备前缀，或官方套装物品名（如
+- 中文译名：仓库 `data/source/ff14-items.tsv` 中的国服装备前缀，或官方套装物品名（如
   `Fallen's Armor → 堕落套装`、`Galatea Attire → 伽拉忒亚装备套装`）。
 - 此次新增历史分页系列包括 Mistwake（雾迹）、Mistic Memory（雾忆）、
   War Cloud's（沃·克劳德）、Prishe's（普利修）、Mayakov（马雅科夫）、
@@ -66,12 +66,12 @@ EC 的饰品系列目录与 Gearsets 是两套独立页面：列表页常显示 
 ## 后续新增套装的步骤
 
 1. 优先在真实 EC Gearsets 页面核对英文标题，并确认 V3 装备库已经收录该套装的相关英中单件物品。符合“三件独立装备 + 共同中文前缀 + 职能一致”即可自动显示中文，不再逐套人工添加。
-2. 不满足自动推导条件的特殊装束，查 `data/ff14-items.tsv` 核对国服正式名称；仅在实际需要时添加到 `EC_GEARSET_SINGLE_SERIES` 和 `EC_GEARSET_NAME_EXTRAS`。
+2. 不满足自动推导条件的特殊装束，查 `data/source/ff14-items.tsv` 核对国服正式名称；仅在实际需要时添加到 `EC_GEARSET_SINGLE_SERIES` 和 `EC_GEARSET_NAME_EXTRAS`。
 3. 执行 `npm run build && node tests/unit/test-ec-gearsets.mjs && npm test`，并通过真实浏览器检查目录页、详情页、关联卡片及检索框。
 
 ## 自动化覆盖审计
 
-运行 `python3 tools/audit-ec-gearsets.py --report .cache/reports/ec-gearsets.md`，可从当前 `data/ff14-items.tsv` 重新生成命名覆盖报告。报告是临时审计产物，不提交固定统计快照。
+运行 `python3 tools/audit-ec-gearsets.py --report .cache/reports/ec-gearsets.md`，可从当前 `data/source/ff14-items.tsv` 重新生成命名覆盖报告。报告是临时审计产物，不提交固定统计快照。
 
 区分三个指标：官方游戏物品中英映射覆盖、能否生成 EC 搜索关键词、EC 网站上确实存在对应页面。前两项可自动验证，第三项仍需实际网站确认；不依据历史统计数量承诺完整覆盖。
 

@@ -1,5 +1,5 @@
-import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/dictionary.js';
-import { resolveByName } from '../core/data-manager.js';
+import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/data/dictionary.js';
+import { resolveByName } from '../core/data/data-manager.js';
 import { dedupeByAncestor, localScope, _markScan } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { WIKI_ITEM } from '../core/constants.js';

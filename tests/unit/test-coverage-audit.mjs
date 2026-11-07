@@ -14,7 +14,7 @@ import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-co
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const header = fs.readFileSync(path.join(root, 'build/userscript-header.txt'), 'utf8');
+const header = fs.readFileSync(path.join(root, 'build/userscript/userscript-header.txt'), 'utf8');
 assert.equal(classify('Miramiru',{ui:true}),'exempt');
 assert.equal(classify('FFXIV WEAPON COLLECTION',{ui:true}),'exempt');
 assert.equal(classify('关于 Miramiru',{ui:true,before:'About Miramiru'}),'ok');
