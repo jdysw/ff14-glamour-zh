@@ -27,9 +27,10 @@ const dictObj = JSON.parse(runtime.dict.text);
 
 const origSeries = dictObj.fc['装備シリーズ'];
 if (origSeries !== '装备系列') { console.error('防呆失败：「装備シリーズ」当前译 = ' + JSON.stringify(origSeries)); process.exit(1); }
-if (dictObj.fc['ランダム'] !== undefined) { console.error('防呆失败：「ランダム」已存在于词典'); process.exit(1); }
+const newLabel = '診断用項目ＸＺ９';
+if (Object.hasOwn(dictObj.fc, newLabel)) throw new Error('新增词样本已存在于词典');
 dictObj.fc['装備シリーズ'] = '装备系列Q';
-dictObj.fc['ランダム'] = '随机Q';
+dictObj.fc[newLabel] = '测试新增词';
 
 const dictText = JSON.stringify(dictObj);
 const dictSha = sha256Text(dictText);
@@ -70,7 +71,16 @@ const wrap = (src) => `(function(){ try { ${src} } catch (e) { console.error('[T
 async function bootPage(clearCache, label) {
   const t = await newPage(PORT, FIXTURE);
   const c = t.cdp;
-  await c.eval("(() => { const p = document.createElement('p'); p.textContent = '装備シリーズ'; document.body.appendChild(p); const select = document.createElement('select'); const option = document.createElement('option'); option.textContent = 'ランダム'; select.appendChild(option); document.body.appendChild(select); return 1; })()");
+  await c.waitFor('document.body');
+  await c.callFn(`function (label) {
+    const p = document.createElement('p');
+    p.textContent = '装備シリーズ';
+    const select = document.createElement('select');
+    const option = document.createElement('option');
+    option.textContent = label;
+    select.appendChild(option);
+    document.body.append(p, select);
+  }`, [newLabel]);
   console.log(`  [${label}] 本地 FC 夹具已就绪`);
   await c.eval("window.__zhxTestSite = 'fc';");
   if (clearCache) await c.eval(`(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('gm:')) localStorage.removeItem(k); return 1; })()`);
@@ -108,8 +118,8 @@ async function probe(c) {
       return {
         noBody: false,
         hasFix: joined.indexOf('装备系列Q') >= 0,
-        hasNew: joined.indexOf('随机Q') >= 0,
-        randLeft: opts.filter((s) => s.indexOf('ランダム') >= 0).length,
+        hasNew: joined.includes('测试新增词'),
+        randLeft: opts.filter(s => s.includes(${JSON.stringify(newLabel)})).length,
         qContext: qc,
         hits: window.__mockHits || {},
         dictCached: !!dictKey,
@@ -123,10 +133,11 @@ async function probe(c) {
 
 // 轮询「两个断言都出现」最多 waitSec 秒（抗导航/慢补扫）
 async function waitBoth(c, waitSec) {
-  for (let i = 0; i < Math.ceil(waitSec / 4); i++) {
-    await sleep(4000);
+  const deadline = performance.now() + waitSec * 1000;
+  while (performance.now() < deadline) {
     const r = await probe(c);
     if (r.hasFix && r.hasNew) return r;
+    await sleep(100);
   }
   return await probe(c);
 }
@@ -141,8 +152,8 @@ console.log('╔══ 场景 A：下载路径（无缓存）══╗');
   const r = timeout ? await probe(c) : await waitBoth(c, 40);
   console.log('  mock 命中:', JSON.stringify(r.hits), '｜上下文:', JSON.stringify(r.qContext));
   ok('A1 修正重译：旧译「装备系列」→「装备系列Q」', r.hasFix);
-  ok('A2 新增词补扫：「ランダム」→「随机Q」', r.hasNew);
-  ok('A3 旧文本无残留（option 无「ランダム」）', r.randLeft === 0, `残留 ${r.randLeft}`);
+  ok('A2 新增词补扫', r.hasNew);
+  ok('A3 选项无原文残留', r.randLeft === 0, `残留 ${r.randLeft}`);
   ok('A4 V3 manifest 与字典文件已下载', r.hits.manifest > 0 && r.hits.dict > 0, JSON.stringify(r.hits));
   ok('A5 更新词典写入 SHA 内容寻址缓存', r.dictCached && r.dictSha === dictSha);
   ok('A6 请求均来自 V3 manifest 与当前站点文件', r.hits && r.hits.unexpected && r.hits.unexpected.length === 0, JSON.stringify(r.hits.unexpected));
@@ -165,5 +176,8 @@ console.log('╔══ 场景 B：缓存路径（不清缓存，fresh 直接用�
 
 console.log();
 console.log(`总计: ${pass} 通过 / ${fail} 失败`);
-await new Promise((resolve) => pageServer.close(resolve));
+await new Promise(resolve => {
+  pageServer.close(resolve);
+  pageServer.closeAllConnections();
+});
 process.exitCode = fail ? 1 : 0;

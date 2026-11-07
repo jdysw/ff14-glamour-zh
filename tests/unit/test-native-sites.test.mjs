@@ -470,6 +470,16 @@ test('MIRAPRI 实体翻译：正文、属性、按钮文本及标题保持原站
   assert.equal(button.getAttribute('title'), '加载中…');
   assert.equal(button.getAttribute('value'), '加载中…');
 
+  const authored = element('H2');
+  authored.closest = selector => selector.includes('#gallery article') ? {} : null;
+  const authoredTitle = { nodeType: 3, nodeValue: '侍', parentElement: authored };
+  trNode(authoredTitle);
+  assert.equal(authoredTitle.nodeValue, '侍');
+
+  const input = element('INPUT', { type: 'text', value: 'Loading...' });
+  trEl(input);
+  assert.equal(input.getAttribute('value'), 'Loading...');
+
   const oldDoc = globalThis.document;
   try {
     globalThis.document = { title: 'FF14ミラプリSS投稿・共有サイト · ミラプリを投稿' };
@@ -769,6 +779,11 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     assert.equal(fcLinkZhName({
       textContent: '精金骑士铠甲', getAttribute: () => '',
     }), '精金骑士铠甲');
+    _applyV3({ candidatePolicy: 1, hash: 'abcdef\t理想化的春日护手\n' });
+    assert.equal(fcLinkZhName({
+      textContent: '春日護手【想】',
+      getAttribute: () => 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/',
+    }), '理想化的春日护手', '原站装备散列优先于混合文字');
     const link = element('A', { href: 'https://external.example/item', target: '_blank' });
     link.textContent = '精金骑士铠甲';
     link.removeAttribute = name => link.setAttribute(name, null);
@@ -788,6 +803,7 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     trimFCNode(node);
     assert.equal(node.nodeValue, '模拟译文');
   } finally {
+    _applyV3({ candidatePolicy: 1 });
     if (had) DICT_FC[key] = old;
     else delete DICT_FC[key];
     if (hadTitle) DICT_FC['テストカバー'] = oldTitle;

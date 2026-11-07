@@ -171,6 +171,7 @@ test('真实运行时：异常边界、诊断注册及最近 20 条滚动日志'
 test('原生 HTTP：GM 响应与错误、fetch 响应体及超时', async () => {
   const oldGM = globalThis.GM_xmlhttpRequest;
   const oldFetch = globalThis.fetch;
+  const oldAbort = globalThis.AbortController;
   try {
     globalThis.GM_xmlhttpRequest = options => options.onload({ status: 200, responseText: '原生成功' });
     assert.equal(await httpGet('https://example.invalid/item', 100), '原生成功');
@@ -187,13 +188,23 @@ test('原生 HTTP：GM 响应与错误、fetch 响应体及超时', async () => 
     assert.equal(await httpGet('https://example.invalid/item', 100), '响应体完成');
     globalThis.fetch = async () => ({ ok: false, status: 404 });
     await assert.rejects(httpGet('https://example.invalid/item', 100), /HTTP 404/);
-    globalThis.fetch = async () => ({ ok: true, text: () => new Promise(() => {}) });
+    let bodySignal;
+    globalThis.fetch = async (_url, { signal }) => {
+      bodySignal = signal;
+      return { ok: true, text: () => new Promise(() => {}) };
+    };
+    await assert.rejects(httpGet('https://example.invalid/item', 5), /timeout/);
+    assert.equal(bodySignal.aborted, true, '响应体超时后中止请求');
+
+    delete globalThis.AbortController;
+    globalThis.fetch = () => new Promise(() => {});
     await assert.rejects(httpGet('https://example.invalid/item', 5), /timeout/);
   } finally {
     if (oldGM === undefined) delete globalThis.GM_xmlhttpRequest;
     else globalThis.GM_xmlhttpRequest = oldGM;
     if (oldFetch === undefined) delete globalThis.fetch;
     else globalThis.fetch = oldFetch;
+    if (oldAbort !== undefined) globalThis.AbortController = oldAbort;
   }
 });
 
