@@ -137,6 +137,7 @@ export async function newPage(port, url = 'about:blank', { width = 1440, height 
   pageConnections.set(target.id, cdp);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
+  await cdp.send('Page.bringToFront');
   await beginBrowserCoverage(cdp);
   try {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });

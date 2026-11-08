@@ -18,7 +18,7 @@ try {
     window.GM_xmlhttpRequest = o => { window.__requests.push(o.url); o.onerror?.({status:0}); };
   `);
   await c.callFn('function(source) { (0,eval)(source); }', [readDist()]);
-  await sleep(900);
+  await c.waitFor(`document.querySelector('#name').textContent==='库啵外套'`);
   const actual = await c.eval(`(() => ({
     name: document.querySelector('#name').textContent,
     link: document.querySelector('a.eorzeadb_link').getAttribute('href'),
@@ -75,7 +75,7 @@ try {
     document.querySelector('#name').firstChild.nodeValue = 'Thavnairian Babouches';
     const label = document.createElement('span'); label.id = 'dynamic'; label.textContent = 'Equipment List'; document.body.append(label);
   })()`);
-  await sleep(500);
+  await c.waitFor(`document.querySelector('#name').textContent==='萨维奈尖头鞋'`);
   const changed = await c.eval(`({name: document.querySelector('#name').textContent,
     href: document.querySelector('a.eorzeadb_link').getAttribute('href'), dynamic: document.querySelector('#dynamic').textContent})`);
   assert.equal(changed.name, '萨维奈尖头鞋');
@@ -87,16 +87,25 @@ try {
     link.querySelector('img').alt = 'Unknown Item';
     document.querySelector('#name').firstChild.nodeValue = 'Unknown Item';
   })()`);
-  await sleep(500);
+  await c.waitFor(`!document.querySelector('a.eorzeadb_link').hasAttribute('data-zhx-miramiru-zh')`);
   assert.match(await c.eval(`document.querySelector('a.eorzeadb_link').getAttribute('href')`), /deadbeef/);
   assert.equal(await c.eval(`document.querySelector('#name').textContent`), 'Unknown Item');
   await c.eval(`(()=>{const span=document.createElement('span');span.id='split-counter';span.append('7','건');document.body.append(span)})()`);
-  await sleep(300);
+  await c.waitFor(`document.querySelector('#split-counter').textContent==='7 篇投稿'`);
   assert.equal(await c.eval(`document.querySelector('#split-counter').textContent`),'7 篇投稿');
-  // Self-authored title/href mutations must settle, rather than rescheduling forever.
-  const ticks = await c.eval('window.__zhxDiagRecord().obs.ticks');
-  await sleep(600);
-  assert.equal(await c.eval('window.__zhxDiagRecord().obs.ticks'), ticks);
+  // Permit the final self-write batch, but reject a loop that never settles.
+  const settled=await c.eval(`(async()=>{
+    let ticks=window.__zhxDiagRecord().obs.ticks,stable=performance.now(),samples=0;
+    const deadline=performance.now()+5000;
+    while(performance.now()<deadline){
+      await new Promise(resolve=>setTimeout(resolve,100));
+      const next=window.__zhxDiagRecord().obs.ticks;
+      if(next!==ticks){ticks=next;stable=performance.now();samples=0}else samples++;
+      if(samples>=2&&performance.now()-stable>=600)return true;
+    }
+    return false;
+  })()`);
+  assert.equal(settled,true,'Translation observer must become idle');
   const locales = JSON.parse(fs.readFileSync(new URL('../fixtures/miramiru-locales.json', import.meta.url), 'utf8'));
   const names = {en:'Kupo Jacket',ja:'クポクポジャケット',ko:'쿠뽀쿠뽀 재킷'};
   const dyes = {en:'Chestnut Brown',ja:'チェスナットブラウン',ko:'밤색'};
@@ -113,7 +122,7 @@ try {
       link.querySelector('img').alt = name;
       document.querySelector('#name').firstChild.nodeValue = name;
     }`, [locale, labels, names[locale], dyes[locale]]);
-    await sleep(500);
+    await c.waitFor(`document.querySelector('#dynamic').textContent==='装备列表'`);
     const translated = await c.eval(`({heading:document.querySelector('#dynamic').textContent,
       filter:document.querySelector('#filter').textContent, plain:document.querySelector('#unknown').textContent,
       name:document.querySelector('#name').textContent, dye:document.querySelector('#dye').textContent,
