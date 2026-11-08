@@ -61,7 +61,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: userscript-build
-          path: dist/ff14-glamour-zh.greasyfork.user.js
+          path: |
+            dist/ff14-glamour-zh.greasyfork.user.js
+            dist/ff14-glamour-zh.greasyfork.user.js.map
           retention-days: 1
           if-no-files-found: error
 
@@ -171,7 +173,17 @@ jobs:
         run: node tools/manual-coverage-audit/build-userscript.mjs
 
       - name: 集成测试 B（站点适配组）
+        env:
+          ZHX_E2E_COVERAGE_DIR: tests/.cache/e2e-coverage
         run: node tests/run.mjs --suite=sites
+
+      - name: 上传站点浏览器实际执行覆盖率
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-source-sites
+          path: tests/.cache/e2e-coverage
+          retention-days: 1
+          if-no-files-found: error
 
       - name: 验证按需的工具与独立安装包
         if: github.event_name == 'workflow_dispatch'
@@ -193,7 +205,7 @@ jobs:
 
   sonarqube-cloud:
     name: SonarQube Cloud Scan
-    needs: coverage
+    needs: [coverage, integration-a, integration-b]
     permissions:
       contents: read
       pull-requests: read
@@ -208,6 +220,27 @@ jobs:
         with:
           name: native-source-lcov
           path: tests/.cache/coverage
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 下载同一提交的浏览器产物和 source map
+        uses: actions/download-artifact@v4
+        with:
+          name: userscript-build
+          path: dist
+
+      - name: 下载已有端到端流程的实际 V8 覆盖率
+        uses: actions/download-artifact@v4
+        with:
+          pattern: e2e-source-*
+          merge-multiple: true
+          path: tests/.cache/e2e-coverage
+
+      - name: 合并端到端源码行覆盖（不重复执行测试）
+        run: node tools/coverage/merge-browser-coverage.mjs
 
       # 官方扫描 action（v6：使用当前受支持版本）
       - name: SonarQube Cloud scan

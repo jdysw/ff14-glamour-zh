@@ -699,32 +699,31 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   function ecServerText(text) {
-    return text.replace(/«([^»]+)»|⧫\s*([^«»⧫\r\n]+)$/g, (match, quoted, plain) => {
-      const name = quoted || plain;
-      const translated = ecServerDisplayName(name);
-      if (translated === name) return match;
-      return quoted ? '«' + translated + '»' : '⧫ ' + translated;
-    });
+    const quoted = text.replace(/«([^«»]*)»/g, (match, name) => '«' + ecServerDisplayName(name) + '»');
+    const index = quoted.lastIndexOf('⧫');
+    if (index < 0) return quoted;
+    const tail = quoted.slice(index + 1);
+    if (/[«»⧫\r\n]/.test(tail)) return quoted;
+    const name = tail.trim();
+    const translated = ecServerDisplayName(name);
+    return translated === name ? quoted : quoted.slice(0, index + 1) + ' ' + translated;
   }
 
   const EC_SERVER_TEXT_SEL = '.c-glamour-grid-item-content-author, ' +
     'a[href^="/creator/"] .subtitle, .tooltip-content';
 
-  function translateECServers(rootArg) {
-    const selector = '#filter_server option, #filter_server optgroup, ' + EC_SERVER_TEXT_SEL;
-    const scope = localScope(rootArg);
-    const elements = new Set(queryIn(scope, selector));
-    const ancestor = scope?.closest?.(selector);
-    if (ancestor) elements.add(ancestor);
-    for (const el of elements) {
+  function translateECServerElement(el) {
       if (el.tagName === 'OPTGROUP') {
         const label = ecServerDisplayName(el.label);
         if (label !== el.label) el.label = label;
-      } else if (el.tagName === 'OPTION') {
+        return;
+      }
+      if (el.tagName === 'OPTION') {
         const server = ecServerDisplayName(el.value);
         const name = server !== el.value ? server : DICT_EC[el.textContent.trim()];
         if (name && name !== el.textContent) el.textContent = name;
-      } else {
+        return;
+      }
         // Preserve the player's nested markup, links and event handlers.
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
@@ -732,16 +731,25 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
           const translated = ecServerText(node.nodeValue);
           if (translated !== node.nodeValue) node.nodeValue = translated;
         }
-      }
-    }
-    for (const img of queryIn(scope, 'img[alt], img[title]')) {
+  }
+
+  function translateECServerImage(img) {
       for (const attr of ['alt', 'title']) {
         const old = img.getAttribute(attr);
         if (!old?.includes(' from ')) continue;
         const translated = ecServerText(old);
         if (translated !== old) img.setAttribute(attr, translated);
       }
-    }
+  }
+
+  function translateECServers(rootArg) {
+    const selector = '#filter_server option, #filter_server optgroup, ' + EC_SERVER_TEXT_SEL;
+    const scope = localScope(rootArg);
+    const elements = new Set(queryIn(scope, selector));
+    const ancestor = scope?.closest?.(selector);
+    if (ancestor) elements.add(ancestor);
+    for (const element of elements) translateECServerElement(element);
+    for (const img of queryIn(scope, 'img[alt], img[title]')) translateECServerImage(img);
   }
 
   function trimECNode(node) {

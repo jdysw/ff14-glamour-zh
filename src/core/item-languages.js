@@ -4,6 +4,11 @@ import { cacheRegister } from './cache-primitives.js';
 let revision = '';
 let names = new Map();
 cacheRegister('itemLanguages', 'derived', () => { revision = ''; names.clear(); }, () => names.size);
+function nativeLanguage(name) {
+  if (/[가-힣]/u.test(name)) return 'ko';
+  if (/[ぁ-ヺ\u3400-\u9fff]/u.test(name)) return 'ja';
+  return 'en';
+}
 export function itemNames(zh) {
   const status = dataGetStatus();
   const next = status.generation + ':' + status.version;
@@ -11,13 +16,13 @@ export function itemNames(zh) {
     revision = next;
     names = new Map();
     for (const [native, chinese] of Object.entries(dataGetIndex('nameMap') || {})) {
-      const language = /[가-힣]/u.test(native) ? 'ko' : /[ぁ-ヺ\u3400-\u9fff]/u.test(native) ? 'ja' : 'en';
+      const language = nativeLanguage(native);
       let entry = names.get(chinese);
       if (!entry) { entry = {}; names.set(chinese, entry); }
       entry[language] ??= native;
     }
   }
-  const entry = { ...(names.get(zh) || {}) };
+  const entry = { ...names.get(zh) };
   entry.ko ||= resolveKo(zh) || undefined;
   return entry;
 }

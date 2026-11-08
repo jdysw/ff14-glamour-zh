@@ -47,16 +47,8 @@ function addAction(text, action, href) {
 }
 
 async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { /* Clipboard may be unavailable in a userscript sandbox. */ }
-  const field = document.createElement('textarea');
-  field.value = text;
-  field.style.cssText = 'position:fixed;left:-9999px';
-  document.body.append(field);
-  field.select();
-  let copied = false;
-  try { copied = document.execCommand('copy'); } catch { /* Show selectable text below. */ }
-  field.remove();
-  return copied;
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { return false; /* Callers offer selectable text when clipboard access is denied. */ }
 }
 
 function diagnostic() {
@@ -115,7 +107,13 @@ function showItemMenu(item) {
   const names = itemNames(item.zh);
   openPanel(item.zh);
   const copy = (label, value) => {
-    const button = addAction(label, async () => { button.textContent = await copyText(value) ? '已复制' : value; });
+    const button = addAction(label, async () => {
+      if (await copyText(value)) { button.textContent = '已复制'; return; }
+      const field = document.createElement('textarea');
+      field.readOnly = true; field.value = value; field.setAttribute('aria-label', '请手动复制名称');
+      panel.append(field); field.focus(); field.select();
+      button.textContent = '名称已选中，请手动复制';
+    });
   };
   copy('复制国服名称', item.zh);
   for (const [lang, label] of [['en', '英文'], ['ja', '日文'], ['ko', '韩文']])
@@ -134,7 +132,10 @@ function showItemMenu(item) {
 function revealItemButton(event) {
   if (event.target?.closest?.('#zhx-tools-item,#zhx-tools-panel')) return;
   const item = recognizedItem(event.target);
-  if (!item) { if (itemButton && document.activeElement !== itemButton) itemButton.hidden = true; return; }
+  if (!item) {
+    if (itemButton && document.activeElement !== itemButton) itemButton.hidden = true;
+    return;
+  }
   currentItem = item;
   if (!itemButton) {
     itemButton = document.createElement('button');
@@ -154,11 +155,16 @@ function revealItemButton(event) {
   itemButton.hidden = false;
 }
 
+function menuRegistration() {
+  if (typeof GM_registerMenuCommand === 'function') return GM_registerMenuCommand;
+  if (typeof GM !== 'undefined' && GM.registerMenuCommand) return GM.registerMenuCommand.bind(GM);
+  return null;
+}
+
 export function startUserTools() {
   if (window.__zhxUserTools) return;
   window.__zhxUserTools = true;
-  const register = typeof GM_registerMenuCommand === 'function' ? GM_registerMenuCommand
-    : typeof GM !== 'undefined' && GM.registerMenuCommand ? GM.registerMenuCommand.bind(GM) : null;
+  const register = menuRegistration();
   register?.('词库状态', () => showStatus());
   register?.('立即检查词库更新', refreshData);
   register?.('复制诊断', async () => {
@@ -183,8 +189,8 @@ export function startUserTools() {
     if (!panel) return;
     if (event.key === 'Escape') { event.preventDefault(); closePanel(); }
     if (event.key === 'Tab') {
-      const nodes = [...panel.querySelectorAll('button,a[href]')];
-      const first = nodes[0], last = nodes[nodes.length - 1];
+      const nodes = [...panel.querySelectorAll('button,a[href],textarea')];
+      const first = nodes[0], last = nodes.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }

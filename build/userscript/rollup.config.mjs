@@ -25,6 +25,7 @@ export default {
     file: process.env.ZHX_OUT || path.join(repoRoot, 'dist', 'ff14-glamour-zh.greasyfork.user.js'),
     format: 'iife',
     strict: true,
+    sourcemap: 'hidden',
     banner: () => mergeTrailingLF(fs.readFileSync(headerFile, 'utf8')),
   },
 };

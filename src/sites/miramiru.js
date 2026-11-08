@@ -82,8 +82,7 @@ function translateMiramiruLink(element) {
   if (element.getAttribute('title') !== title) element.setAttribute('title', title);
 }
 
-function translateMiramiruAttributes(element) {
-  if (element.tagName === 'INPUT') {
+function markMiramiruSearchInput(element) {
     const hint = element.getAttribute('placeholder') || '';
     const slot = /^搜索(.+)装备$/.exec(trMiramiru(hint));
     const groups = { '头部': 0, '身体': 1, '手部': 2, '腿部': 3, '脚部': 4, '主手': 5, '副手': 5,
@@ -93,7 +92,10 @@ function translateMiramiruAttributes(element) {
       const group = groups[slot[1]];
       element.dataset.zhxMiramiruSlot = String(group);
     } else delete element.dataset.zhxMiramiruSlot;
-  }
+}
+
+function translateMiramiruAttributes(element) {
+  if (element.tagName === 'INPUT') markMiramiruSearchInput(element);
   for (const attr of ['placeholder', 'alt', 'title', 'aria-label']) {
     const raw = element.getAttribute(attr);
     if (!raw) continue;

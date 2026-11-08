@@ -182,18 +182,20 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
 
   const ronkaItemLists = new WeakSet();
 
+  function ronkaMutationItems(node) {
+    if (!RONKA_KR.test(node.textContent || '')) return [];
+    const element = localScope(node);
+    if (!element?.isConnected) return [];
+    const item = element.closest('.item-searcher');
+    return item ? [item] : element.querySelectorAll('.item-searcher');
+  }
+
   function translateRonkaItemMutations(records) {
     const items = new Set();
     for (const record of records) {
       const changed = record.type === 'characterData' ? [record.target] : record.addedNodes;
       for (const node of changed) {
-        // Our Chinese writes must not schedule another scan of the same row.
-        if (!RONKA_KR.test(node.textContent || '')) continue;
-        const element = localScope(node);
-        if (!element?.isConnected) continue;
-        const item = element.closest('.item-searcher');
-        if (item) items.add(item);
-        else for (const row of element.querySelectorAll('.item-searcher')) items.add(row);
+        for (const item of ronkaMutationItems(node)) items.add(item);
       }
     }
     for (const item of items) translateRonkaPage(item);

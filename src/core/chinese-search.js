@@ -921,28 +921,29 @@ function commitEdenMakerCandidate(input, selectedNative) {
   });
 }
 
-function convertStandaloneForSearch(input, allowPartial = false, selectedNative = null) {
-  try {
-    if (!input || input.isConnected === false || _composingInputs.has(input)) return false;
-    const shown = input.value;
-    const query = normalizeSearchQuery(shown);
-    if (query.length < 2 || !isChineseSearchQuery(query)) return false;
+function miramiruStandaloneNative(input, query, allowPartial, selectedNative) {
+  const rows = ecScopedSuggestions(query, input);
+  const matching = rows.filter(row => row.zh === query || row.native === selectedNative);
+  let row = null;
+  if (matching.length === 1) row = matching[0];
+  else if (allowPartial && rows.length === 1) row = rows[0];
+  if (!row) return null;
+  if (!_ecPendingNativePick) armECNativePick(input, row);
+  return row.native;
+}
+
+function standaloneNative(input, query, allowPartial, selectedNative) {
+    if (_activeSearchSiteId === 'miramiru') return miramiruStandaloneNative(input, query, allowPartial, selectedNative);
     const context = ecSearchContext(input);
-    let native = selectedNative
+    const native = selectedNative
       || (context ? ecScopedNative(query, input, allowPartial) : null)
       || (!context && isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
       || (!context ? resolveByZh(query) : null)
       || (!context && allowPartial ? resolvePartialByZh(query) : null);
-    native = edenMakerNative(input, native);
-    if (_activeSearchSiteId === 'miramiru') {
-      const rows = ecScopedSuggestions(query, input);
-      const matching = rows.filter(row => row.zh === query || row.native === selectedNative);
-      const row = matching.length === 1 ? matching[0] : (allowPartial && rows.length === 1 ? rows[0] : null);
-      if (!row) return false;
-      native = row.native;
-      if (!_ecPendingNativePick) armECNativePick(input, row);
-    }
-    if (!native || native === query) return false;
+    return edenMakerNative(input, native);
+}
+
+function commitStandaloneNative(input, native, selectedNative, shown) {
     if (!rewriteInputNatively(input, native)) return false;
     commitEdenMakerCandidate(input, selectedNative);
     if (_activeSearchSiteId === 'miramiru' && _ecPendingNativePick) attemptECNativePick(_ecPendingNativePick);
@@ -952,6 +953,17 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
     if (!isECVueSearchInput(input) && !['eden', 'xivc', 'miramiru'].includes(_activeSearchSiteId))
       restoreStandaloneDisplay(input, shown, native);
     return true;
+}
+
+function convertStandaloneForSearch(input, allowPartial = false, selectedNative = null) {
+  try {
+    if (!input || input.isConnected === false || _composingInputs.has(input)) return false;
+    const shown = input.value;
+    const query = normalizeSearchQuery(shown);
+    if (query.length < 2 || !isChineseSearchQuery(query)) return false;
+    const native = standaloneNative(input, query, allowPartial, selectedNative);
+    if (!native || native === query) return false;
+    return commitStandaloneNative(input, native, selectedNative, shown);
   } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }
 }
 
