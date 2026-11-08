@@ -24,7 +24,7 @@ const DIST_FILE = 'dist/ff14-glamour-zh.greasyfork.user.js';
 // @version 行：捕获前缀（对齐空白）与版本号；[ \t] 限定行内空白，避免跨行误配
 const RE_ONE = /^(\/\/ @version[ \t]+)(\S+)([ \t]*)$/m;
 const RE_ALL = /^(\/\/ @version[ \t]+)(\S+)([ \t]*)$/gm;
-const SEMVER_RE = /^\d+\.\d+\.\d+$/;
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.[1-9]\d*)?$/;
 const CHECK = process.argv.includes('--check');
 
 function fail(msg) {
@@ -45,7 +45,7 @@ function readVersion(rel) {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, PKG_FILE), 'utf8'));
 const VERSION = String(pkg.version || '');
-if (!SEMVER_RE.test(VERSION)) fail(`package.json version 非法："${VERSION}"（应为 x.y.z）`);
+if (!SEMVER_RE.test(VERSION)) fail(`package.json version 非法："${VERSION}"（应为 x.y.z 或 x.y.z-beta.1 等预发行版本）`);
 
 if (CHECK) {
   const rows = [[PKG_FILE, VERSION]];
