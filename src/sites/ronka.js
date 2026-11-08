@@ -5,6 +5,7 @@ import { DICT_RONKA } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
+import { isAuthoredContent } from '../core/content-scope.js';
 export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
 
 
@@ -16,7 +17,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
    * childList 与 characterData；翻译幂等（不含韩文即跳过）防循环。
    * ===================================================================== */
 
-  const RONKA_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip';
+  const RONKA_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip, [data-zhx-chinese-suggest]';
   const RONKA_KR = /[\uac00-\ud7a3]/;
 
   // 装备名单条查找（缓存 + 名称索引直查）；_ronkaCacheN = 条目计数（容量防线用）
@@ -132,6 +133,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.(RONKA_SKIP_SEL)) return;
+    if (isAuthoredContent(p, 'ronka')) return;
     const next = trRonka(raw);
     if (next !== raw) {
       node.nodeValue = next;
@@ -144,6 +146,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     if (n.nodeType === 1) {
       if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
       if (n.closest?.(RONKA_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+      if (isAuthoredContent(n, 'ronka')) return NodeFilter.FILTER_REJECT;
     }
     return NodeFilter.FILTER_ACCEPT;
   }
@@ -154,10 +157,11 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   }
 
   function _ronkaImgAlt(n) {
+    if (isAuthoredContent(n, 'ronka')) return;
     const alt = n.getAttribute('alt');
     if (alt && alt.length >= 2 && alt.length <= 90) {
       const nn = trRonka(alt);
-      if (nn !== alt && !n.dataset.zhixiaRonkaAlt) { n.setAttribute('alt', nn); n.dataset.zhixiaRonkaAlt = '1'; }
+      if (nn !== alt) n.setAttribute('alt', nn);
     }
     const ti = n.getAttribute('title');
     if (ti) { const nn = trRonka(ti); if (nn !== ti) n.setAttribute('title', nn); }
@@ -169,10 +173,44 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   }
 
   function _procRonkaNode(n) {
+    if (isAuthoredContent(n.nodeType === 3 ? n.parentElement : n, 'ronka')) return;
     if (n.nodeType === 3) { trimRonkaNode(n); return; }
     if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') { _ronkaInput(n); return; }
     if (n.tagName === 'IMG' || n.hasAttribute('alt')) { _ronkaImgAlt(n); return; }
     if (n.hasAttribute?.('aria-label')) _ronkaAria(n);
+  }
+
+  const ronkaItemLists = new WeakSet();
+
+  function ronkaMutationItems(node) {
+    if (!RONKA_KR.test(node.textContent || '')) return [];
+    const element = localScope(node);
+    if (!element?.isConnected) return [];
+    const item = element.closest('.item-searcher');
+    return item ? [item] : element.querySelectorAll('.item-searcher');
+  }
+
+  function translateRonkaItemMutations(records) {
+    const items = new Set();
+    for (const record of records) {
+      const changed = record.type === 'characterData' ? [record.target] : record.addedNodes;
+      for (const node of changed) {
+        for (const item of ronkaMutationItems(node)) items.add(item);
+      }
+    }
+    for (const item of items) translateRonkaPage(item);
+  }
+
+  function bindRonkaItemLists(rootArg) {
+    for (const list of queryIn(localScope(rootArg), '.item-searcher-list')) {
+      if (ronkaItemLists.has(list)) continue;
+      ronkaItemLists.add(list);
+      // The live viewer recreates every row when a magnifier is clicked.
+      // Observe only this small list and translate in the mutation microtask,
+      // before the next paint, rather than exposing Korean for the debounce.
+      const observer = new MutationObserver(safe(translateRonkaItemMutations, 'Ronka 装备即时翻译'));
+      observer.observe(list, { childList: true, characterData: true, subtree: true });
+    }
   }
 
   function translateRonkaPage(rootArg) {
@@ -180,6 +218,11 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
+    if (root.nodeType === 1) {
+      if (_ronkaAcceptNode(root) === NodeFilter.FILTER_REJECT) return;
+      _procRonkaNode(root);
+    }
+    bindRonkaItemLists(rootArg);
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: _ronkaAcceptNode,
@@ -206,10 +249,12 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     createTranslationObserver({
       root: document.documentElement,
       characterData: true,
-      filter: (m) => !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),
+      attributes: true,
+      attributeFilter: ['alt', 'title', 'aria-label', 'placeholder'],
+      filter: (m) => m.type === 'attributes' || !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),
       debounce: 120,
-      handler: (nodes) => {
-        for (const n of nodes) safe(translateRonkaPage, 'Ronka 局部')(n);
+      handler: (nodes, textNodes) => {
+        for (const n of [...nodes, ...textNodes]) safe(translateRonkaPage, 'Ronka 局部')(n);
         safe(translateRonkaTitle, 'Ronka 标题')();
       },
     });

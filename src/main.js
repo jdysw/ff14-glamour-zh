@@ -4,6 +4,7 @@ import { _zhxErr, safe } from './core/runtime.js';
 import { findSite } from './core/site-registry.js';
 import { startChineseSearch } from './core/chinese-search.js';
 import { ensureChineseFont } from './core/dom.js';
+import { startUserTools } from './core/user-tools.js';
 
 
 
@@ -17,6 +18,7 @@ import { ensureChineseFont } from './core/dom.js';
   const __site = findSite();
   const bootSite = () => {
     if (!__site) return;
+    if (__site.id !== 'xivc') safe(startUserTools, '脚本菜单')();
     safe(ensureChineseFont, '中文字体')();
     safe(startChineseSearch, '中文装备搜索')(__site.id);
     try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); }

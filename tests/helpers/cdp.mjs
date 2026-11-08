@@ -1,6 +1,7 @@
 // 极简 CDP 客户端（Node ≥22 内置 WebSocket / fetch）
 // 用法见同目录测试脚本；连接 127.0.0.1:9223 的 headless Chrome
 import { setTimeout as sleep } from 'node:timers/promises';
+import {beginBrowserCoverage,endBrowserCoverage,tagBrowserSource} from './browser-coverage.mjs';
 
 export { sleep };
 const pageConnections = new Map();
@@ -48,6 +49,10 @@ export class CDP {
     this.handlers.set(method, a);
   }
   send(method, params = {}, timeoutMs = 180000) {
+    if(method==='Runtime.evaluate')params={...params,expression:tagBrowserSource(this,params.expression)};
+    if(method==='Page.addScriptToEvaluateOnNewDocument')params={...params,source:tagBrowserSource(this,params.source)};
+    if(method==='Runtime.callFunctionOn'&&params.arguments)params={...params,arguments:params.arguments.map(arg=>
+      typeof arg.value==='string'?{...arg,value:tagBrowserSource(this,arg.value)}:arg)};
     const id = ++this.id;
     return new Promise((res, rej) => {
       const timer = setTimeout(() => {
@@ -132,6 +137,8 @@ export async function newPage(port, url = 'about:blank', { width = 1440, height 
   pageConnections.set(target.id, cdp);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
+  await cdp.send('Page.bringToFront');
+  await beginBrowserCoverage(cdp);
   try {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   } catch (e) {}
@@ -140,6 +147,9 @@ export async function newPage(port, url = 'about:blank', { width = 1440, height 
 
 export async function closePage(port, targetId) {
   const cdp = pageConnections.get(targetId);
-  if (cdp) { await cdp.close(); pageConnections.delete(targetId); }
+  if (cdp) {
+    try { await endBrowserCoverage(cdp,targetId); }
+    finally { await cdp.close(); pageConnections.delete(targetId); }
+  }
   try { await fetch(`http://127.0.0.1:${port}/json/close/${targetId}`); } catch (e) {}
 }

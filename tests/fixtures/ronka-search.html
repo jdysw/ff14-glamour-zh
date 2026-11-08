@@ -17,6 +17,36 @@
       <input type="text" name="keyword" placeholder="검색">
       <button type="submit">검색</button>
     </form>
+    <div class="item-searcher-list"></div>
+    <script>
+      // The live site defines its item component inside the viewer render:
+      // opening a menu remounts every equipment row, including inactive menus.
+      const items = ['메이드 머리띠', '집사 재킷'];
+      const list = document.querySelector('.item-searcher-list');
+      function renderItems(active = -1) {
+        list.innerHTML = items.map((name, index) => `
+          <div class="item-searcher">
+            <div class="post-item-information"><p>${name}</p>
+              <div class="item-color-information"><span>1-하얀눈색</span></div>
+            </div>
+            <button type="button" class="search-button" data-index="${index}">⌕</button>
+            <div class="post-search-modal ${index === active ? 'modal-active' : ''}">
+              <a href="https://guide.ff14.co.kr/lodestone/search?keyword=${name}" target="_blank">공식 가이드</a>
+              <a href="https://ronkacloset.com/search?type=&keyword=${name}" target="_blank">롱카의 옷장</a>
+              <a href="https://lookbook.ronkacloset.com/?keyword=${name}">다른 코디 보기</a>
+            </div>
+          </div>`).join('');
+      }
+      let active = -1;
+      list.addEventListener('click', event => {
+        const button = event.target.closest('.search-button');
+        if (!button) return;
+        const index = Number(button.dataset.index);
+        active = active === index ? -1 : index;
+        renderItems(active);
+      });
+      renderItems();
+    </script>
   </main>
 </body>
 </html>
