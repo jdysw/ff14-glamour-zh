@@ -15,7 +15,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const t = text.trim();
     if (!t) return text;
     if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
-    const hit = DICT_EC[t];
+    // Editorial paragraphs contain source indentation/newlines between words.
+    // Match their normalized text while retaining the surrounding inline markup.
+    const hit = DICT_EC[t] || DICT_EC[t.replace(/\s+/g, ' ')];
     if (hit) {
       const i = text.indexOf(t);
       return text.slice(0, i) + hit + text.slice(i + t.length);
@@ -35,6 +37,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   const PATTERNS_EC = [
+    [/^(\s*)Last updated:\s*/i, '$1最后更新：'],
     [/^(\s*)in The Firmament (\(X:\s*\d+(?:\.\d+)?\s+Y:\s*\d+(?:\.\d+)?\))(\s*)$/i, '$1位于天穹街 $2$3'],
     // 面饰页动态文案
     [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
@@ -689,10 +692,63 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     '[contenteditable="true"]',
   ].join(',');
 
+  // Server names follow https://ff14.huijiwiki.com/wiki/服务器. Keep this
+  // namespace separate from ordinary item/UI translations (e.g. Anima).
+  function ecServerDisplayName(name) {
+    return DICT_EC['server:' + name.trim().toLowerCase()] || name;
+  }
+
+  function ecServerText(text) {
+    return text.replace(/«([^»]+)»|⧫\s*([^«»⧫\r\n]+)$/g, (match, quoted, plain) => {
+      const name = quoted || plain;
+      const translated = ecServerDisplayName(name);
+      if (translated === name) return match;
+      return quoted ? '«' + translated + '»' : '⧫ ' + translated;
+    });
+  }
+
+  const EC_SERVER_TEXT_SEL = '.c-glamour-grid-item-content-author, ' +
+    'a[href^="/creator/"] .subtitle, .tooltip-content';
+
+  function translateECServers(rootArg) {
+    const selector = '#filter_server option, #filter_server optgroup, ' + EC_SERVER_TEXT_SEL;
+    const scope = localScope(rootArg);
+    const elements = new Set(queryIn(scope, selector));
+    const ancestor = scope?.closest?.(selector);
+    if (ancestor) elements.add(ancestor);
+    for (const el of elements) {
+      if (el.tagName === 'OPTGROUP') {
+        const label = ecServerDisplayName(el.label);
+        if (label !== el.label) el.label = label;
+      } else if (el.tagName === 'OPTION') {
+        const server = ecServerDisplayName(el.value);
+        const name = server !== el.value ? server : DICT_EC[el.textContent.trim()];
+        if (name && name !== el.textContent) el.textContent = name;
+      } else {
+        // Preserve the player's nested markup, links and event handlers.
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          const translated = ecServerText(node.nodeValue);
+          if (translated !== node.nodeValue) node.nodeValue = translated;
+        }
+      }
+    }
+    for (const img of queryIn(scope, 'img[alt], img[title]')) {
+      for (const attr of ['alt', 'title']) {
+        const old = img.getAttribute(attr);
+        if (!old?.includes(' from ')) continue;
+        const translated = ecServerText(old);
+        if (translated !== old) img.setAttribute(attr, translated);
+      }
+    }
+  }
+
   function trimECNode(node) {
     const raw = node.nodeValue;
     if (!raw?.trim()) return;
     const p = node.parentElement;
+    if (p?.closest?.('#filter_server option')) return;
     if (p?.closest?.(EC_SKIP_SEL)) return;
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
@@ -719,7 +775,16 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (attr === 'title' && _zhixiaTitleKeep.has(el)) return;
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
-    const translated = trEC(old);
+    let translated = trEC(old);
+    if (attr === 'alt') {
+      if (old === 'male') translated = '男性';
+      else if (old === 'female') translated = '女性';
+      else if (old.endsWith(' image')) {
+        const name = old.slice(0, -6);
+        const zh = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
+        if (zh) translated = zh + '图片';
+      }
+    }
     if (translated !== old) el.setAttribute(attr, translated);
   }
 
@@ -746,6 +811,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     try {
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
+      translateECServers(rootArg);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
@@ -868,9 +934,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       root: document.documentElement,
       debounce: 300,
       attributes: true,
-      attributeFilter: ['title', 'alt', 'aria-label', 'placeholder'],
-      handler: (nodes) => {
-        for (const n of nodes) {
+      attributeFilter: ['title', 'alt', 'aria-label', 'placeholder', 'label'],
+      characterData: true,
+      filter: (mutation) => mutation.type !== 'characterData'
+        || Boolean(mutation.target.parentElement?.closest(EC_SERVER_TEXT_SEL + ', #filter_server option')),
+      handler: (nodes, textNodes) => {
+        for (const n of [...nodes, ...textNodes]) {
           safe(translateECPage, 'EC 局部')(n);
           safe(bindECPieceTiles, 'EC 部位图')(n);
         }

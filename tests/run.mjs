@@ -71,6 +71,7 @@ const SUITES = {
     "e2e/test-miramiru.mjs",
     "e2e/test-miramiru-filters.mjs",
     "e2e/test-standalone-search.mjs",
+    "e2e/test-user-tools.mjs",
     "e2e/test-eden.mjs",
     "e2e/test-xivc.mjs"
   ],

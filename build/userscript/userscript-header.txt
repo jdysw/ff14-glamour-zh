@@ -25,6 +25,8 @@
 // @grant        GM.setValue
 // @grant        GM.listValues
 // @grant        GM.deleteValue
+// @grant        GM_registerMenuCommand
+// @grant        GM.registerMenuCommand
 // @connect      zhixia-data.pages.dev
 // @run-at       document-start
 // @noframes

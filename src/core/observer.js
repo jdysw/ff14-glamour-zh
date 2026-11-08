@@ -1,6 +1,28 @@
 import { dedupeByAncestor, localScope } from './dom.js';
 import { _perfNow, _zhxErr, safe } from './runtime.js';
-export { _obsStats, createObserver, createTranslationObserver, observeUntilDomReady };
+export { _obsStats, createObserver, createTranslationObserver, observeUntilDomReady, observeBeforePaint };
+
+// Use only for small, explicitly safe interactive regions. Mutation callbacks
+// run before paint; normal pages continue using the bounded batched observer.
+function observeBeforePaint(selector, translate, attributes = []) {
+  const observer = new MutationObserver(safe(records => {
+    const roots = [];
+    for (const record of records) {
+      const nodes = record.type === 'childList' ? record.addedNodes : [record.target];
+      for (const node of nodes) {
+        const element = localScope(node);
+        if (!element?.isConnected) continue;
+        const region = element.closest(selector);
+        if (region) roots.push(element);
+        else if (node.nodeType === 1) roots.push(...element.querySelectorAll(selector));
+      }
+    }
+    for (const root of dedupeByAncestor(roots)) translate(root);
+  }, '交互区域即时翻译'));
+  observer.observe(document.documentElement, { childList: true, characterData: true, subtree: true,
+    ...(attributes.length ? { attributes: true, attributeFilter: attributes } : {}) });
+  return observer;
+}
 
 
   /* @zhixia:core-observer-start */

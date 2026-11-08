@@ -1,5 +1,6 @@
-import { onTablesReady, resolveByZh, resolvePartialByZh, suggestByZh, dataGetIndex } from './data/data-manager.js';
+import { onTablesReady, resolveByZh, resolveByName, resolvePartialByZh, suggestByZh, dataGetIndex } from './data/data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
+import { itemNames, miramiruLanguage } from './item-languages.js';
 
 // 站点能力表：统一交互由 Core 调度；form 与 SPA 输入的提交路径各用原站行为。
 const SEARCH_SITES = Object.freeze({
@@ -11,6 +12,7 @@ const SEARCH_SITES = Object.freeze({
   endcloset: { vueSelect: false },
   eden: { vueSelect: false },
   xivc: { vueSelect: false },
+  miramiru: { vueSelect: false },
 });
 let _activeSearchSiteId = null;
 
@@ -133,6 +135,18 @@ function ecSearchContext(input) {
 }
 
 function ecScopedSuggestions(query, input) {
+  if (_activeSearchSiteId === 'miramiru') {
+    const key = input.dataset.zhxMiramiruSlot;
+    const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
+    const rows = new Map();
+    const language = miramiruLanguage();
+    for (const row of suggestByZh(query, 0, slot)) {
+      const zh = resolveByName(row.native) || row.zh;
+      const native = itemNames(zh)[language];
+      if (native && !rows.has(native)) rows.set(native, { zh, native });
+    }
+    return [...rows.values()];
+  }
   const context = ecSearchContext(input);
   if (context?.kind === 'facewear') return EC_FACEWEAR_ROWS.filter(row => row.zh.includes(query));
   if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
@@ -352,14 +366,19 @@ function cancelECNativePick() {
 // original equipment name; compare translated text only as a unique fallback.
 function ecNativeOptionMatch(option, row) {
   const clean = text => String(text || '').normalize('NFKC').replace(/\s+/gu, ' ').trim();
-  const source = option.getAttribute?.('data-zhixia-source-text');
+  const source = option.getAttribute?.('data-zhx-miramiru-native') || option.getAttribute?.('data-zhixia-source-text');
   if (source) return clean(source) === clean(row.native) ? 'native' : null;
   if (clean(option.textContent) === clean(row.native)) return 'native';
+  if (option.getAttribute?.('role') === 'option') {
+    const labels = [...option.querySelectorAll('span')].filter(label => !label.childElementCount);
+    if (labels.some(label => clean(label.textContent) === clean(row.native))) return 'native';
+    if (labels.some(label => clean(label.textContent) === clean(row.zh))) return 'zh';
+  }
   return clean(option.textContent) === clean(row.zh) ? 'zh' : null;
 }
 
 function ecNativePickCandidates(pending) {
-  return [...pending.root.querySelectorAll('.vs__dropdown-option')].filter(option =>
+  return [...pending.root.querySelectorAll(pending.miramiru ? '[role="option"]' : '.vs__dropdown-option')].filter(option =>
     option.isConnected !== false
     && option.getAttribute?.('aria-disabled') !== 'true'
     && !option.classList?.contains('vs__dropdown-option--disabled'));
@@ -385,14 +404,16 @@ function attemptECNativePick(pending) {
   cancelECNativePick();
   // vue-select selects the LI on click; mousedown on the UL only preserves
   // focus. Use its own component handler so v-model and selected chips update.
-  target.click?.();
+  const control = pending.miramiru ? target.querySelector('button') || target : target;
+  control.click?.();
 }
 
 function armECNativePick(input, row) {
   cancelECNativePick();
-  const root = input.closest?.('.v-select');
+  const miramiru = _activeSearchSiteId === 'miramiru';
+  const root = miramiru ? input.parentElement : input.closest?.('.v-select');
   if (!root?.querySelectorAll) return null;
-  const pending = { input, root, row, observer: null, timer: null };
+  const pending = { input, root, row, miramiru, observer: null, timer: null };
   _ecPendingNativePick = pending;
   const attempt = () => attemptECNativePick(pending);
   pending.timer = setTimeout(() => {
@@ -406,6 +427,7 @@ function armECNativePick(input, row) {
 }
 
 function isSearchInput(input) {
+  if (_activeSearchSiteId === 'miramiru') return false;
   const form = input?.form;
   if (!form) return false;
   const cached = _searchInputCache.get(form);
@@ -469,6 +491,15 @@ function positionSuggestionBox(input) {
   _suggestBox.style.top = top + 'px';
   _suggestBox.style.width = width + 'px';
   _suggestBox.style.maxHeight = maxHeight + 'px';
+  const portal = _suggestBox.parentElement;
+  if (portal?.getAttribute('role') === 'dialog') {
+    const style = getComputedStyle(portal);
+    if (style.transform !== 'none' || (style.translate && style.translate !== 'none')) {
+      const origin = portal.getBoundingClientRect();
+      _suggestBox.style.left = (left - origin.left - portal.clientLeft + portal.scrollLeft) + 'px';
+      _suggestBox.style.top = (top - origin.top - portal.clientTop + portal.scrollTop) + 'px';
+    }
+  }
 }
 
 // 滚动/缩放时保持候选框（1.4.2 后续修复）：输入框仍在视口内 → 跟随重定位（保持打开）；
@@ -561,7 +592,7 @@ function selectSuggestion(index) {
   if (submitECGearsetsSearch(input, row.native)) return;
   // EC vue-select needs an actual native-option selection, not merely an
   // input event that leaves the dropdown waiting for a second click.
-  if (isECVueSearchInput(input)) {
+  if (isECVueSearchInput(input) || _activeSearchSiteId === 'miramiru') {
     const attempt = armECNativePick(input, row);
     if (!convertStandaloneForSearch(input, false, row.native)) cancelECNativePick();
     else attempt?.();
@@ -621,6 +652,7 @@ function updateSuggestionActive(index) {
 }
 
 function showSuggestions(input) {
+  if (_activeSearchSiteId === 'miramiru' && document.activeElement !== input) { dismissSuggestions(); return; }
   if (!isSuggestibleInput(input) || !input.isConnected) {
     hideSuggestions(true);
     return;
@@ -649,9 +681,14 @@ function showSuggestions(input) {
     _suggestBox.id = 'zhx-chinese-suggest-list';
     _suggestBox.dataset.zhxChineseSuggest = '';
     _suggestBox.setAttribute('role', 'listbox');
-    (document.body || document.documentElement)?.appendChild(_suggestBox);
   }
   if (!_suggestBox) return;
+  // Radix modal drawers disable pointer events outside their own portal.
+  // Keep suggestions inside the native dialog so real clicks and focus work.
+  const host = (_activeSearchSiteId === 'miramiru' && input.closest('[role="dialog"]'))
+    || document.body || document.documentElement;
+  if (_suggestBox.parentElement !== host) host.appendChild(_suggestBox);
+  _suggestBox.style.pointerEvents = 'auto';
 
   _suggestInput = input;
   _suggestRows = rows;
@@ -708,7 +745,8 @@ function handleSearchInput(event) {
 function handleSearchFocus(event) {
   const input = event.target;
   if (_ecPendingNativePick && _ecPendingNativePick.input !== input) cancelECNativePick();
-  if (!isSuggestibleInput(input) || _composingInputs.has(input)) return;
+  if (!isSuggestibleInput(input)) { dismissSuggestions(); return; }
+  if (_composingInputs.has(input)) return;
   scheduleSuggestions(input);
 }
 
@@ -774,6 +812,7 @@ function handleSuggestionPointerDown(event) {
     const button = target.closest?.('button[data-zhx-index]');
     if (!button || !_suggestBox.contains(button)) return;
     event.preventDefault();
+    event.stopPropagation();
     selectSuggestion(Number(button.dataset.zhxIndex));
     return;
   }
@@ -812,6 +851,7 @@ function isStandaloneSearchInput(input) {
   if (input.disabled || input.readOnly) return false;
   if (_activeSearchSiteId === 'eden') return input.dataset?.zhxEdenSearch === '1';
   if (_activeSearchSiteId === 'xivc') return input.dataset?.zhxXivcSearch === '1';
+  if (_activeSearchSiteId === 'miramiru') return input.dataset?.zhxMiramiruSlot !== undefined;
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
   // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
   // b 方案后与独立搜索框统一：打字不转换，候选面板点选时做「转换式搜索」。
@@ -894,13 +934,22 @@ function convertStandaloneForSearch(input, allowPartial = false, selectedNative 
       || (!context ? resolveByZh(query) : null)
       || (!context && allowPartial ? resolvePartialByZh(query) : null);
     native = edenMakerNative(input, native);
+    if (_activeSearchSiteId === 'miramiru') {
+      const rows = ecScopedSuggestions(query, input);
+      const matching = rows.filter(row => row.zh === query || row.native === selectedNative);
+      const row = matching.length === 1 ? matching[0] : (allowPartial && rows.length === 1 ? rows[0] : null);
+      if (!row) return false;
+      native = row.native;
+      if (!_ecPendingNativePick) armECNativePick(input, row);
+    }
     if (!native || native === query) return false;
     if (!rewriteInputNatively(input, native)) return false;
     commitEdenMakerCandidate(input, selectedNative);
+    if (_activeSearchSiteId === 'miramiru' && _ecPendingNativePick) attemptECNativePick(_ecPendingNativePick);
     // The EC vue-select model must remain synchronized with the dispatched
     // native search term. Silent delayed display restoration desynchronizes
     // its DOM value from Vue state and can override later user keystrokes.
-    if (!isECVueSearchInput(input) && _activeSearchSiteId !== 'eden' && _activeSearchSiteId !== 'xivc')
+    if (!isECVueSearchInput(input) && !['eden', 'xivc', 'miramiru'].includes(_activeSearchSiteId))
       restoreStandaloneDisplay(input, shown, native);
     return true;
   } catch { return false; /* 转换失败时保留站点原有搜索行为 */ }

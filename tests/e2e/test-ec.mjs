@@ -109,8 +109,53 @@ const rescanOrder = await c.eval(`({
   bulkText: document.querySelector('#ec-rescan-order').textContent,
 })`);
 
+const servers = await c.eval(`(() => {
+  const select = document.querySelector('#filter_server');
+  select.value = 'omega';
+  return {
+    options: [...select.options].map(o => [o.value, o.textContent]),
+    groups: [...select.querySelectorAll('optgroup')].map(g => g.label),
+    value: select.value,
+    author: document.querySelector('.c-glamour-grid-item-content-author').textContent,
+    subtitle: document.querySelector('a[href="/creator/92275"] .subtitle').textContent,
+    tooltip: document.querySelector('.tooltip-content').textContent,
+    alt: document.querySelector('.server-avatar').alt,
+    title: document.querySelector('.server-avatar').title,
+    description: document.querySelector('.s-glamour-description').textContent,
+    href: document.querySelector('a[href="/creator/92275"]').getAttribute('href'),
+  };
+})()`);
+// Hydration replaces only a nested text node; subsequent rescans must be idempotent.
+await c.eval(`document.querySelector('a[href="/creator/92275"] .subtitle').firstChild.nodeValue = '⧫ malboro'`);
+await c.waitFor(`document.querySelector('a[href="/creator/92275"] .subtitle').textContent === '⧫ Malboro（魔界花）'`);
+await c.eval(`document.querySelector('.server-avatar').title = 'Sezumi Bai-tsuki from «Phoenix»'`);
+await c.waitFor(`document.querySelector('.server-avatar').title === 'Sezumi Bai-tsuki from «Phoenix（不死鸟）»'`);
+const serverDynamic = await c.eval(`document.querySelector('a[href="/creator/92275"] .subtitle').textContent`);
+
 console.log('\n--- 断言 ---');
 const checks = [
+  ['说明页长段落容忍 HTML 换行，季节活动及规则正文翻译完整', await c.eval(`
+    document.querySelector('#seasonal-events').textContent === '季节活动'
+    && /^最后更新：.*2020.*1.*26/.test(document.querySelector('#policy-updated').textContent)
+    && document.querySelector('#about-copy').textContent.trim() === '不过，几个月之后，它才成为一个让玩家分享个人幻化、为自己的《最终幻想14》角色浏览海量穿搭的平台。'
+    && document.querySelector('#rules-copy').textContent === '使用尚未在日服、北美服或欧服版本中推出的物品'
+  `), null],
+  ['说明页行内链接保留结构和地址', await c.eval(`(() => {
+    const p = document.querySelector('#policy-contact');
+    return p.textContent === '如对本隐私政策有任何疑问，请 联系我们'
+      && p.querySelector('a').getAttribute('href') === 'mailto:example@example.com';
+  })()`), null],
+  ['服务器下拉使用 Wiki 双语名称且保留筛选值', JSON.stringify(servers.options) === JSON.stringify([
+    ['any', '全部服务器'], ['anima', 'Anima（阿尼玛）'], ['omega', 'Omega（欧米茄）'],
+    ['malboro', 'Malboro（魔界花）'], ['unknown', 'Unknown World'],
+  ]) && servers.value === 'omega' && servers.groups.join('|') === 'Mana（魔力）|Chaos（混沌）', servers],
+  ['服务器展示和提示统一双语，保留玩家名和链接',
+    servers.author === 'Omega Player «Phoenix（不死鸟）»' && servers.subtitle === '⧫ Omega（欧米茄）'
+    && servers.tooltip === 'Sezumi Bai-tsuki from ⧫ Omega（欧米茄）'
+    && servers.alt === 'Sezumi Bai-tsuki from «Omega（欧米茄）»'
+    && servers.title === servers.alt && servers.href === '/creator/92275'
+    && servers.description === 'Omega and Phoenix', servers],
+  ['服务器动态文本和提示更新后不重复追加译名', serverDynamic === '⧫ Malboro（魔界花）', serverDynamic],
   ['① 链接文本 → 中文', r.link && r.link.text === ZH, r.link && r.link.text],
   ['① 链接 href → wiki', r.link && r.link.href === WIKI, r.link && r.link.href],
   ['② 纯文本风 span → a 标签', r.plain && r.plain.tag === 'A', r.plain && r.plain.tag],

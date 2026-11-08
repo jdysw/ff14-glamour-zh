@@ -1,16 +1,17 @@
 import { DICT_MIRAMIRU } from '../core/data/dictionary.js';
 import { resolveByHash, resolveByName } from '../core/data/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
-import { createTranslationObserver } from '../core/observer.js';
+import { createTranslationObserver, observeBeforePaint } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { WIKI_ITEM } from '../core/constants.js';
+import { isAuthoredContent } from '../core/content-scope.js';
 
 export { trMiramiru, translateMiramiruPage, translateMiramiruTitle, startMiramiru };
 
 // Preserve React-owned elements and their children. Only replace text nodes and
 // the main equipment-name anchor's destination; secondary official/source links
 // and /items/<id> (other outfits using this equipment) retain their destinations.
-const SKIP = 'script,style,noscript,textarea,[contenteditable]:not([contenteditable="false"]),.zhx-skip';
+const SKIP = 'script,style,noscript,textarea,[contenteditable]:not([contenteditable="false"]),.zhx-skip,[data-zhx-chinese-suggest]';
 const ITEM_LINK = 'a.eorzeadb_link';
 const officialItem = /^https:\/\/(?:na|eu|jp|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
 const OFFICIAL_TAG_SUFFIX = /^(.{1,100}?)\s{0,8}(?:\((?:Official tag|公式タグ|공식 태그)\)|（(?:公式タグ|官方标签)）)$/u;
@@ -82,6 +83,17 @@ function translateMiramiruLink(element) {
 }
 
 function translateMiramiruAttributes(element) {
+  if (element.tagName === 'INPUT') {
+    const hint = element.getAttribute('placeholder') || '';
+    const slot = /^搜索(.+)装备$/.exec(trMiramiru(hint));
+    const groups = { '头部': 0, '身体': 1, '手部': 2, '腿部': 3, '脚部': 4, '主手': 5, '副手': 5,
+      '耳饰': 'ears', '项链': 'neck', '手镯': 'wrists', '戒指': 'rings', '右戒指': 'rings', '左戒指': 'rings',
+      '时尚配饰': 5, '面部配饰': 5 };
+    if (element.getAttribute('role') === 'combobox' && slot && Object.hasOwn(groups, slot[1]) && element.closest('[role="dialog"]')) {
+      const group = groups[slot[1]];
+      element.dataset.zhxMiramiruSlot = String(group);
+    } else delete element.dataset.zhxMiramiruSlot;
+  }
   for (const attr of ['placeholder', 'alt', 'title', 'aria-label']) {
     const raw = element.getAttribute(attr);
     if (!raw) continue;
@@ -98,6 +110,8 @@ function isMiramiruOfficialTag(element) {
 }
 
 function translateMiramiruText(raw, element) {
+  const option = element.closest('[role="option"]');
+  if (option && resolveByName(raw.trim())) option.dataset.zhxMiramiruNative = raw.trim();
   const officialTag = isMiramiruOfficialTag(element);
   const badge = element.closest('[data-slot="badge"],[role="option"] .truncate');
   if (badge?.textContent.trim().startsWith('#') && !officialTag) return raw;
@@ -127,6 +141,7 @@ function translateMiramiruText(raw, element) {
 function processMiramiruNode(node) {
   const element = node.nodeType === 1 ? node : node.parentElement;
   if (!element || element.closest(SKIP)) return;
+  if (isAuthoredContent(element, 'miramiru')) return;
   if (node.nodeType === 3) {
     const raw = node.nodeValue;
     const next = translateMiramiruText(raw, element);
@@ -171,6 +186,8 @@ function translateMiramiruTitle() {
 
 function startMiramiru() {
   safe(translateMiramiruPage, 'Miramiru 首屏')();
+  observeBeforePaint('[role="dialog"],[role="listbox"]', translateMiramiruPage,
+    ['placeholder', 'alt', 'title', 'aria-label', 'href']);
   createTranslationObserver({
     root: document.documentElement,
     characterData: true,

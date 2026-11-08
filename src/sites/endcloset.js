@@ -5,6 +5,7 @@ import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { startChineseSearch } from '../core/chinese-search.js';
+import { isAuthoredContent } from '../core/content-scope.js';
 
 export {
   _ecAcceptNode,
@@ -105,6 +106,7 @@ function _ecAcceptNode(n) {
   if (n.nodeType === 1) {
     if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
     if (n.closest?.(EC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+    if (isAuthoredContent(n, 'endcloset')) return NodeFilter.FILTER_REJECT;
   }
   return NodeFilter.FILTER_ACCEPT;
 }
@@ -133,6 +135,7 @@ function _ecAria(n) {
 }
 
 function _ecProcNode(n) {
+  if (isAuthoredContent(n.nodeType === 3 ? n.parentElement : n, 'endcloset')) return;
   if (n.nodeType === 3) {
     const raw = n.nodeValue;
     if (!raw?.trim()) return;

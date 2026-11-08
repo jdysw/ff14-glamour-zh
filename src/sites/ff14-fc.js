@@ -122,6 +122,10 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (!text) return text;
     const t0 = text.trim();
     if (!t0) return text;
+    const slide = /^Go to slide (\d+)$/.exec(t0);
+    if (slide) return text.replace(t0, '切换到第 ' + slide[1] + ' 张');
+    if (t0 === 'Previous slide') return text.replace(t0, '上一张图片');
+    if (t0 === 'Next slide') return text.replace(t0, '下一张图片');
     if (t0.length > 120) return text;
     const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
     const s1 = _trFCExact(text, t0);
@@ -210,6 +214,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
+      if (root.nodeType === 1 && _fcAcceptNode(root) !== NodeFilter.FILTER_REJECT) _procFCNode(root);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: _fcAcceptNode,
@@ -447,8 +452,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     bindFCWikiJump();
     safe(fixFCMenu, 'FC 菜单')();
     safe(bindFCBanners, 'FC 横幅')();
-    createTranslationObserver({ debounce: 300, handler(nodes) {
-      for (const n of nodes) {
+    createTranslationObserver({ debounce: 300, characterData: true, attributes: true,
+      attributeFilter: ['alt', 'title', 'aria-label', 'placeholder'], handler(nodes, texts) {
+      for (const n of [...nodes, ...texts]) {
         safe(translateFCPage, 'FC 局部')(n);
         safe(fixFCMenu, 'FC 菜单')(n);
         safe(bindFCBanners, 'FC 横幅')(n);

@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Miramiru equipment filter</title>
+<style>body{pointer-events:none}[role=dialog]{pointer-events:auto;position:fixed;right:0;top:0;width:320px;height:100vh;overflow:auto;background:white}</style>
+<div role="dialog">
+  <input id="general-query" placeholder="Search by title, gear, or tag">
+  <input id="tag-query" role="combobox" placeholder="Filter by tag">
+  <div><input id="miramiru-gear" role="combobox" placeholder="Search Head gear"></div>
+</div>
+<script>
+  const input=document.querySelector('#miramiru-gear');
+  let request=0;
+  input.addEventListener('input',()=>{
+    const generation=++request;
+    const query=input.value;
+    input.parentElement.querySelector('[role=listbox]')?.remove();
+    setTimeout(()=>{
+      if(generation!==request||!["Housemaid's Brim",'メイドホワイトブリム','메이드 머리띠'].includes(query))return;
+      const list=document.createElement('div');list.setAttribute('role','listbox');
+      const option=document.createElement('li');option.setAttribute('role','option');
+      const button=document.createElement('button');button.type='button';
+      const name=document.createElement('span');name.textContent=query;
+      const source=document.createElement('span');source.textContent='Other';button.append(name,source);
+      button.addEventListener('click',()=>{window.__selectedGear=query;input.value=query;list.remove()});
+      option.append(button);
+      list.append(option);input.parentElement.append(list);
+    },80);
+  });
+</script></html>
