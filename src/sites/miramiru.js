@@ -111,9 +111,13 @@ function isMiramiruOfficialTag(element) {
   return knownBadge || OFFICIAL_TAG_SUFFIX.test(label) || !!element.closest('[role="option"]')?.querySelector('svg.lucide-shield');
 }
 
-function translateMiramiruText(raw, element) {
+function markMiramiruNativeOption(raw, element) {
   const option = element.closest('[role="option"]');
   if (option && resolveByName(raw.trim())) option.dataset.zhxMiramiruNative = raw.trim();
+}
+
+function translateMiramiruText(raw, element) {
+  markMiramiruNativeOption(raw, element);
   const officialTag = isMiramiruOfficialTag(element);
   const badge = element.closest('[data-slot="badge"],[role="option"] .truncate');
   if (badge?.textContent.trim().startsWith('#') && !officialTag) return raw;
