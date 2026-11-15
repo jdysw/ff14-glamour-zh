@@ -55,10 +55,14 @@ async function main() {
   const latest = await github('/releases/latest');
   if (latest.id !== release.id) throw new Error('Only the latest stable release may be synchronized');
   const repository = await github('');
-  const result = await notifyGreasyFork({ release, repository,
+  await notifyGreasyFork({ release, repository,
     url: process.env.GREASYFORK_WEBHOOK_URL?.trim(), secret: process.env.GREASYFORK_WEBHOOK_SECRET?.trim() });
-  console.log(`Greasy Fork: synchronized ${release.tag_name}; scripts=${result.updated}`);
+  console.log('Greasy Fork: latest stable release synchronized successfully');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(error => { console.error(error.message); process.exitCode = 1; });
+  try { await main(); }
+  catch {
+    console.error('Greasy Fork notification failed. Check release metadata, webhook secrets and service availability.');
+    process.exitCode = 1;
+  }
 }
