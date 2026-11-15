@@ -161,3 +161,13 @@ jobs:
             --generate-notes \
             "${extra_args[@]}" \
             --repo "$GITHUB_REPOSITORY"
+
+      # Releases created with GITHUB_TOKEN do not trigger another release workflow.
+      - name: Synchronize the stable release to Greasy Fork
+        if: steps.current.outputs.skip == '0' && steps.chk.outputs.skip == '0' && steps.v.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ steps.v.outputs.ver }}
+          GREASYFORK_WEBHOOK_URL: ${{ secrets.GREASYFORK_WEBHOOK_URL }}
+          GREASYFORK_WEBHOOK_SECRET: ${{ secrets.GREASYFORK_WEBHOOK_SECRET }}
+        run: node build/userscript/notify-greasyfork.mjs

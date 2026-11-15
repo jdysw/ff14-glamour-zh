@@ -32,6 +32,7 @@ const SUITES = {
     "unit/test-data-refresh.mjs",
     "unit/test-runtime-v3.mjs",
     "unit/test-data-deploy.mjs",
+    "unit/test-greasyfork-release.mjs",
     "unit/test-dictionary.mjs",
     "unit/test-item-resolver.mjs",
     "unit/test-rebuild-db-classification.mjs",
