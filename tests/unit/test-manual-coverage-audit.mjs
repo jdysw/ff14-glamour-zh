@@ -14,7 +14,7 @@ assert.equal(C.siteFor('https://mirapri.ff14eden.work/#/'),'eden');
 assert.equal(C.siteFor('https://xivc.app/'),null);
 assert.equal(C.siteFor('https://evilxivc.app/'),null);
 assert.equal(C.allowedRoute('https://xivc.app/?token=secret&q=player&sort=popular#unknown'),false);
-assert.equal(C.urlKey('https://xivc.app/?token=secret&q=player&zhx-search=private&zhx-slot=body&sort=popular#unknown'),'https://xivc.app/');
+assert.throws(()=>C.urlKey('https://xivc.app/?token=secret&q=player&zhx-search=private&zhx-slot=body&sort=popular#unknown'),/unsupported https site/);
 assert.equal(C.allowedRoute('https://xivc.app/unknown'),false);
 assert.equal(C.urlKey('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private&token=secret'),'https://mirapri.ff14eden.work/#/components/popular-equipment');
 assert.notEqual(C.urlKey('https://mirapri.ff14eden.work/#/'),C.urlKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));
