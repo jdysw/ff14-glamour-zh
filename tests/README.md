@@ -47,6 +47,6 @@ Chrome 默认使用隔离的 9223 端口，runner 只关闭自己启动的实例
 - 把完整词典复制成期待表，再逐条断言同一份译文。少量独立样本代表边界，实际漏翻交给真实页面审计。
 - 为覆盖率数字重复执行同一批浏览器场景。独立安装包只检查内置数据和缓存隔离，不再重跑完整三语功能测试。
 
-站点测试包可用 `build:miramiru-test`、`build:eden-test`、`build:xivc-test` 生成；`build:font-test` 只测试共用字体。产物带当前 package 版本，正式版支持后停用独立测试版。
+站点测试包可用 `build:miramiru-test`、`build:eden-test` 生成；`build:font-test` 只测试共用字体。产物带当前 package 版本，正式版支持后停用独立测试版。
 
 临时日志、扫描结果与报告放在 `tests/.cache/` 或 `.cache/`，不把一次性验收记录提交成维护文档。可执行夹具和 `tests/benchmark/baseline/` 是回归输入，继续保留。

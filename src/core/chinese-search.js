@@ -11,7 +11,6 @@ const SEARCH_SITES = Object.freeze({
   ec: { vueSelect: true },
   endcloset: { vueSelect: false },
   eden: { vueSelect: false },
-  xivc: { vueSelect: false },
   miramiru: { vueSelect: false },
 });
 let _activeSearchSiteId = null;
@@ -850,7 +849,6 @@ function isStandaloneSearchInput(input) {
   if (STANDALONE_EXCLUDE_TYPES.has(type)) return false;
   if (input.disabled || input.readOnly) return false;
   if (_activeSearchSiteId === 'eden') return input.dataset?.zhxEdenSearch === '1';
-  if (_activeSearchSiteId === 'xivc') return input.dataset?.zhxXivcSearch === '1';
   if (_activeSearchSiteId === 'miramiru') return input.dataset?.zhxMiramiruSlot !== undefined;
   // 1.4.2 后续修复：vue-select 搜索输入框（EC 部位筛选器，如 "Any head"）——
   // 不依赖 form 归属：输入即触发站点装备检索（EC 实测 POST /gear/<slot>/search）；
@@ -950,7 +948,7 @@ function commitStandaloneNative(input, native, selectedNative, shown) {
     // The EC vue-select model must remain synchronized with the dispatched
     // native search term. Silent delayed display restoration desynchronizes
     // its DOM value from Vue state and can override later user keystrokes.
-    if (!isECVueSearchInput(input) && !['eden', 'xivc', 'miramiru'].includes(_activeSearchSiteId))
+    if (!isECVueSearchInput(input) && !['eden', 'miramiru'].includes(_activeSearchSiteId))
       restoreStandaloneDisplay(input, shown, native);
     return true;
 }

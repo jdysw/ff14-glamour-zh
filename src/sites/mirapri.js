@@ -30,16 +30,17 @@ export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translat
     '.comment-body',
   ].join(',');
   const MIRAPRI_TRANSLATABLE_ATTRS = ['title', 'alt', 'aria-label', 'placeholder'];
-  const isMirapriAuthored = (el) => !!el?.closest?.(MIRAPRI_AUTHORED_SEL);
+  const isMirapriAuthored = (el) => !!el?.closest?.(MIRAPRI_AUTHORED_SEL + ',[data-zhx-chinese-suggest],.zhx-skip');
   let busy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
   function tr(text) {
     if (!text) return text;
     const t = text.trim();
     if (!t) return text;
-    if (DICT[t]) {
+    const translated = DICT[t] || DICT[t.replace(/\s+/gu, ' ')];
+    if (translated) {
       const i = text.indexOf(t);
-      return text.slice(0, i) + DICT[t] + text.slice(i + t.length);
+      return text.slice(0, i) + translated + text.slice(i + t.length);
     }
     let out = text;
     for (const [re, to] of PATTERNS) out = out.replace(re, to);

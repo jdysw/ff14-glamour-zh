@@ -18,18 +18,13 @@ import { startUserTools } from './core/user-tools.js';
   const __site = findSite();
   const bootSite = () => {
     if (!__site) return;
-    if (__site.id !== 'xivc') safe(startUserTools, '脚本菜单')();
+    safe(startUserTools, '脚本菜单')();
     safe(ensureChineseFont, '中文字体')();
     safe(startChineseSearch, '中文装备搜索')(__site.id);
     try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); }
   };
   const bootWhenReady = () => {
-    // xivc 的局部观察器需要 React 已挂载的抽屉。
-    if (__site?.id === 'xivc' && !document.getElementById('drawer') && document.readyState !== 'complete') {
-      window.addEventListener('load', bootSite, { once: true });
-    } else {
-      bootSite();
-    }
+    bootSite();
   };
   if (document.readyState === 'loading') {
     if (__site) safe(() => __site.prepare(), '提前翻译装备')();

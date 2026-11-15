@@ -1,6 +1,6 @@
 # 架构与维护边界
 
-生产脚本保留十站现有功能，十个应用站点对应八个发布数据集。版本以 package.json 为准；当前协议与发布流程见 [V3 数据存储与发布](data-storage-optimization.md)。
+生产脚本启用九个应用站点，对应八个发布数据集；xivc 暂停支持。版本以 package.json 为准；当前协议与发布流程见 [V3 数据存储与发布](data-storage-optimization.md)。
 
 ## 运行时
 
@@ -34,4 +34,4 @@
 
 合并不自动创建脚本发行版；数据站按现有部署工作流执行。清单、摘要、字节数和平台路径验证仍是发布前提。
 
-站点维护说明：[Miramiru](miramiru-adaptation.md)、[Mirapri Eden](mirapri-eden-adaptation.md)、[xivc](xivc-adaptation.md)。
+站点维护说明：[Miramiru](miramiru-adaptation.md)、[Mirapri Eden](mirapri-eden-adaptation.md)。

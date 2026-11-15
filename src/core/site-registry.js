@@ -12,11 +12,10 @@ import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ro
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
 import { startMiramiru, translateMiramiruPage } from '../sites/miramiru.js';
 import { startEden, translateEdenPage } from '../sites/mirapri-eden.js';
-import { startXivc, translateXivcPage } from '../sites/xivc.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
 
 const FC_EARLY_EQUIPMENT = 'a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/playguide/db/item/"]';
-const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name)';
+const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .description > p';
 
   /* @zhixia:site-registry-start */
   /* ── Site Registry：站点启动行为与 DOM 适配器 ──────────────────
@@ -136,8 +135,6 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name)';
     }),
     createSiteAdapter({ id: 'eden', start: startEden,
       onDataReady() { translateEdenPage(); }, onPageShow: translateEdenPage }),
-    createSiteAdapter({ id: 'xivc', start: startXivc,
-      onDataReady() { translateXivcPage(); }, onPageShow: translateXivcPage }),
   ];
 
   // 只保留站点启动行为；站点选择和数据需求由纯策略模块负责。

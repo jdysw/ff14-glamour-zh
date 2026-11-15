@@ -237,7 +237,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       const hit = DICT_FC[pp];
       if (hit) return hit;
       const zh = lookupJp2Zh(pp.replace(/(の一覧|一覧|まとめ)$/, ''));
-      return zh || pp;
+      return zh || trFC(pp);
     });
     out = mapped.join(' | ');
     if (out !== t && out.length <= 80) document.title = out;

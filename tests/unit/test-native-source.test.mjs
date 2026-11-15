@@ -42,9 +42,8 @@ test('纯站点策略：站点配置、宿主边界和测试覆盖钩子', () =>
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'www.mirapri.com' };
-    assert.equal(SITE_POLICIES.length, 10);
-    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, 10);
-    assert.equal(DATA_POLICIES.length, 8);
+    assert.equal(new Set(SITE_POLICIES.map(x => x.id)).size, SITE_POLICIES.length, '站点 ID 不得重复');
+    assert.ok(DATA_POLICIES.every(site => !site.dataSite), '复用数据的站点不应生成重复数据集');
     assert.equal(Object.isFrozen(SITE_POLICIES), true);
     assert.equal(onHost('mirapri.com', 'mirapri.com'), true);
     assert.equal(onHost('www.mirapri.com', 'mirapri.com'), true);
@@ -55,10 +54,10 @@ test('纯站点策略：站点配置、宿主边界和测试覆盖钩子', () =>
     assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
 
     globalThis.location.hostname = 'xivc.app';
-    assert.equal(findSitePolicy()?.id, 'xivc');
-    assert.deepEqual(neededTables(), ['items', 'dict']);
-    assert.deepEqual(_siteIndexes(), ['nameMap', 'itemHash']);
-    assert.equal(SITE_POLICIES.find(x => x.id === 'xivc')?.dataSite, 'miramiru');
+    assert.equal(findSitePolicy(), null, 'xivc 支持暂时停用');
+    assert.deepEqual(neededTables(), []);
+    assert.equal(_siteIndexes(), null);
+    assert.equal(SITE_POLICIES.some(x => x.id === 'xivc'), false);
     assert.equal(DATA_POLICIES.some(x => x.id === 'xivc'), false);
     globalThis.location.hostname = 'evilxivc.app';
     assert.equal(findSitePolicy(), null);

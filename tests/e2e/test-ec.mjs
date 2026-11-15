@@ -236,28 +236,33 @@ try {
 async function withParsingSite(site, markup, verify) {
   let unblock;
   const gate = new Promise(resolve => { unblock = resolve; });
+  // Serve the full real cache over HTTP rather than a multi-megabyte CDP command.
+  const bootstrap = `
+    window.__zhxTestSite = ${JSON.stringify(site)};
+    window.__zhxDiagOn = true;
+    const local = new Map(Object.entries(${JSON.stringify(v3CacheEntries(site))}));
+    window.GM_getValue = (key, fallback) => local.get(key) ?? fallback;
+    window.addEventListener('DOMContentLoaded', () => { window.__fixtureDomReady = true; });
+    ${wrap(GF)}
+  `;
   const server = http.createServer(async (req, res) => {
+    if (req.url === '/bootstrap.js') {
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' }).end(bootstrap);
+      return;
+    }
     if (req.url === '/gate.js') {
       await gate;
       res.writeHead(200, { 'Content-Type': 'application/javascript' }).end('');
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      .end('<!doctype html><script defer src="/gate.js"></script>' + markup);
+      .end('<!doctype html><script src="/bootstrap.js"></script><script defer src="/gate.js"></script>' + markup);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   let streaming;
   try {
     streaming = await newPage(PORT);
     const { cdp } = streaming;
-    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `
-      window.__zhxTestSite = ${JSON.stringify(site)};
-      window.__zhxDiagOn = true;
-      const local = new Map(Object.entries(${JSON.stringify(v3CacheEntries(site))}));
-      window.GM_getValue = (key, fallback) => local.get(key) ?? fallback;
-      window.addEventListener('DOMContentLoaded', () => { window.__fixtureDomReady = true; });
-      ${wrap(GF)}
-    ` });
     await cdp.send('Page.navigate', { url: 'http://127.0.0.1:' + server.address().port + '/glamour/339340' });
     const waitForTranslation = (selector, name = ZH) => cdp.callFn(`async function (selector, name) {
     for (let i = 0; i < 80; i++) {

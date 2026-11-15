@@ -109,7 +109,8 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     const p = node.parentElement;
     if (p?.tagName !== 'P') return;
     const wrap = p.parentElement;
-    if (!wrap?.classList?.contains('item-name')) return;
+    const weapon = wrap?.classList?.contains('description') && wrap.parentElement?.classList?.contains('item-panel');
+    if (!wrap?.classList?.contains('item-name') && !weapon) return;
     // 排除部位名（<p class="region-name">頭防具</p>），只标记装备名
     if (p.classList.contains('region-name')) return;
     if (p.dataset.zhxItem === translated) return;
@@ -122,6 +123,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
   // 选择器只匹配 href 含 lodestone 的链接 → 替换后不再命中，天然幂等。
   // v1.2.x：子步骤拆出（降认知复杂度）
   function _aclItemNameEl(box) {
+    if (box.classList?.contains('item-panel')) return box.querySelector('.description > p');
     for (const p of box.querySelectorAll('p')) if (!p.classList.contains('region-name')) return p;
     return null;
   }
@@ -160,7 +162,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
   function replaceACLLodestone(rootArg) {
     const links = queryIn(localScope(rootArg), 'a.item-link-1[href*="lodestone"]');
     for (const a of links) {
-      const box = a.closest('.item-name');
+      const box = a.closest('.item-name,.item-panel');
       if (!box) continue;
       const nameEl = _aclItemNameEl(box);
       if (!nameEl) continue;
@@ -249,7 +251,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
   function translateACLTitle() {
     const t = document.title;
     if (!t || !/[\u3040-\u30ff]/.test(t)) return;
-    const parts = t.split('｜');
+    const parts = t.split(/[|｜]/);
     const nt = parts.map((x) => trACL(x.trim())).join(' ｜ ');
     if (nt && nt !== t && nt.length <= 160) document.title = nt;
   }

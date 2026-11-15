@@ -13,7 +13,6 @@
 // @match        https://ff14.huijiwiki.com/*
 // @match        https://miramiru.co/*
 // @match        https://mirapri.ff14eden.work/*
-// @match        https://xivc.app/*
 // @noframes
 // @run-at       document-start
 // @grant        GM_getValue
@@ -29,7 +28,7 @@
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
-    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden','xivc.app':'xivc'
+    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden'
   });
   const FORMAT = 'zhx-manual-audit-v2';
   const XIVC_EQUIPMENT_SLOTS = new Set(['Head','Body','Gloves','Legs','Feet','Facewear','头部','身体','手套','腿部','脚部','面饰']);
@@ -112,7 +111,7 @@
     if(el.closest?.('.unequip-card,.preset-actions'))return 'ui';
     return null;
   }
-  function allowedRoute(url){try{const u=new URL(url);const site=siteFor(url);return !ROUTE_BLOCK.test(u.pathname)&&(site!=='eden'||!!edenRoute(u))&&(site!=='xivc'||u.pathname==='/')}catch{return false}}
+  function allowedRoute(url){try{const u=new URL(url);const site=siteFor(url);return !!site&&!ROUTE_BLOCK.test(u.pathname)&&(site!=='eden'||!!edenRoute(u))&&(site!=='xivc'||u.pathname==='/')}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
   function classifyContext(el,kind,site,url){
