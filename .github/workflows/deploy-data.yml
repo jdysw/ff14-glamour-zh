@@ -46,8 +46,8 @@ jobs:
         env:
           # 固定上游提交及该提交树中 Item.csv 的 Git blob ID。
           # 提交、文件校验值必须一起更新，避免 CDN 返回未经审查的新数据。
-          DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
-          EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229
+          DATAMINING_COMMIT: 52a72b38aa2f967cab36867f34cd9bee9debb88b
+          EXPECTED_ITEM_BLOB: 40b6d77a89ba2ab3f69aa39b9f4772af6f9a10be
         run: |
           set -euo pipefail
           mkdir -p build/.cache/datamining

@@ -29,8 +29,8 @@ jobs:
           node-version: 22
       - name: 获取固定版本的装备部位 CSV 并校验 Git blob
         env:
-          DATAMINING_COMMIT: d9582a624eaec69d45649366dee801c2f3a6e9b3
-          EXPECTED_ITEM_BLOB: 7ba78567b60c763375f2f0596119cd5aff149229
+          DATAMINING_COMMIT: 52a72b38aa2f967cab36867f34cd9bee9debb88b
+          EXPECTED_ITEM_BLOB: 40b6d77a89ba2ab3f69aa39b9f4772af6f9a10be
         run: |
           set -euo pipefail
           mkdir -p build/.cache/datamining

@@ -5255,7 +5255,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 5317	长须豹的粗皮	Coeurl Skin	クァールの粗皮	커얼 생가죽				0
 5318	结实的筋腱	Animal Sinew	丈夫な腱	단단한 힘줄				0
 5319	柔韧的筋腱	Beast Sinew	しなやかな腱	부드러운 힘줄				0
-5320	蜘蛛筋腱	Diremite Sinew	ダイアマイトの腱	거미전갈 힘줄				0
+5320	蛛蝎筋腱	Diremite Sinew	ダイアマイトの腱	거미전갈 힘줄				0
 5321	骏鹰筋腱	Hippogryph Sinew	ヒッポグリフの腱	히포그리프 힘줄				0
 5322	盗龙筋腱	Raptor Sinew	ラプトルの腱	랍토르 힘줄				0
 5323	梦幻靴革料	Dream Boots Materials	ドリームブーツ生地	꿈빛 장화 원단				0
@@ -5280,7 +5280,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 5342	麦秆	Straw	麦わら	밀짚				0
 5343	草棉	Cotton Boll	草綿	목화				0
 5344	木棉	Cotton Stuffing	木綿	목화솜				0
-5345	蛛网	Diremite Web	ダイアマイトウェブ	거미전갈 그물				0
+5345	蛛蝎网	Diremite Web	ダイアマイトウェブ	거미전갈 그물				0
 5346	亚麻	Flax	亜麻	아마풀				0
 5347	绵羊毛	Fleece	フリース	양털				0
 5348	碧企鹅绵毛	Apkallu Down	アプカルの綿毛	아프칼루 솜털				0
@@ -12022,7 +12022,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 12230	深蓝晶簇	Deep-blue Cluster	紺碧のクラスター	감청색 클러스터				0
 12231	致远帆布	Farreach Canvas	ファーリーチカンバス	항해용 돛천				0
 12232	铁刀木木材	Cassia Lumber	タガヤサン材	철도목 목재				0
-12233	亚拉戈高位合成兽革	High Allagan Chimera Leather	ハイアラガンキメラレザー	상급 알라그 키메라 가죽				0
+12233	亚拉戈高位合成生物革	High Allagan Chimera Leather	ハイアラガンキメラレザー	상급 알라그 키메라 가죽				0
 12234	鲁冰花丛	Lupin Plot	ルピナスガーデン	루핀 꽃밭	0af57c12e31			0
 12235	探险家篝火	Explorer's Campfire	探検家の焚火炉	탐험가의 모닥불	2fddf7ef989			0
 12236	虫珀	Amber-encased Vilekin	虫入りアンバー	벌레 든 호박석	6ea89fcb416			0
@@ -12075,7 +12075,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 12283	贝希摩斯女王之枪	Spear of the Behemoth Queen	クィーンベヒーモス・スピア	여왕 베히모스 창	2e659137104	7218		1
 12284	最后的独角兽之弓	Longbow of the Last Unicorn	ラストユニコーン・ロングボウ	최후의 유니콘 장궁	77e1a9b1425	7219		1
 12285	堕龙之爪	Claws of the Falling Dragon	ディセンドドラゴン・クロー	강하하는 드래곤 서슬발톱	ccb0d896b03	7220		1
-12286	贝希摩斯领主之剑	Greatsword of the Behemoth King	キングベヒーモス・グレートソード	대왕 베히모스 그레이트소드	bf8de0698c4	7221		1
+12286	贝希摩斯王之巨剑	Greatsword of the Behemoth King	キングベヒーモス・グレートソード	대왕 베히모스 그레이트소드	bf8de0698c4	7221		1
 12287	最后的独角兽之火枪	Musketoon of the Last Unicorn	ラストユニコーン・マスケトン	최후의 유니콘 단총	4a0e9dc35ba	7222		1
 12288	白狮鹫之杖	Cane of the White Griffin	ホワイトグリフィン・ケーン	하얀 그리핀 지팡이	d0b44af5d99	7223		1
 12289	黑狮鹫之杖	Rod of the Black Griffin	ブラックグリフィン・ロッド	검은 그리핀 주술봉	0e6204c7bc5	7224		1
@@ -15339,7 +15339,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 15738	烹调所需品	Mogstew Miscellany	調理不足品	요리용 물품	9963dd88767			0
 15739	雕像样本	Moogle Statuette	彫像見本品	조각상 견본	86455e42f3f			0
 15740	飞空艇模型	Makeshift Toy Airship	飛空艇模型	비공정 모형	785907ee22b			0
-15741	龙鳞锉刀	Dragonscale Rasp	竜鱗ヤスリ	용비늘 줄톱	d9bf9ca6685			0
+15741	龙鳞锉刀	Dragonscale Rasp	竜鱗ヤスリ	용비늘 줄판	d9bf9ca6685			0
 15742	云海钓饵	Cloudfish Lure	雲海釣餌	구름바다 미끼	35cb83d2e2e			0
 15743	晚餐所需品	Ishgardian Cuisine Miscellany	晩餐不足品	만찬용 물품	ed7437d6903			0
 15744	卷扬机部件	Treadwheel Crane Components	巻き上げ機部材	도르래 부재	6adf9ad22bd			0
@@ -15365,7 +15365,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 15764	烹调所需品的材料	Mogstew Miscellany Materials	調理不足品の材料	요리용 물품 재료	7202b294632			0
 15765	雕像样本的材料	Moogle Statuette Materials	彫像見本品の材料	조각상 견본 재료	240272cfae0			0
 15766	飞空艇模型的材料	Makeshift Toy Airship Materials	飛空艇模型の材料	비공정 모형 재료	d78f63cb911			0
-15767	龙鳞锉刀的材料	Dragonscale Rasp Materials	竜鱗ヤスリの材料	용비늘 줄톱 재료	01fbb1fa332			0
+15767	龙鳞锉刀的材料	Dragonscale Rasp Materials	竜鱗ヤスリの材料	용비늘 줄판 재료	01fbb1fa332			0
 15768	云海钓饵的材料	Cloudfish Tackle Materials	雲海釣餌の材料	구름바다 미끼 재료	e138c607796			0
 15769	晚餐所需品的材料	Ishgardian Cuisine Miscellany Materials	晩餐不足品の材料	만찬용 물품 재료	a353bb3ef73			0
 15770	卷扬机部件的材料	Treadwheel Crane Component Materials	巻き上げ機部材の材料	도르래 부재 재료	07ae513a0af			0
@@ -45414,6 +45414,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 46783	尤卡巨人玩偶	Wind-up Yok Huy	マメット・ヨカフイ	요카후이 인형	ed0f7fc6c18			0
 46784	蟑虫	Oglop	ブリ虫	바벌레	cfbdc6f8470			0
 46785	迷你菲奥·乌儿	Wind-up Feo Ul	マメット・フェオ＝ウル	페오 울 인형	77bb613bcd1			0
+46786	转梦兽	Dreambringer	ユメマワシ	꿈나르미				0
 46787	仙子阳伞	Pixie Parasol	ピクシーパラソル	픽시 우산	089d11d3148	26796		1
 46788	泡狐龙猫花伞	Mizutsune Parasol	ミツネネコ華傘	미츠네고양이꽃우산	bed80e5da77	26795		1
 46789	死暗装甲	Barding of the Dead	ネクロン・バード	죽음의 갑주	4236a385424			1
@@ -48398,7 +48399,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 49807	科纳格壶：粘液怪	Slime Gourd	コルナゴの壺:スライム	코르나고 항아리: 슬라임				0
 49808	科纳格壶：无头骑士	Dullahan Gourd	コルナゴの壺:デュラハン	코르나고 항아리: 둘라한				0
 49809	科纳格壶：巨虫	Worm Gourd	コルナゴの壺:ジャイアントウォーム	코르나고 항아리: 거대지렁이				0
-49810	科纳格壶：烈阳火蛟	Drake Gourd	コルナゴの壺:ドレイク	코르나고 항아리: 도마뱀				0
+49810	科纳格壶：火蛟	Drake Gourd	コルナゴの壺:ドレイク	코르나고 항아리: 도마뱀				0
 49811	科纳格壶：灵蚁	Antling Gourd	コルナゴの壺:アントリング	코르나고 항아리: 거대개미				0
 49812	科纳格壶：奇美拉	Chimera Gourd	コルナゴの壺:キマイラ	코르나고 항아리: 키마이라				0
 49813	科纳格壶：海德拉	Hydra Gourd	コルナゴの壺:ハイドラ	코르나고 항아리: 하이드라				0
@@ -48406,7 +48407,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 49815	科纳格壶：腐坏古菩猩猩	Rotting Goobbue Gourd	コルナゴの壺:ロッティング・グゥーブー	코르나고 항아리: 부패한 구부				0
 49816	科纳格壶：祖	Zu Gourd	コルナゴの壺:ズー	코르나고 항아리: 즈				0
 49817	科纳格壶：寒冰巨像	Ice Golem Gourd	コルナゴの壺:アイスゴーレム	코르나고 항아리: 얼음 골렘				0
-49818	科纳格壶：真红龙虾	Karlabos Gourd	コルナゴの壺:カーラボス	코르나고 항아리: 칼라보스				0
+49818	科纳格壶：龙虾	Karlabos Gourd	コルナゴの壺:カーラボス	코르나고 항아리: 칼라보스				0
 49819	科纳格壶：大王花	Rafflesia Gourd	コルナゴの壺:ラフレシア	코르나고 항아리: 라플레시아				0
 49820	科纳格壶：贝希摩斯	Behemoth Gourd	コルナゴの壺:ベヒーモス	코르나고 항아리: 베히모스				0
 49821	勇敢牧羊犬	Gallant Shepherd	ブレイブ・シェパード	용맹한 셰퍼드	620b9826ebc			0
@@ -49852,6 +49853,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 51265	永护地毯	Everkeep Rug	エバーキープ・ラグ	에버킵 깔개	4dfb31d6c5d			0
 51266	永护厨台	Everkeep Kitchen Counter	エバーキープ・キッチンカウンター	에버킵 조리대	9c8ac246a7a			0
 51267	永护隔离墙	Everkeep Partition	エバーキープ・パーティション	에버킵 칸막이	18ecdd2a072			0
+51268	礼物箱	Wrapped Gift	ギフトボックス	증정품 상자				0
 51269	花园装饰彩灯	Garden Mood Lighting	ガーデン・パーティライト	정원 축제등	5c579ad6209			0
 51270	花园水渠	Garden Canal	ガーデン・カナル	정원 수로	3994cd98878			0
 51271	半圆花园舞台	Semicircular Outdoor Stage	セミサークル・ガーデンステージ	반원형 화단 무대	cc77449246c			0
@@ -51070,7 +51072,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 52505	高纯度树脂珠宝	Purified Jewel Resin	高純度ジュエルレジン	고순도 보석 수지				0
 52506	统一规格的强化木材	Standard Reinforced Lumber	統一規格の強化木材	통일 규격 강화 목재				0
 52507	统一规格的高密度合板	Standard High-density Plywood	統一規格の高密度合板	통일 규격 고밀도 합판				0
-52508	统一规格的树脂球	Standard Resin Pole	統一規格の樹脂ポール	통일 규격 수지 막대				0
+52508	统一规格的树脂杆	Standard Resin Pole	統一規格の樹脂ポール	통일 규격 수지 막대				0
 52509	基地沙发	Habitat Sofa	基地生活用のソファ	기지 생활용 안락의자				0
 52510	宇宙探索用的加工短靴	Survey Boots	惑星探索用の加工ブーツ	행성 탐색용 가공 장화				0
 52511	搬运用的上级捆包物资	Superior Freight Component	搬出用の上級梱包資材	반출용 상급 포장 자재				0
@@ -51223,6 +51225,7 @@ key	zh	en	ja	ko	hash	ecid	alias	glam
 52658	零点打底裤	Zero's Luminary Breeches	ゼロルミナリー・ボトム	제로 광명 하의	70d7e615ba8	27956		1
 52659	零点锁甲靴	Zero's Luminary Sollerets	ゼロルミナリー・ソルレット	제로 광명 쇠구두	126279cce3d	27984		1
 52660	零点套装	Zero's Luminary Attire	ゼロルミナリー・アタイア	제로 광명 의상				0
+52661	金曦冒险录·银冬将至	Tales of Adventure: Winter's Prelude	黄金の冒険録:白銀への道	황금의 모험록: 백은에 이르는 길				0
 52712	色素	All-purpose Pigment	ピグメント	안료	2e956a2e2d5			0
 -	稀少神话神典石		希少トームストーン:神話					0
 -	稀少战记神典石		希少トームストーン:戦記					0
