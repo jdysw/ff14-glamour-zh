@@ -34,9 +34,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/.cache/datamining
-          curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
-            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
-            --output build/.cache/datamining/en-Item.csv
+          # 固定提交的原始文件优先；CDN 暂时拒绝请求时不应阻断常规数据更新。
+          if ! curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 20 --max-time 240 \
+            "https://raw.githubusercontent.com/xivapi/ffxiv-datamining/${DATAMINING_COMMIT}/csv/en/Item.csv" \
+            --output build/.cache/datamining/en-Item.csv; then
+            curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 20 --max-time 240 \
+              "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
+              --output build/.cache/datamining/en-Item.csv
+          fi
           test "$(git hash-object build/.cache/datamining/en-Item.csv)" = "$EXPECTED_ITEM_BLOB"
       - name: 生成真实 V3 产物
         env:

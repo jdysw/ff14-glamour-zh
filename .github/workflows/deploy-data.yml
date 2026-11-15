@@ -51,9 +51,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/.cache/datamining
-          curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 240 \
-            "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
-            --output build/.cache/datamining/en-Item.csv
+          # 固定提交的原始文件优先；CDN 暂时拒绝请求时不应阻断常规数据更新。
+          if ! curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 20 --max-time 240 \
+            "https://raw.githubusercontent.com/xivapi/ffxiv-datamining/${DATAMINING_COMMIT}/csv/en/Item.csv" \
+            --output build/.cache/datamining/en-Item.csv; then
+            curl --fail --location --silent --show-error --retry 3 --retry-all-errors --connect-timeout 20 --max-time 240 \
+              "https://cdn.jsdelivr.net/gh/xivapi/ffxiv-datamining@${DATAMINING_COMMIT}/csv/en/Item.csv" \
+              --output build/.cache/datamining/en-Item.csv
+          fi
           test -s build/.cache/datamining/en-Item.csv
           # Git blob ID 校验文件完整字节，与上述固定提交树中的对象一致。
           actual_blob="$(git hash-object build/.cache/datamining/en-Item.csv)"
