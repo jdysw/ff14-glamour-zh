@@ -3,6 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Window as TestWindow} from 'happy-dom';
+import { isAuthoredContent } from '../../src/core/content-scope.js';
+import { translateECPage } from '../../src/sites/eorzea-collection.js';
+import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
 import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
@@ -14,6 +17,37 @@ function createTestDom(markup) {
   host.document.write(markup);
   return host;
 }
+
+test('实站回归：候选原名、指南空白与概念卡片标题保持正确边界', () => {
+  const previous = Object.fromEntries(['document','location','window','NodeFilter'].map(k=>[k,globalThis[k]]));
+  const dom = createTestDom('<div data-zhx-chinese-suggest><button role="option"><span>幻境意象御敌套装</span><span id="native">Phantom Vision Fending</span></button></div><div class="group cursor-pointer"><img alt="Grisly Bear Hood"><div><h3>Grisly Bear Hood</h3><p>2 outfits</p></div></div><p id="equipment">Grisly Bear Hood</p>');
+  try {
+    globalThis.document=dom.document; globalThis.NodeFilter=dom.NodeFilter;
+    globalThis.window=dom; globalThis.location={pathname:'/gearsets'};
+    translateECPage();
+    assert.equal(dom.document.querySelector('#native').textContent,'Phantom Vision Fending');
+    const cardTitle=dom.document.querySelector('h3');
+    assert.equal(isAuthoredContent(cardTitle,'endcloset'),true);
+    assert.equal(isAuthoredContent(dom.document.querySelector('img'),'endcloset'),true);
+    assert.equal(isAuthoredContent(dom.document.querySelector('p'),'endcloset'),false,'穿搭数量仍属于官方界面');
+    assert.equal(isAuthoredContent(dom.document.querySelector('#equipment'),'endcloset'),false,'普通装备名称仍可翻译');
+    assert.equal(tr('①\u00a0正面全身画像は全身が写っていて、ミラプリが分かりやすいものを選択！'),'① 正面全身图应清晰展示整套幻化！');
+    assert.equal(tr('しましょう。\n            また、ミラプリギャラリーサイトとして利用していただきたいため、過度な加工や目立つテキストの配置を行った画像をメインに設定することはお控えください。'),'并请尽量避免将过度修图或添加醒目文字的图片设为主图，以便大家正常欣赏幻化。');
+    dom.__zhxTestSite='collection';
+    _applyV3({candidatePolicy:1,names:'ブレイズグローリー\t女王之荣光\t1\t0'});
+    dom.document.title='ブレイズグローリー | FFXIV WEAPON COLLECTION';
+    dom.document.body.innerHTML='<div class="item-panel"><div class="name"><p>両手槍</p></div><div class="description"><p>ブレイズグローリー</p></div><a class="item-link-1" href="http://jp.finalfantasyxiv.com/lodestone/playguide/db/item/76f2f7502ee/"><img></a></div><div class="item-panel"><div class="description"><p>架空の未知武器</p></div><a class="item-link-1" href="http://jp.finalfantasyxiv.com/lodestone/playguide/db/item/unknown/"></a></div>';
+    translateACLPage();translateACLTitle();
+    const weapon=dom.document.querySelector('.item-panel');
+    assert.equal(weapon.querySelector('.description p').dataset.zhxItem,'女王之荣光');
+    assert.equal(decodeURIComponent(weapon.querySelector('a').href),'https://ff14.huijiwiki.com/wiki/物品:女王之荣光');
+    assert.ok(dom.document.title.startsWith('女王之荣光'));
+    assert.ok(dom.document.querySelector('.item-panel:last-child a').href.includes('lodestone'),'未知武器保留原链接');
+  } finally {
+    for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
+    dom.happyDOM.abort();
+  }
+});
 
 test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容边界', async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver'].map(k=>[k,globalThis[k]]));
@@ -260,7 +294,7 @@ import {
 } from '../../src/sites/huiji-wiki.js';
 import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data/data-manager.js';
 
-test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', async () => {
+test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', { skip: 'xivc 支持暂时停用' }, async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver','setTimeout','clearTimeout']
     .map(key=>[key,globalThis[key]]));
   const dom = createTestDom('<html><head></head><body><div id="app">'

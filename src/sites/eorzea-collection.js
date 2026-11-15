@@ -683,6 +683,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   // 用户产出的内容：绝不翻译
   const EC_SKIP_SEL = [
+    '[data-zhx-chinese-suggest]',
+    '.zhx-skip',
     '.c-glamour-grid-item-content-title',
     '.c-glamour-grid-item-content-author',
     '[class*="s-glamour-description"]',

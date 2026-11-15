@@ -4,6 +4,11 @@ const AUTHORED = '.post-title,.post-content,.post-author,.post-user-name,.post-b
     '[class*="creatorComment"],[data-user-content],[contenteditable]:not([contenteditable="false"])';
 
 function isEndClosetAuthored(element) {
+  // Concept cards use creator titles even when the title matches an item name.
+  const card = element.closest('.group.cursor-pointer');
+  if (card?.querySelector('h3') && card.querySelector('img')) {
+    if (element.closest('h3') || element.tagName === 'IMG') return true;
+  }
   if (element.closest('.whitespace-pre-wrap,.whitespace-pre-line')) return true;
   const author = element.closest('button[title]');
   return !!author && /^(?:作者|작성자|Author)\s*[:：]/i.test(author.title)

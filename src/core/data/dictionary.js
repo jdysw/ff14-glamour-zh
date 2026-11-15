@@ -1395,6 +1395,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'xivc:No items available.': '没有可用装备。',
     'xivc:Unlock': '解锁',
     'eden:記載されている会社名・製品名・システム名などは、各社の商標、または登録商標です。': '文中记载的公司名、产品名和系统名等，均为各公司的商标或注册商标。',
+    'eden:基準色を選ぶと、近い順で10件表示します。': '选择基准颜色后，将按相似程度显示最接近的 10 种染剂。',
   };
 
   /* =====================================================================
@@ -2367,6 +2368,15 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'contact us': '联系我们',
     ', the Creator': '，网站创始人',
     'Our past': '曾经的',
+    'VERSIONS': '不同版本',
+    '- Exchanged using': '－兑换所需',
+    '- Upgraded by': '－强化 NPC',
+    'Phantom Vision +1': '幻境意象 +1',
+    'Phantom Vision +2': '幻境意象 +2',
+    'Phantom Vision +3': '幻境意象 +3',
+    'Versions': '不同版本',
+    'Exchanged using': '兑换所需',
+    'Upgraded by': '强化 NPC',
   };
 
   /* =====================================================================
@@ -3120,6 +3130,15 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     '歴代': '历届',
     '見た目': '外观',
     '無人島で入手できる': '可在无人岛获得的',
+    'CONTENTS': '目录',
+    'Detail': '详情',
+    'How to get': '获取方式',
+    'CLOSE': '收起',
+    'PREV': '上一篇',
+    'ブレイドバン': '麻花辫丸子头',
+    'ヘアカタログ:ブレイドバンについて': '关于麻花辫丸子头发型',
+    'ヘアカタログ:ブレイドバンの入手方法は？': '如何获得麻花辫丸子头发型？',
+    '男性・他種族の見た目も、上のボタンで切り替えて見られます！': '点击上方按钮，也可以查看男性角色和其他种族的外观！',
   };
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 data/dictionaries/dict-ronka.json 注入）
@@ -3571,6 +3590,15 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'job:btn': '园艺工',
     'job:fsh': '捕鱼人',
     '新生から黄金まで、全てのシリーズ装備を掲載中。': '收录从《重生之境》到《黄金的遗产》的全部系列装备。',
+    'Home': '首页',
+    'Top': '顶部',
+    '戦': '战',
+    '竜': '龙',
+    '機': '机',
+    '踊': '舞',
+    '黒': '黑',
+    'アマコレ': '防具收藏站',
+    'Clear': '清空',
   };
 
   // ⚠️ 自动生成（data/dictionaries/dict-miramiru.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建

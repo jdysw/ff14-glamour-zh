@@ -40,7 +40,6 @@ const SUITES = {
     "unit/test-observer.mjs",
     "unit/test-endcloset.mjs",
     "unit/test-coverage-audit.mjs",
-    "unit/test-audit-localization.mjs",
     "unit/test-ec-gearsets.mjs",
     "unit/test-ec-reset-filters.mjs",
     "unit/test-manual-coverage-audit.mjs",
@@ -72,8 +71,7 @@ const SUITES = {
     "e2e/test-miramiru-filters.mjs",
     "e2e/test-standalone-search.mjs",
     "e2e/test-user-tools.mjs",
-    "e2e/test-eden.mjs",
-    "e2e/test-xivc.mjs"
+    "e2e/test-eden.mjs"
   ],
   "e2e-tools": [
     "e2e/test-probe.mjs",

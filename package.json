@@ -28,7 +28,6 @@
     "check:deps": "node build/userscript/verify-dependencies.mjs",
     "build:miramiru-test": "node build/userscript/build.mjs && node build/userscript/make-site-test.mjs miramiru",
     "build:eden-test": "node build/userscript/build.mjs && node build/userscript/make-site-test.mjs eden",
-    "build:xivc-test": "node build/userscript/build.mjs && node build/userscript/make-site-test.mjs xivc",
     "build:font-test": "node build/userscript/build.mjs && node build/userscript/make-font-test.mjs",
     "test:build": "node tests/run.mjs --suite=build",
     "test:experimental": "node tests/run.mjs --suite=experimental"

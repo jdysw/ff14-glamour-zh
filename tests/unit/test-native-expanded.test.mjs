@@ -55,10 +55,10 @@ test('真实中文搜索模块：输入筛选、查询判定和 URL 保留有效
   if (typeof document === 'undefined') assert.equal(startChineseSearch('mirapri'), undefined);
 });
 
-test('真实站点注册：十站生命周期、异常隔离与域名识别', () => {
-  assert.equal(SITE_REGISTRY.length, 10);
+test('真实站点注册：九站生命周期、异常隔离与域名识别', () => {
+  assert.equal(SITE_REGISTRY.length, 9);
   assert.deepEqual(SITE_REGISTRY.map(row => row.id),
-    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'eden', 'xivc']);
+    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'eden']);
   const events = [];
   const adapter = createSiteAdapter({
     id: 'mirapri',
