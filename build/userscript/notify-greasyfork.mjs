@@ -56,7 +56,7 @@ async function main() {
   if (latest.id !== release.id) throw new Error('Only the latest stable release may be synchronized');
   const repository = await github('');
   const result = await notifyGreasyFork({ release, repository,
-    url: process.env.GREASYFORK_WEBHOOK_URL, secret: process.env.GREASYFORK_WEBHOOK_SECRET });
+    url: process.env.GREASYFORK_WEBHOOK_URL?.trim(), secret: process.env.GREASYFORK_WEBHOOK_SECRET?.trim() });
   console.log(`Greasy Fork: synchronized ${release.tag_name}; scripts=${result.updated}`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
