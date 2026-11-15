@@ -34,6 +34,9 @@ jobs:
       - name: 安装依赖（锁文件）
         run: npm ci
 
+      - name: 验证 Greasy Fork 正式版通知过滤
+        run: node tests/unit/test-greasyfork-release.mjs
+
       - name: 数据文件校验
         run: npm run validate:data
 
