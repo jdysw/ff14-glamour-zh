@@ -827,11 +827,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
   // 匹配度在每个装备部位内计算：精确 / 正式名前缀 / 正式名包含 /
-  // 别名前缀 / 别名包含；非匹配项返回 -1。
-  function _irSuggestionScore(name, query, kind) {
+  // 别名前缀 / 别名包含 / 正式名多词 / 别名多词；非匹配项返回 -1。
+  function _irSuggestionScore(name, query, kind, terms) {
     if (name === query) return 0;
     if (name.startsWith(query)) return kind === 0 ? 1 : 3;
     if (name.includes(query)) return kind === 0 ? 2 : 4;
+    if (terms.length > 1 && terms.every(term => name.includes(term))) return 5 + kind;
     return -1;
   }
 
@@ -841,8 +842,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
   function _irSuggestionCollect(buckets, query, kind, limit, map, scope, terms) {
     for (const name of _irSearchContainsCandidates(query, kind, terms)) {
-      let score = _irSuggestionScore(name, query, kind);
-      if (score < 0 && terms.length > 1 && terms.every(term => name.includes(term))) score = 5 + kind;
+      const score = _irSuggestionScore(name, query, kind, terms);
       if (score < 0) continue;
       const native = map[name];
       if (!native) continue;

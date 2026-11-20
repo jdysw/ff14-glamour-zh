@@ -133,19 +133,21 @@ function ecSearchContext(input) {
   return accessoryPage ? { kind: 'accessories' } : null;
 }
 
-function ecScopedSuggestions(query, input) {
-  if (_activeSearchSiteId === 'miramiru') {
-    const key = input.dataset.zhxMiramiruSlot;
-    const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
-    const rows = new Map();
-    const language = miramiruLanguage();
-    for (const row of suggestByZh(query, 0, slot)) {
-      const zh = resolveByName(row.native) || row.zh;
-      const native = itemNames(zh)[language];
-      if (native && !rows.has(native)) rows.set(native, { zh, native });
-    }
-    return [...rows.values()];
+function miramiruScopedSuggestions(query, input) {
+  const key = input.dataset.zhxMiramiruSlot;
+  const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
+  const rows = new Map();
+  const language = miramiruLanguage();
+  for (const row of suggestByZh(query, 0, slot)) {
+    const zh = resolveByName(row.native) || row.zh;
+    const native = itemNames(zh)[language];
+    if (native && !rows.has(native)) rows.set(native, { zh, native });
   }
+  return [...rows.values()];
+}
+
+function ecScopedSuggestions(query, input) {
+  if (_activeSearchSiteId === 'miramiru') return miramiruScopedSuggestions(query, input);
   const context = ecSearchContext(input);
   if (context?.kind === 'facewear') {
     const terms = query.split(/\s+/u);
@@ -680,6 +682,16 @@ function updateSuggestionActive(index) {
   }
 }
 
+function appendSelectionHint(input) {
+  const hint = document.createElement('div');
+  hint.className = 'zhx-suggest-hint';
+  hint.setAttribute('role', 'status');
+  hint.textContent = isECGearsetsSearchInput(input)
+    ? '匹配到多套套装，请选择一项后搜索。'
+    : '匹配到多件装备，请选择一项后搜索。';
+  _suggestBox.appendChild(hint);
+}
+
 function showSuggestions(input, needsSelection = false) {
   if (_activeSearchSiteId === 'miramiru' && document.activeElement !== input) { dismissSuggestions(); return; }
   if (!isSuggestibleInput(input) || !input.isConnected) {
@@ -746,15 +758,7 @@ function showSuggestions(input, needsSelection = false) {
   }
 
   _suggestBox.setAttribute('role', 'listbox');
-  if (needsSelection) {
-    const hint = document.createElement('div');
-    hint.className = 'zhx-suggest-hint';
-    hint.setAttribute('role', 'status');
-    hint.textContent = isECGearsetsSearchInput(input)
-      ? '匹配到多套套装，请选择一项后搜索。'
-      : '匹配到多件装备，请选择一项后搜索。';
-    _suggestBox.appendChild(hint);
-  }
+  if (needsSelection) appendSelectionHint(input);
   appendSuggestionBatch();
 
   input.setAttribute('aria-autocomplete', 'list');
