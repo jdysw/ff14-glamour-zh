@@ -571,18 +571,23 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       .replace(/[\s·・.,，、'’"（）()[\]【】_-]/gu, '').toLowerCase();
   }
 
-  function ecGearsetMatchesZh(query) {
+  function ecGearsetMatchesZh(query, multiword = false) {
     const key = ecGearsetNormalizedZh(query);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
-    const matching = ecGearsetCatalog().filter(row => ecGearsetNormalizedZh(row.zh).includes(key));
+    const terms = multiword ? String(query ?? '').normalize('NFKC').trim().split(/\s+/u)
+      .map(ecGearsetNormalizedZh).filter(Boolean) : [key];
+    const matchesName = name => {
+      const text = ecGearsetNormalizedZh(name);
+      return terms.every(term => text.includes(term));
+    };
+    const matching = ecGearsetCatalog().filter(row => matchesName(row.zh));
     // Stronger evidence always wins over provisional official game packages;
     // include alias matches before choosing the fallback candidate tier.
     const rows = matching.filter(row => !row.provisional);
     // 已核实的 EC 英文套装名/公共关键词，兼容用户实际输入的俗称与简繁体。
     // 去重使用英文原生名，避免常见别名与现有国服译名重复展示。
     for (const alias of EC_GEARSET_SEARCH_ALIASES) {
-      const matches = [alias.zh, ...alias.terms]
-        .some(term => ecGearsetNormalizedZh(term).includes(key));
+      const matches = [alias.zh, ...alias.terms].some(matchesName);
       if (matches && !rows.some(row => row.native === alias.native)) {
         rows.push({ native: alias.native, zh: alias.zh });
       }
@@ -608,11 +613,22 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   function resolveECGearsetSearch(query) {
+    if (/\s/u.test(String(query ?? '').trim())) {
+      const names = new Set(suggestECGearsetsByZh(query).map(row => row.native));
+      return names.size === 1 ? names.values().next().value : null;
+    }
     return ecGearsetCommonNative(ecGearsetMatchesZh(query));
   }
 
   function suggestECGearsetsByZh(query) {
-    return ecGearsetMatchesZh(query);
+    const direct = ecGearsetMatchesZh(query);
+    if (!/\s/u.test(String(query ?? '').trim())) return direct;
+    const seen = new Set(direct.map(row => row.native));
+    return direct.concat(ecGearsetMatchesZh(query, true).filter(row => {
+      if (seen.has(row.native)) return false;
+      seen.add(row.native);
+      return true;
+    }));
   }
 
   function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {

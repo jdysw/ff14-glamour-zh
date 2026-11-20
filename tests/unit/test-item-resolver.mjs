@@ -132,6 +132,20 @@ console.log('\n── B2：按真实装备部位优先，组内再按匹配度�
  eq('无旧部位元数据时安全退回原匹配排序',api.suggestByZh('装备')[0].zh,'装备');
 }
 
+{
+ const nameMap = {
+   exact: '星光 长袍', prefix: '星光 长袍改', middle: '改良星光 长袍',
+   loose: '长袍·星光', head: '星光礼帽', extra: '华丽礼服',
+ };
+ const glamMap = Object.fromEntries(Object.keys(nameMap).map(name => [name, '1']));
+ const api = buildResolver(mkEnv({ nameMap, glamMap, aliasMap: { '星光 长袍别称': ['华丽礼服'] } }));
+ api.__setSlots({ exact: 1, prefix: 1, middle: 1, loose: 1, extra: 1, head: 0 });
+ eq('多词结果排在连续正式名和连续别名之后，且保留部位限制',
+   api.suggestByZh('星光 长袍', 0, 1).map(row => row.native).join('|'),
+   'exact|prefix|middle|extra|loose');
+ eq('不跨名称或部位拼凑查询词', api.suggestByZh('星光 长袍', 0, 0).length, 0);
+}
+
 console.log('\n── B3：倒排索引保持匹配、排序和局部词提取契约 ──');
 {
  const entries = {};

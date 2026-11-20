@@ -2,8 +2,9 @@
 // 校验中文输入法组合态、候选空态、视口滚动、GET 与 React 独立框事件。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { _applyV3, dataInvalidate } from '../../src/core/data/data-manager.js';
+import { _applyV3, dataInvalidate, suggestByZh } from '../../src/core/data/data-manager.js';
 import { handleChineseSearchSubmit, startChineseSearch } from '../../src/core/chinese-search.js';
+import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
 const original = new Map([
   'window', 'document', 'location', 'FormData', 'setTimeout', 'clearTimeout',
@@ -235,6 +236,70 @@ test('独立搜索框：搜索按钮仅在显式提交时派发原生 input 并�
     assert.equal(field.events.length, 2, '独立搜索框 Enter 应和按钮一致执行转换');
     runTimers(0);
     assert.equal(field.value, '测试中文装备');
+  } finally {
+    globalThis.location = oldLocation;
+  }
+});
+
+test('真实 EC 词库支持跨片段装备和套装查询，多条命中须显式选择', () => {
+  const oldLocation = globalThis.location;
+  const { siteFiles } = readRuntimeV3('ec');
+  assert.equal(_applyV3({ candidatePolicy: 1,
+    ...Object.fromEntries(Object.entries(siteFiles).map(([name, file]) => [name, file.text])),
+  }), true);
+  const itemName = '宫廷爱人游击衬衫';
+  assert.ok(suggestByZh('宫廷爱人 衬衫').some(row => row.zh === itemName));
+  assert.ok(suggestByZh('衬衫 宫廷爱人').some(row => row.zh === itemName));
+  assert.ok(suggestByZh('游击衬衫').some(row => row.zh === itemName));
+  assert.deepEqual(suggestByZh('宫廷爱人 不存在词条'), []);
+  const native = "Courtly Lover's Shirt of Scouting";
+  assert.deepEqual(suggestByZh('宫廷爱人 衬衫', 1, new Set([native])).map(row => row.native), [native]);
+  assert.deepEqual(suggestByZh('宫廷爱人 衬衫', 1, new Set(["Courtly Lover's Hat of Scouting"])), []);
+  if (process.env.FF14_EQUIP_SLOTS_CSV) {
+    assert.ok(suggestByZh('宫廷爱人 衬衫', 0, 1).some(row => row.native === native));
+    assert.deepEqual(suggestByZh('宫廷爱人 衬衫', 0, 0), []);
+  }
+
+  const urls = [];
+  globalThis.location = {
+    hostname: 'ffxiv.eorzeacollection.com', pathname: '/gearsets',
+    href: 'https://ffxiv.eorzeacollection.com/gearsets?page=2&patch=7.5',
+    assign: url => urls.push(new URL(url)),
+  };
+  try {
+    const form = element('FORM');
+    const input = element('INPUT');
+    input.setAttribute('placeholder', '搜索…');
+    form.appendChild(input);
+    input.form = form;
+    globalThis.location.pathname = '/glamours';
+    input.value = '宫廷爱人 衬衫';
+    const itemSubmit = event(form);
+    handleChineseSearchSubmit(itemSubmit, 'ec');
+    assert.equal(itemSubmit.prevented, true);
+    assert.equal(input.value, '宫廷爱人 衬衫');
+    assert.equal(urls.length, 0);
+    globalThis.location.pathname = '/gearsets';
+    input.value = '套装 幻境';
+    fire('input', event(input));
+    runTimers(70);
+    const box = body.children.find(node => node.id === 'zhx-chinese-suggest-list');
+    assert.ok(box.querySelectorAll('button[data-zhx-index]').length > 1);
+    assert.equal(urls.length, 0);
+    const enter = event(input, 'Enter');
+    fire('keydown', enter);
+    assert.equal(enter.prevented, true);
+    const submit = event(form);
+    fire('submit', submit);
+    assert.equal(submit.prevented, true);
+    assert.equal(urls.length, 0);
+    assert.equal(input.value, '套装 幻境');
+    fire('keydown', event(input, 'ArrowDown'));
+    fire('keydown', event(input, 'Enter'));
+    assert.equal(urls.length, 1);
+    assert.match(urls[0].searchParams.get('search'), /Phantom/);
+    assert.equal(urls[0].searchParams.get('patch'), '7.5');
+    assert.equal(urls[0].searchParams.has('page'), false);
   } finally {
     globalThis.location = oldLocation;
   }
