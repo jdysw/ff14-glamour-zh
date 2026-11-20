@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { _applyV3, dataInvalidate, suggestByZh } from '../../src/core/data/data-manager.js';
 import { handleChineseSearchSubmit, startChineseSearch } from '../../src/core/chinese-search.js';
+import { suggestECGearsetsByZh } from '../../src/sites/eorzea-collection.js';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
 const original = new Map([
@@ -252,6 +253,8 @@ test('真实 EC 词库支持跨片段装备和套装查询，多条命中须显�
   assert.ok(suggestByZh('衬衫 宫廷爱人').some(row => row.zh === itemName));
   assert.ok(suggestByZh('游击衬衫').some(row => row.zh === itemName));
   assert.deepEqual(suggestByZh('宫廷爱人 不存在词条'), []);
+  assert.deepEqual(suggestECGearsetsByZh('御敌 幻境').map(row => row.native), ['Phantom Vision Fending'],
+    'the known EC title takes precedence over the inferred Phantom Fending query');
   const native = "Courtly Lover's Shirt of Scouting";
   assert.deepEqual(suggestByZh('宫廷爱人 衬衫', 1, new Set([native])).map(row => row.native), [native]);
   assert.deepEqual(suggestByZh('宫廷爱人 衬衫', 1, new Set(["Courtly Lover's Hat of Scouting"])), []);

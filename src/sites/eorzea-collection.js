@@ -332,8 +332,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   function ecGearsetAppendInferredRows(rows, nameIndex) {
     if (!nameIndex) return;
     const seen = new Set(rows.map(row => row.native));
+    // Truncating an item prefix can infer a second native title for a set we
+    // already know (Phantom Fending vs. Phantom Vision Fending).
+    const knownZh = new Set(rows.map(row => row.zh));
     const derived = [
-      ...inferECGearsetsFromItems(nameIndex),
+      ...inferECGearsetsFromItems(nameIndex).filter(row => !knownZh.has(row.zh)),
       ...ecGearsetOfficialVariantRows(nameIndex),
       ...ecGearsetOfficialOutfitRows(nameIndex),
     ];
