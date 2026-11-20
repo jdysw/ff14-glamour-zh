@@ -184,7 +184,9 @@ function requireMultiwordSelection(event, input) {
   if (!rows || rows.size < 2) return false;
   event.preventDefault();
   event.stopPropagation();
-  showSuggestions(input);
+  input.focus?.({ preventScroll: true });
+  hideSuggestions(true);
+  showSuggestions(input, true);
   return true;
 }
 
@@ -481,6 +483,7 @@ function ensureSuggestionStyle() {
     '[data-zhx-chinese-suggest] .zhx-suggest-zh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-native{margin-left:12px;overflow:hidden;color:#777;font-size:12px;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-empty{box-sizing:border-box;min-height:40px;padding:10px;color:#777;text-align:center;}',
+    '[data-zhx-chinese-suggest] .zhx-suggest-hint{padding:8px 10px;color:#444;border-bottom:1px solid #eee;}',
   ].join('');
   host.appendChild(style);
   _suggestStyleReady = true;
@@ -677,7 +680,7 @@ function updateSuggestionActive(index) {
   }
 }
 
-function showSuggestions(input) {
+function showSuggestions(input, needsSelection = false) {
   if (_activeSearchSiteId === 'miramiru' && document.activeElement !== input) { dismissSuggestions(); return; }
   if (!isSuggestibleInput(input) || !input.isConnected) {
     hideSuggestions(true);
@@ -699,7 +702,12 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = ecScopedSuggestions(query, input);
+  const seen = new Set();
+  const rows = ecScopedSuggestions(query, input).filter(row => {
+    if (seen.has(row.native)) return false;
+    seen.add(row.native);
+    return true;
+  });
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -738,6 +746,15 @@ function showSuggestions(input) {
   }
 
   _suggestBox.setAttribute('role', 'listbox');
+  if (needsSelection) {
+    const hint = document.createElement('div');
+    hint.className = 'zhx-suggest-hint';
+    hint.setAttribute('role', 'status');
+    hint.textContent = isECGearsetsSearchInput(input)
+      ? '匹配到多套套装，请选择一项后搜索。'
+      : '匹配到多件装备，请选择一项后搜索。';
+    _suggestBox.appendChild(hint);
+  }
   appendSuggestionBatch();
 
   input.setAttribute('aria-autocomplete', 'list');

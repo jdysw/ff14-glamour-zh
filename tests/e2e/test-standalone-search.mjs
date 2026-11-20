@@ -23,6 +23,35 @@ async function until(c,expression,label){
     inputs:[...document.querySelectorAll('input')].map(i=>({id:i.id,value:i.value,slot:i.dataset.zhxMiramiruSlot,placeholder:i.placeholder})),
     suggest:document.querySelector('#zhx-chinese-suggest-list')?.textContent,errors:window.__zhxErrs})`)));
 }
+async function checkMultiwordSelection(c, type, value) {
+  const query = '御敌 宫廷爱人';
+  const native = "Courtly Lover's Hairpin of Fending";
+  const candidates = '#zhx-chinese-suggest-list button[data-zhx-index]';
+  const readCandidates = `[...document.querySelectorAll(${JSON.stringify(candidates)})]
+    .map(option => option.querySelector('.zhx-suggest-native').textContent)`;
+  await c.eval('window.__inputs = []; window.__selectedGear = null');
+  await type(query);
+  await until(c, `${readCandidates}.includes(${JSON.stringify(native)})`, 'multiword head candidates');
+  const actual = await c.eval(readCandidates);
+  assert.deepEqual([...actual].sort(), [native, 'Augmented ' + native].sort(),
+    'The head picker must exclude the surcoats and duplicate native names');
+  assert.deepEqual(await c.eval('window.__inputs'), [query]);
+  const blocked = await c.eval(`!document.activeElement.dispatchEvent(
+    new KeyboardEvent('keydown', {key:'Enter',bubbles:true,cancelable:true}))`);
+  assert.equal(blocked, true);
+  assert.match(await c.eval("document.querySelector('.zhx-suggest-hint')?.textContent"), /请选/);
+  assert.equal(await value(), query);
+  assert.deepEqual(await c.eval('window.__inputs'), [query], 'Enter must not issue a native search');
+  await c.callFn(`function(selector, name) {
+    const option = [...document.querySelectorAll(selector)].find(row =>
+      row.querySelector('.zhx-suggest-native').textContent === name);
+    option.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,cancelable:true,pointerType:'touch'}));
+  }`, [candidates, native]);
+  await until(c, `window.__selectedGear === ${JSON.stringify(native)}`, 'multiword native option');
+  assert.deepEqual(await c.eval('window.__inputs'), [query, native]);
+  console.log('PASS multiword search: real translations, slot filtering, selection hint and native query');
+}
+
 for(const entry of cases){
   const page=await newPage(port);const c=page.cdp;
   try{
@@ -56,6 +85,7 @@ for(const entry of cases){
       if(entry.controlled){
         await until(c,`window.__selectedGear===${JSON.stringify(row[entry.column])}`,'native item selection');
         assert.equal(await value(),row[entry.column],'Controlled equipment picker retains its native model');
+        if (entry.language === 'en') await checkMultiwordSelection(c, type, value);
         await type('管家燕尾服');
         await until(c,`document.querySelector('#zhx-chinese-suggest-list')?.textContent==='未找到对应装备'`,'slot-filtered empty state');
         assert.equal(await c.eval(`document.querySelectorAll('#zhx-chinese-suggest-list button[data-zhx-index]').length`),0,'Head picker excludes body gear');

@@ -289,6 +289,9 @@ test('真实 EC 词库支持跨片段装备和套装查询，多条命中须显�
     const enter = event(input, 'Enter');
     fire('keydown', enter);
     assert.equal(enter.prevented, true);
+    const hint = box.children.find(node => node.className === 'zhx-suggest-hint');
+    assert.equal(hint?.getAttribute('role'), 'status');
+    assert.match(hint?.textContent, /多套套装.*请选择/);
     const submit = event(form);
     fire('submit', submit);
     assert.equal(submit.prevented, true);
