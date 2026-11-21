@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { newPage, closePage } from '../helpers/cdp.mjs';
+import { beginBrowserCoverage, endBrowserCoverage } from '../helpers/browser-coverage.mjs';
 import { fixtureUrl, readDist } from '../helpers/paths.mjs';
 
 const port = Number(process.env.ZHX_CDP_PORT || 9223);
@@ -66,6 +67,9 @@ try {
       [...panel.querySelectorAll('button')].find(button => button.textContent === '保存设置').click();
     }`, [key]);
     await cdp.waitFor("document.querySelector('#zhx-tools-panel [role=status]').textContent.includes('设置已保存')");
+    // Chromium drops compiled scripts on reload, so save the current execution first.
+    await endBrowserCoverage(cdp, `${page.target.id}-${key}`);
+    await beginBrowserCoverage(cdp);
     assert.deepEqual(await refreshAndRead(), expected, key);
   }
   console.log('PASS Wiki 阅读排版默认开启、分别关闭、刷新后持久化，窄屏宽图始终适配');

@@ -142,7 +142,17 @@ jobs:
           path: dist
 
       - name: 集成测试 A（wiki 夹具组）
+        env:
+          ZHX_E2E_COVERAGE_DIR: tests/.cache/e2e-coverage
         run: node tests/run.mjs --suite=wiki
+
+      - name: 上传 Wiki 浏览器实际执行覆盖率
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-source-wiki
+          path: tests/.cache/e2e-coverage
+          retention-days: 1
+          if-no-files-found: error
 
   integration-b:
     name: Integration B (Sites)
