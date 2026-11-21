@@ -42,6 +42,49 @@ function fitWikiFigures() {
   }
 }
 
+function styleWikiHeadings() {
+  const styleId = 'ff14-wiki-heading-style';
+  if (document.getElementById(styleId)) return;
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    #firstHeading > h1, h1#firstHeading {
+      font-size: clamp(1.875rem, 1.6rem + .8vw, 2.125rem);
+      font-weight: 650;
+      line-height: 1.25;
+    }
+    #wiki-body #mw-content-text > h2,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h2 {
+      padding-block: 26px 3px;
+      border-block-end: none;
+      color: inherit;
+      color: color-mix(in srgb, currentColor 87%, #b88b54);
+      font-size: clamp(1.3125rem, 1.25rem + .26vw, 1.5rem);
+      font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: .012em;
+    }
+    #wiki-body #mw-content-text > h3,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3 {
+      padding-block: 11px 5px;
+      color: inherit;
+      font-size: clamp(1.0625rem, 1rem + .14vw, 1.125rem);
+      font-weight: 600;
+      line-height: 1.45;
+    }
+    #wiki-body #mw-content-text > h3::before,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3::before {
+      content: none;
+    }
+    #wiki-body #mw-content-text > :is(h2,h3) > .mw-headline,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > :is(h2,h3) > .mw-headline {
+      font-size: inherit;
+      font-weight: inherit;
+    }
+  `;
+  document.head.append(style);
+}
+
 function plainItemText(item) {
   if (item.tagName !== 'LI' || item.attributes.length ||
     item.querySelector('ul, ol, dl, p, div, table, blockquote, figure, pre, hr')) {
@@ -145,19 +188,81 @@ function replaceWikiQuotes(article) {
   }
 }
 
-function indentWikiParagraphs(article) {
-  const needsIndent = [...article.querySelectorAll('p')].filter(paragraph => {
-    if (paragraph.closest(excluded + ', .boss-guide')) return false;
-    const visibleText = paragraph.innerText;
-    if (!visibleText.trim() || /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u.test(visibleText)) {
-      return false;
+const existingIndent = /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u;
+
+function startsNumberedStep(text) {
+  const line = text.trimStart();
+  return /^[①-⑳㉑-㉟㊱-㊿]/u.test(line) ||
+    /^[（(][0-9０-９一二三四五六七八九十]+[）)]/u.test(line) ||
+    /^[0-9０-９]{1,3}(?:[、)）]|[.．](?![0-9０-９]))/u.test(line) ||
+    /^[一二三四五六七八九十]+、/u.test(line);
+}
+
+function findParallelWikiTexts(article) {
+  const parallelTexts = new Set();
+  for (const content of article.querySelectorAll('.tab-content')) {
+    const tabs = content.previousElementSibling;
+    if (!tabs?.matches('.nav-tabs')) continue;
+    const labels = [...tabs.querySelectorAll('[role="tab"]')].map(tab => tab.textContent.trim());
+    const hasOriginal = labels.some(label => label.endsWith('原文'));
+    const hasTranslation = labels.some(label => ['译本', '译文', '直译'].some(suffix => label.endsWith(suffix)));
+    if (hasOriginal && hasTranslation) {
+      parallelTexts.add(content);
     }
+  }
+  return parallelTexts;
+}
 
-    return Number.parseFloat(getComputedStyle(paragraph).textIndent) === 0;
-  });
+function isNarrativeLine(line) {
+  const text = line.trim();
+  return text.length >= 24 && /[。！？]/u.test(text) && !itemLabel.test(text) && !startsNumberedStep(text);
+}
 
-  for (const paragraph of needsIndent) {
-    paragraph.style.textIndent = '2em';
+function wikiParagraphIndent(paragraph) {
+  const visibleText = paragraph.innerText;
+  if (!visibleText.trim() || existingIndent.test(visibleText) || startsNumberedStep(visibleText) ||
+      Number.parseFloat(getComputedStyle(paragraph).textIndent) !== 0) return '';
+
+  const hasBreak = !!paragraph.querySelector('br');
+  let indentEachLine = hasBreak && /^[\t ]*\n/u.test(visibleText);
+  if (hasBreak && visibleText.trim().includes('\n')) {
+    const lines = visibleText.split('\n').filter(line => line.trim());
+    // Breaks can separate prose paragraphs or preserve intentionally aligned lines.
+    if (!lines.every(isNarrativeLine)) return '';
+    indentEachLine = !lines.some(line => existingIndent.test(line));
+  }
+  return indentEachLine && CSS.supports('text-indent', '2em each-line') ? '2em each-line' : '2em';
+}
+
+function indentWikiParagraphs(article) {
+  const parallelTexts = findParallelWikiTexts(article);
+  const needsIndent = new Map();
+  for (const paragraph of article.querySelectorAll('p')) {
+    if (paragraph.closest(excluded + ', .boss-guide, .gallerytext, .thumbcaption, figcaption') ||
+        parallelTexts.has(paragraph.closest('.tab-content'))) continue;
+    const indent = wikiParagraphIndent(paragraph);
+    if (indent) needsIndent.set(paragraph, indent);
+  }
+
+  if (!needsIndent.size) return;
+  const indentStyleId = 'ff14-wiki-paragraph-indent';
+  const indentMarker = 'data-ff14-wiki-indent';
+  if (!document.getElementById(indentStyleId)) {
+    const style = document.createElement('style');
+    style.id = indentStyleId;
+    // Reset inherited indentation without overriding a component's own styles.
+    style.textContent = `
+      :where(#mw-content-text p[${indentMarker}] > *) { text-indent: 0; }
+      #mw-content-text > p[${indentMarker}] + ul:not([class], [id], [role], [style]),
+      #mw-content-text .mw-parser-output > p[${indentMarker}] + ul:not([class], [id], [role], [style]) {
+        margin-inline-start: 2em;
+      }
+    `;
+    document.head.append(style);
+  }
+  for (const [paragraph, indent] of needsIndent) {
+    paragraph.setAttribute(indentMarker, '');
+    paragraph.style.textIndent = indent;
   }
 }
 
@@ -170,7 +275,8 @@ export async function applyWikiReading() {
   const article = content.querySelector('.mw-parser-output') || content;
 
   fitWikiFigures();
-  const { proseLists, quotes, indent } = await readWikiReadingSettings();
+  const { proseLists, quotes, indent, headings } = await readWikiReadingSettings();
+  if (headings) styleWikiHeadings();
   if (proseLists) convertWikiProse(article);
   if (quotes) replaceWikiQuotes(article);
   if (indent) indentWikiParagraphs(article);
