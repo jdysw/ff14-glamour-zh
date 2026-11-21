@@ -6,6 +6,7 @@ export const WIKI_READING_OPTIONS = Object.freeze({
   quotes: '直角引号',
   indent: '正文首行缩进',
   proseLists: '剧情列表转段落',
+  headings: '文档式标题',
 });
 
 function normalize(options) {

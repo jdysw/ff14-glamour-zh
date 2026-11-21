@@ -25,6 +25,7 @@ try {
         <header id="firstHeading"><h1>词条标题</h1></header>
         <main id="mw-content-text"><div class="mw-parser-output">
         <style>
+          header h1, #wiki-body h2, .mw-parser-output h3 { font-weight: 500; }
           #wiki-body h2 { border-bottom: 2px solid; color: brown; padding-top: 50px; }
           .mw-parser-output h3::before { content: '■'; }
           h2 .mw-headline { font-size: 32px; font-weight: bold; }
@@ -43,6 +44,9 @@ try {
         <p id="cries">咕咕<small>摩杜纳小红的叫声</small><br>吱吱<br>呜。<br></p>
         <p id="method">听到宝石兽叫声的方法：<br><small>①携宝石兽从高处摔落。</small></p>
         <p id="numbered"><small>②召唤/收回你的宝石兽/宝石兽坐骑。</small></p>
+        <p id="parenthesized-step">（二）完成第二步。</p>
+        <p id="decimal-step">2. 完成第二步。</p>
+        <p id="chinese-step">二、完成第二步。</p>
         <p id="decimal">6.35 版本中的宝石兽仍然可以协助作战。</p>
         <p id="trailing-break">普通段落。<br></p>
         <p id="inline">正文含有<span id="item-link" style="display:inline-block"><span id="item-name" style="display:inline-block">水晶砂</span></span>和<span id="authored-indent" style="display:inline-block;text-indent:5px">硬灵性岩</span>。</p>
@@ -89,6 +93,7 @@ try {
       independentList: getComputedStyle(document.querySelector('#standalone-heading').nextElementSibling).marginInlineStart,
       navigationList: getComputedStyle(document.querySelector('.nav-tabs')).marginInlineStart,
       galleryList: getComputedStyle(document.querySelector('.gallery')).marginInlineStart,
+      headingStyle: !!document.getElementById('ff14-wiki-heading-style'),
       titleWeights: ['#firstHeading h1', '.mw-parser-output > h2', '#standalone-heading'].map(selector =>
         getComputedStyle(document.querySelector(selector)).fontWeight),
       headingMarkers: ['#standalone-heading', '#skill-heading'].map(selector =>
@@ -100,7 +105,8 @@ try {
         getComputedStyle(document.querySelector('.mw-headline'))[property] ===
         getComputedStyle(document.querySelector('.mw-parser-output > h2'))[property]),
       decimalIndent: document.querySelector('#decimal').style.textIndent,
-      preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
+      preservedIndents: ['numbered', 'parenthesized-step', 'decimal-step', 'chinese-step', 'gallery-caption', 'thumb-caption']
+        .map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
       figureFits: document.querySelector('table').getBoundingClientRect().right <= innerWidth,
     })`);
@@ -117,8 +123,9 @@ try {
     mythIndents: ['', '', ''], normalTabIndent: '2em',
     introList: '32px', nestedList: '25.6px', independentList: '25.6px',
     navigationList: '25.6px', galleryList: '25.6px',
-    titleWeights: ['650', '600', '600'], headingMarkers: ['none', '"■"'], h2Border: '0px', h2SharesBodyTypeface: true, h2HeadlineMatches: true,
-    decimalIndent: '2em', preservedIndents: ['', '', ''],
+    headingStyle: true, titleWeights: ['650', '600', '600'], headingMarkers: ['none', '"■"'],
+    h2Border: '0px', h2SharesBodyTypeface: true, h2HeadlineMatches: true,
+    decimalIndent: '2em', preservedIndents: ['', '', '', '', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
 
@@ -126,9 +133,11 @@ try {
     ['quotes', { ...defaults, quotes: '“正文”' }],
     ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', leadingBreakIndent: '', normalTabIndent: '', introList: '25.6px', decimalIndent: '' }],
     ['proseLists', { ...defaults, prose: null, list: '她离开了前往营地' }],
+    ['headings', { ...defaults, headingStyle: false, titleWeights: ['500', '500', '500'],
+      headingMarkers: ['"■"', '"■"'], h2Border: '2px', h2HeadlineMatches: false }],
   ]) {
     await cdp.eval("window.__wikiSettingsMenu.get('Wiki 阅读排版设置')()");
-    assert.equal(await cdp.eval("document.querySelectorAll('#zhx-tools-panel input[type=checkbox]').length"), 3);
+    assert.equal(await cdp.eval("document.querySelectorAll('#zhx-tools-panel input[type=checkbox]').length"), 4);
     await cdp.callFn(`function (key) {
       const panel = document.querySelector('#zhx-tools-panel');
       for (const input of panel.querySelectorAll('input')) input.checked = input.name !== key;
@@ -140,6 +149,11 @@ try {
     await beginBrowserCoverage(cdp);
     assert.deepEqual(await refreshAndRead(), expected, key);
   }
+  // An existing saved configuration without a heading preference keeps the new default.
+  await cdp.eval("sessionStorage.setItem('zhx.wiki.reading', JSON.stringify({ quotes: false, indent: true, proseLists: true }))");
+  await endBrowserCoverage(cdp, `${page.target.id}-previous-settings`);
+  await beginBrowserCoverage(cdp);
+  assert.deepEqual(await refreshAndRead(), { ...defaults, quotes: '“正文”' });
   console.log('PASS Wiki 阅读排版默认开启、分别关闭、刷新后持久化，窄屏宽图始终适配');
 } finally {
   await closePage(port, page.target.id);
