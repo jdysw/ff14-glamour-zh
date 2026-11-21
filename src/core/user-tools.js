@@ -1,6 +1,7 @@
 import { dataGetStatus, dataInvalidate, ensureTables, dataGetIndex } from './data/data-manager.js';
 import { itemNames } from './item-languages.js';
 import { WIKI_ITEM } from './constants.js';
+import { readWikiReadingSettings, saveWikiReadingSettings, WIKI_READING_OPTIONS } from './wiki-reading-settings.js';
 
 let panel;
 let returnFocus;
@@ -155,16 +156,48 @@ function revealItemButton(event) {
   itemButton.hidden = false;
 }
 
+async function showWikiReadingSettings() {
+  const box = openPanel('Wiki 阅读排版设置');
+  box.style.boxSizing = 'border-box';
+  const status = document.createElement('p');
+  status.setAttribute('role', 'status');
+  status.textContent = '正在读取设置…';
+  box.append(status);
+  const settings = await readWikiReadingSettings();
+  if (!box.isConnected) return;
+
+  const controls = Object.entries(WIKI_READING_OPTIONS).map(([key, text]) => {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:block;padding:6px 0;cursor:pointer;';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = key;
+    input.checked = settings[key];
+    label.append(input, ' ' + text);
+    box.insertBefore(label, status);
+    return input;
+  });
+  status.textContent = '保存后刷新页面生效。';
+  const save = addAction('保存设置', async () => {
+    save.disabled = true;
+    const options = Object.fromEntries(controls.map(input => [input.name, input.checked]));
+    const saved = await saveWikiReadingSettings(options);
+    status.textContent = saved ? '设置已保存，刷新页面生效。' : '保存失败，请重试。';
+    save.disabled = false;
+  });
+}
+
 function menuRegistration() {
   if (typeof GM_registerMenuCommand === 'function') return GM_registerMenuCommand;
   if (typeof GM !== 'undefined' && GM.registerMenuCommand) return GM.registerMenuCommand.bind(GM);
   return null;
 }
 
-export function startUserTools() {
+export function startUserTools(siteId) {
   if (window.__zhxUserTools) return;
   window.__zhxUserTools = true;
   const register = menuRegistration();
+  if (siteId === 'wiki') register?.('Wiki 阅读排版设置', showWikiReadingSettings);
   register?.('词库状态', () => showStatus());
   register?.('立即检查词库更新', refreshData);
   register?.('复制诊断', async () => {
@@ -189,7 +222,7 @@ export function startUserTools() {
     if (!panel) return;
     if (event.key === 'Escape') { event.preventDefault(); closePanel(); }
     if (event.key === 'Tab') {
-      const nodes = [...panel.querySelectorAll('button,a[href],textarea')];
+      const nodes = [...panel.querySelectorAll('button:not(:disabled),a[href],textarea,input:not(:disabled)')];
       const first = nodes[0], last = nodes.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }

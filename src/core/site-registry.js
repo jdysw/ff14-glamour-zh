@@ -7,6 +7,7 @@ import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '..
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
 import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-collection.js';
 import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
+import { applyWikiReading } from '../sites/huiji-wiki-reading.js';
 import { startMirapri, translatePage } from '../sites/mirapri.js';
 import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ronka.js';
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
@@ -91,7 +92,10 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
     }),
     createSiteAdapter({
       id: 'wiki',
-      start() { startWiki(); },
+      start() {
+        startWiki();
+        applyWikiReading().catch(err => _zhxErr('Wiki 阅读排版', err));
+      },
       onDataReady() { safe(injectWikiButton, 'Wiki 反查刷新')(); },
       onPageShow() { safe(injectWikiButton, 'pageshow')(); },
     }),

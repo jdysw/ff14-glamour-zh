@@ -18,7 +18,7 @@ import { startUserTools } from './core/user-tools.js';
   const __site = findSite();
   const bootSite = () => {
     if (!__site) return;
-    safe(startUserTools, '脚本菜单')();
+    safe(startUserTools, '脚本菜单')(__site.id);
     safe(ensureChineseFont, '中文字体')();
     safe(startChineseSearch, '中文装备搜索')(__site.id);
     try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); }

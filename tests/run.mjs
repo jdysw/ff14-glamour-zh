@@ -58,6 +58,7 @@ const SUITES = {
   ],
   "e2e": [
     "e2e/test-wiki.mjs",
+    "e2e/test-wiki-reading.mjs",
     "e2e/test-wiki-slow.mjs",
     "e2e/test-wiki-fallback.mjs",
     "e2e/test-index-scope.mjs",
@@ -183,7 +184,7 @@ function runOne(abs, logFile) {
     const env={...process.env, PYTHONIOENCODING: process.env.PYTHONIOENCODING || 'utf-8'};
     // Profile representative UI flows once; timing/streaming and failure probes
     // keep their normal runtime rather than measuring a profiler-instrumented page.
-    const coverageScenarios=new Set(['test-miramiru.mjs','test-standalone-search.mjs','test-user-tools.mjs']);
+    const coverageScenarios=new Set(['test-miramiru.mjs','test-standalone-search.mjs','test-user-tools.mjs','test-wiki-reading.mjs']);
     if(!coverageScenarios.has(path.basename(abs)))delete env.ZHX_E2E_COVERAGE_DIR;
     const child = spawn(process.execPath, [abs], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
       env });
