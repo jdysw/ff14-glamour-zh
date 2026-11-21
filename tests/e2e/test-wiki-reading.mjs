@@ -25,6 +25,12 @@ try {
         <h2>剧情</h2>
         <p id="plain">“正文”</p>
         <ul><li>她离开了</li><li>前往营地</li></ul>
+        <style>.mw-parser-output ul { margin-inline-start: 1.6em; padding-inline-start: 0; }</style>
+        <h2>列表对齐</h2>
+        <p id="list-intro">下面列出三种极限槽规则。</p>
+        <ul><li>四人以下队伍</li><li>满编队伍<ul id="nested-list"><li>副本条件</li></ul></li></ul>
+        <h3 id="standalone-heading">独立列表</h3>
+        <ul><li>道具名称</li></ul>
         <div class="boss-guide"><p id="skill">“攻击”<br>“电磁力”</p></div>
         <h2>宝石兽的叫声</h2>
         <p id="cries">咕咕<small>摩杜纳小红的叫声</small><br>吱吱<br>呜。<br></p>
@@ -71,6 +77,11 @@ try {
       leadingBreakIndent: document.querySelector('#leading-break').style.textIndent,
       mythIndents: ['myth-line', 'myth-after-break', 'myth-original'].map(id => document.getElementById(id).style.textIndent),
       normalTabIndent: document.querySelector('#normal-tab').style.textIndent,
+      introList: getComputedStyle(document.querySelector('#list-intro').nextElementSibling).marginInlineStart,
+      nestedList: getComputedStyle(document.querySelector('#nested-list')).marginInlineStart,
+      independentList: getComputedStyle(document.querySelector('#standalone-heading').nextElementSibling).marginInlineStart,
+      navigationList: getComputedStyle(document.querySelector('.nav-tabs')).marginInlineStart,
+      galleryList: getComputedStyle(document.querySelector('.gallery')).marginInlineStart,
       decimalIndent: document.querySelector('#decimal').style.textIndent,
       preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
@@ -87,13 +98,15 @@ try {
     evolutionIndent: supportsEachLine ? '2em each-line' : '2em',
     leadingBreakIndent: supportsEachLine ? '2em each-line' : '2em',
     mythIndents: ['', '', ''], normalTabIndent: '2em',
+    introList: '32px', nestedList: '25.6px', independentList: '25.6px',
+    navigationList: '25.6px', galleryList: '25.6px',
     decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
 
   for (const [key, expected] of [
     ['quotes', { ...defaults, quotes: '“正文”' }],
-    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', leadingBreakIndent: '', normalTabIndent: '', decimalIndent: '' }],
+    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', leadingBreakIndent: '', normalTabIndent: '', introList: '25.6px', decimalIndent: '' }],
     ['proseLists', { ...defaults, prose: null, list: '她离开了前往营地' }],
   ]) {
     await cdp.eval("window.__wikiSettingsMenu.get('Wiki 阅读排版设置')()");

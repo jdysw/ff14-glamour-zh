@@ -186,7 +186,13 @@ function indentWikiParagraphs(article) {
     const style = document.createElement('style');
     style.id = indentStyleId;
     // Reset inherited indentation without overriding a component's own styles.
-    style.textContent = `:where(#mw-content-text p[${indentMarker}] > *) { text-indent: 0; }`;
+    style.textContent = `
+      :where(#mw-content-text p[${indentMarker}] > *) { text-indent: 0; }
+      #mw-content-text > p[${indentMarker}] + ul:not([class], [id], [role], [style]),
+      #mw-content-text .mw-parser-output > p[${indentMarker}] + ul:not([class], [id], [role], [style]) {
+        margin-inline-start: 2em;
+      }
+    `;
     document.head.append(style);
   }
   for (const [paragraph, indent] of needsIndent) {
