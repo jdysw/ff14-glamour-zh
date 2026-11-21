@@ -94,7 +94,8 @@ try {
       headingMarkers: ['#standalone-heading', '#skill-heading'].map(selector =>
         getComputedStyle(document.querySelector(selector), '::before').content),
       h2Border: getComputedStyle(document.querySelector('.mw-parser-output > h2')).borderBottomWidth,
-      h2Typeface: getComputedStyle(document.querySelector('.mw-parser-output > h2')).fontFamily.includes('SimSun'),
+      h2SharesBodyTypeface: getComputedStyle(document.querySelector('.mw-parser-output > h2')).fontFamily ===
+        getComputedStyle(document.querySelector('#plain')).fontFamily,
       h2HeadlineMatches: ['fontSize', 'fontWeight'].every(property =>
         getComputedStyle(document.querySelector('.mw-headline'))[property] ===
         getComputedStyle(document.querySelector('.mw-parser-output > h2'))[property]),
@@ -116,7 +117,7 @@ try {
     mythIndents: ['', '', ''], normalTabIndent: '2em',
     introList: '32px', nestedList: '25.6px', independentList: '25.6px',
     navigationList: '25.6px', galleryList: '25.6px',
-    titleWeights: ['600', '600', '600'], headingMarkers: ['none', '"■"'], h2Border: '0px', h2Typeface: true, h2HeadlineMatches: true,
+    titleWeights: ['650', '600', '600'], headingMarkers: ['none', '"■"'], h2Border: '0px', h2SharesBodyTypeface: true, h2HeadlineMatches: true,
     decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
