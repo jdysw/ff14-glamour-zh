@@ -42,6 +42,43 @@ function fitWikiFigures() {
   }
 }
 
+function styleWikiHeadings() {
+  const styleId = 'ff14-wiki-heading-style';
+  if (document.getElementById(styleId)) return;
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    #firstHeading > h1, h1#firstHeading {
+      font-size: clamp(1.95rem, 1.5rem + 1.25vw, 2.55rem);
+      font-weight: 700;
+      line-height: 1.18;
+      letter-spacing: .015em;
+    }
+    #wiki-body #mw-content-text > h2,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h2 {
+      padding-block: clamp(24px, 2.4vw, 34px) 9px;
+      border-block-end: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+      color: inherit;
+      font-size: clamp(1.375rem, 1.2rem + .48vw, 1.625rem);
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    #wiki-body #mw-content-text > h3,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3 {
+      padding-block: 18px 6px;
+      color: inherit;
+      font-size: clamp(1.125rem, 1rem + .32vw, 1.3125rem);
+      font-weight: 650;
+      line-height: 1.4;
+    }
+    #wiki-body #mw-content-text > h3::before,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3::before {
+      content: none;
+    }
+  `;
+  document.head.append(style);
+}
+
 function plainItemText(item) {
   if (item.tagName !== 'LI' || item.attributes.length ||
     item.querySelector('ul, ol, dl, p, div, table, blockquote, figure, pre, hr')) {
@@ -210,6 +247,7 @@ export async function applyWikiReading() {
   const article = content.querySelector('.mw-parser-output') || content;
 
   fitWikiFigures();
+  styleWikiHeadings();
   const { proseLists, quotes, indent } = await readWikiReadingSettings();
   if (proseLists) convertWikiProse(article);
   if (quotes) replaceWikiQuotes(article);

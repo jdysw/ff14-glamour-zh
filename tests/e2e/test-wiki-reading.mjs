@@ -21,7 +21,13 @@ try {
     window.GM_xmlhttpRequest = request => request.onerror?.({});
     document.addEventListener('DOMContentLoaded', () => {
       document.body.innerHTML = \`
+        <div id="wiki-body">
+        <header id="firstHeading"><h1>词条标题</h1></header>
         <main id="mw-content-text"><div class="mw-parser-output">
+        <style>
+          #wiki-body h2 { border-bottom: none; color: brown; padding-top: 50px; }
+          .mw-parser-output h3::before { content: '■'; }
+        </style>
         <h2>剧情</h2>
         <p id="plain">“正文”</p>
         <ul><li>她离开了</li><li>前往营地</li></ul>
@@ -31,7 +37,7 @@ try {
         <ul><li>四人以下队伍</li><li>满编队伍<ul id="nested-list"><li>副本条件</li></ul></li></ul>
         <h3 id="standalone-heading">独立列表</h3>
         <ul><li>道具名称</li></ul>
-        <div class="boss-guide"><p id="skill">“攻击”<br>“电磁力”</p></div>
+        <div class="boss-guide"><h3 id="skill-heading">技能说明</h3><p id="skill">“攻击”<br>“电磁力”</p></div>
         <h2>宝石兽的叫声</h2>
         <p id="cries">咕咕<small>摩杜纳小红的叫声</small><br>吱吱<br>呜。<br></p>
         <p id="method">听到宝石兽叫声的方法：<br><small>①携宝石兽从高处摔落。</small></p>
@@ -54,7 +60,7 @@ try {
           <img class="thumbimage" width="500" height="281" alt="">
           <div class="thumbcaption"><p id="thumb-caption">宝石兽的图片说明</p></div>
         </div></div></td></tr></table>
-        </div></main>
+        </div></main></div>
       \`;
     }, { once: true });
     ${bundle}
@@ -82,6 +88,11 @@ try {
       independentList: getComputedStyle(document.querySelector('#standalone-heading').nextElementSibling).marginInlineStart,
       navigationList: getComputedStyle(document.querySelector('.nav-tabs')).marginInlineStart,
       galleryList: getComputedStyle(document.querySelector('.gallery')).marginInlineStart,
+      titleWeights: ['#firstHeading h1', '.mw-parser-output > h2', '#standalone-heading'].map(selector =>
+        getComputedStyle(document.querySelector(selector)).fontWeight),
+      headingMarkers: ['#standalone-heading', '#skill-heading'].map(selector =>
+        getComputedStyle(document.querySelector(selector), '::before').content),
+      h2Border: getComputedStyle(document.querySelector('.mw-parser-output > h2')).borderBottomWidth,
       decimalIndent: document.querySelector('#decimal').style.textIndent,
       preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
@@ -100,6 +111,7 @@ try {
     mythIndents: ['', '', ''], normalTabIndent: '2em',
     introList: '32px', nestedList: '25.6px', independentList: '25.6px',
     navigationList: '25.6px', galleryList: '25.6px',
+    titleWeights: ['700', '700', '650'], headingMarkers: ['none', '"■"'], h2Border: '1px',
     decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
