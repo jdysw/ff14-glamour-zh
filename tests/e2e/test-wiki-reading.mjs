@@ -26,6 +26,10 @@ try {
         <p id="plain">“正文”</p>
         <ul><li>她离开了</li><li>前往营地</li></ul>
         <div class="boss-guide"><p id="skill">“攻击”<br>“电磁力”</p></div>
+        <h2>宝石兽的叫声</h2>
+        <p id="cries">咕咕<small>摩杜纳小红的叫声</small><br>吱吱<br>呜。<br></p>
+        <p id="method">听到宝石兽叫声的方法：<br><small>①携宝石兽从高处摔落。</small></p>
+        <p id="trailing-break">普通段落。<br></p>
         <table style="width:100%"><tr><td><div class="thumb"><div class="thumbinner" style="width:502px">
           <img class="thumbimage" width="500" height="281" alt="">
         </div></div></td></tr></table>
@@ -44,19 +48,23 @@ try {
       prose: document.querySelector('[data-ff14-wiki-prose]')?.textContent ?? null,
       list: document.querySelector('.mw-parser-output ul').textContent,
       skillIndent: document.querySelector('#skill').style.textIndent,
+      criesIndent: document.querySelector('#cries').style.textIndent,
+      methodIndent: document.querySelector('#method').style.textIndent,
+      trailingBreakIndent: document.querySelector('#trailing-break').style.textIndent,
       figureFits: document.querySelector('table').getBoundingClientRect().right <= innerWidth,
     })`);
   }
 
   const defaults = {
     quotes: '「正文」', indent: '2em', prose: '她离开了',
-    list: '前往营地', skillIndent: '', figureFits: true,
+    list: '前往营地', skillIndent: '', criesIndent: '', methodIndent: '',
+    trailingBreakIndent: '2em', figureFits: true,
   };
   assert.deepEqual(await refreshAndRead(), defaults);
 
   for (const [key, expected] of [
     ['quotes', { ...defaults, quotes: '“正文”' }],
-    ['indent', { ...defaults, indent: '' }],
+    ['indent', { ...defaults, indent: '', trailingBreakIndent: '' }],
     ['proseLists', { ...defaults, prose: null, list: '她离开了前往营地' }],
   ]) {
     await cdp.eval("window.__wikiSettingsMenu.get('Wiki 阅读排版设置')()");

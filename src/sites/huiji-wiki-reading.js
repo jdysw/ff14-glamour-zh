@@ -149,6 +149,8 @@ function indentWikiParagraphs(article) {
   const needsIndent = [...article.querySelectorAll('p')].filter(paragraph => {
     if (paragraph.closest(excluded + ', .boss-guide')) return false;
     const visibleText = paragraph.innerText;
+    // A hand-broken block already has its own line layout.
+    if (paragraph.querySelector('br') && visibleText.trim().includes('\n')) return false;
     if (!visibleText.trim() || /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u.test(visibleText)) {
       return false;
     }
