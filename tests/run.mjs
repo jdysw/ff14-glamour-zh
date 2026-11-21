@@ -57,6 +57,7 @@ const SUITES = {
   ],
   "e2e": [
     "e2e/test-wiki.mjs",
+    "e2e/test-wiki-reading.mjs",
     "e2e/test-wiki-slow.mjs",
     "e2e/test-wiki-fallback.mjs",
     "e2e/test-index-scope.mjs",
