@@ -158,7 +158,18 @@ function indentWikiParagraphs(article) {
     return Number.parseFloat(getComputedStyle(paragraph).textIndent) === 0;
   });
 
+  if (!needsIndent.length) return;
+  const indentStyleId = 'ff14-wiki-paragraph-indent';
+  const indentMarker = 'data-ff14-wiki-indent';
+  if (!document.getElementById(indentStyleId)) {
+    const style = document.createElement('style');
+    style.id = indentStyleId;
+    // Reset inherited indentation without overriding a component's own styles.
+    style.textContent = `:where(#mw-content-text p[${indentMarker}] > *) { text-indent: 0; }`;
+    document.head.append(style);
+  }
   for (const paragraph of needsIndent) {
+    paragraph.setAttribute(indentMarker, '');
     paragraph.style.textIndent = '2em';
   }
 }
