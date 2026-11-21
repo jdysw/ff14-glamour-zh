@@ -133,21 +133,28 @@ function ecSearchContext(input) {
   return accessoryPage ? { kind: 'accessories' } : null;
 }
 
-function ecScopedSuggestions(query, input) {
-  if (_activeSearchSiteId === 'miramiru') {
-    const key = input.dataset.zhxMiramiruSlot;
-    const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
-    const rows = new Map();
-    const language = miramiruLanguage();
-    for (const row of suggestByZh(query, 0, slot)) {
-      const zh = resolveByName(row.native) || row.zh;
-      const native = itemNames(zh)[language];
-      if (native && !rows.has(native)) rows.set(native, { zh, native });
-    }
-    return [...rows.values()];
+function miramiruScopedSuggestions(query, input) {
+  const key = input.dataset.zhxMiramiruSlot;
+  const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
+  const rows = new Map();
+  const language = miramiruLanguage();
+  for (const row of suggestByZh(query, 0, slot)) {
+    const zh = resolveByName(row.native) || row.zh;
+    const native = itemNames(zh)[language];
+    if (native && !rows.has(native)) rows.set(native, { zh, native });
   }
+  return [...rows.values()];
+}
+
+function ecScopedSuggestions(query, input) {
+  if (_activeSearchSiteId === 'miramiru') return miramiruScopedSuggestions(query, input);
   const context = ecSearchContext(input);
-  if (context?.kind === 'facewear') return EC_FACEWEAR_ROWS.filter(row => row.zh.includes(query));
+  if (context?.kind === 'facewear') {
+    const terms = query.split(/\s+/u);
+    const direct = EC_FACEWEAR_ROWS.filter(row => row.zh.includes(query));
+    return terms.length < 2 ? direct : direct.concat(EC_FACEWEAR_ROWS.filter(row =>
+      !row.zh.includes(query) && terms.every(term => row.zh.includes(term))));
+  }
   if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
   if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot);
   if (context?.kind === 'accessory-slot') {
@@ -165,6 +172,24 @@ function ecScopedNative(query, input, allowPartial) {
   const exact = rows.filter(row => row.zh === query);
   if (exact.length === 1) return exact[0].native;
   return allowPartial && rows.length === 1 ? rows[0].native : null;
+}
+
+function multiwordSearchRows(query, input) {
+  return isChineseSearchQuery(query) && /\s/u.test(query.trim())
+    ? new Set(ecScopedSuggestions(query, input).map(row => row.native)) : null;
+}
+
+function requireMultiwordSelection(event, input) {
+  const query = normalizeSearchQuery(input.value);
+  if (_composingInputs.has(input) || _selectedSearchRows.get(input)?.zh === query) return false;
+  const rows = multiwordSearchRows(query, input);
+  if (!rows || rows.size < 2) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  input.focus?.({ preventScroll: true });
+  hideSuggestions(true);
+  showSuggestions(input, true);
+  return true;
 }
 
 function resolveSearchNative(query, gearsets = false) {
@@ -460,6 +485,7 @@ function ensureSuggestionStyle() {
     '[data-zhx-chinese-suggest] .zhx-suggest-zh{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-native{margin-left:12px;overflow:hidden;color:#777;font-size:12px;text-overflow:ellipsis;white-space:nowrap;}',
     '[data-zhx-chinese-suggest] .zhx-suggest-empty{box-sizing:border-box;min-height:40px;padding:10px;color:#777;text-align:center;}',
+    '[data-zhx-chinese-suggest] .zhx-suggest-hint{padding:8px 10px;color:#444;border-bottom:1px solid #eee;}',
   ].join('');
   host.appendChild(style);
   _suggestStyleReady = true;
@@ -562,6 +588,8 @@ function scheduleSuggestions(input) {
   }, SUGGEST_DEBOUNCE_MS);
 }
 
+let renderedSuggestionQuery = '';
+
 function isECVueSearchInput(input) {
   return _activeSearchSiteId === 'ec'
     && /\bvs__search\b/.test(String(input?.className || ''));
@@ -571,6 +599,10 @@ function selectSuggestion(index) {
   const row = _suggestRows[index];
   if (!row || !_suggestInput) return;
   const input = _suggestInput;
+  if (normalizeSearchQuery(input.value) !== renderedSuggestionQuery) {
+    showSuggestions(input);
+    return;
+  }
   input.focus({ preventScroll: true });
   // EC's vue-select owns the input's value. Never write a temporary Chinese
   // label into this controlled field; it can race the component's own v-model
@@ -650,7 +682,17 @@ function updateSuggestionActive(index) {
   }
 }
 
-function showSuggestions(input) {
+function appendSelectionHint(input) {
+  const hint = document.createElement('div');
+  hint.className = 'zhx-suggest-hint';
+  hint.setAttribute('role', 'status');
+  hint.textContent = isECGearsetsSearchInput(input)
+    ? '匹配到多套套装，请选择一项后搜索。'
+    : '匹配到多件装备，请选择一项后搜索。';
+  _suggestBox.appendChild(hint);
+}
+
+function showSuggestions(input, needsSelection = false) {
   if (_activeSearchSiteId === 'miramiru' && document.activeElement !== input) { dismissSuggestions(); return; }
   if (!isSuggestibleInput(input) || !input.isConnected) {
     hideSuggestions(true);
@@ -672,7 +714,12 @@ function showSuggestions(input) {
     return;
   }
 
-  const rows = ecScopedSuggestions(query, input);
+  const seen = new Set();
+  const rows = ecScopedSuggestions(query, input).filter(row => {
+    if (seen.has(row.native)) return false;
+    seen.add(row.native);
+    return true;
+  });
 
   ensureSuggestionStyle();
   if (!_suggestBox) {
@@ -691,6 +738,7 @@ function showSuggestions(input) {
 
   _suggestInput = input;
   _suggestRows = rows;
+  renderedSuggestionQuery = query;
   _suggestRendered = 0;
   _suggestActive = -1;
   _suggestBox.replaceChildren();
@@ -710,6 +758,7 @@ function showSuggestions(input) {
   }
 
   _suggestBox.setAttribute('role', 'listbox');
+  if (needsSelection) appendSelectionHint(input);
   appendSuggestionBatch();
 
   input.setAttribute('aria-autocomplete', 'list');
@@ -767,6 +816,7 @@ function handleSuggestionKeydown(event) {
   // dropdown; our Chinese suggestions remain pointer-selectable.
   if (isECVueSearchInput(event.target)) return false;
   if (_suggestInput !== event.target || !_suggestBox || _suggestBox.hidden || !_suggestRows.length) return false;
+  if (normalizeSearchQuery(event.target.value) !== renderedSuggestionQuery) return false;
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     updateSuggestionActive((_suggestActive + 1) % _suggestRows.length);
@@ -788,6 +838,7 @@ function handleSearchKeydown(event) {
   const input = event.target;
   if (event.isComposing || _composingInputs.has(input) || event.keyCode === 229) return;
   if (handleSuggestionKeydown(event)) return;
+  if (event.key === 'Enter' && isSuggestibleInput(input) && requireMultiwordSelection(event, input)) return;
   // Gearsets 的 search GET 参数是网站的查询入口；按回车时立即导航，
   // 而不是向可能有异步状态的前端组件派发临时原生名 input。
   if (event.key === 'Enter' && submitECGearsetsSearch(input)) {
@@ -921,16 +972,21 @@ function commitEdenMakerCandidate(input, selectedNative) {
 
 function miramiruStandaloneNative(input, query, allowPartial, selectedNative) {
   const rows = ecScopedSuggestions(query, input);
-  const matching = rows.filter(row => row.zh === query || row.native === selectedNative);
+  const matching = rows.filter(row => selectedNative ? row.native === selectedNative : row.zh === query);
   let row = null;
   if (matching.length === 1) row = matching[0];
-  else if (allowPartial && rows.length === 1) row = rows[0];
+  else if (!selectedNative && allowPartial && rows.length === 1) row = rows[0];
   if (!row) return null;
   if (!_ecPendingNativePick) armECNativePick(input, row);
   return row.native;
 }
 
 function standaloneNative(input, query, allowPartial, selectedNative) {
+    if (!selectedNative) {
+      const rows = multiwordSearchRows(query, input);
+      if (rows && rows.size !== 1) return null;
+      if (rows && _activeSearchSiteId !== 'miramiru') return edenMakerNative(input, rows.values().next().value);
+    }
     if (_activeSearchSiteId === 'miramiru') return miramiruStandaloneNative(input, query, allowPartial, selectedNative);
     const context = ecSearchContext(input);
     const native = selectedNative
@@ -999,6 +1055,7 @@ function handleStandaloneSearchClick(event) {
   if (/clear|reset|取消|重置|清空|初期化|초기화|지우기/i.test(label)) return;
   if (!/搜索|搜尋|查询|查找|검색|検索|\bsearch\b|필터\s*적용|应用筛选|適用|\bapply\b/i.test(label)) return;
   const input = findStandaloneTriggerInput(button);
+  if (input && requireMultiwordSelection(event, input)) return;
   if (input && submitECGearsetsSearch(input)) {
     event.preventDefault();
     event.stopPropagation();
@@ -1079,6 +1136,8 @@ function handleECGearsetsFormSubmit(event, siteId, input, query, selected) {
 
 function nativeForSubmittedSearch(query, siteId, input, selected) {
   if (selected?.zh === query && selected.native) return selected.native;
+  const rows = multiwordSearchRows(query, input);
+  if (rows) return rows.size === 1 ? rows.values().next().value : null;
   if (siteId === 'ec' && ecSearchContext(input)) return ecScopedNative(query, input, true);
   return resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
 }
@@ -1094,6 +1153,7 @@ function handleChineseSearchSubmit(event, siteId) {
   if (!isChineseSearchQuery(query)) return;
 
   const selected = _selectedSearchRows.get(input);
+  if (requireMultiwordSelection(event, input)) return;
   if (handleECGearsetsFormSubmit(event, siteId, input, query, selected)) return;
   const native = nativeForSubmittedSearch(query, siteId, input, selected);
   _selectedSearchRows.delete(input);

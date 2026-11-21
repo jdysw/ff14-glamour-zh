@@ -159,6 +159,7 @@ class FakeDocument {
   }
 
   dispatch(type, event) {
+    event.stopPropagation ??= () => {};
     for (const handler of this.listeners.get(type) || []) handler(event);
   }
 }
@@ -263,7 +264,9 @@ try {
     const box = findSuggestBox(document);
     eq('数据就绪后展示候选框', box?.hidden, false);
     eq('候选框使用 listbox 语义', box?.getAttribute('role'), 'listbox');
-    eq('候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
+    const rows = box?.querySelectorAll('button[data-zhx-index]');
+    eq('同一原站名称只显示一次', rows.length, 3);
+    eq('重复原站名称保留排名靠前的标签', rows[1].children[0].textContent, '炎灵长袍');
     const popupTop = Number.parseFloat(box?.style.top);
     eq('候选框底部空间不足时向上弹出', popupTop < input._rect.top, true);
     eq('输入框 aria-expanded=true', input.getAttribute('aria-expanded'), 'true');
@@ -312,13 +315,13 @@ try {
     eq('Enter 选择第二项中文名', input.value, '炎灵长袍');
     eq('选择后关闭候选框', box.hidden, true);
 
-    input.value = '炎灵';
+    input.value = '炎灵袍';
     document.dispatch('focusin', { target: input });
     await sleep();
     const freshBox = findSuggestBox(document);
     const buttons2 = freshBox.querySelectorAll('button[data-zhx-index]');
     const pointer = {
-      target: buttons2[3],
+      target: buttons2[0],
       prevented: false,
       preventDefault() { this.prevented = true; },
     };
@@ -683,7 +686,7 @@ try {
     installDocument();
     delete globalThis.__zhxChineseSearchBound;
     const many = [{ zh: '炎灵', native: 'カ' }];
-    for (let i = 1; i <= 12; i++) many.push({ zh: '炎灵装' + i, native: '装' });
+    for (let i = 1; i <= 12; i++) many.push({ zh: '炎灵装' + i, native: '装' + i });
     const harness = buildSearchHarness(many);
     const api = harness.api;
     api.startChineseSearch('mirapri');
@@ -739,7 +742,7 @@ try {
 
     const box = findSuggestBox(document);
     eq('H1 独立框输入中文出现智能候选', box?.hidden, false);
-    eq('H2 候选数量正确', box?.querySelectorAll('button[data-zhx-index]').length, 5);
+    eq('H2 独立搜索框也按原站名称去重', box?.querySelectorAll('button[data-zhx-index]').length, 3);
 
     // b 方案：点选候选 → 转换式搜索（用原生名触发站点检索），显示随后恢复为中文
     const pointer = { target: box.children[0], prevented: false, preventDefault() { this.prevented = true; } };
@@ -823,7 +826,7 @@ try {
     input.setAttribute('type', 'search');
     input.setAttribute('placeholder', '装備品名等を入力');
     form.appendChild(input);
-    input.value = '炎灵';
+    input.value = '炎灵袍';
     const previousFormData = globalThis.FormData;
     const previousLocation = globalThis.location;
     const urls = [];
@@ -844,7 +847,7 @@ try {
       await sleep();
       const box = findSuggestBox(document);
       document.dispatch('pointerdown', {
-        target: box.querySelectorAll('button[data-zhx-index]')[3],
+        target: box.querySelectorAll('button[data-zhx-index]')[0],
         preventDefault() {},
       });
       eq('候选点击调用站点 requestSubmit 一次', submissions, 1);

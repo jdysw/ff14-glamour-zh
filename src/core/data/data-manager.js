@@ -735,19 +735,21 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 优先选候选最少的双字符桶，再由原始 includes 校验完整输入，
   // 避免每次输入都遍历所有正式名称和别名。
-  function _irSearchContainsCandidates(query, kind) {
+  function _irSearchContainsCandidates(query, kind, terms = [query]) {
     const index = _irSearchGramIndex[kind] || _irSearchBuildGramIndex(kind);
     let smallest = null;
     const seen = new Set();
-    for (let pos = 0; pos + 1 < query.length; pos++) {
-      const gram = query.slice(pos, pos + 2);
-      if (seen.has(gram)) continue;
-      seen.add(gram);
-      const bucket = index.get(gram);
-      if (!bucket) return [];
-      if (!smallest || bucket.length < smallest.length) smallest = bucket;
+    for (const term of terms) {
+      for (let pos = 0; pos + 1 < term.length; pos++) {
+        const gram = term.slice(pos, pos + 2);
+        if (seen.has(gram)) continue;
+        seen.add(gram);
+        const bucket = index.get(gram);
+        if (!bucket) return [];
+        if (!smallest || bucket.length < smallest.length) smallest = bucket;
+      }
     }
-    return smallest || [];
+    return smallest || _getIrSearchKeysByKind(kind);
   }
 
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
@@ -825,21 +827,22 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
   const SUGGEST_ABS_MAX = 3000;
   // 匹配度在每个装备部位内计算：精确 / 正式名前缀 / 正式名包含 /
-  // 别名前缀 / 别名包含；非匹配项返回 -1。
-  function _irSuggestionScore(name, query, kind) {
+  // 别名前缀 / 别名包含 / 正式名多词 / 别名多词；非匹配项返回 -1。
+  function _irSuggestionScore(name, query, kind, terms) {
     if (name === query) return 0;
     if (name.startsWith(query)) return kind === 0 ? 1 : 3;
     if (name.includes(query)) return kind === 0 ? 2 : 4;
+    if (terms.length > 1 && terms.every(term => name.includes(term))) return 5 + kind;
     return -1;
   }
 
-  // 每个部位设五个有序匹配桶；先采集完整匹配，再进行最终限流，
+  // 每个部位先保留原有五档，再补正式名和别名的多词匹配，最后限流。
   // 否则高优先级部位可能被词典顺序和 limit 提前截断。
   // 必须先按部位过滤、分桶，不能提前截断到 3000 条。
   // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
-  function _irSuggestionCollect(buckets, query, kind, limit, map, scope) {
-    for (const name of _irSearchContainsCandidates(query, kind)) {
-      const score = _irSuggestionScore(name, query, kind);
+  function _irSuggestionCollect(buckets, query, kind, limit, map, scope, terms) {
+    for (const name of _irSearchContainsCandidates(query, kind, terms)) {
+      const score = _irSuggestionScore(name, query, kind, terms);
       if (score < 0) continue;
       const native = map[name];
       if (!native) continue;
@@ -871,9 +874,10 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!map) return [];
     const raw = Number(limit);
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
-    const buckets = Array.from({ length: 6 }, () => Array.from({ length: 5 }, () => []));
-    _irSuggestionCollect(buckets, key, 0, max, map, scope);
-    _irSuggestionCollect(buckets, key, 1, max, map, scope);
+    const terms = key.split(/\s+/u);
+    const buckets = Array.from({ length: 6 }, () => Array.from({ length: 7 }, () => []));
+    _irSuggestionCollect(buckets, key, 0, max, map, scope, terms);
+    _irSuggestionCollect(buckets, key, 1, max, map, scope, terms);
     return _irSuggestionFlatten(buckets, max);
   }
 

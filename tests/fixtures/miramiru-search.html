@@ -13,7 +13,8 @@
     const query=input.value;
     input.parentElement.querySelector('[role=listbox]')?.remove();
     setTimeout(()=>{
-      if(generation!==request||!["Housemaid's Brim",'メイドホワイトブリム','메이드 머리띠'].includes(query))return;
+      const validNames = ["Housemaid's Brim", 'メイドホワイトブリム', '메이드 머리띠', "Courtly Lover's Hairpin of Fending"];
+      if(generation!==request||!validNames.includes(query))return;
       const list=document.createElement('div');list.setAttribute('role','listbox');
       const option=document.createElement('li');option.setAttribute('role','option');
       const button=document.createElement('button');button.type='button';
