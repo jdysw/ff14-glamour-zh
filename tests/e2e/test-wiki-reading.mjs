@@ -29,10 +29,16 @@ try {
         <h2>宝石兽的叫声</h2>
         <p id="cries">咕咕<small>摩杜纳小红的叫声</small><br>吱吱<br>呜。<br></p>
         <p id="method">听到宝石兽叫声的方法：<br><small>①携宝石兽从高处摔落。</small></p>
+        <p id="numbered"><small>②召唤/收回你的宝石兽/宝石兽坐骑。</small></p>
+        <p id="decimal">6.35 版本中的宝石兽仍然可以协助作战。</p>
         <p id="trailing-break">普通段落。<br></p>
         <p id="inline">正文含有<span id="item-link" style="display:inline-block"><span id="item-name" style="display:inline-block">水晶砂</span></span>和<span id="authored-indent" style="display:inline-block;text-indent:5px">硬灵性岩</span>。</p>
+        <h2>阿尔菲诺的宝石兽进化史</h2>
+        <p id="evolution"><a href="#summon">阿尔菲诺</a>所召唤出的宝石兽与常见的宝石兽有着明显的不同。<br>在伊修加德遭遇袭击时他第一次召唤出了自己的红宝石兽。(使用技能「利爪」)<br></p>
+        <ul class="gallery"><li class="gallerybox"><div><div class="gallerytext"><p id="gallery-caption"><span>版本 5.0</span>的宝石兽攻击动作</p></div></div></li></ul>
         <table style="width:100%"><tr><td><div class="thumb"><div class="thumbinner" style="width:502px">
           <img class="thumbimage" width="500" height="281" alt="">
+          <div class="thumbcaption"><p id="thumb-caption">宝石兽的图片说明</p></div>
         </div></div></td></tr></table>
         </div></main>
       \`;
@@ -53,22 +59,28 @@ try {
       methodIndent: document.querySelector('#method').style.textIndent,
       trailingBreakIndent: document.querySelector('#trailing-break').style.textIndent,
       inlineParagraphIndent: document.querySelector('#inline').style.textIndent,
+      evolutionIndent: document.querySelector('#evolution').style.textIndent,
+      decimalIndent: document.querySelector('#decimal').style.textIndent,
+      preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
       figureFits: document.querySelector('table').getBoundingClientRect().right <= innerWidth,
     })`);
   }
 
+  const supportsEachLine = await cdp.eval("CSS.supports('text-indent', '2em each-line')");
   const defaults = {
     quotes: '「正文」', indent: '2em', prose: '她离开了',
     list: '前往营地', skillIndent: '', criesIndent: '', methodIndent: '',
     trailingBreakIndent: '2em', figureFits: true,
     inlineParagraphIndent: '2em', itemIndents: ['0px', '0px', '5px'],
+    evolutionIndent: supportsEachLine ? '2em each-line' : '2em',
+    decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
 
   for (const [key, expected] of [
     ['quotes', { ...defaults, quotes: '“正文”' }],
-    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '' }],
+    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', decimalIndent: '' }],
     ['proseLists', { ...defaults, prose: null, list: '她离开了前往营地' }],
   ]) {
     await cdp.eval("window.__wikiSettingsMenu.get('Wiki 阅读排版设置')()");

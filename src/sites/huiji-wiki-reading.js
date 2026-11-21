@@ -146,19 +146,30 @@ function replaceWikiQuotes(article) {
 }
 
 function indentWikiParagraphs(article) {
-  const needsIndent = [...article.querySelectorAll('p')].filter(paragraph => {
-    if (paragraph.closest(excluded + ', .boss-guide')) return false;
+  const existingIndent = /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u;
+  const numberedStep = /^(?:[①-⑳㉑-㉟㊱-㊿]|[（(][0-9０-９一二三四五六七八九十]+[）)]|[0-9０-９]{1,3}(?:[、)）]|[.．](?![0-9０-９]))|[一二三四五六七八九十]+、)/u;
+  const needsIndent = new Map();
+  for (const paragraph of article.querySelectorAll('p')) {
+    if (paragraph.closest(excluded + ', .boss-guide, .gallerytext, .thumbcaption, figcaption')) continue;
     const visibleText = paragraph.innerText;
-    // A hand-broken block already has its own line layout.
-    if (paragraph.querySelector('br') && visibleText.trim().includes('\n')) return false;
-    if (!visibleText.trim() || /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u.test(visibleText)) {
-      return false;
+    if (!visibleText.trim() || existingIndent.test(visibleText) || numberedStep.test(visibleText.trimStart()) ||
+        Number.parseFloat(getComputedStyle(paragraph).textIndent) !== 0) continue;
+
+    let indent = '2em';
+    if (visibleText.trim().includes('\n') && paragraph.querySelector('br')) {
+      const lines = visibleText.split('\n').filter(line => line.trim());
+      // Authors sometimes use breaks between prose paragraphs. Preserve short
+      // lines, instructions and other blocks whose visual alignment is intentional.
+      if (!lines.every(line => line.trim().length >= 24 && /[。！？]/u.test(line) &&
+          !itemLabel.test(line.trim()) && !numberedStep.test(line.trimStart()))) continue;
+      if (!lines.some(line => existingIndent.test(line)) && CSS.supports('text-indent', '2em each-line')) {
+        indent = '2em each-line';
+      }
     }
+    needsIndent.set(paragraph, indent);
+  }
 
-    return Number.parseFloat(getComputedStyle(paragraph).textIndent) === 0;
-  });
-
-  if (!needsIndent.length) return;
+  if (!needsIndent.size) return;
   const indentStyleId = 'ff14-wiki-paragraph-indent';
   const indentMarker = 'data-ff14-wiki-indent';
   if (!document.getElementById(indentStyleId)) {
@@ -168,9 +179,9 @@ function indentWikiParagraphs(article) {
     style.textContent = `:where(#mw-content-text p[${indentMarker}] > *) { text-indent: 0; }`;
     document.head.append(style);
   }
-  for (const paragraph of needsIndent) {
+  for (const [paragraph, indent] of needsIndent) {
     paragraph.setAttribute(indentMarker, '');
-    paragraph.style.textIndent = '2em';
+    paragraph.style.textIndent = indent;
   }
 }
 
