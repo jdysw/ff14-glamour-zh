@@ -25,10 +25,11 @@ try {
         <header id="firstHeading"><h1>词条标题</h1></header>
         <main id="mw-content-text"><div class="mw-parser-output">
         <style>
-          #wiki-body h2 { border-bottom: none; color: brown; padding-top: 50px; }
+          #wiki-body h2 { border-bottom: 2px solid; color: brown; padding-top: 50px; }
           .mw-parser-output h3::before { content: '■'; }
+          h2 .mw-headline { font-size: 32px; font-weight: bold; }
         </style>
-        <h2>剧情</h2>
+        <h2><span class="mw-headline">剧情</span></h2>
         <p id="plain">“正文”</p>
         <ul><li>她离开了</li><li>前往营地</li></ul>
         <style>.mw-parser-output ul { margin-inline-start: 1.6em; padding-inline-start: 0; }</style>
@@ -93,6 +94,10 @@ try {
       headingMarkers: ['#standalone-heading', '#skill-heading'].map(selector =>
         getComputedStyle(document.querySelector(selector), '::before').content),
       h2Border: getComputedStyle(document.querySelector('.mw-parser-output > h2')).borderBottomWidth,
+      h2Typeface: getComputedStyle(document.querySelector('.mw-parser-output > h2')).fontFamily.includes('SimSun'),
+      h2HeadlineMatches: ['fontSize', 'fontWeight'].every(property =>
+        getComputedStyle(document.querySelector('.mw-headline'))[property] ===
+        getComputedStyle(document.querySelector('.mw-parser-output > h2'))[property]),
       decimalIndent: document.querySelector('#decimal').style.textIndent,
       preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
@@ -111,7 +116,7 @@ try {
     mythIndents: ['', '', ''], normalTabIndent: '2em',
     introList: '32px', nestedList: '25.6px', independentList: '25.6px',
     navigationList: '25.6px', galleryList: '25.6px',
-    titleWeights: ['700', '700', '650'], headingMarkers: ['none', '"■"'], h2Border: '1px',
+    titleWeights: ['600', '600', '600'], headingMarkers: ['none', '"■"'], h2Border: '0px', h2Typeface: true, h2HeadlineMatches: true,
     decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);

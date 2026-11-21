@@ -48,32 +48,44 @@ function styleWikiHeadings() {
   const style = document.createElement('style');
   style.id = styleId;
   style.textContent = `
+    #firstHeading > h1, h1#firstHeading,
+    #wiki-body #mw-content-text > h2,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h2 {
+      --zhx-chinese-font: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "Noto Serif SC", SimSun, serif;
+      font-family: var(--zhx-chinese-font);
+      font-weight: 600;
+    }
     #firstHeading > h1, h1#firstHeading {
-      font-size: clamp(1.95rem, 1.5rem + 1.25vw, 2.55rem);
-      font-weight: 700;
+      font-size: clamp(2rem, 1.65rem + 1.1vw, 2.5rem);
       line-height: 1.18;
-      letter-spacing: .015em;
+      letter-spacing: .025em;
     }
     #wiki-body #mw-content-text > h2,
     #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h2 {
-      padding-block: clamp(24px, 2.4vw, 34px) 9px;
-      border-block-end: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+      padding-block: clamp(20px, 2vw, 30px) 4px;
+      border-block-end: none;
       color: inherit;
-      font-size: clamp(1.375rem, 1.2rem + .48vw, 1.625rem);
-      font-weight: 700;
+      color: color-mix(in srgb, currentColor 76%, #b88b54);
+      font-size: clamp(1.375rem, 1.25rem + .3vw, 1.5rem);
       line-height: 1.35;
+      letter-spacing: .045em;
     }
     #wiki-body #mw-content-text > h3,
     #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3 {
-      padding-block: 18px 6px;
+      padding-block: 12px 5px;
       color: inherit;
-      font-size: clamp(1.125rem, 1rem + .32vw, 1.3125rem);
-      font-weight: 650;
+      font-size: clamp(1.0625rem, 1rem + .2vw, 1.1875rem);
+      font-weight: 600;
       line-height: 1.4;
     }
     #wiki-body #mw-content-text > h3::before,
     #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > h3::before {
       content: none;
+    }
+    #wiki-body #mw-content-text > :is(h2,h3) > .mw-headline,
+    #wiki-body #mw-content-text :where(.mw-parser-output, .mw-parser-output > .mw-heading) > :is(h2,h3) > .mw-headline {
+      font-size: inherit;
+      font-weight: inherit;
     }
   `;
   document.head.append(style);
