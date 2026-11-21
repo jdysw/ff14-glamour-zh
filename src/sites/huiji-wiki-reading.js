@@ -148,25 +148,35 @@ function replaceWikiQuotes(article) {
 function indentWikiParagraphs(article) {
   const existingIndent = /^[\t\n\r ]*[\u3000\u00A0\u2002\u2003]/u;
   const numberedStep = /^(?:[①-⑳㉑-㉟㊱-㊿]|[（(][0-9０-９一二三四五六七八九十]+[）)]|[0-9０-９]{1,3}(?:[、)）]|[.．](?![0-9０-９]))|[一二三四五六七八九十]+、)/u;
+  const parallelTexts = new Set();
+  for (const content of article.querySelectorAll('.tab-content')) {
+    const tabs = content.previousElementSibling;
+    if (!tabs?.matches('.nav-tabs')) continue;
+    const labels = [...tabs.querySelectorAll('[role="tab"]')].map(tab => tab.textContent.trim());
+    if (labels.some(label => /原文$/u.test(label)) && labels.some(label => /(?:译本|译文|直译)$/u.test(label))) {
+      parallelTexts.add(content);
+    }
+  }
+
   const needsIndent = new Map();
   for (const paragraph of article.querySelectorAll('p')) {
-    if (paragraph.closest(excluded + ', .boss-guide, .gallerytext, .thumbcaption, figcaption')) continue;
+    if (paragraph.closest(excluded + ', .boss-guide, .gallerytext, .thumbcaption, figcaption') ||
+        parallelTexts.has(paragraph.closest('.tab-content'))) continue;
     const visibleText = paragraph.innerText;
     if (!visibleText.trim() || existingIndent.test(visibleText) || numberedStep.test(visibleText.trimStart()) ||
         Number.parseFloat(getComputedStyle(paragraph).textIndent) !== 0) continue;
 
-    let indent = '2em';
-    if (visibleText.trim().includes('\n') && paragraph.querySelector('br')) {
+    const hasBreak = !!paragraph.querySelector('br');
+    let indentEachLine = hasBreak && /^[\t ]*\n/u.test(visibleText);
+    if (hasBreak && visibleText.trim().includes('\n')) {
       const lines = visibleText.split('\n').filter(line => line.trim());
       // Authors sometimes use breaks between prose paragraphs. Preserve short
       // lines, instructions and other blocks whose visual alignment is intentional.
       if (!lines.every(line => line.trim().length >= 24 && /[。！？]/u.test(line) &&
           !itemLabel.test(line.trim()) && !numberedStep.test(line.trimStart()))) continue;
-      if (!lines.some(line => existingIndent.test(line)) && CSS.supports('text-indent', '2em each-line')) {
-        indent = '2em each-line';
-      }
+      indentEachLine = !lines.some(line => existingIndent.test(line));
     }
-    needsIndent.set(paragraph, indent);
+    needsIndent.set(paragraph, indentEachLine && CSS.supports('text-indent', '2em each-line') ? '2em each-line' : '2em');
   }
 
   if (!needsIndent.size) return;

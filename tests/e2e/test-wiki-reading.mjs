@@ -35,6 +35,14 @@ try {
         <p id="inline">正文含有<span id="item-link" style="display:inline-block"><span id="item-name" style="display:inline-block">水晶砂</span></span>和<span id="authored-indent" style="display:inline-block;text-indent:5px">硬灵性岩</span>。</p>
         <h2>阿尔菲诺的宝石兽进化史</h2>
         <p id="evolution"><a href="#summon">阿尔菲诺</a>所召唤出的宝石兽与常见的宝石兽有着明显的不同。<br>在伊修加德遭遇袭击时他第一次召唤出了自己的红宝石兽。(使用技能「利爪」)<br></p>
+        <p id="leading-break"><br>空行之后的普通正文。</p>
+        <ul class="nav nav-tabs" role="tablist"><li><a role="tab">创世神话文艺译本</a></li><li><a role="tab">日文原文</a></li></ul>
+        <div class="tab-content"><div class="tab-pane"><br><i>初时未见有光暗之分，世界混沌。</i>
+          <p id="myth-line"><i>混沌之中首现阿尔基克，始作时刻。</i></p>
+          <p id="myth-after-break"><br><i>昼夜交替不知几何，混沌之中再现神明。</i></p>
+        </div><div class="tab-pane" hidden><p id="myth-original">はじめに光も闇もなく。</p></div></div>
+        <ul class="nav nav-tabs" role="tablist"><li><a role="tab">详细介绍</a></li><li><a role="tab">相关信息</a></li></ul>
+        <div class="tab-content"><div class="tab-pane"><p id="normal-tab">普通标签页的正文。</p></div></div>
         <ul class="gallery"><li class="gallerybox"><div><div class="gallerytext"><p id="gallery-caption"><span>版本 5.0</span>的宝石兽攻击动作</p></div></div></li></ul>
         <table style="width:100%"><tr><td><div class="thumb"><div class="thumbinner" style="width:502px">
           <img class="thumbimage" width="500" height="281" alt="">
@@ -60,6 +68,9 @@ try {
       trailingBreakIndent: document.querySelector('#trailing-break').style.textIndent,
       inlineParagraphIndent: document.querySelector('#inline').style.textIndent,
       evolutionIndent: document.querySelector('#evolution').style.textIndent,
+      leadingBreakIndent: document.querySelector('#leading-break').style.textIndent,
+      mythIndents: ['myth-line', 'myth-after-break', 'myth-original'].map(id => document.getElementById(id).style.textIndent),
+      normalTabIndent: document.querySelector('#normal-tab').style.textIndent,
       decimalIndent: document.querySelector('#decimal').style.textIndent,
       preservedIndents: ['numbered', 'gallery-caption', 'thumb-caption'].map(id => document.getElementById(id).style.textIndent),
       itemIndents: ['item-link', 'item-name', 'authored-indent'].map(id => getComputedStyle(document.getElementById(id)).textIndent),
@@ -74,13 +85,15 @@ try {
     trailingBreakIndent: '2em', figureFits: true,
     inlineParagraphIndent: '2em', itemIndents: ['0px', '0px', '5px'],
     evolutionIndent: supportsEachLine ? '2em each-line' : '2em',
+    leadingBreakIndent: supportsEachLine ? '2em each-line' : '2em',
+    mythIndents: ['', '', ''], normalTabIndent: '2em',
     decimalIndent: '2em', preservedIndents: ['', '', ''],
   };
   assert.deepEqual(await refreshAndRead(), defaults);
 
   for (const [key, expected] of [
     ['quotes', { ...defaults, quotes: '“正文”' }],
-    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', decimalIndent: '' }],
+    ['indent', { ...defaults, indent: '', trailingBreakIndent: '', inlineParagraphIndent: '', evolutionIndent: '', leadingBreakIndent: '', normalTabIndent: '', decimalIndent: '' }],
     ['proseLists', { ...defaults, prose: null, list: '她离开了前往营地' }],
   ]) {
     await cdp.eval("window.__wikiSettingsMenu.get('Wiki 阅读排版设置')()");
