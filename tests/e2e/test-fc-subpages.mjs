@@ -9,7 +9,7 @@ const server=http.createServer((req,res)=>res.writeHead(200,{'Content-Type':'tex
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=Number(process.env.ZHX_CDP_PORT||9223);
 try{
-  for(const route of ['/summary_weapon/','/summary_equipment_af/']){
+  for(const route of ['/summary_weapon/','/summary_equipment_af/','/equipment/southern_seas_swimsuit/']){
     const page=await newPage(port,`http://127.0.0.1:${server.address().port}${route}`);
     const c=page.cdp;
     try{
@@ -34,6 +34,8 @@ try{
         unknown:document.querySelector('#unknown').textContent,ambiguous:document.querySelector('#ambiguous-name').textContent
       })`);
       assert.equal(actual.toc,'目录');assert.match(actual.title,/武器装备/);assert.doesNotMatch(actual.title,/[ぁ-ヺ]/);
+      const readingTime = await c.eval("document.querySelector('#reading-time').textContent");
+      assert.equal(readingTime.includes('天赐祝福'), route === '/equipment/southern_seas_swimsuit/');
       assert.match(actual.intro,/本页汇总介绍/);assert.doesNotMatch(actual.rich,/[ぁ-ヺ]/);
       assert.match(actual.long,/职业任务/);assert.match(actual.long,/FF11/);assert.doesNotMatch(actual.long,/[ぁ-ヺ]/);
       assert.equal(actual.br,3);assert.equal(actual.sameLink,true);assert.equal(actual.sameStrong,true);

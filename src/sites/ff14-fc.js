@@ -269,7 +269,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (element.closest(FC_SKIP_SEL)) return;
     const model = fcParagraphModel(element);
     if (!model?.children.length) return;
-    const translated = fcUIValue('rich:' + model.key);
+    const key = 'rich:' + model.key;
+    const translated = fcUIValue('page:' + location.pathname + ':' + key) || fcUIValue(key);
     if (!translated) return;
     const indices = [...translated.matchAll(/\{(\d{1,3})\}/g)].map(match => Number(match[1]));
     // Refuse malformed entries rather than dropping or duplicating native links.
