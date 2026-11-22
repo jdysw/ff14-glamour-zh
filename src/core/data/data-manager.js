@@ -7,7 +7,7 @@ import { __zhxMark, _zhxErr } from '../runtime.js';
 import { findSitePolicy as findSite, neededTables } from '../site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
-import { indexItemIds, parseItemIds } from './item-identity.js';
+import { dyeColorName, indexItemIds, parseItemIds } from './item-identity.js';
 export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveDyeColor, itemById, findItemsByName, hasItemIdentities, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
@@ -804,21 +804,23 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return /[가-힣]/u.test(name) ? name.replace(/\s+/gu, '') : name;
   }
 
+  function buildDyeColors() {
+    const colors = new Map();
+    for (const [native, zh] of Object.entries(nameMap)) {
+      if (!zh.endsWith('染剂')) continue;
+      const color = dyeColorName(native);
+      if (!color) continue;
+      const key = dyeColorKey(color);
+      const value = zh.slice(0, -2);
+      if (!colors.has(key)) colors.set(key, value);
+      else if (colors.get(key) !== value) colors.set(key, null);
+    }
+    return colors;
+  }
+
   function resolveDyeColor(name) {
     if (!name) return null;
-    if (!dyeColors) {
-      dyeColors = new Map();
-      for (const [native, zh] of Object.entries(nameMap)) {
-        if (!zh.endsWith('染剂')) continue;
-        const color = /^(?:カララント|염료)[:：]\s*(.+)$/u.exec(native)?.[1]
-          || (native.endsWith(' Dye') ? native.slice(0, -4) : '');
-        if (!color) continue;
-        const key = dyeColorKey(color);
-        const value = zh.slice(0, -2);
-        if (!dyeColors.has(key)) dyeColors.set(key, value);
-        else if (dyeColors.get(key) !== value) dyeColors.set(key, null);
-      }
-    }
+    dyeColors ||= buildDyeColors();
     return dyeColors.get(dyeColorKey(name)) || null;
   }
 
@@ -902,29 +904,38 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return -1;
   }
 
+  function _irSuggestionVariants(name, native, kind, language) {
+    const translations = kind === 0 ? [name] : _irAliasMap?.[name] || [];
+    const identities = language && itemIdRows
+      ? translations.flatMap(zh => findItemsByName(zh)).filter(row => row.glam === '1') : [];
+    if (!identities.length) return [{ native, group: _irSearchSlotByNative?.[native] ?? 5 }];
+    return identities.filter(row => row.names[language])
+      .map(row => ({ native: row.names[language], itemId: row.id, group: row.slot }));
+  }
+
+  function _irAddSuggestion(buckets, name, score, row, options) {
+    const { scope, limit } = options;
+    if (scope instanceof Set && !scope.has(row.native)) return;
+    if (typeof scope === 'number' && scope !== row.group) return;
+    const bucket = buckets[row.group][score];
+    if (bucket.length >= limit) return;
+    const suggestion = { zh: name, native: row.native };
+    if (row.itemId) suggestion.itemId = row.itemId;
+    bucket.push(suggestion);
+  }
+
   // 每个部位先保留原有五档，再补正式名和别名的多词匹配，最后限流。
   // 否则高优先级部位可能被词典顺序和 limit 提前截断。
   // 必须先按部位过滤、分桶，不能提前截断到 3000 条。
   // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
-  function _irSuggestionCollect(buckets, query, kind, limit, map, scope, terms, language) {
+  function _irSuggestionCollect(buckets, query, kind, map, options) {
+    const { terms, language } = options;
     for (const name of _irSearchContainsCandidates(query, kind, terms)) {
       const score = _irSuggestionScore(name, query, kind, terms);
-      if (score < 0) continue;
       const native = map[name];
-      if (!native) continue;
-      const translations = kind === 0 ? [name] : _irAliasMap?.[name] || [];
-      const identities = language && itemIdRows
-        ? translations.flatMap(zh => findItemsByName(zh)).filter(row => row.glam === '1') : [];
-      const rows = identities.length ? identities.filter(row => row.names[language])
-        .map(row => ({ native: row.names[language], itemId: row.id, group: row.slot }))
-        : [{ native, group: _irSearchSlotByNative?.[native] ?? 5 }];
-      for (const row of rows) {
-        if (scope instanceof Set && !scope.has(row.native)) continue;
-        if (typeof scope === 'number' && scope !== row.group) continue;
-        const bucket = buckets[row.group][score];
-        if (bucket.length < limit) bucket.push(row.itemId
-          ? { zh: name, native: row.native, itemId: row.itemId } : { zh: name, native: row.native });
-      }
+      if (score < 0 || !native) continue;
+      for (const row of _irSuggestionVariants(name, native, kind, language))
+        _irAddSuggestion(buckets, name, score, row, options);
     }
   }
 
@@ -950,8 +961,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const terms = key.split(/\s+/u);
     const buckets = Array.from({ length: 6 }, () => Array.from({ length: 7 }, () => []));
-    _irSuggestionCollect(buckets, key, 0, max, map, scope, terms, language);
-    _irSuggestionCollect(buckets, key, 1, max, map, scope, terms, language);
+    const options = { limit: max, scope, terms, language };
+    _irSuggestionCollect(buckets, key, 0, map, options);
+    _irSuggestionCollect(buckets, key, 1, map, options);
     return _irSuggestionFlatten(buckets, max);
   }
 

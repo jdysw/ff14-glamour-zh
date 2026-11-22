@@ -149,7 +149,7 @@ function miramiruScopedSuggestions(query, input) {
 
 const SEARCH_LANGUAGES = { fc: 'ja', mirapri: 'ja', collection: 'ja', ec: 'en', ronka: 'ko', eden: 'ja' };
 function searchLanguage(value) {
-  const lang = String(value || '').replace(/"/g, '').toLowerCase().split(/[-_]/)[0];
+  const lang = String(value || '').replaceAll('"', '').toLowerCase().split(/[-_]/)[0];
   return ['en', 'ja', 'ko'].includes(lang) ? lang : null;
 }
 
@@ -1045,27 +1045,27 @@ function miramiruStandaloneNative(input, query, allowPartial, selectedNative) {
   return row.native;
 }
 
+function identityStandaloneNative(input, query, allowPartial, selectedNative) {
+  if (selectedNative) return chosenNative(_selectedSearchRows.get(input), input) || selectedNative;
+  const rows = multiwordSearchRows(query, input);
+  if (rows) return rows.size === 1 ? rows.values().next().value : null;
+  return identityOnlyNative(input, query, allowPartial);
+}
+
+function legacyStandaloneNative(input, query, allowPartial) {
+  if (ecSearchContext(input)) return ecScopedNative(query, input, allowPartial);
+  const gearset = isECGearsetsPage() ? resolveECGearsetSearch(query) : null;
+  return gearset || resolveByZh(query) || (allowPartial ? resolvePartialByZh(query) : null);
+}
+
 function standaloneNative(input, query, allowPartial, selectedNative) {
-    if (hasItemIdentities() && ['endcloset', 'eden'].includes(_activeSearchSiteId)) {
-      const selected = _selectedSearchRows.get(input);
-      if (selectedNative) return chosenNative(selected, input) || selectedNative;
-      const rows = multiwordSearchRows(query, input);
-      if (rows) return rows.size === 1 ? rows.values().next().value : null;
-      return identityOnlyNative(input, query, allowPartial);
-    }
-    if (!selectedNative) {
-      const rows = multiwordSearchRows(query, input);
-      if (rows && rows.size !== 1) return null;
-      if (rows && _activeSearchSiteId !== 'miramiru') return edenMakerNative(input, rows.values().next().value);
-    }
-    if (_activeSearchSiteId === 'miramiru') return miramiruStandaloneNative(input, query, allowPartial, selectedNative);
-    const context = ecSearchContext(input);
-    const native = selectedNative
-      || (context ? ecScopedNative(query, input, allowPartial) : null)
-      || (!context && isECGearsetsPage() ? resolveECGearsetSearch(query) : null)
-      || (!context ? resolveByZh(query) : null)
-      || (!context && allowPartial ? resolvePartialByZh(query) : null);
-    return edenMakerNative(input, native);
+  if (hasItemIdentities() && ['endcloset', 'eden'].includes(_activeSearchSiteId))
+    return identityStandaloneNative(input, query, allowPartial, selectedNative);
+  const rows = selectedNative ? null : multiwordSearchRows(query, input);
+  if (rows && rows.size !== 1) return null;
+  if (_activeSearchSiteId === 'miramiru') return miramiruStandaloneNative(input, query, allowPartial, selectedNative);
+  const native = selectedNative || rows?.values().next().value || legacyStandaloneNative(input, query, allowPartial);
+  return edenMakerNative(input, native);
 }
 
 function commitStandaloneNative(input, native, selectedNative, shown) {
@@ -1205,17 +1205,22 @@ function handleECGearsetsFormSubmit(event, siteId, input, query, selected) {
   return true;
 }
 
+function identityFormNative(query, siteId, input) {
+  if (!hasItemIdentities()) return undefined;
+  const matches = ecScopedSuggestions(query, input).filter(row => row.itemId && row.zh === query);
+  if (matches.length) return matches.length === 1 ? matches[0].native : null;
+  if (siteId === 'endcloset') return identityOnlyNative(input, query, true);
+  return undefined;
+}
+
 function nativeForSubmittedSearch(query, siteId, input, selected) {
   if (selected?.zh === query && selected.native) return chosenNative(selected, input, siteId);
   const rows = multiwordSearchRows(query, input);
   if (rows) return rows.size === 1 ? rows.values().next().value : null;
   if (fcArmorSlot(input) !== null || (siteId === 'ec' && ecSearchContext(input)))
     return ecScopedNative(query, input, true);
-  if (hasItemIdentities()) {
-    const matches = ecScopedSuggestions(query, input).filter(row => row.itemId && row.zh === query);
-    if (matches.length) return matches.length === 1 ? matches[0].native : null;
-    if (siteId === 'endcloset') return identityOnlyNative(input, query, true);
-  }
+  const identity = identityFormNative(query, siteId, input);
+  if (identity !== undefined) return identity;
   return resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
 }
 

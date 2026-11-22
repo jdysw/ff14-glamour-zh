@@ -11,7 +11,11 @@ const storySection = /^(?:简介|概述)$|剧情|故事|生平|早年|经历|背
 const narrativeOpening = /^(?:他(?!人)|[她它]|随后|此后|后来|当时|最终(?!幻想)|不久|于是|从此|次日|与此同时)(?=\p{Script=Han})/u;
 const sentenceEnding = /[。！？…][」』”’）】》〉]*$/u;
 const itemLabel = /^[^，。！？…：:\n]{1,16}[：:]/u;
-const eventVerb = /离开|归来|离去|返[回城]|回[到来去家]|抵达|重逢|相遇|失踪|遇袭|获救|去世|醒来|倒下|解散|得知|发现|决定|加入|留下|出发|告别|沉默|走了|死了|来了|变了|平息|失散|再会|被捕|坦言|揭开|逃离/u;
+const eventVerbs = [
+  '离开', '归来', '离去', '返回', '返城', '回到', '回来', '回去', '回家', '抵达', '重逢', '相遇',
+  '失踪', '遇袭', '获救', '去世', '醒来', '倒下', '解散', '得知', '发现', '决定', '加入', '留下',
+  '出发', '告别', '沉默', '走了', '死了', '来了', '变了', '平息', '失散', '再会', '被捕', '坦言', '揭开', '逃离',
+];
 const instructionOpening = /^(?:请|点击|选择|前往|返回|完成|领取|提交|购买|使用|查看|击败|收集|调查|确保|务必|建议)/u;
 const timeClause = /^[^，,。！？；：\n]{2,48}(?:[前后时]|之际|期间)[，,]\s*/u;
 const convertedParagraph = 'data-ff14-wiki-prose';
@@ -105,8 +109,8 @@ function mainClause(text) {
 
 function isNarrativeFragment(clause) {
   if (clause.length < 3 || instructionOpening.test(clause)) return false;
-  const verb = eventVerb.exec(clause);
-  return narrativeOpening.test(clause) || (verb !== null && verb.index > 0);
+  if (narrativeOpening.test(clause)) return true;
+  return !eventVerbs.some(verb => clause.startsWith(verb)) && eventVerbs.some(verb => clause.includes(verb));
 }
 
 function isCompleteSentence(text) {
@@ -120,62 +124,65 @@ function isNarrativeParagraph(element) {
     (text.length >= 24 || isNarrativeFragment(mainClause(text)));
 }
 
+function replaceNarrativeList(list, items, convert) {
+  const replacement = document.createDocumentFragment();
+  let remainingList = null;
+  for (const [index, item] of items.entries()) {
+    if (convert[index]) {
+      const paragraph = document.createElement('p');
+      paragraph.dataset.ff14WikiProse = '';
+      paragraph.append(...item.childNodes);
+      replacement.append(paragraph);
+      remainingList = null;
+      continue;
+    }
+    if (!remainingList) {
+      remainingList = document.createElement('ul');
+      remainingList.dataset.ff14WikiRemainder = '';
+      replacement.append(remainingList);
+    }
+    remainingList.append(item);
+  }
+  list.replaceWith(replacement);
+}
+
+function convertNarrativeList(list, headings) {
+  if (list.tagName !== 'UL' || list.attributes.length || list.closest(excluded) ||
+      headings.some(title => listSection.test(title))) return;
+
+  const intro = list.previousElementSibling;
+  if (intro?.tagName === 'P' && /[：:]$/u.test(intro.innerText.trim())) return;
+
+  const items = [...list.children];
+  const texts = items.map(plainItemText);
+  const clauses = texts.map(mainClause);
+  const narrative = clauses.map(isNarrativeFragment);
+  const fullProse = texts.map((text, index) => isCompleteSentence(text)
+    && !instructionOpening.test(clauses[index]) && text.length >= 24);
+  const hasContext = headings.some(title => storySection.test(title))
+    || isNarrativeParagraph(intro) || isNarrativeParagraph(list.nextElementSibling)
+    || texts.some((text, index) => fullProse[index] || (narrative[index] && isCompleteSentence(text)));
+  if (!hasContext) return;
+
+  // A mixed list requires narrative wording in each item we convert.
+  const allProse = texts.every((_, index) => narrative[index] || fullProse[index]);
+  const convert = narrative.map((isNarrative, index) => isNarrative || (allProse && fullProse[index]));
+  if (convert.some(Boolean)) replaceNarrativeList(list, items, convert);
+}
+
 function convertWikiProse(article) {
   const headings = [];
   const headingSelector = 'h1, h2, h3, h4, h5, h6';
-  for (const child of [...article.children]) {
+  // A static node list allows the current child to be replaced safely.
+  for (const child of article.querySelectorAll(':scope > *')) {
     const heading = child.matches('.mw-heading') ? child.querySelector(headingSelector) : child;
     if (heading?.matches(headingSelector)) {
       const level = Number(heading.tagName[1]);
       headings.length = level;
       headings[level] = (heading.querySelector('.mw-headline') || heading).innerText.trim();
-      continue;
+    } else {
+      convertNarrativeList(child, headings);
     }
-
-    if (child.tagName !== 'UL' || child.attributes.length || child.closest(excluded) ||
-      headings.some(title => listSection.test(title))) {
-      continue;
-    }
-
-    const intro = child.previousElementSibling;
-    if (intro?.tagName === 'P' && /[：:]$/u.test(intro.innerText.trim())) continue;
-
-    const items = [...child.children];
-    const texts = items.map(plainItemText);
-    const clauses = texts.map(mainClause);
-    const narrative = clauses.map(isNarrativeFragment);
-    const fullProse = texts.map((text, index) => isCompleteSentence(text) &&
-      !instructionOpening.test(clauses[index]) && text.length >= 24);
-    const hasContext = headings.some(title => storySection.test(title)) ||
-      isNarrativeParagraph(intro) || isNarrativeParagraph(child.nextElementSibling) ||
-      texts.some((text, index) => fullProse[index] ||
-        (narrative[index] && isCompleteSentence(text)));
-    if (!hasContext) continue;
-
-    // A mixed list requires narrative wording in each item we convert.
-    const allProse = texts.every((_, index) => narrative[index] || fullProse[index]);
-    const convert = narrative.map((isNarrative, index) => isNarrative || (allProse && fullProse[index]));
-    if (!convert.some(Boolean)) continue;
-
-    const replacement = document.createDocumentFragment();
-    let remainingList = null;
-    for (const [index, item] of items.entries()) {
-      if (convert[index]) {
-        const paragraph = document.createElement('p');
-        paragraph.setAttribute(convertedParagraph, '');
-        paragraph.append(...item.childNodes);
-        replacement.append(paragraph);
-        remainingList = null;
-        continue;
-      }
-      if (!remainingList) {
-        remainingList = document.createElement('ul');
-        remainingList.setAttribute('data-ff14-wiki-remainder', '');
-        replacement.append(remainingList);
-      }
-      remainingList.append(item);
-    }
-    child.replaceWith(replacement);
   }
 }
 

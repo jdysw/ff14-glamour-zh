@@ -8,7 +8,7 @@
 #   data/dictionaries/dict-*.json×8    可解析、kind=kv、entries 为「字符串 → 字符串」
 # 用法：python3 build/data/validate-data.py
 import json
-from dictionary_source import load_entries
+from dictionary_source import expand_entries
 import sys
 from pathlib import Path
 
@@ -95,43 +95,49 @@ def check_pairs(rel: str, min_lines: int) -> int:
     return n
 
 
+def check_duty_entries(entries, rel):
+    for key, value in entries.items():
+        if not key.startswith(('duty:', 'duty-alias:')) or not isinstance(value, str):
+            continue
+        if key.startswith('duty-alias:') and 'duty:' + value not in entries:
+            errors.append(f'{rel} 副本简称缺少正式名：{key} → {value}')
+        if not key.partition(':')[2].strip() or not value.strip() or any(c in key + value for c in '|\r\n'):
+            errors.append(f'{rel} 副本词条不能生成兼容文件：{key}')
+
+
+def check_dictionary(file):
+    rel = file.relative_to(ROOT).as_posix()
+    try:
+        data = json.loads(file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        errors.append(f"{rel} 解析失败：{exc}")
+        return 0
+    if not isinstance(data, dict) or data.get("kind") != "kv":
+        kind = data.get("kind") if isinstance(data, dict) else type(data).__name__
+        errors.append(f"{rel} kind 应为 kv：{kind!r}")
+        return 0
+    entries = data.get("entries")
+    if not isinstance(entries, dict) or not entries:
+        errors.append(f"{rel} entries 应为非空对象")
+        return 0
+    bad = [k for k, v in entries.items() if not isinstance(v, str)]
+    if bad:
+        errors.append(f"{rel} 含 {len(bad)} 个非字符串译文：{detail(bad)}")
+    if file.name == 'dict-common.json':
+        check_duty_entries(entries, rel)
+    try:
+        return len(expand_entries(data, file))
+    except (ValueError, KeyError, TypeError) as exc:
+        errors.append(f'{rel} 多语词条无效：{exc}')
+        return 0
+
+
 def check_dicts() -> int:
     """校验 data/dictionaries/dict-*.json；返回总条目数"""
     files = sorted((ROOT / "data" / "dictionaries").glob("dict-*.json"))
     if len(files) != 8:
         errors.append(f"data/dictionaries/dict-*.json 应为 8 个，实际 {len(files)}：{[f.name for f in files]}")
-    total = 0
-    for f in files:
-        rel = f.relative_to(ROOT).as_posix()
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            errors.append(f"{rel} 解析失败：{exc}")
-            continue
-        if not isinstance(data, dict) or data.get("kind") != "kv":
-            kind = data.get("kind") if isinstance(data, dict) else type(data).__name__
-            errors.append(f"{rel} kind 应为 kv：{kind!r}")
-            continue
-        entries = data.get("entries")
-        if not isinstance(entries, dict) or not entries:
-            errors.append(f"{rel} entries 应为非空对象")
-            continue
-        bad = [k for k, v in entries.items() if not isinstance(v, str)]
-        if bad:
-            errors.append(f"{rel} 含 {len(bad)} 个非字符串译文：{detail(bad)}")
-        if f.name == 'dict-common.json':
-            for key, value in entries.items():
-                if key.startswith('duty-alias:') and isinstance(value, str) and 'duty:' + value not in entries:
-                    errors.append(f'{rel} 副本简称缺少正式名：{key} → {value}')
-                if key.startswith(('duty:', 'duty-alias:')) and isinstance(value, str) and (
-                    not key.partition(':')[2].strip() or not value.strip() or any(c in key + value for c in '|\r\n')
-                ):
-                    errors.append(f'{rel} 副本词条不能生成兼容文件：{key}')
-        try:
-            total += len(load_entries(f))
-        except (ValueError, KeyError, TypeError) as exc:
-            errors.append(f'{rel} 多语词条无效：{exc}')
-    return total
+    return sum(check_dictionary(file) for file in files)
 
 
 def main() -> int:

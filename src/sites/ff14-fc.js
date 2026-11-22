@@ -77,7 +77,10 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (!match || !_tablesReady) return null;
     const job = FC_ROLE_ZH[match[1]] || fcUIValue(match[1]);
     if (!job) return null;
-    const parts = match[2].split(/\s*[&＆]\s*/);
+    const parts = match[2].split(/[&＆]/u).map((part, index, all) => {
+      const start = index === 0 ? part : part.trimStart();
+      return index === all.length - 1 ? start : start.trimEnd();
+    });
     if (parts.length > 2) return null;
     // Some sword/shield headings abbreviate the second name's shared prefix.
     const prefix = parts[0].slice(0, parts[0].lastIndexOf('・') + 1);
@@ -158,12 +161,24 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     }
     return { out, changed };
   }
+  function translateBracketedDuties(text) {
+    const chunks = text.split('】');
+    for (let index = 0; index < chunks.length - 1; index++) {
+      const chunk = chunks[index];
+      const opening = chunk.indexOf('【');
+      if (opening < 0) continue;
+      const names = chunk.slice(opening + 1);
+      chunks[index] = chunk.slice(0, opening + 1)
+        + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
+    }
+    return chunks.join('】');
+  }
+
   function _trFCSubstr(text, t0, core) {
     if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
     // Avoid corrupting arbitrary Japanese prose with dictionary word fragments.
     if (/[。！？]/.test(t0) && /[ぁ-ん]/.test(t0)) return null;
-    let out = text.replace(/【([^】]+)】/gu, (_, names) =>
-      '【' + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('') + '】');
+    let out = translateBracketedDuties(text);
     let changed = out !== text;
     // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
     for (const k of _getSubstrKeysAll()) {
@@ -205,7 +220,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     const match = /^(.{1,60})の(関連アイテム)?$/.exec(label);
     if (!match) return null;
     const name = fcKnownName(match[1]);
-    return name ? text.replace(label, name + (match[2] ? '的相关物品' : '的')) : null;
+    if (!name) return null;
+    const suffix = match[2] ? '的相关物品' : '的';
+    return text.replace(label, name + suffix);
   }
 
   function trFCDynamic(text, t0) {
