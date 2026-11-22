@@ -3,8 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
+import { _applyV3, resolveDyeColor } from '../../src/core/data/data-manager.js';
+import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
 const entries = name => JSON.parse(fs.readFileSync(new URL(`../../data/dictionaries/${name}`, import.meta.url), 'utf8')).entries;
+const { siteFiles } = readRuntimeV3('endcloset');
+assert.equal(_applyV3({ candidatePolicy: 1, names: siteFiles.names.text }), true);
 
 const source = fs.readFileSync(new URL('../../src/sites/endcloset.js', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '')
@@ -13,6 +17,7 @@ let observer;
 const ctx = vm.createContext({
   DICT_ENDCLOSET: { ...entries('dict-common.json'), ...entries('dict-endcloset.json') },
   isAuthoredContent,
+  resolveDyeColor,
   resolveByName: (name) => ({ '메이드 드레스': '女仆礼服' })[name] || null,
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'TEXTAREA']),
   NodeFilter: { FILTER_REJECT: 2, FILTER_ACCEPT: 1, SHOW_TEXT: 4, SHOW_ELEMENT: 1 },
@@ -73,7 +78,8 @@ check('Search candidate UI is excluded from translation', () => {
 check('导航、筛选与三语界面词均有译文', () => {
   for (const [raw, zh] of [['좋아요 목록', '我的点赞'], ['Run search (Enter)', '执行搜索（回车）'],
     ['フィルター', '筛选'], ['선택 모드', '选择模式'], ['나이트', '骑士'], ['하얀눈색', '素雪白'],
-    ['ミコッテ', '猫魅族'], ['Weaver', '裁衣匠'], ['Ash Grey', '苍白灰'], ['Jet Black', '煤玉黑']]) {
+    ['ミコッテ', '猫魅族'], ['Weaver', '裁衣匠'], ['Ash Grey', '苍白灰'], ['Jet Black', '煤玉黑'],
+    ['ジェットブラックEX', '特制煤玉黑'], ['1-칠흑색 (거래 불가)', '1-特制煤玉黑']]) {
     assert.equal(ctx.trEndCloset(raw), zh);
   }
 });

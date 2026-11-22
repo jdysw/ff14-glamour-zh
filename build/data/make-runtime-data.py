@@ -382,11 +382,16 @@ def main() -> int:
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names)
-
     dict_bytes = _gen_dict_bytes(out_dir)
     if dict_bytes is None:
         return 1
+    # Keep the existing Collection V3 file readable by released userscripts.
+    common = json.loads(dict_bytes)['common']
+    duties = {key.removeprefix('duty:'): zh for key, zh in common.items() if key.startswith('duty:')}
+    aliases = {key.removeprefix('duty-alias:'): duties[target]
+               for key, target in common.items() if key.startswith('duty-alias:')}
+    acl_text = acl_text.rstrip('\n') + '\n' + ''.join(f'{name}|{zh}\n' for name, zh in (duties | aliases).items())
+    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names)
 
     sites, ver_parts, total_bytes = _write_sites(out_dir, files)
 

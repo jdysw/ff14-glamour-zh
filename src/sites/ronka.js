@@ -2,6 +2,7 @@ import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/data/dictionary.js';
+import { resolveDyeColor } from '../core/data/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -12,7 +13,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   /* ===================================================================== */
   /* =====================================================================
    * ronka（lookbook.ronkacloset.com，韩语幻化站）— 全站汉化
-   * 界面/染剂走 DICT_RONKA；装备名走物品总表统一索引（韩文→国服名）。
+   * 界面走 DICT_RONKA；染剂与装备走物品总表统一索引（韩文→国服名）。
    * 站点为 Next.js SPA（React 拆文本节点、频繁重渲染），observer 覆盖
    * childList 与 characterData；翻译幂等（不含韩文即跳过）防循环。
    * ===================================================================== */
@@ -28,7 +29,8 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   function _trRonkaDye(t0) {
     const m = t0.match(/^([1-9])-(.+)$/);
     if (!m) return null;
-    const s = DICT_RONKA[m[2].trim()];
+    const color = m[2].trim();
+    const s = DICT_RONKA[color] || resolveDyeColor(color);
     if (!s) return null;
     return m[1] + '-' + s;
   }
@@ -37,7 +39,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   function _trRonkaIcon(t0) {
     if (t0.length <= 3 || t0.slice(-3) !== '아이콘') return null;
     const base = t0.slice(0, -3).trim();
-    const bz = DICT_RONKA[base] || ronkaItemLookup(base);
+    const bz = DICT_RONKA[base] || resolveDyeColor(base) || ronkaItemLookup(base);
     if (!bz) return null;
     return bz + '图标';
   }
@@ -55,7 +57,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     const hasKR = RONKA_KR.test(t0);
     // ① 无韩文：仅查词典（GALLERY/GENERATOR/ABOUT/LOGIN/JOIN 等）
     if (!hasKR) return DICT_RONKA[t0] || text;
-    let zh = DICT_RONKA[t0] || null;
+    let zh = DICT_RONKA[t0] || resolveDyeColor(t0);
     // ② 染剂 "N-名称"（如 "1-하얀눈색"；React 拆分时 "하얀눈색" 单独命中 ①）
     if (zh == null) zh = _trRonkaDye(t0);
     // ③ 装备名（韩文 → 国服名）

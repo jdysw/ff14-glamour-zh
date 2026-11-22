@@ -118,6 +118,14 @@ def check_dicts() -> int:
         bad = [k for k, v in entries.items() if not isinstance(v, str)]
         if bad:
             errors.append(f"{rel} 含 {len(bad)} 个非字符串译文：{detail(bad)}")
+        if f.name == 'dict-common.json':
+            for key, value in entries.items():
+                if key.startswith('duty-alias:') and isinstance(value, str) and 'duty:' + value not in entries:
+                    errors.append(f'{rel} 副本简称缺少正式名：{key} → {value}')
+                if key.startswith(('duty:', 'duty-alias:')) and isinstance(value, str) and (
+                    not key.partition(':')[2].strip() or not value.strip() or any(c in key + value for c in '|\r\n')
+                ):
+                    errors.append(f'{rel} 副本词条不能生成兼容文件：{key}')
         total += len(entries)
     return total
 

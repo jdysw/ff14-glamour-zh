@@ -1,5 +1,5 @@
 import { DICT_MIRAMIRU } from '../core/data/dictionary.js';
-import { resolveByHash, resolveByName } from '../core/data/data-manager.js';
+import { resolveByHash, resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { createTranslationObserver, observeBeforePaint } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -56,7 +56,7 @@ function trMiramiru(text, officialTag = false) {
   const normalized = raw.replace(/\s+/gu, ' ');
   let zh = officialTag ? translateMiramiruTag(raw, true) : null;
   if (!zh) zh = knownMiramiruText(raw) || knownMiramiruText(normalized);
-  if (!zh && raw.length <= 100) zh = resolveByName(raw);
+  if (!zh && raw.length <= 100) zh = resolveDyeColor(normalized) || resolveByName(raw);
   if (!zh) zh = translateMiramiruCount(raw) || translateMiramiruTag(raw, officialTag) || translateMiramiruFilterSummary(raw);
   if (!zh || zh === raw) return text;
   return text.replace(raw, zh);

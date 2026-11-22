@@ -1,8 +1,8 @@
 import { FC_ROLE_ZH, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
-import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash } from '../core/data/data-manager.js';
+import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { cacheRegister } from '../core/cache-primitives.js';
-import { DICT_FC } from '../core/data/dictionary.js';
+import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
@@ -68,7 +68,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
 
   function fcKnownName(name) {
     // Accept an actual key, never an arbitrary longer series sharing its prefix.
-    return fcUIValue(name) || fcItemName(name) || _getSeriesMap().get(name)
+    return fcUIValue(name) || fcItemName(name) || lookupDutyName(name) || _getSeriesMap().get(name)
       || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
   }
 
@@ -97,7 +97,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   // v1.2.8：四步链拆为子步骤（降认知复杂度）
   // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
   function _trFCExact(text, t0, path = globalThis.location?.pathname || '') {
-    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0);
+    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0) || lookupDutyName(t0) || resolveDyeColor(t0);
     if (!hit0) return null;
     const i = text.indexOf(t0);
     return text.slice(0, i) + hit0 + text.slice(i + t0.length);
@@ -162,12 +162,13 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
     // Avoid corrupting arbitrary Japanese prose with dictionary word fragments.
     if (/[。！？]/.test(t0) && /[ぁ-ん]/.test(t0)) return null;
-    let out = text;
-    let changed = false;
+    let out = text.replace(/【([^】]+)】/gu, (_, names) =>
+      '【' + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('') + '】');
+    let changed = out !== text;
     // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
     for (const k of _getSubstrKeysAll()) {
       if (!out.includes(k)) continue;
-      const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
+      const v = DICT_FC[k] || DICT_FC['duty:' + k] || _getSeriesPfx().get(k) || _getItemPfx().get(k);
       if (v == null) continue;
       const replaced = _fcReplaceSubstr(out, k, v);
       out = replaced.out;

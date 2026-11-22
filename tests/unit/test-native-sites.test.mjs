@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Window as TestWindow} from 'happy-dom';
+import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
@@ -152,7 +153,7 @@ test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重
     Object.assign(globalThis,{document:doc,location:{hash:'#/'},window:{__zhxTestSite:'eden'},NodeFilter:dom.NodeFilter});
     globalThis.fetch=(url,opt)=>{requests++;options.push(opt);if(fail)return Promise.resolve({ok:false,status:503});
       const response={ok:true,json:async()=>rows};return requests===1?new Promise(resolve=>{deliver=()=>resolve(response);}):Promise.resolve(response);};
-    _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0'});
+    _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0\nカララント:スートブラック\t煤烟黑染剂\t0\t5'});
     translateEdenPage();assert.equal(requests,0,'打开空弹窗不能匹配时不下载整份数据');
     await move(a+'?format=png');assert.equal(requests,1);
     await move(b);assert.equal(requests,1,'切换图片共享同一请求');
@@ -192,7 +193,15 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(trMiramiru(row.Filter.keywordPlaceholder), '搜索标题、装备或标签');
     assert.equal(trMiramiru(row.Hero.subtitle), 'FF14 幻化展示');
   }
-  for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+  const { siteFiles } = readRuntimeV3('miramiru');
+  assert.ok(_applyV3({candidatePolicy:1,names:siteFiles.names.text}));
+  try {
+    for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+    for (const raw of ['General-purpose Jet Black','ジェットブラック','칠흑색']) assert.equal(trMiramiru(raw), '煤玉黑');
+    for (const raw of ['Jet Black','ジェットブラックEX','칠흑색(거래 불가)']) assert.equal(trMiramiru(raw), '特制煤玉黑');
+  } finally {
+    _applyV3({candidatePolicy:1});
+  }
   for (const raw of ['Other','その他','기타']) assert.equal(trMiramiru(raw), '其他');
   for (const raw of ['15 Glamours','15 ミラプリ','15 투영']) assert.equal(trMiramiru(raw), '15 套幻化');
   assert.equal(trMiramiru('  '), '  ');

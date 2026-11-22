@@ -1,5 +1,5 @@
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/data/dictionary.js';
-import { resolveByHash, resolveByName } from '../core/data/data-manager.js';
+import { resolveByHash, resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
@@ -113,7 +113,8 @@ function ensureRecipeStyle() {
 
 function recipeRows(items) {
   return items?.map(item => ({...item, zh:resolveByName(item.name), colors:item.colors.map(color =>
-    resolveByName(color) || (Object.hasOwn(DICT_MIRAMIRU,color) ? DICT_MIRAMIRU[color] : color))}));
+    (Object.hasOwn(DICT_MIRAMIRU,color) ? DICT_MIRAMIRU[color] : null)
+    || resolveDyeColor(color) || resolveByName(color) || color)}));
 }
 
 function appendRecipeItems(panel, rows) {
@@ -193,7 +194,7 @@ function trEden(text) {
   const raw = text?.trim();
   if (!raw) return text;
   let value = known(raw) || known(raw.replace(/\s+/gu, ' '))
-    || (Object.hasOwn(DICT_COMMON, raw) ? DICT_COMMON[raw] : null);
+    || (Object.hasOwn(DICT_COMMON, raw) ? DICT_COMMON[raw] : null) || resolveDyeColor(raw);
   const numbers = raw.match(/\d+/gu);
   if (!value && numbers?.length === 1) value = known(raw.replace(/\d+/u, '{count}'))?.replace('{count}', numbers[0]);
   const summary = !value && /^(種族（任意）|性別（任意）|Race \(optional\)|Gender \(optional\)):\s*(.{1,50})$/u.exec(raw);

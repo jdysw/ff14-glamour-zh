@@ -53,6 +53,8 @@ try{
         unknown:document.querySelector('#unknown').textContent,ambiguous:document.querySelector('#ambiguous-name').textContent
       })`);
       assert.equal(actual.toc,'目录');assert.match(actual.title,/武器装备/);assert.doesNotMatch(actual.title,/[ぁ-ヺ]/);
+      assert.deepEqual(await c.eval(`[...document.querySelectorAll('#official-terms p')].map(e => e.textContent)`),
+        ['天然要害沙斯塔夏溶洞', '封锁坑道铜铃铜山', '骚乱坑道铜铃铜山', '亚拉戈诗学神典石', '巧手橙票', '大地紫票']);
       assert.deepEqual(await c.eval(`[
         document.querySelector('#augmented-role-set').textContent,
         document.querySelector('#second-augmented-role-set').textContent,

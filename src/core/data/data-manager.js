@@ -7,7 +7,7 @@ import { __zhxMark, _zhxErr } from '../runtime.js';
 import { findSitePolicy as findSite, neededTables } from '../site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveDyeColor, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -63,6 +63,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   const itemHash = Object.create(null);   // hash -> 中文名（EC / mirapri 用） // NOSONAR
   const ecidMap = Object.create(null);    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR
   const nameMap = Object.create(null);    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR
+  let dyeColors = null;
   const koByZh = Object.create(null);     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR
 
   // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
@@ -162,6 +163,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const ali = take('alias', true) || Object.create(null);
       const dup = take('dup', true) || Object.create(null);
       _replaceMap(nameMap, names);
+      dyeColors = null;
       _replaceMap(itemHash, hash);
       _irSearchByZh = null;
       _irSearchKind = null;
@@ -615,6 +617,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     DATA_VER = '';
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);
+    dyeColors = null;
     _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irSearchSlotByNative = null; _irCandidatePolicy = 0;
     _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
@@ -756,6 +759,29 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   const _irStats = { hit: 0, miss: 0 };
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveByName(name) { const z = (name && nameMap?.[name]) ? nameMap[name] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
+
+  function dyeColorKey(name) {
+    return /[가-힣]/u.test(name) ? name.replace(/\s+/gu, '') : name;
+  }
+
+  function resolveDyeColor(name) {
+    if (!name) return null;
+    if (!dyeColors) {
+      dyeColors = new Map();
+      for (const [native, zh] of Object.entries(nameMap)) {
+        if (!zh.endsWith('染剂')) continue;
+        const color = /^(?:カララント|염료)[:：]\s*(.+)$/u.exec(native)?.[1]
+          || (native.endsWith(' Dye') ? native.slice(0, -4) : '');
+        if (!color) continue;
+        const key = dyeColorKey(color);
+        const value = zh.slice(0, -2);
+        if (!dyeColors.has(key)) dyeColors.set(key, value);
+        else if (dyeColors.get(key) !== value) dyeColors.set(key, null);
+      }
+    }
+    return dyeColors.get(dyeColorKey(name)) || null;
+  }
+
   function resolveByZh(zh) {
     const key = _irNormZhSearch(zh);
     const map = _ensureIrSearch();
