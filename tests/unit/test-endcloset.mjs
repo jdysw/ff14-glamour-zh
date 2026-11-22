@@ -2,13 +2,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { isAuthoredContent } from '../../src/core/content-scope.js';
+
+const entries = name => JSON.parse(fs.readFileSync(new URL(`../../data/dictionaries/${name}`, import.meta.url), 'utf8')).entries;
 
 const source = fs.readFileSync(new URL('../../src/sites/endcloset.js', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '')
   .replace(/export\s*\{[^}]*\};/s, '');
 let observer;
 const ctx = vm.createContext({
-  DICT_ENDCLOSET: JSON.parse(fs.readFileSync(new URL('../../data/dictionaries/dict-endcloset.json', import.meta.url), 'utf8')).entries,
+  DICT_ENDCLOSET: { ...entries('dict-common.json'), ...entries('dict-endcloset.json') },
+  isAuthoredContent,
   resolveByName: (name) => ({ '메이드 드레스': '女仆礼服' })[name] || null,
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'TEXTAREA']),
   NodeFilter: { FILTER_REJECT: 2, FILTER_ACCEPT: 1, SHOW_TEXT: 4, SHOW_ELEMENT: 1 },
@@ -62,26 +66,27 @@ check('A newly added element itself has its placeholder translated', () => {
   assert.equal(attributes.placeholder, '搜索');
 });
 check('Search candidate UI is excluded from translation', () => {
-  let selector;
-  ctx._ecAcceptNode({ nodeType: 1, tagName: 'SPAN', closest: (value) => { selector = value; return null; } });
-  assert.ok(selector.includes('#zhx-chinese-suggest-list'));
+  const node = { nodeType: 1, tagName: 'SPAN', closest: selector =>
+    selector.includes('#zhx-chinese-suggest-list') ? {} : null };
+  assert.equal(ctx._ecAcceptNode(node), ctx.NodeFilter.FILTER_REJECT);
 });
 check('导航、筛选与三语界面词均有译文', () => {
   for (const [raw, zh] of [['좋아요 목록', '我的点赞'], ['Run search (Enter)', '执行搜索（回车）'],
-    ['フィルター', '筛选'], ['선택 모드', '选择模式'], ['나이트', '骑士'], ['하얀눈색', '素雪白']]) {
+    ['フィルター', '筛选'], ['선택 모드', '选择模式'], ['나이트', '骑士'], ['하얀눈색', '素雪白'],
+    ['ミコッテ', '猫魅族'], ['Weaver', '裁衣匠'], ['Ash Grey', '苍白灰'], ['Jet Black', '煤玉黑']]) {
     assert.equal(ctx.trEndCloset(raw), zh);
   }
 });
 check('普通按钮同时翻译 title 与 aria-label', () => {
   const attributes = { title: '검색 실행 (Enter)', 'aria-label': '메뉴 열기' };
-  ctx._ecProcNode({ nodeType: 1, tagName: 'BUTTON', getAttribute: (name) => attributes[name],
+  ctx._ecProcNode({ nodeType: 1, tagName: 'BUTTON', closest: () => null, getAttribute: (name) => attributes[name],
     setAttribute: (name, value) => { attributes[name] = value; } });
   assert.equal(attributes.title, '执行搜索（回车）');
   assert.equal(attributes['aria-label'], '打开菜单');
 });
 check('图片属性在站点重渲染后可再次翻译', () => {
   const attributes = { alt: '좋아요 목록' };
-  const node = { nodeType: 1, tagName: 'IMG', getAttribute: (name) => attributes[name],
+  const node = { nodeType: 1, tagName: 'IMG', closest: () => null, getAttribute: (name) => attributes[name],
     setAttribute: (name, value) => { attributes[name] = value; } };
   ctx._ecProcNode(node);
   assert.equal(attributes.alt, '我的点赞');
@@ -132,15 +137,15 @@ check('Dynamic item list totals and image identifiers are translated without alt
 });
 check('Only primary navigation gets its English landmark translated', () => {
   const attrs1 = { 'aria-label': 'primary' };
-  ctx._ecProcNode({ nodeType: 1, tagName: 'NAV', getAttribute: k=>attrs1[k], setAttribute:(k,v)=>{attrs1[k]=v;} });
+  ctx._ecProcNode({ nodeType: 1, tagName: 'NAV', closest: () => null, getAttribute: k=>attrs1[k], setAttribute:(k,v)=>{attrs1[k]=v;} });
   assert.equal(attrs1['aria-label'],'主导航');
   const attrs2 = { 'aria-label': 'primary' };
-  ctx._ecProcNode({ nodeType: 1, tagName: 'BUTTON', getAttribute: k=>attrs2[k], setAttribute:(k,v)=>{attrs2[k]=v;} });
+  ctx._ecProcNode({ nodeType: 1, tagName: 'BUTTON', closest: () => null, getAttribute: k=>attrs2[k], setAttribute:(k,v)=>{attrs2[k]=v;} });
   assert.equal(attrs2['aria-label'],'primary');
 });
 check('Dynamic author title translates prefix without changing author identity', () => {
   const attrs = { title:'작성자: B' };
-  ctx._ecProcNode({ nodeType:1, tagName:'BUTTON', getAttribute: k=>attrs[k], setAttribute:(k,v)=>{attrs[k]=v;} });
+  ctx._ecProcNode({ nodeType:1, tagName:'BUTTON', closest: () => null, getAttribute: k=>attrs[k], setAttribute:(k,v)=>{attrs[k]=v;} });
   assert.equal(attrs.title, '作者：B');
   assert.equal(ctx.trEndCloset('작성자: 바람'), '作者：바람');
 });
