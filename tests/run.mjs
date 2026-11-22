@@ -67,6 +67,7 @@ const SUITES = {
     "e2e/test-mirapri.mjs",
     "e2e/test-chinese-search-submit.mjs",
     "e2e/test-fc-search-candidates.mjs",
+    "e2e/test-fc-subpages.mjs",
     "e2e/test-ec-search-inline.mjs",
     "e2e/test-chinese-font.mjs",
     "e2e/test-miramiru.mjs",
@@ -184,7 +185,7 @@ function runOne(abs, logFile) {
     const env={...process.env, PYTHONIOENCODING: process.env.PYTHONIOENCODING || 'utf-8'};
     // Profile representative UI flows once; timing/streaming and failure probes
     // keep their normal runtime rather than measuring a profiler-instrumented page.
-    const coverageScenarios=new Set(['test-miramiru.mjs','test-standalone-search.mjs','test-user-tools.mjs','test-wiki-reading.mjs']);
+    const coverageScenarios=new Set(['test-miramiru.mjs','test-standalone-search.mjs','test-user-tools.mjs','test-wiki-reading.mjs','test-fc-subpages.mjs']);
     if(!coverageScenarios.has(path.basename(abs)))delete env.ZHX_E2E_COVERAGE_DIR;
     const child = spawn(process.execPath, [abs], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
       env });

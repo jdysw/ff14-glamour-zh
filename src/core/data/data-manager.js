@@ -881,7 +881,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return _irSuggestionFlatten(buckets, max);
   }
 
-  function resolveAllByName(name) {   // NOSONAR —— 接口层：tests/unit 经 dist 区段装配调用（冻结契约）；生产路径暂不直呼
+  // Formatting-normalized lookups must retain all candidates to detect ambiguity.
+  function resolveAllByName(name) {
     const first = nameMap?.[name];
     if (!first) return [];
     const d = _irDupMap?.[name];
