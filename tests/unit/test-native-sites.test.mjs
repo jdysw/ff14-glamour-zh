@@ -193,6 +193,12 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(trMiramiru(row.Filter.keywordPlaceholder), '搜索标题、装备或标签');
     assert.equal(trMiramiru(row.Hero.subtitle), 'FF14 幻化展示');
   }
+  assert.equal(trMiramiru('Weaver'), '裁衣匠');
+  assert.equal(trMiramiru('재봉사'), '裁衣匠');
+  assert.equal(trMiramiru('Miqo’te'), '猫魅族');
+  assert.equal(trMiramiru('Rava'), '密林之民');
+  assert.equal(trMiramiru('황금의 유산'), '金曦之遗辉');
+  assert.equal(trMiramiru('キャスター'), '远程魔法输出');
   const { siteFiles } = readRuntimeV3('miramiru');
   assert.ok(_applyV3({candidatePolicy:1,names:siteFiles.names.text}));
   try {
@@ -589,6 +595,9 @@ test('End Closet 实体翻译：英文统计、属性和装备标记', () => {
 
 test('FFXIV Collection 实体翻译：词典、套装规则和原生筛选表单标签', () => {
   assert.equal(trACL(''), '');
+  assert.equal(trACL('漆黒のヴィランズ'), '暗影之逆焰');
+  assert.equal(trACL('キャスター'), '咏咒');
+  assert.equal(trACL('ロスト'), 'ロスト');
   const phrase = 'テスト・ディフェンダーアタイアRE';
   const setName = _trACLSet(phrase, phrase);
   assert.ok(setName?.startsWith('改良型'), 'RE 套装必须带改良型前缀');
@@ -783,6 +792,11 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
 });
 
 test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重写', () => {
+  assert.equal(trFC('ヴァイパー'), '蝰蛇剑士');
+  assert.equal(trFC('ミコッテ'), '猫魅族');
+  assert.equal(trFC('ひろし似'), '人族（宣传片男主风）');
+  assert.equal(trFC('キャスター'), '法系');
+  assert.equal(trFC('漆黒'), '暗影之逆焰');
   assert.equal(trFC('🎉インスタンスダンジョン✨'),'🎉副本✨','Decorative emoji must survive translation');
   assert.equal(trFCSegments('不存在'), null);
   assert.equal(trFCSegments('ディフェンダー・ディフェンダー'), '御敌·御敌');
