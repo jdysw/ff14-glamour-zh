@@ -25,7 +25,10 @@ execFileSync(findPython(), ['build/data/make-runtime-data.py', '--out', dataDir]
 const manifest = JSON.parse(fs.readFileSync(path.join(dataDir, 'manifest.json'), 'utf8'));
 manifest.sites = { [dataSite]: manifest.sites[dataSite] };
 const files = {};
-for (const [name, meta] of Object.entries(manifest.sites[dataSite].files)) {
+const entry = manifest.sites[dataSite];
+const testFiles = entry.itemIds ? { ...entry.files, itemIds: entry.itemIds } : entry.files;
+for (const [name, meta] of Object.entries(testFiles)) {
+  if (name === 'names' && entry.itemIds) continue;
   files[name] = { sha256: meta.sha256, text: fs.readFileSync(path.join(dataDir, meta.url), 'utf8') };
 }
 const dict = manifest.shared.dict;

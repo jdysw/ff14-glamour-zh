@@ -7,8 +7,10 @@
 # data/dictionaries/*.json 为词典唯一权威源——本脚本每次构建全量覆盖 src/core/data/dictionary.js 中的七个词典块
 # 生成七个词典块，并在每块上方维护一行「⚠️ 自动生成」标识（存在即更新、缺失即插入，
 # 幂等；对块与标识的任何手改都会被下一次构建覆盖）。
-import re, json, sys, os
+import re, sys, os
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'data'))
+from dictionary_source import load_entries
 
 BASE = str(Path(__file__).resolve().parents[2])
 DICT_DIR = os.path.join(BASE, 'data', 'dictionaries')
@@ -116,8 +118,7 @@ s = open(TARGET, encoding='utf-8').read()
 total = 0
 for name, fn, is_site in FILES:
     fp = os.path.join(DICT_DIR, fn)
-    data = json.load(open(fp, encoding='utf-8'))
-    entries = data['entries']
+    entries = load_entries(fp)
     body = gen_kv(entries, spread=is_site)
     new_stmt = '  const ' + name + ' = ' + body + ';'
     r = find_block(s, name)

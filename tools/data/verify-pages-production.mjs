@@ -54,8 +54,10 @@ export async function verifyProductionV3(originValue = DEFAULT_ORIGIN, transport
   let files = 0;
   let bytesChecked = 0;
   for (const site of DATA_POLICIES) {
-    for (const name of requiredV3Files(site)) {
-      const meta = manifest.sites[site.id].files[name];
+    const entry = manifest.sites[site.id];
+    const metas = requiredV3Files(site).map(name => entry.files[name]);
+    if (entry.itemIds) metas.push(entry.itemIds);
+    for (const meta of metas) {
       const bytes = await httpBytes(origin, meta.url, transport);
       assert.equal(bytes.length, meta.bytes, '线上文件字节长度不符：' + meta.url);
       assert.equal(sha256(bytes), meta.sha256.toLowerCase(),

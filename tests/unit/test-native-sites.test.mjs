@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {Window as TestWindow} from 'happy-dom';
+import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
@@ -152,7 +153,7 @@ test('Eden 图片投稿数据：精确匹配、异步换图、缺失记录与重
     Object.assign(globalThis,{document:doc,location:{hash:'#/'},window:{__zhxTestSite:'eden'},NodeFilter:dom.NodeFilter});
     globalThis.fetch=(url,opt)=>{requests++;options.push(opt);if(fail)return Promise.resolve({ok:false,status:503});
       const response={ok:true,json:async()=>rows};return requests===1?new Promise(resolve=>{deliver=()=>resolve(response);}):Promise.resolve(response);};
-    _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0'});
+    _applyV3({candidatePolicy:1,names:'テスト甲\t测试甲\t1\t0\nテスト乙\t测试乙\t1\t0\nカララント:スートブラック\t煤烟黑染剂\t0\t5'});
     translateEdenPage();assert.equal(requests,0,'打开空弹窗不能匹配时不下载整份数据');
     await move(a+'?format=png');assert.equal(requests,1);
     await move(b);assert.equal(requests,1,'切换图片共享同一请求');
@@ -192,7 +193,21 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(trMiramiru(row.Filter.keywordPlaceholder), '搜索标题、装备或标签');
     assert.equal(trMiramiru(row.Hero.subtitle), 'FF14 幻化展示');
   }
-  for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+  assert.equal(trMiramiru('Weaver'), '裁衣匠');
+  assert.equal(trMiramiru('재봉사'), '裁衣匠');
+  assert.equal(trMiramiru('Miqo’te'), '猫魅族');
+  assert.equal(trMiramiru('Rava'), '密林之民');
+  assert.equal(trMiramiru('황금의 유산'), '金曦之遗辉');
+  assert.equal(trMiramiru('キャスター'), '远程魔法输出');
+  const { siteFiles } = readRuntimeV3('miramiru');
+  assert.ok(_applyV3({candidatePolicy:1,names:siteFiles.names.text}));
+  try {
+    for (const raw of ['Chestnut Brown','チェスナットブラウン','밤색']) assert.equal(trMiramiru(raw), '山栗棕');
+    for (const raw of ['General-purpose Jet Black','ジェットブラック','칠흑색']) assert.equal(trMiramiru(raw), '煤玉黑');
+    for (const raw of ['Jet Black','ジェットブラックEX','칠흑색(거래 불가)']) assert.equal(trMiramiru(raw), '特制煤玉黑');
+  } finally {
+    _applyV3({candidatePolicy:1});
+  }
   for (const raw of ['Other','その他','기타']) assert.equal(trMiramiru(raw), '其他');
   for (const raw of ['15 Glamours','15 ミラプリ','15 투영']) assert.equal(trMiramiru(raw), '15 套幻化');
   assert.equal(trMiramiru('  '), '  ');
@@ -292,7 +307,37 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { parseItemIds } from '../../src/core/data/item-identity.js';
+import { itemNames } from '../../src/core/item-languages.js';
+
+test('同名物品按 ID 分别反查，染剂可按普通和特制原名查询', () => {
+  const data = [
+    'en\tja\tko',
+    '1001\t同名装备\tFirst Coat\t共通装備\t첫 장비\t1\t1',
+    '1002\t同名装备\tSecond Coat\t共通装備\t두번째 장비\t1\t1',
+    '1003\t煤玉黑染剂\tGeneral-purpose Jet Black Dye\tカララント:ジェットブラック\t염료: 칠흑색\t0\t5',
+    '1004\t特制煤玉黑染剂\tJet Black Dye\tカララント:ジェットブラックEX\t염료: 칠흑색(거래 불가)\t0\t5',
+  ].join('\n');
+  const parsed = parseItemIds(data);
+  assert.ok(parsed);
+  assert.equal(parseItemIds(data + '\n1001\t重复\tA\tB\tC\t1\t1'), null);
+  assert.ok(_applyV3({ candidatePolicy: 1, identity: parsed }));
+  try {
+    assert.equal(itemById(1002).names.ko, '두번째 장비');
+    assert.deepEqual(findItemsByName('共通装備', 'ja').map(row => row.id), [1001, 1002]);
+    assert.deepEqual(suggestByZh('同名装备', 0, 1, 'en').map(row => [row.itemId, row.native]),
+      [[1001, 'First Coat'], [1002, 'Second Coat']]);
+    assert.deepEqual(suggestByZh('同名装备', 0, 1, 'ja').map(row => row.itemId), [1001, 1002]);
+    assert.deepEqual(itemNames('同名装备'), {});
+    assert.equal(itemNames('同名装备', 1002).en, 'Second Coat');
+    assert.equal(findItemsByName('ジェットブラック', 'ja')[0].id, 1003);
+    assert.equal(findItemsByName('칠흑색(거래불가)', 'ko')[0].id, 1004);
+    assert.equal(itemById(1004).names.en, 'Jet Black Dye');
+  } finally {
+    _applyV3({ candidatePolicy: 1 });
+  }
+});
 
 test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', { skip: 'xivc 支持暂时停用' }, async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver','setTimeout','clearTimeout']
@@ -580,6 +625,9 @@ test('End Closet 实体翻译：英文统计、属性和装备标记', () => {
 
 test('FFXIV Collection 实体翻译：词典、套装规则和原生筛选表单标签', () => {
   assert.equal(trACL(''), '');
+  assert.equal(trACL('漆黒のヴィランズ'), '暗影之逆焰');
+  assert.equal(trACL('キャスター'), '咏咒');
+  assert.equal(trACL('ロスト'), 'ロスト');
   const phrase = 'テスト・ディフェンダーアタイアRE';
   const setName = _trACLSet(phrase, phrase);
   assert.ok(setName?.startsWith('改良型'), 'RE 套装必须带改良型前缀');
@@ -774,6 +822,11 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
 });
 
 test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重写', () => {
+  assert.equal(trFC('ヴァイパー'), '蝰蛇剑士');
+  assert.equal(trFC('ミコッテ'), '猫魅族');
+  assert.equal(trFC('ひろし似'), '人族（宣传片男主风）');
+  assert.equal(trFC('キャスター'), '法系');
+  assert.equal(trFC('漆黒'), '暗影之逆焰');
   assert.equal(trFC('🎉インスタンスダンジョン✨'),'🎉副本✨','Decorative emoji must survive translation');
   assert.equal(trFCSegments('不存在'), null);
   assert.equal(trFCSegments('ディフェンダー・ディフェンダー'), '御敌·御敌');

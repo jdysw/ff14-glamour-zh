@@ -177,13 +177,24 @@ if (dictJsonIdx >= 0) {
     ['DICT_ENDCLOSET', 'dict-endcloset.json'],
     ['DICT_MIRAMIRU', 'dict-miramiru.json'],
   ];
-  const commonData = JSON.parse(fs.readFileSync(path.join(dictDir, 'dict-common.json'), 'utf8'));
+  const readSource = (file) => {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const entries = { ...data.entries };
+    for (const {zh, names} of data.terms || [])
+      for (const aliases of Object.values(names))
+        for (const alias of aliases) {
+          if (Object.hasOwn(entries, alias)) throw new Error('Duplicate dictionary alias: ' + alias);
+          entries[alias] = zh;
+        }
+    return entries;
+  };
+  const commonEntries = readSource(path.join(dictDir, 'dict-common.json'));
   for (const [n, fn] of MAP) {
     const fp = path.join(dictDir, fn);
     if (!fs.existsSync(fp)) { console.log('⚠️', fn, '缺失'); allEq = false; continue; }
-    const entries = JSON.parse(fs.readFileSync(fp, 'utf8')).entries;
+    const entries = readSource(fp);
     // 期望值：站点层 = common + 本站增量（与运行时/注入的合并语义一致）
-    const expect = (n === 'DICT_COMMON') ? entries : { ...commonData.entries, ...entries };
+    const expect = (n === 'DICT_COMMON') ? entries : { ...commonEntries, ...entries };
     const d = extractDict(a, n);
     if (d.value === undefined) {
       console.log(n, '提取失败', d.missing ? '(src 中缺失)' : '');

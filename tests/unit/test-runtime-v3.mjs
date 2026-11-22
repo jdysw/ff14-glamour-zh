@@ -29,6 +29,7 @@ const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
 import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
+import { parseItemIds } from '../../src/core/data/item-identity.js';
 import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
@@ -225,9 +226,24 @@ ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publish
   let mism = 0;
   for (const [site, want] of Object.entries(expect)) {
     const got = readdirSync(new URL(`${site}/`, V3_DIR)).sort();
-    if (got.join(',') !== want.join(',')) { mism++; console.log(`     ${site}: 实际=${got.join(',')}`); }
+    const declared = want.includes('names.tsv') ? [...want, 'item-ids.tsv'].sort() : want;
+    if (got.join(',') !== declared.join(',')) { mism++; console.log(`     ${site}: 实际=${got.join(',')}`); }
   }
   eq('A18 站点文件清单与预期一致', mism, 0);
+  for (const [site, entry] of Object.entries(man.sites)) {
+    if (!entry.itemIds) continue;
+    const data = readFileSync(new URL(entry.itemIds.url, V3_DIR));
+    eq(site + ' 物品 ID 文件哈希', createHash('sha256').update(data).digest('hex'), entry.itemIds.sha256);
+    const grouped = parseItemIds(data.toString('utf8'));
+    const legacy = new Map();
+    for (const line of readFileSync(new URL(entry.files.names.url, V3_DIR), 'utf8').trimEnd().split('\n')) {
+      const [name, ...fields] = line.split('\t');
+      if (!legacy.has(name)) legacy.set(name, fields.join('\t'));
+    }
+    ok(site + ' 通过物品 ID 文件还原旧名称、排序与部位', grouped
+      && [...legacy.keys()].join('\n') === Object.keys(grouped.names).join('\n')
+      && [...legacy].every(([name, fields]) => fields === [grouped.names[name], grouped.glam[name], grouped.slots[name]].join('\t')));
+  }
 }
 
 // ══════════ B. 运行时 v3 加载（桩装配）══════════

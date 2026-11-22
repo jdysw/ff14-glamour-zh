@@ -282,6 +282,25 @@ def _site_name_pairs(site, langs, names, glams, slot_names):
     return pairs
 
 
+def build_item_ids(site, items_text, item_slots):
+    """Group the same V3 names by game row ID, with explicit native languages."""
+    langs = SITE_LANGS[site]
+    if site == 'mirapri':
+        langs = [*langs, 'en']
+    columns = dict(zip(LANGS, (2, 3, 4)))
+    lines = ['\t'.join(langs)]
+    for line in items_text.splitlines():
+        p = _row_parts(line)
+        if not p or len(p) < 9:
+            continue
+        names = [p[columns[lang]] for lang in langs]
+        if site == 'mirapri' and not names[-1].endswith(' Dye'):
+            names[-1] = ''
+        if any(names):
+            lines.append('\t'.join([p[0], p[1], *names, p[8], item_slots.get(p[0], OTHER_SLOT)]))
+    return ('\n'.join(lines) + '\n').encode('utf-8')
+
+
 def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names=None):
     """生成 {(site, 文件名): bytes}——含按站语言裁剪。"""
     out = {}
@@ -382,13 +401,29 @@ def main() -> int:
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names)
-
     dict_bytes = _gen_dict_bytes(out_dir)
     if dict_bytes is None:
         return 1
+    # Keep the existing Collection V3 file readable by released userscripts.
+    common = json.loads(dict_bytes)['common']
+    duties = {key.removeprefix('duty:'): zh for key, zh in common.items() if key.startswith('duty:')}
+    aliases = {key.removeprefix('duty-alias:'): duties[target]
+               for key, target in common.items() if key.startswith('duty-alias:')}
+    acl_text = acl_text.rstrip('\n') + '\n' + ''.join(f'{name}|{zh}\n' for name, zh in (duties | aliases).items())
+    files = build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_text, acl_text, slot_names)
 
     sites, ver_parts, total_bytes = _write_sites(out_dir, files)
+    # A sibling to files keeps the exact legacy V3 file list readable.
+    for site, langs in SITE_LANGS.items():
+        if not langs:
+            continue
+        item_ids = build_item_ids(site, items_text, item_slots)
+        url = f'{site}/item-ids.tsv'
+        (out_dir / url).write_bytes(item_ids)
+        fingerprint = sha256_hex(item_ids)
+        sites[site]['itemIds'] = {'url': url, 'sha256': fingerprint, 'bytes': len(item_ids)}
+        ver_parts.append(f'{url}:{fingerprint}')
+        total_bytes += len(item_ids)
 
     # shared dict 落盘
     (out_dir / DICT_JSON).write_bytes(dict_bytes)

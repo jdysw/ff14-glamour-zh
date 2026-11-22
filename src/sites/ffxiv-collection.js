@@ -2,7 +2,7 @@ import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DATA_TEXT } from '../core/data/data-manager.js';
-import { DICT_ACL } from '../core/data/dictionary.js';
+import { DICT_ACL, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
@@ -30,6 +30,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
       const norm = t0.replace(/[ \t\u00a0]+/g, ' ').trim();
       if (norm !== t0) hit = DICT_ACL[norm];
     }
+    hit ||= lookupDutyName(t0, false);
     if (!hit) return null;
     const i = text.indexOf(t0);
     return text.slice(0, i) + hit + text.slice(i + t0.length);
@@ -90,6 +91,8 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
 
   // 副本名单条查找：「日文名|中文名」表（DATA_TEXT.acl）
   function lookupAclCfc(ja) {
+    const shared = lookupDutyName(ja);
+    if (shared) return shared;
     if (!ja || typeof DATA_TEXT.acl !== 'string' || !DATA_TEXT.acl) return null;
     const key = '\n' + ja + '|';
     const at = DATA_TEXT.acl.indexOf(key);

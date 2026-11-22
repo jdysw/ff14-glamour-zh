@@ -1,15 +1,21 @@
-import { dataGetIndex, dataGetStatus, resolveKo } from './data/data-manager.js';
+import { dataGetIndex, dataGetStatus, findItemsByName, hasItemIdentities, itemById, resolveKo } from './data/data-manager.js';
 import { cacheRegister } from './cache-primitives.js';
 
 let revision = '';
 let names = new Map();
 cacheRegister('itemLanguages', 'derived', () => { revision = ''; names.clear(); }, () => names.size);
-function nativeLanguage(name) {
+export function nativeLanguage(name) {
   if (/[가-힣]/u.test(name)) return 'ko';
   if (/[ぁ-ヺ\u3400-\u9fff]/u.test(name)) return 'ja';
   return 'en';
 }
-export function itemNames(zh) {
+export function itemNames(zh, id) {
+  if (id != null) return { ...itemById(id)?.names };
+  if (hasItemIdentities()) {
+    const records = findItemsByName(zh);
+    if (records.length > 1) return {};
+    if (records.length === 1) return { ...records[0].names };
+  }
   const status = dataGetStatus();
   const next = status.generation + ':' + status.version;
   if (revision !== next) {
@@ -28,7 +34,7 @@ export function itemNames(zh) {
 }
 
 export function miramiruLanguage() {
-  const language = /^\/(en|ko)(?:\/|$)/.exec(location.pathname)?.[1]
+  const language = /^\/(en|ja|ko)(?:\/|$)/.exec(location.pathname)?.[1]
     || document.documentElement.lang.split('-')[0];
   return ['en', 'ko'].includes(language) ? language : 'ja';
 }

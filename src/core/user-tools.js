@@ -174,7 +174,7 @@ async function showWikiReadingSettings() {
     input.name = key;
     input.checked = settings[key];
     label.append(input, ' ' + text);
-    box.insertBefore(label, status);
+  status.before(label);
     return input;
   });
   status.textContent = '保存后刷新页面生效。';

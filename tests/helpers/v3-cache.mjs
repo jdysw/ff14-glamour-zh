@@ -25,6 +25,8 @@ export function readRuntimeV3(siteId = 'ec') {
       const files = {};
       for (const [name, meta] of Object.entries(manifest.sites[id]?.files || {}))
         files[name] = { ...meta, text: fs.readFileSync(path.join(CACHE_DIR, meta.url), 'utf8') };
+      const itemIds = manifest.sites[id]?.itemIds;
+      if (itemIds) files.itemIds = { ...itemIds, text: fs.readFileSync(path.join(CACHE_DIR, itemIds.url), 'utf8') };
       return files;
     };
     const dictMeta = manifest.shared?.dict;
@@ -41,7 +43,7 @@ export function v3CacheEntries(siteId = 'ec', prefix = '') {
     [prefix + 'zhx.v3.manifest']: Date.now() + String.fromCharCode(10) + manifestText,
     [prefix + 'zhx.v3.manifest.' + siteId]: Date.now() + String.fromCharCode(10) + manifestText,
   };
-  for (const [name, meta] of Object.entries(siteFiles))
+  for (const [name, meta] of Object.entries(siteFiles).filter(([name]) => name !== 'names' || !siteFiles.itemIds))
     entries[prefix + 'zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256] = meta.sha256 + String.fromCharCode(10) + meta.text;
   if (dict) entries[prefix + 'zhx.v3.f.' + siteId + '.dict.' + dict.sha256] = dict.sha256 + String.fromCharCode(10) + dict.text;
   return entries;

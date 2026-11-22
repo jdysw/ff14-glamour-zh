@@ -22,6 +22,7 @@ export async function verifyPagesHttp(siteDirectory, origin) {
   const metas = DATA_POLICIES.flatMap(policy =>
     requiredV3Files(policy).map(name => manifest.sites[policy.id].files[name]));
   metas.push(manifest.shared.dict);
+  for (const site of Object.values(manifest.sites)) if (site.itemIds) metas.push(site.itemIds);
   const paths = ['manifest.json', ...metas.map(meta => meta.url)];
   let checks = 0;
   for (const name of paths) {

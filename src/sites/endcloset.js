@@ -1,5 +1,5 @@
 import { DICT_ENDCLOSET } from '../core/data/dictionary.js';
-import { resolveByName } from '../core/data/data-manager.js';
+import { resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
@@ -45,7 +45,8 @@ function _trEndClosetDye(t0) {
   // End Closet 染剂名可能带数字前缀（类似 ronka 的 "N-色名"）
   const m = t0.match(/^([1-9])-(.+)$/);
   if (!m) return null;
-  const s = DICT_ENDCLOSET[m[2].trim()];
+  const color = m[2].trim();
+  const s = DICT_ENDCLOSET[color] || resolveDyeColor(color);
   if (!s) return null;
   return m[1] + '-' + s;
 }
@@ -78,13 +79,13 @@ function trEndCloset(text) {
   if (t0.length > 120 && !exact) return text;
   const hasForeign = EC_KR.test(t0) || EC_EN_WORD.test(t0) || EC_JA.test(t0);
   if (!hasForeign) return text;
-  let zh = exact || null;
+  let zh = exact || resolveDyeColor(t0);
   if (zh == null) zh = trEndClosetCount(t0);
   if (zh == null) zh = _trEndClosetDye(t0);
   if (zh == null) zh = _trEndClosetItem(t0);
   if (zh == null) {
     const norm = t0.replace(/[ \t\u00a0]+/g, ' ');
-    if (norm !== t0) zh = DICT_ENDCLOSET[norm] || _trEndClosetItem(norm) || null;
+    if (norm !== t0) zh = DICT_ENDCLOSET[norm] || resolveDyeColor(norm) || _trEndClosetItem(norm);
   }
   if (zh == null || zh === t0) return text;
   const i = text.indexOf(t0);
@@ -145,7 +146,8 @@ function _ecProcNode(n) {
     if (next !== raw) {
       n.nodeValue = next;
       const itemZh = _trEndClosetItem(raw.trim());
-      if (itemZh) markEndClosetItem(n, itemZh);
+      const shown = next.trim();
+      if (itemZh && (shown === itemZh || shown + '染剂' === itemZh)) markEndClosetItem(n, itemZh);
     }
     return;
   }

@@ -1,9 +1,10 @@
-import { FC_ROLE_ZH, _getItemPfx, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
+import { FC_ROLE_ZH, _getItemPfx, _getSeriesMap, _getSeriesPfx, _getSubstrKeysAll } from '../core/cache.js';
 import { WIKI_ITEM } from '../core/constants.js';
-import { _tablesReady, resolveByHash } from '../core/data/data-manager.js';
-import { DICT_FC } from '../core/data/dictionary.js';
+import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
+import { cacheRegister } from '../core/cache-primitives.js';
+import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
-import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
+import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
@@ -16,7 +17,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (parts.length < 2 || parts.length > 5) return null;
     let hit = 0;
     const zh = parts.map((p) => {
-      const z = FC_ROLE_ZH[p] || DICT_FC[p] || lookupJp2Zh(p) || lookupSeries(p);
+      const z = FC_ROLE_ZH[p] || fcKnownName(p);
       if (z) { hit++; return z; }
       return null;
     });
@@ -25,6 +26,68 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (parts.some((p, i) => zh[i] == null && !/^[A-Za-z0-9 ]{1,15}$/.test(p))) return null;
     const out = parts.map((p, i) => (zh[i] != null ? zh[i] : p));
     return out.join('·');
+  }
+
+  let fcNormalizedNames = null;
+  let fcNormalizedUI = null;
+  cacheRegister('fcNormalizedNames', 'derived', () => { fcNormalizedNames = null; }, () => fcNormalizedNames?.size || 0);
+  cacheRegister('fcNormalizedUI', 'translate', () => { fcNormalizedUI = null; }, () => fcNormalizedUI?.size || 0);
+  const fcNameKey = name => name.normalize('NFKC').replace(/[・\s]/gu, '');
+  const fcUIKey = text => text.normalize('NFKC').replace(/\s+/gu, ' ').trim();
+  function fcCollectUnique(map, key, value) {
+    if (!map.has(key)) map.set(key, value);
+    else if (map.get(key) !== value) map.set(key, null);
+  }
+
+  function fcUIValue(key) {
+    if (DICT_FC[key]) return DICT_FC[key];
+    if (!fcNormalizedUI) {
+      fcNormalizedUI = new Map();
+      for (const [source, value] of Object.entries(DICT_FC)) fcCollectUnique(fcNormalizedUI, fcUIKey(source), value);
+    }
+    return fcNormalizedUI.get(fcUIKey(key)) || null;
+  }
+
+  function fcNormalizedItem(name) {
+    if (!_tablesReady) return null;
+    if (!fcNormalizedNames) {
+      fcNormalizedNames = new Map();
+      for (const native of Object.keys(dataGetIndex('nameMap') || {})) {
+        const key = fcNameKey(native);
+        for (const zh of resolveAllByName(native)) {
+          fcCollectUnique(fcNormalizedNames, key, zh);
+        }
+      }
+    }
+    return fcNormalizedNames.get(fcNameKey(name)) || null;
+  }
+
+  function fcItemName(name) {
+    return lookupJp2Zh(name) || fcNormalizedItem(name);
+  }
+
+  function fcKnownName(name) {
+    // Accept an actual key, never an arbitrary longer series sharing its prefix.
+    return fcUIValue(name) || fcItemName(name) || lookupDutyName(name) || _getSeriesMap().get(name)
+      || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
+  }
+
+  function fcJobEquipment(text, label) {
+    const match = /^【([^】]{1,30})】(.+)$/.exec(label);
+    if (!match || !_tablesReady) return null;
+    const job = FC_ROLE_ZH[match[1]] || fcUIValue(match[1]);
+    if (!job) return null;
+    const parts = match[2].split(/[&＆]/u).map((part, index, all) => {
+      const start = index === 0 ? part : part.trimStart();
+      return index === all.length - 1 ? start : start.trimEnd();
+    });
+    if (parts.length > 2) return null;
+    // Some sword/shield headings abbreviate the second name's shared prefix.
+    const prefix = parts[0].slice(0, parts[0].lastIndexOf('・') + 1);
+    const names = parts.map((name, index) => fcItemName(name) || fcUIValue(name)
+      || (index === 1 && prefix ? fcItemName(prefix + name) : null));
+    if (names.some(name => !name)) return null;
+    return text.replace(label, '【' + job + '】' + names.join('＆'));
   }
 
   // 装饰性首尾符号（菜单里的 ≫ ▶ » ✨ 😊 等，不参与查表）
@@ -36,12 +99,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   // 逐条替换：整串精确 → 剥离装饰 → 当日文装备名 → 子串兜底
   // v1.2.8：四步链拆为子步骤（降认知复杂度）
   // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
-  function _trFCExact(text, t0) {
-    let hit0 = DICT_FC[t0];
-    if (!hit0) {
-      const norm = t0.replace(/[ \t\u00a0]+/g, ' ').trim();
-      if (norm !== t0) hit0 = DICT_FC[norm];
-    }
+  function _trFCExact(text, t0, path = globalThis.location?.pathname || '') {
+    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0) || lookupDutyName(t0) || resolveDyeColor(t0);
     if (!hit0) return null;
     const i = text.indexOf(t0);
     return text.slice(0, i) + hit0 + text.slice(i + t0.length);
@@ -70,7 +129,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     const cand = c3.replace(/(の画像|画像|イメージ|の見た目)$/, '').trim();
     // v1.1.3：数据就绪前不跑逐段翻译——「系列・职业」半翻译（ファントムヴィジョン·御敌）会破坏原文，
     // 数据到后的补扫将无法再识别（整体译名依赖完整日文名）；等数据齐由补扫统一处理
-    let zh = lookupJp2Zh(cand) || lookupSeries(cand);
+    let zh = fcKnownName(cand);
     if (!zh && _tablesReady) zh = trFCSegments(cand);
     if (!zh || zh === cand) return null;
     const i2 = text.indexOf(t0);
@@ -81,9 +140,12 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   // v1.1.3：数据就绪前不跑——避免对「系列・职业」复合名做部分替换破坏原文（如 ファントムヴィジョン・御敌）；补扫时统一处理
   function _fcCanReplaceAt(out, at, key) {
     // Avoid translating ドレス inside メールアドレス or ノート inside ノートゥング.
-    if (!/[ぁ-んァ-ヶー]/.test(key)) return true;
-    const kana = /[ぁ-んァ-ヶー]/;
-    return !kana.test(out[at - 1] || '') && !kana.test(out[at + key.length] || '');
+    // A hiragana particle after a katakana name is a real word boundary.
+    // Keep protecting katakana runs such as ドレス in メールアドレス.
+    const kana = /[ァ-ヶー]/;
+    const joinedBefore = kana.test(key[0]) && kana.test(out[at - 1] || '');
+    const joinedAfter = kana.test(key.at(-1)) && kana.test(out[at + key.length] || '');
+    return !joinedBefore && !joinedAfter;
   }
   function _fcReplaceSubstr(out, key, value) {
     let at = out.indexOf(key);
@@ -99,16 +161,29 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     }
     return { out, changed };
   }
+  function translateBracketedDuties(text) {
+    const chunks = text.split('】');
+    for (let index = 0; index < chunks.length - 1; index++) {
+      const chunk = chunks[index];
+      const opening = chunk.indexOf('【');
+      if (opening < 0) continue;
+      const names = chunk.slice(opening + 1);
+      chunks[index] = chunk.slice(0, opening + 1)
+        + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
+    }
+    return chunks.join('】');
+  }
+
   function _trFCSubstr(text, t0, core) {
     if (!_tablesReady || (core || t0).length < 2 || !/[^\x00-\x7F]/.test(t0)) return null;
     // Avoid corrupting arbitrary Japanese prose with dictionary word fragments.
     if (/[。！？]/.test(t0) && /[ぁ-ん]/.test(t0)) return null;
-    let out = text;
-    let changed = false;
+    let out = translateBracketedDuties(text);
+    let changed = out !== text;
     // 长词优先，避免短词先替换（v1.1.6：含系列 + 物品前缀推导）
     for (const k of _getSubstrKeysAll()) {
       if (!out.includes(k)) continue;
-      const v = DICT_FC[k] != null ? DICT_FC[k] : _getSeriesPfx().get(k) || _getItemPfx().get(k);
+      const v = DICT_FC[k] || DICT_FC['duty:' + k] || _getSeriesPfx().get(k) || _getItemPfx().get(k);
       if (v == null) continue;
       const replaced = _fcReplaceSubstr(out, k, v);
       out = replaced.out;
@@ -118,21 +193,70 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   }
 
   // 逐条替换：整串精确 → 剥离装饰 → 当日文装备名 → 子串兜底
-  function trFC(text) {
-    if (!text) return text;
-    const t0 = text.trim();
-    if (!t0) return text;
+  function trFCAcquisition(text, label) {
+    const source = /^(?:特殊素材「(.+)」|(.+?) の入手方法|NPC[:：](.+)|「(.+?)×(\d{1,6})」と交換で入手)$/.exec(label);
+    if (!source) return null;
+    const native = source[1] || source[2] || source[3] || source[4];
+    const name = fcKnownName(native);
+    if (!name) return null;
+    let result;
+    if (source[1]) result = '特殊材料“' + name + '”';
+    else if (source[2]) result = name + '的获取方式';
+    else if (source[3]) result = 'NPC：' + name;
+    else result = '使用' + source[5] + '个' + name + '兑换';
+    return text.replace(label, result);
+  }
+
+  function fcArticleTitle(text, label) {
+    const match = /^【FF14】(.{1,80}?)(?:装備)?(?=[👗💍✂⚔])/u.exec(label);
+    if (!match) return null;
+    const name = fcKnownName(match[1]);
+    if (!name || name === match[1]) return null;
+    const translated = text.replace(match[1], name);
+    return _trFCSubstr(translated, translated.trim(), '') || translated;
+  }
+
+  function trFCRelated(text, label) {
+    const match = /^(.{1,60})の(関連アイテム)?$/.exec(label);
+    if (!match) return null;
+    const name = fcKnownName(match[1]);
+    if (!name) return null;
+    const suffix = match[2] ? '的相关物品' : '的';
+    return text.replace(label, name + suffix);
+  }
+
+  function trFCDynamic(text, t0) {
+    const label = fcUIKey(t0);
+    const level = /^レベル\s*(\d{1,3})$/.exec(label);
+    if (level) return text.replace(t0, level[1] + '级');
+    const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
+    if (af) return text.replace(t0, (af[1] === '戦闘' ? '战斗职业' : '制作与采集职业') + '专属装备（AF' + af[2] + '）');
+    const afIntro = /^AF(\d{1,2})とは$/.exec(label);
+    if (afIntro) return text.replace(t0, '什么是 AF' + afIntro[1]);
     const slide = /^Go to slide (\d+)$/.exec(t0);
     if (slide) return text.replace(t0, '切换到第 ' + slide[1] + ' 张');
     if (t0 === 'Previous slide') return text.replace(t0, '上一张图片');
     if (t0 === 'Next slide') return text.replace(t0, '下一张图片');
-    if (t0.length > 120) return text;
-    const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
-    const s1 = _trFCExact(text, t0);
-    if (s1 !== null) return s1;
-    const count = t0.match(/^(.{1,40}?) \(([\d,]+)\)$/u);
+    const count = label.match(/^(.{1,40}?) \(([\d,]+)\)$/u);
     if (count && Object.hasOwn(DICT_FC, count[1]))
       return text.replace(t0, DICT_FC[count[1]] + ' (' + count[2] + ')');
+    return trFCRelated(text, t0) || trFCAcquisition(text, t0);
+  }
+
+  function trFC(text, path = globalThis.location?.pathname || '') {
+    if (!text) return text;
+    const t0 = text.trim();
+    if (!t0) return text;
+    const exact = _trFCExact(text, t0, path);
+    if (exact !== null) return exact;
+    const dynamic = trFCDynamic(text, t0);
+    if (dynamic !== null) return dynamic;
+    if (t0.length > 120) return text;
+    const equipment = fcJobEquipment(text, t0);
+    if (equipment !== null) return equipment;
+    const article = fcArticleTitle(text, t0);
+    if (article !== null) return article;
+    const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
     const s2 = _trFCDecor(text, t0, core);
     if (s2 !== null) return s2;
     const s3 = _trFCName(text, t0, core);
@@ -143,14 +267,59 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   }
 
   // #zhx-chinese-suggest-list：中文搜索候选（native span 有意保留日文原名，不参与汉化）
-  const FC_SKIP_SEL = 'script, style, noscript, textarea, .sns, .twitter, .line, #zhx-chinese-suggest-list';
+  const FC_SKIP_SEL = 'script, style, noscript, textarea, pre, code, [contenteditable]:not([contenteditable="false"]), .zhx-skip, .sns, .twitter, .twitter-tweet, .line, .comment-body, .comment-content, .message-box p, .answer-box p, #zhx-chinese-suggest-list';
+
+  const FC_INLINE_TAGS = new Set(['A', 'SPAN', 'STRONG', 'EM', 'B', 'I', 'BR', 'SMALL', 'MARK']);
+  function fcParagraphModel(element) {
+    const children = [];
+    let key = '';
+    for (const node of element.childNodes) {
+      if (node.nodeType === 3) key += node.nodeValue;
+      else if (node.nodeType === 1 && FC_INLINE_TAGS.has(node.tagName)) {
+        key += '{' + children.length + '}';
+        children.push(node);
+      } else if (node.nodeType !== 8) return null;
+    }
+    return { key: key.replace(/\s+/gu, ' ').trim(), children };
+  }
+
+  function translateFCParagraph(element) {
+    if (element.closest(FC_SKIP_SEL)) return;
+    const model = fcParagraphModel(element);
+    if (!model?.children.length) return;
+    const key = 'rich:' + model.key;
+    const translated = fcUIValue('page:' + location.pathname + ':' + key) || fcUIValue(key);
+    if (!translated) return;
+    const indices = [...translated.matchAll(/\{(\d{1,3})\}/g)].map(match => Number(match[1]));
+    // Refuse malformed entries rather than dropping or duplicating native links.
+    if (indices.length !== model.children.length || new Set(indices).size !== indices.length
+      || indices.some(index => index >= model.children.length)) return;
+    const fragment = document.createDocumentFragment();
+    for (const part of translated.split(/(\{\d{1,3}\})/g)) {
+      const match = /^\{(\d{1,3})\}$/.exec(part);
+      fragment.append(match ? model.children[Number(match[1])] : document.createTextNode(part));
+    }
+    element.replaceChildren(fragment);
+  }
+
+  function translateFCParagraphs(rootArg) {
+    const scope = localScope(rootArg);
+    if (rootArg && !scope && rootArg.nodeType !== 9) return;
+    const paragraphs = new Set(queryIn(scope, 'p'));
+    const parent = scope?.closest?.('p');
+    if (parent) paragraphs.add(parent);
+    for (const paragraph of paragraphs) translateFCParagraph(paragraph);
+  }
 
   function trimFCNode(node) {
     const raw = node.nodeValue;
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
-    const next = trFC(raw);
+    const label = raw.trim();
+    const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
+    const translated = filter && fcUIValue('filter:' + label);
+    const next = translated ? raw.replace(label, translated) : trFC(raw);
     if (next !== raw) node.nodeValue = next;
   }
 
@@ -169,7 +338,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
     const v0 = n.getAttribute('value');
     if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
-      const tv = trFC(v0);
+      const tv = (n.closest('form.searchandfilter') && fcUIValue('filter:' + v0)) || trFC(v0);
       if (tv && tv !== v0) n.setAttribute('value', tv);
     }
   }
@@ -211,6 +380,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
       window.__zhixiaFcBusy = true;
     }
     try {
+      translateFCParagraphs(rootArg);
       if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
@@ -230,6 +400,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   // <title> 汉化（子页标题：装备一覧＆検索 | ミラプリライフ 等）
   function translateFCTitle() {
     const t = document.title;
+    const whole = trFC(t || '');
+    if (whole && whole !== t) { document.title = whole; return; }
     if (!t || !/[\u3040-\u30ff]/.test(t)) return;
     let out = t;
     const parts = out.split(/[|｜\-–—]/).map((x) => x.trim()).filter(Boolean);
@@ -256,7 +428,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     // v1.2.1：② 判定前剥【…】标记（「春日半頬【想】」等「纯汉字+全角标记」名此前不查表）
     const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
     if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) {
-      const z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
+      const z = fcKnownName(t);
       if (z && z !== t) return z;
     }
     // 已是中文（或中日共用汉字）→ 去掉空格直接用
@@ -300,7 +472,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     // v1.2.1：② 判定前剥【…】标记（同 fcLinkZhName）
     const tp = t.replace(/【[^【】]*】/g, '').trim() || t;
     if (/[\u3040-\u30ff]/.test(tp) || (/^[\u3005\u3006\u4e00-\u9fff]+$/.test(tp) && tp.length <= 20)) {
-      const z = lookupJp2Zh(t) || lookupSeries(t) || DICT_FC[t];
+      const z = fcKnownName(t);
       if (z) return z;
     }
     if (isForeign && /^[\u4e00-\u9fff·・A-Za-z0-9'\- ]+$/.test(t) && /[\u4e00-\u9fff]/.test(t)) return t;
@@ -373,16 +545,57 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     { match: /banner_003|fashion_accessories|ファッションアクセ/i, zh: '时尚配饰' },
     { match: /banner_004|hair_catalog|ヘアカタログ/i, zh: '发型图鉴' },
     { match: /banner_005|weapon_search|武器シリーズ/i, zh: '武器系列' },
+    { match: /ff14_antenna\.gif/i, zh: 'FF14 资讯聚合' },
+    { match: /br_c_1412_1\.gif/i, zh: 'FF14 博客榜' },
+    { match: /message_button\.svg/i, zh: '联系与留言' },
   ];
   function fcBannerMatch(a, img) {
     const probe = ((img && (img.dataset.src || img.getAttribute('src') || img.getAttribute('title') || img.getAttribute('alt'))) || '') + ' ' + (a.getAttribute('href') || '');
     for (const r of FC_BANNER_RULES) if (r.match.test(probe)) return r;
     return null;
   }
+
+  const FC_SECTION_BUTTONS = {
+    main: '页首', slider: '幻想试穿', information: '基本信息', get: '获取方式',
+    description: '装备介绍', detail: '部位详解', all: '相关物品', point: '总结',
+    head: '头部', body: '身体', hand: '手部', leg: '腿部', foot: '脚部',
+  };
+
+  function translateFCSectionButton(link) {
+    if (link.dataset.zhxFcSection) return;
+    const img = link.querySelector('img.not-hover');
+    const kind = /\/button_([a-z]+)\.svg(?:[?#]|$)/.exec(img?.dataset.src || img?.getAttribute('src') || '')?.[1];
+    const label = kind && Object.hasOwn(FC_SECTION_BUTTONS, kind) && FC_SECTION_BUTTONS[kind];
+    if (!label) return;
+    if (!document.getElementById('zhx-fc-section-style')) {
+      const style = document.createElement('style');
+      style.id = 'zhx-fc-section-style';
+      style.textContent = `
+        .link-button a[data-zhx-fc-section] { position: relative; display: block; line-height: 0; }
+        .link-button a[data-zhx-fc-section] > img { vertical-align: top; }
+        [data-zhx-fc-section] > .zhx-fc-section-label {
+          position: absolute; inset: auto 0 0; height: 30%; display: grid; place-items: center;
+          background: #a7cbea; color: #173752; font-size: clamp(10px, 1.12vw, 17px);
+          font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none;
+        }
+        [data-zhx-fc-section]:is(:hover, :focus-visible) > .zhx-fc-section-label {
+          background: #6691b7; color: #fff;
+        }`;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    link.dataset.zhxFcSection = '1';
+    link.setAttribute('aria-label', label);
+    const caption = document.createElement('span');
+    caption.className = 'zhx-fc-section-label';
+    caption.textContent = label;
+    link.appendChild(caption);
+  }
+
   function bindFCBanners(rootArg) {
     let changed = false;
     const scope = localScope(rootArg);
-    queryIn(scope, 'div.banner-wrap a').forEach((a) => {
+    queryIn(scope, '.link-button a[href^="#sub-toc-"]').forEach(translateFCSectionButton);
+    queryIn(scope, 'div.banner-wrap a, #side a.ff14rank, #side a:has(img.other-site-link)').forEach((a) => {
       if (a.dataset.zhixiaBanner) return;
       const img = a.querySelector('img');
       if (!img) return;

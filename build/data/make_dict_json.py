@@ -13,9 +13,9 @@
 """
 import hashlib
 import json
-import os
 import sys
 from pathlib import Path
+from dictionary_source import load_entries
 
 DICT_DIR = Path(__file__).resolve().parents[2] / 'data' / 'dictionaries'
 
@@ -34,9 +34,7 @@ FILES = [
 def build_dict_json():
     merged = {}
     for key, fn in FILES:
-        with open(os.path.join(DICT_DIR, fn), encoding='utf-8') as f:
-            data = json.load(f)
-        merged[key] = data.get('entries', {})
+        merged[key] = load_entries(DICT_DIR / fn)
     text = json.dumps(merged, ensure_ascii=False, separators=(',', ':'))
     fp = hashlib.sha256(text.encode('utf-8')).hexdigest()[:12]
     return text, fp

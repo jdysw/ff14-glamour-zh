@@ -39,7 +39,11 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
   function _getFCSubstrKeys() {
     if (_fcSubstrCache) return _fcSubstrCache;
     _fcSubstrCache = Object.keys(DICT_FC)
-      .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k))
+      .map(key => key.startsWith('duty:') ? key.slice(5) : key)
+      // Grammatical fragments are exact-only; replacing する inside prose corrupts it.
+      .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k)
+        && !/^[ぁ-ゖ\p{Punctuation}\s]+$/u.test(k) && !/^(?:rich|page|filter|duty-alias):/.test(k))
+      .filter(k => !/^(?:新生|蒼天|紅蓮|漆黒|暁月|黄金)$/.test(k))
       .sort((a, b) => b.length - a.length);
     return _fcSubstrCache;
   }
@@ -110,6 +114,31 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     return groups;
   }
 
+  // FC uses standalone names such as レディアント・スレイヤーRE for whole sets.
+  // Infer the localized name only when several parts agree on the augmented prefix and role.
+  function fcAugmentedRoleSets(nameMap) {
+    const roles = Object.entries(FC_ROLE_ZH);
+    const sets = new Map();
+    for (const [native, zh] of Object.entries(nameMap)) {
+      if (!native.endsWith('RE') || !zh.startsWith('改良型')) continue;
+      const separator = native.lastIndexOf('・');
+      if (separator < 2) continue;
+      const part = native.slice(separator + 1, -2);
+      const role = roles.find(([ja]) => part.startsWith(ja) && part.length > ja.length);
+      if (!role) continue;
+      const [jaRole, zhRole] = role;
+      const roleIndex = zh.indexOf(zhRole, '改良型'.length);
+      if (roleIndex <= '改良型'.length || roleIndex + zhRole.length >= zh.length) continue;
+      const key = native.slice(0, separator + 1) + jaRole + 'RE';
+      const localized = zh.slice(0, roleIndex + zhRole.length);
+      const entry = sets.get(key) || { name: localized, count: 0 };
+      entry.count++;
+      if (entry.name !== localized) entry.name = null;
+      sets.set(key, entry);
+    }
+    return sets;
+  }
+
   function _getItemPfx() {
     if (_itemPfxCache) return _itemPfxCache;
     _itemPfxCache = new Map();
@@ -121,6 +150,9 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
         if (list.length < 2) continue;
         const sub = _lcs90(list);
         if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
+      }
+      for (const [key, {name, count}] of fcAugmentedRoleSets(nameMap)) {
+        if (name && count >= 3 && !DICT_FC[key]) _itemPfxCache.set(key, name);
       }
     } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
