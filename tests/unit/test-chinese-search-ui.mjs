@@ -183,6 +183,7 @@ function buildSearchHarness(suggestionsOverride) {
   ]);
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
+    'const hasItemIdentities = () => false;',
     'const onTablesReady = (cb) => { __ready.push(cb); };',
     'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
     'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',

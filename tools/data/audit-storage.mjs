@@ -26,6 +26,7 @@ export function auditStorage(directory) {
   };
   for (const [site, entry] of Object.entries(manifest.sites)) {
     for (const meta of Object.values(entry.files)) append(site, meta);
+    if (entry.itemIds) append(site, entry.itemIds);
   }
   append('shared', manifest.shared.dict);
   rows.sort((a, b) => a.path.localeCompare(b.path, 'en'));

@@ -1,6 +1,6 @@
-import { onTablesReady, resolveByZh, resolveByName, resolvePartialByZh, suggestByZh, dataGetIndex } from './data/data-manager.js';
+import { onTablesReady, resolveByZh, resolveByName, resolvePartialByZh, suggestByZh, dataGetIndex, hasItemIdentities, itemById, findItemsByName } from './data/data-manager.js';
 import { resolveECGearsetSearch, suggestECGearsetsByZh } from '../sites/eorzea-collection.js';
-import { itemNames, miramiruLanguage } from './item-languages.js';
+import { itemNames, miramiruLanguage, nativeLanguage } from './item-languages.js';
 
 // 站点能力表：统一交互由 Core 调度；form 与 SPA 输入的提交路径各用原站行为。
 const SEARCH_SITES = Object.freeze({
@@ -137,13 +137,44 @@ function miramiruScopedSuggestions(query, input) {
   const key = input.dataset.zhxMiramiruSlot;
   const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
   const rows = new Map();
-  const language = miramiruLanguage();
+  const language = controlSearchLanguage(input);
+  if (hasItemIdentities()) return suggestByZh(query, 0, slot, language);
   for (const row of suggestByZh(query, 0, slot)) {
     const zh = resolveByName(row.native) || row.zh;
     const native = itemNames(zh)[language];
     if (native && !rows.has(native)) rows.set(native, { zh, native });
   }
   return [...rows.values()];
+}
+
+const SEARCH_LANGUAGES = { fc: 'ja', mirapri: 'ja', collection: 'ja', ec: 'en', ronka: 'ko', eden: 'ja' };
+function searchLanguage(value) {
+  const lang = String(value || '').replace(/"/g, '').toLowerCase().split(/[-_]/)[0];
+  return ['en', 'ja', 'ko'].includes(lang) ? lang : null;
+}
+
+function controlSearchLanguage(input, site = _activeSearchSiteId) {
+  const explicit = searchLanguage(input?.dataset?.searchLanguage || input?.getAttribute?.('lang'));
+  if (explicit) return explicit;
+  if (site === 'miramiru') return miramiruLanguage();
+  if (site === 'endcloset') {
+    let saved;
+    try { saved = globalThis.localStorage?.getItem('language'); } catch { /* storage can be disabled */ }
+    return searchLanguage(saved) || searchLanguage(document.documentElement?.lang) || 'ko';
+  }
+  if (site === 'eden' && input?.dataset?.zhxEdenMaker === '1') {
+    const label = document.querySelector('#equipment-view h6[data-zhx-eden-native]')?.dataset.zhxEdenNative;
+    if (label) {
+      const matches = ['ja', 'en', 'ko'].filter(lang => findItemsByName(label, lang).length);
+      if (matches.length === 1) return matches[0];
+      return nativeLanguage(label);
+    }
+  }
+  return SEARCH_LANGUAGES[site] || null;
+}
+
+function chosenNative(row, input, site) {
+  return row?.itemId ? itemById(row.itemId)?.names[controlSearchLanguage(input, site)] || null : row?.native;
 }
 
 function fcArmorSlot(input) {
@@ -155,8 +186,9 @@ function fcArmorSlot(input) {
 
 function ecScopedSuggestions(query, input) {
   if (_activeSearchSiteId === 'miramiru') return miramiruScopedSuggestions(query, input);
+  const language = controlSearchLanguage(input);
   const fcSlot = fcArmorSlot(input);
-  if (fcSlot !== null) return suggestByZh(query, 0, fcSlot);
+  if (fcSlot !== null) return suggestByZh(query, 0, fcSlot, language);
   const context = ecSearchContext(input);
   if (context?.kind === 'facewear') {
     const terms = query.split(/\s+/u);
@@ -165,13 +197,13 @@ function ecScopedSuggestions(query, input) {
       !row.zh.includes(query) && terms.every(term => row.zh.includes(term))));
   }
   if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
-  if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot);
+  if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot, language);
   if (context?.kind === 'accessory-slot') {
     return suggestByZh(query, 0, EC_ACCESSORY_SLOT_NATIVES[context.slot]);
   }
   if (context?.kind === 'accessories') return suggestByZh(query, 0, EC_ALL_ACCESSORY_NATIVES);
   return isECGearsetsPage() && !/\bvs__search\b/.test(String(input?.className || ''))
-    ? suggestECGearsetsByZh(query) : suggestByZh(query);
+    ? suggestECGearsetsByZh(query) : suggestByZh(query, 0, null, language);
 }
 
 // Only an exact or a single unambiguous in-category name can be converted
@@ -192,7 +224,9 @@ function requireMultiwordSelection(event, input) {
   const query = normalizeSearchQuery(input.value);
   if (_composingInputs.has(input) || _selectedSearchRows.get(input)?.zh === query) return false;
   const rows = multiwordSearchRows(query, input);
-  if (!rows || rows.size < 2) return false;
+  const variants = hasItemIdentities() ? ecScopedSuggestions(query, input)
+    .filter(row => row.itemId && (rows || row.zh === query)) : [];
+  if ((!rows || rows.size < 2) && new Set(variants.map(row => row.itemId)).size < 2) return false;
   event.preventDefault();
   event.stopPropagation();
   input.focus?.({ preventScroll: true });
@@ -398,6 +432,8 @@ function cancelECNativePick() {
 // The EC localization walker may replace the label. Prefer the preserved
 // original equipment name; compare translated text only as a unique fallback.
 function ecNativeOptionMatch(option, row) {
+  const itemId = option.getAttribute?.('data-item-id');
+  if (row.itemId && itemId) return String(row.itemId) === itemId ? 'native' : null;
   const clean = text => String(text || '').normalize('NFKC').replace(/\s+/gu, ' ').trim();
   const source = option.getAttribute?.('data-zhx-miramiru-native') || option.getAttribute?.('data-zhixia-source-text');
   if (source) return clean(source) === clean(row.native) ? 'native' : null;
@@ -605,13 +641,16 @@ function isECVueSearchInput(input) {
 }
 
 function selectSuggestion(index) {
-  const row = _suggestRows[index];
+  let row = _suggestRows[index];
   if (!row || !_suggestInput) return;
   const input = _suggestInput;
   if (normalizeSearchQuery(input.value) !== renderedSuggestionQuery) {
     showSuggestions(input);
     return;
   }
+  const native = chosenNative(row, input);
+  if (!native) { showSuggestions(input); return; }
+  if (native !== row.native) row = { ...row, native };
   input.focus({ preventScroll: true });
   // EC's vue-select owns the input's value. Never write a temporary Chinese
   // label into this controlled field; it can race the component's own v-model
@@ -657,6 +696,10 @@ function appendSuggestionBatch() {
     button.setAttribute('role', 'option');
     button.setAttribute('aria-selected', 'false');
     button.dataset.zhxIndex = String(index);
+    if (row.itemId) {
+      button.dataset.zhxItemId = String(row.itemId);
+      button.title = '物品 ID ' + row.itemId;
+    }
     const zh = document.createElement('span');
     zh.className = 'zhx-suggest-zh';
     zh.textContent = row.zh;
@@ -725,8 +768,9 @@ function showSuggestions(input, needsSelection = false) {
 
   const seen = new Set();
   const rows = ecScopedSuggestions(query, input).filter(row => {
-    if (seen.has(row.native)) return false;
-    seen.add(row.native);
+    const key = row.itemId ?? row.native;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 
@@ -971,6 +1015,14 @@ function edenMakerNative(input, native) {
   return native;
 }
 
+function identityOnlyNative(input, query, allowPartial) {
+  const rows = ecScopedSuggestions(query, input);
+  const exact = rows.filter(row => row.zh === query);
+  if (exact.length === 1) return exact[0].native;
+  if (!exact.length && allowPartial && rows.length === 1) return rows[0].native;
+  return null;
+}
+
 function commitEdenMakerCandidate(input, selectedNative) {
   if (_activeSearchSiteId !== 'eden' || !selectedNative || input.dataset?.zhxEdenMaker !== '1') return;
   // Vuetify combobox 以回车提交选中值；候选点击需走同一原生事件。
@@ -981,7 +1033,10 @@ function commitEdenMakerCandidate(input, selectedNative) {
 
 function miramiruStandaloneNative(input, query, allowPartial, selectedNative) {
   const rows = ecScopedSuggestions(query, input);
-  const matching = rows.filter(row => selectedNative ? row.native === selectedNative : row.zh === query);
+  const selected = _selectedSearchRows.get(input);
+  const matching = rows.filter(row => selectedNative
+    ? row.native === selectedNative && (!selected?.itemId || selected.itemId === row.itemId)
+    : row.zh === query);
   let row = null;
   if (matching.length === 1) row = matching[0];
   else if (!selectedNative && allowPartial && rows.length === 1) row = rows[0];
@@ -991,6 +1046,13 @@ function miramiruStandaloneNative(input, query, allowPartial, selectedNative) {
 }
 
 function standaloneNative(input, query, allowPartial, selectedNative) {
+    if (hasItemIdentities() && ['endcloset', 'eden'].includes(_activeSearchSiteId)) {
+      const selected = _selectedSearchRows.get(input);
+      if (selectedNative) return chosenNative(selected, input) || selectedNative;
+      const rows = multiwordSearchRows(query, input);
+      if (rows) return rows.size === 1 ? rows.values().next().value : null;
+      return identityOnlyNative(input, query, allowPartial);
+    }
     if (!selectedNative) {
       const rows = multiwordSearchRows(query, input);
       if (rows && rows.size !== 1) return null;
@@ -1144,11 +1206,16 @@ function handleECGearsetsFormSubmit(event, siteId, input, query, selected) {
 }
 
 function nativeForSubmittedSearch(query, siteId, input, selected) {
-  if (selected?.zh === query && selected.native) return selected.native;
+  if (selected?.zh === query && selected.native) return chosenNative(selected, input, siteId);
   const rows = multiwordSearchRows(query, input);
   if (rows) return rows.size === 1 ? rows.values().next().value : null;
   if (fcArmorSlot(input) !== null || (siteId === 'ec' && ecSearchContext(input)))
     return ecScopedNative(query, input, true);
+  if (hasItemIdentities()) {
+    const matches = ecScopedSuggestions(query, input).filter(row => row.itemId && row.zh === query);
+    if (matches.length) return matches.length === 1 ? matches[0].native : null;
+    if (siteId === 'endcloset') return identityOnlyNative(input, query, true);
+  }
   return resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
 }
 

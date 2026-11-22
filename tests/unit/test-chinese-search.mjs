@@ -27,6 +27,7 @@ function sliceSource(s) {
 function buildSearch() {
   const seg = sliceSource(SOURCE_TEXT);
   const body = [
+    'const hasItemIdentities = () => false;',
     'const resolveByZh = (v) => ({\'甲\': \'ア\', \'乙\': \'ガ\'}[v] || null);',
     'const resolvePartialByZh = (v) => ({\'丙\': \'ウ\'}[v] || null);',
     seg,

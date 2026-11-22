@@ -23,6 +23,8 @@ function listedFiles(manifest) {
     for (const name of requiredV3Files(site)) {
       files.push(manifest.sites[site.id].files[name]);
     }
+    const itemIds = manifest.sites[site.id].itemIds;
+    if (itemIds) files.push(itemIds);
   }
   files.push(manifest.shared.dict);
   return files;

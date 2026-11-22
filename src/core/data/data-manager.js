@@ -7,7 +7,8 @@ import { __zhxMark, _zhxErr } from '../runtime.js';
 import { findSitePolicy as findSite, neededTables } from '../site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
-export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveDyeColor, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
+import { indexItemIds, parseItemIds } from './item-identity.js';
+export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveDyeColor, itemById, findItemsByName, hasItemIdentities, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
   // 英文名 -> 国服中文名（单条查找 + 缓存）。用于 EC 上没进固定词典的
@@ -64,6 +65,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   const ecidMap = Object.create(null);    // 中文名 -> EC_ID（wiki / EC 链接用） // NOSONAR
   const nameMap = Object.create(null);    // 英/日/韩名 -> 中文名（含染剂色名回退；各站共用） // NOSONAR
   let dyeColors = null;
+  let itemIdRows = null;
+  let itemIdIndex = null;
   const koByZh = Object.create(null);     // 中文名 -> 韩文名（ronka 反查用） // NOSONAR
 
   // （EC 装备 ID 单条查找已并入 Item Resolver：resolveEcId，v1.4 Phase 10）
@@ -144,6 +147,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function _validateV3Payload(files) {
     if (files.candidatePolicy !== 1) return null;
     if (files.dict && !validRuntimeDictionary(JSON.parse(files.dict))) return null;
+    if (files.identity) return files.identity;
     return typeof files.names === 'string'
       ? _v3Names(files.names)
       : { names: Object.create(null), glam: Object.create(null), slots: Object.create(null) };
@@ -164,6 +168,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       const dup = take('dup', true) || Object.create(null);
       _replaceMap(nameMap, names);
       dyeColors = null;
+      itemIdRows = parsedNames.rows || null;
+      itemIdIndex = null;
       _replaceMap(itemHash, hash);
       _irSearchByZh = null;
       _irSearchKind = null;
@@ -226,7 +232,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 只读取按站点、文件名和 SHA-256 指纹寻址的当前缓存。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
     const extension = name === 'series' || name === 'acl' ? '.txt' : '.tsv';
-    const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + name + extension;
+    const filename = name === 'itemIds' ? 'item-ids.tsv' : name + extension;
+    const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + filename;
     if (!validV3FileMeta(meta, expectedUrl)) return null;
     const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
     const key = baseKey + '.' + meta.sha256;
@@ -357,6 +364,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     for (const [name, meta] of Object.entries(files)) {
       if (meta?.sha256) keys.add('zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256);
     }
+    const itemIds = manifest?.sites?.[siteId]?.itemIds;
+    if (itemIds?.sha256) keys.add('zhx.v3.f.' + siteId + '.itemIds.' + itemIds.sha256);
     const dict = manifest?.shared?.dict;
     if (dict?.sha256) keys.add('zhx.v3.f.' + siteId + '.dict.' + dict.sha256);
     return keys;
@@ -377,6 +386,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       if (meta?.sha256) stale.add('zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256);
     }
     const oldDict = previousManifest?.shared?.dict;
+    const oldItemIds = previousManifest?.sites?.[siteId]?.itemIds;
+    if (oldItemIds?.sha256 && oldItemIds.sha256 !== currentManifest?.sites?.[siteId]?.itemIds?.sha256)
+      stale.add('zhx.v3.f.' + siteId + '.itemIds.' + oldItemIds.sha256);
     const currentDict = currentManifest?.shared?.dict;
     if (oldDict?.sha256 && oldDict.sha256 !== currentDict?.sha256) {
       stale.add('zhx.v3.f.' + siteId + '.dict.' + oldDict.sha256);
@@ -402,7 +414,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!names.length || required.some((name) => !sm[name])) return null;
     const sharedDict = (need.includes('dict') && manifest.shared?.dict) || null;
     if (need.includes('dict') && !sharedDict) return null;
-    return { sm, names, sharedDict };
+    return { sm, names, sharedDict, itemIds: manifest.sites[site.id].itemIds };
   }
 
   async function _readPreviousV3Manifest(siteId) {
@@ -427,8 +439,15 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   async function _readV3Bundle(site, manifest, need, force, staged, networkAllowed) {
     const selected = _manifestSiteFiles(manifest, site, need);
     if (!selected) return null;
-    const files = await fetchStationFiles(site.id, selected.names, selected.sm, selected.sharedDict, force, staged, networkAllowed);
-    if (!allFilesReady(selected.names, files, selected.sharedDict)) return null;
+    const names = selected.itemIds ? selected.names.filter(name => name !== 'names') : selected.names;
+    const [files, identityText] = await Promise.all([
+      fetchStationFiles(site.id, names, selected.sm, selected.sharedDict, force, staged, networkAllowed),
+      selected.itemIds ? _v3FetchFile(site.id, 'itemIds', selected.itemIds, force, staged, networkAllowed) : null,
+    ]);
+    if (identityText) files.identity = parseItemIds(identityText);
+    if (selected.itemIds && !files.identity)
+      files.names = await _v3FetchFile(site.id, 'names', selected.sm.names, force, staged, networkAllowed);
+    if (!allFilesReady(files.identity ? names : selected.names, files, selected.sharedDict)) return null;
     files.candidatePolicy = manifest.candidatePolicy;
     return files;
   }
@@ -618,6 +637,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     _manifestRefreshRequested = true;
     _replaceMap(itemHash, null); _replaceMap(ecidMap, null); _replaceMap(nameMap, null); _replaceMap(koByZh, null);
     dyeColors = null;
+    itemIdRows = null;
+    itemIdIndex = null;
     _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irSearchSlotByNative = null; _irCandidatePolicy = 0;
     _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
@@ -760,6 +781,25 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function resolveByHash(hash) { const z = (hash && itemHash?.[hash]) ? itemHash[hash] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
   function resolveByName(name) { const z = (name && nameMap?.[name]) ? nameMap[name] : null; _irStats[z ? 'hit' : 'miss']++; return z; }
 
+  function getItemIdIndex() {
+    if (!itemIdRows) return null;
+    itemIdIndex ||= indexItemIds(itemIdRows);
+    return itemIdIndex;
+  }
+
+  function itemById(id) {
+    return getItemIdIndex()?.byId.get(Number(id)) || null;
+  }
+
+  function findItemsByName(name, language = 'zh') {
+    const records = getItemIdIndex()?.byLanguage.get(language)?.get(name);
+    return records ? records.slice() : [];
+  }
+
+  function hasItemIdentities() {
+    return itemIdRows !== null;
+  }
+
   function dyeColorKey(name) {
     return /[가-힣]/u.test(name) ? name.replace(/\s+/gu, '') : name;
   }
@@ -866,17 +906,25 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   // 否则高优先级部位可能被词典顺序和 limit 提前截断。
   // 必须先按部位过滤、分桶，不能提前截断到 3000 条。
   // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
-  function _irSuggestionCollect(buckets, query, kind, limit, map, scope, terms) {
+  function _irSuggestionCollect(buckets, query, kind, limit, map, scope, terms, language) {
     for (const name of _irSearchContainsCandidates(query, kind, terms)) {
       const score = _irSuggestionScore(name, query, kind, terms);
       if (score < 0) continue;
       const native = map[name];
       if (!native) continue;
-      const group = _irSearchSlotByNative?.[native] ?? 5;
-      if (scope instanceof Set && !scope.has(native)) continue;
-      if (typeof scope === 'number' && scope !== group) continue;
-      const bucket = buckets[group][score];
-      if (bucket.length < limit) bucket.push({ zh: name, native });
+      const translations = kind === 0 ? [name] : _irAliasMap?.[name] || [];
+      const identities = language && itemIdRows
+        ? translations.flatMap(zh => findItemsByName(zh)).filter(row => row.glam === '1') : [];
+      const rows = identities.length ? identities.filter(row => row.names[language])
+        .map(row => ({ native: row.names[language], itemId: row.id, group: row.slot }))
+        : [{ native, group: _irSearchSlotByNative?.[native] ?? 5 }];
+      for (const row of rows) {
+        if (scope instanceof Set && !scope.has(row.native)) continue;
+        if (typeof scope === 'number' && scope !== row.group) continue;
+        const bucket = buckets[row.group][score];
+        if (bucket.length < limit) bucket.push(row.itemId
+          ? { zh: name, native: row.native, itemId: row.itemId } : { zh: name, native: row.native });
+      }
     }
   }
 
@@ -893,7 +941,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
 
   // 先按头、身、手、腿、脚、其余；组内按匹配度排序，保持已存在的
   // 正式名、别名、limit、旧 V3 缓存及六站原生名行为。
-  function suggestByZh(zh, limit = 0, scope = null) {
+  function suggestByZh(zh, limit = 0, scope = null, language = null) {
     const key = _irNormZhSearch(zh);
     if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
     const map = _ensureIrSearch();
@@ -902,8 +950,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
     const terms = key.split(/\s+/u);
     const buckets = Array.from({ length: 6 }, () => Array.from({ length: 7 }, () => []));
-    _irSuggestionCollect(buckets, key, 0, max, map, scope, terms);
-    _irSuggestionCollect(buckets, key, 1, max, map, scope, terms);
+    _irSuggestionCollect(buckets, key, 0, max, map, scope, terms, language);
+    _irSuggestionCollect(buckets, key, 1, max, map, scope, terms, language);
     return _irSuggestionFlatten(buckets, max);
   }
 

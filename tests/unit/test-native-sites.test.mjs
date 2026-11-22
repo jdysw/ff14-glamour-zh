@@ -307,7 +307,37 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByName, resolveByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { parseItemIds } from '../../src/core/data/item-identity.js';
+import { itemNames } from '../../src/core/item-languages.js';
+
+test('同名物品按 ID 分别反查，染剂可按普通和特制原名查询', () => {
+  const data = [
+    'en\tja\tko',
+    '1001\t同名装备\tFirst Coat\t共通装備\t첫 장비\t1\t1',
+    '1002\t同名装备\tSecond Coat\t共通装備\t두번째 장비\t1\t1',
+    '1003\t煤玉黑染剂\tGeneral-purpose Jet Black Dye\tカララント:ジェットブラック\t염료: 칠흑색\t0\t5',
+    '1004\t特制煤玉黑染剂\tJet Black Dye\tカララント:ジェットブラックEX\t염료: 칠흑색(거래 불가)\t0\t5',
+  ].join('\n');
+  const parsed = parseItemIds(data);
+  assert.ok(parsed);
+  assert.equal(parseItemIds(data + '\n1001\t重复\tA\tB\tC\t1\t1'), null);
+  assert.ok(_applyV3({ candidatePolicy: 1, identity: parsed }));
+  try {
+    assert.equal(itemById(1002).names.ko, '두번째 장비');
+    assert.deepEqual(findItemsByName('共通装備', 'ja').map(row => row.id), [1001, 1002]);
+    assert.deepEqual(suggestByZh('同名装备', 0, 1, 'en').map(row => [row.itemId, row.native]),
+      [[1001, 'First Coat'], [1002, 'Second Coat']]);
+    assert.deepEqual(suggestByZh('同名装备', 0, 1, 'ja').map(row => row.itemId), [1001, 1002]);
+    assert.deepEqual(itemNames('同名装备'), {});
+    assert.equal(itemNames('同名装备', 1002).en, 'Second Coat');
+    assert.equal(findItemsByName('ジェットブラック', 'ja')[0].id, 1003);
+    assert.equal(findItemsByName('칠흑색(거래불가)', 'ko')[0].id, 1004);
+    assert.equal(itemById(1004).names.en, 'Jet Black Dye');
+  } finally {
+    _applyV3({ candidatePolicy: 1 });
+  }
+});
 
 test('xivc 真实 DOM 适配：固定界面、装备与染色搜索隔离、预设和试穿行为', { skip: 'xivc 支持暂时停用' }, async () => {
   const previous = Object.fromEntries(['document','location','window','NodeFilter','MutationObserver','setTimeout','clearTimeout']

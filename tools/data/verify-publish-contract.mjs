@@ -37,6 +37,8 @@ export function verifyV3Publish(directory) {
     assert.deepEqual(Object.keys(files).sort(), requiredV3Files(site).sort(),
       site.id + ' 数据文件必须与当前脚本的查询需求完全一致');
     for (const meta of Object.values(files)) check(meta);
+    const itemIds = manifest.sites[site.id].itemIds;
+    if (itemIds) check(itemIds);
   }
   assert.ok(manifest.shared?.dict, '必须提供共享词典');
   check(manifest.shared.dict);

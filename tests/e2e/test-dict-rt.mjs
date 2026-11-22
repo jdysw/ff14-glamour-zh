@@ -42,6 +42,7 @@ const mock = {
 for (const [name, meta] of Object.entries(manifest.sites.fc.files)) {
   mock[BASE + meta.url] = runtime.siteFiles[name].text;
 }
+mock[BASE + manifest.sites.fc.itemIds.url] = runtime.siteFiles.itemIds.text;
 
 const GF_REAL = readDist();
 const GF = GF_REAL.replace('https://zhixia-data.pages.dev/ff14/v3/', BASE);

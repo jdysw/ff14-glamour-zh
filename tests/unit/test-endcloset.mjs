@@ -5,8 +5,8 @@ import vm from 'node:vm';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { _applyV3, resolveDyeColor } from '../../src/core/data/data-manager.js';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
+import { DICT_ENDCLOSET } from '../../src/core/data/dictionary.js';
 
-const entries = name => JSON.parse(fs.readFileSync(new URL(`../../data/dictionaries/${name}`, import.meta.url), 'utf8')).entries;
 const { siteFiles } = readRuntimeV3('endcloset');
 assert.equal(_applyV3({ candidatePolicy: 1, names: siteFiles.names.text }), true);
 
@@ -15,7 +15,7 @@ const source = fs.readFileSync(new URL('../../src/sites/endcloset.js', import.me
   .replace(/export\s*\{[^}]*\};/s, '');
 let observer;
 const ctx = vm.createContext({
-  DICT_ENDCLOSET: { ...entries('dict-common.json'), ...entries('dict-endcloset.json') },
+  DICT_ENDCLOSET,
   isAuthoredContent,
   resolveDyeColor,
   resolveByName: (name) => ({ '메이드 드레스': '女仆礼服' })[name] || null,

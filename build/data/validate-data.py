@@ -8,6 +8,7 @@
 #   data/dictionaries/dict-*.json×8    可解析、kind=kv、entries 为「字符串 → 字符串」
 # 用法：python3 build/data/validate-data.py
 import json
+from dictionary_source import load_entries
 import sys
 from pathlib import Path
 
@@ -126,7 +127,10 @@ def check_dicts() -> int:
                     not key.partition(':')[2].strip() or not value.strip() or any(c in key + value for c in '|\r\n')
                 ):
                     errors.append(f'{rel} 副本词条不能生成兼容文件：{key}')
-        total += len(entries)
+        try:
+            total += len(load_entries(f))
+        except (ValueError, KeyError, TypeError) as exc:
+            errors.append(f'{rel} 多语词条无效：{exc}')
     return total
 
 

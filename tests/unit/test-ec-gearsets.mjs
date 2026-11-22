@@ -4,10 +4,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DICT_EC } from '../../src/core/data/dictionary.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const loadEntries = name => JSON.parse(fs.readFileSync(path.join(root, 'data', 'dictionaries', name), 'utf8')).entries;
-const DICT_EC = { ...loadEntries('dict-common.json'), ...loadEntries('dict-ec.json') };
 
 const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection.js'), 'utf8');
 const start = source.indexOf('  const EC_GEARSET_ROLES =');

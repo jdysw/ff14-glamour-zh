@@ -14,7 +14,8 @@ const cases=[
   ...[['en',2],['ja',3],['ko',4]].map(([language,column])=>({site:'miramiru',language,column,fixture:'miramiru-search.html',selector:'#miramiru-gear',inline:true,controlled:true})),
   {site:'ronka',fixture:'ronka-search.html',selector:'#search-input',column:4,inline:true},
   {site:'collection',fixture:'collection-search.html',selector:'input[name="keyword"]',column:3,inline:true},
-  ...[['endcloset',4],['ronka',4],['collection',3],['ec',2]].map(([site,column])=>({site,column,fixture:'standalone-search.html',selector:'#equipment-search'})),
+  ...[['endcloset',4],['endcloset',2,'en'],['endcloset',3,'ja'],['ronka',4],['collection',3],['ec',2]]
+    .map(([site,column,controlLanguage])=>({site,column,controlLanguage,fixture:'standalone-search.html',selector:'#equipment-search'})),
 ];
 async function until(c,expression,label){
   const deadline=Date.now()+5000;
@@ -58,13 +59,14 @@ for(const entry of cases){
     const loaded=c.waitForEvent('Page.loadEventFired');
     await c.send('Page.navigate',{url:fixtureUrl(entry.fixture)});await loaded;
     await seedV3Memory(c,entry.site);
-    await c.callFn(`function(site,selector,language){
+    await c.callFn(`function(site,selector,language,controlLanguage){
       if(language)document.documentElement.lang=language;
+      if(controlLanguage)document.querySelector(selector).lang=controlLanguage;
       window.__zhxTestSite=site;window.__zhxDiagOn=true;window.__inputs=[];
       window.GM_getValue=(k,d)=>window.__v3MemoryCache.get(k)??d;
       window.GM_setValue=(k,v)=>window.__v3MemoryCache.set(k,v);window.GM_xmlhttpRequest=o=>o.onerror?.({});
       document.querySelector(selector).addEventListener('input',e=>window.__inputs.push(e.target.value));
-    }`,[entry.site,entry.selector,entry.language]);
+    }`,[entry.site,entry.selector,entry.language,entry.controlLanguage]);
     await c.callFn('function(source){(0,eval)(source)}',[readDist()]);
     await until(c,`Object.hasOwn(window.__zhxMarks||{},'ready')`,'data');
     const type=value=>c.callFn(`function(selector,value){const el=document.querySelector(selector);el.focus();el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}))}`,[entry.selector,value]);
@@ -72,6 +74,7 @@ for(const entry of cases){
     await type(chinese);
     if(entry.inline){
       await until(c,`(()=>{const list=document.querySelector('#zhx-chinese-suggest-list');return list&&!list.hidden&&list.querySelector('button[data-zhx-index]')})()`,'suggestions');
+      assert.equal(await c.eval("document.querySelector('button[data-zhx-index]').dataset.zhxItemId"), '14972');
       // This negative check spans the old debounce window: typing must not search.
       await sleep(1000);
       assert.equal(await value(),chinese);

@@ -4,6 +4,9 @@
 
 ## 当前实现
 
+- `dict-common.json` 的 `terms` 按中文正式名维护英、日、韩别名，构建时展开到现有 `common` 层。站点覆盖和远程词典格式沿用 V3。
+- 支持物品搜索的站点在清单中可声明 `itemIds`。它与 `files` 并列，旧客户端继续读取原有的 `names.tsv`。新客户端优先读取按物品 ID 归组的 `item-ids.tsv`，缺失或校验失败时读取原文件。有效物品 ID 与可搜索标记、装备部位及语言字段一并保留。
+
 - `build/data/make-runtime-data.py` 从 `data/source/` 和 `data/dictionaries/` 生成站点数据与清单，默认输出到 `.cache/runtime-v3/`。
 - `tools/data/verify-publish-contract.mjs` 校验全部必需文件、SHA-256、字节长度、UTF-8 和共享词典结构。
 - `tools/data/verify-shared-candidates.mjs` 验证共享候选数据一致性。

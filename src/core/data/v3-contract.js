@@ -57,6 +57,8 @@ function validV3Manifest(man) {
   if (!entries.length) return false;
   return entries.every(([siteId, entry]) => {
     const policy = policies.get(siteId);
-    return !!policy && validV3SiteFiles(siteId, entry, policy);
+    return !!policy && validV3SiteFiles(siteId, entry, policy)
+      && (entry.itemIds === undefined || (requiredV3Files(policy).includes('names')
+        && validV3FileMeta(entry.itemIds, siteId + '/item-ids.tsv')));
   }) && validV3Shared(man.shared);
 }
