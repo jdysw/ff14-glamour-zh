@@ -81,7 +81,7 @@ try{
       const readingTime = await c.eval("document.querySelector('#reading-time').textContent");
       assert.equal(readingTime.includes('天赐祝福'), route === '/equipment/southern_seas_swimsuit/');
       assert.match(actual.intro,/本页汇总介绍/);assert.doesNotMatch(actual.rich,/[ぁ-ヺ]/);
-      assert.match(actual.long,/职业任务/);assert.match(actual.long,/FF11/);assert.doesNotMatch(actual.long,/[ぁ-ヺ]/);
+      assert.match(actual.long,/特职任务/);assert.match(actual.long,/FF11/);assert.doesNotMatch(actual.long,/[ぁ-ヺ]/);
       assert.equal(actual.br,3);assert.equal(actual.sameLink,true);assert.equal(actual.sameStrong,true);
       assert.equal(actual.href,'/summary/af1/');assert.ok(actual.official.endsWith(encodeURIComponent('梦羽妖灵王剑')));
       assert.deepEqual(actual.headers,['战斗职业专属装备（AF6）','制作与采集职业专属装备（AF6）','100级']);
