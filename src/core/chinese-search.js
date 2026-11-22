@@ -146,8 +146,17 @@ function miramiruScopedSuggestions(query, input) {
   return [...rows.values()];
 }
 
+function fcArmorSlot(input) {
+  if (_activeSearchSiteId !== 'fc' || input?.name !== '_sf_search[]') return null;
+  const path = globalThis.location?.pathname || '';
+  const part = /^\/equipment_search_parts\/equipment_search_(head|body|hand|leg|foot)\/?$/.exec(path)?.[1];
+  return part ? ['head', 'body', 'hand', 'leg', 'foot'].indexOf(part) : null;
+}
+
 function ecScopedSuggestions(query, input) {
   if (_activeSearchSiteId === 'miramiru') return miramiruScopedSuggestions(query, input);
+  const fcSlot = fcArmorSlot(input);
+  if (fcSlot !== null) return suggestByZh(query, 0, fcSlot);
   const context = ecSearchContext(input);
   if (context?.kind === 'facewear') {
     const terms = query.split(/\s+/u);
@@ -1138,7 +1147,8 @@ function nativeForSubmittedSearch(query, siteId, input, selected) {
   if (selected?.zh === query && selected.native) return selected.native;
   const rows = multiwordSearchRows(query, input);
   if (rows) return rows.size === 1 ? rows.values().next().value : null;
-  if (siteId === 'ec' && ecSearchContext(input)) return ecScopedNative(query, input, true);
+  if (fcArmorSlot(input) !== null || (siteId === 'ec' && ecSearchContext(input)))
+    return ecScopedNative(query, input, true);
   return resolveSearchNative(query, siteId === 'ec' && isECGearsetsPage());
 }
 

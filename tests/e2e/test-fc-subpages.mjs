@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
+import {fileURLToPath} from 'node:url';
 import {newPage,closePage} from '../helpers/cdp.mjs';
-import {readDist,fixturePath} from '../helpers/paths.mjs';
+import {readDist,fixturePath,fixtureUrl} from '../helpers/paths.mjs';
 import {seedV3Memory} from '../helpers/v3-cache.mjs';
 const html=fs.readFileSync(fixturePath('fc-subpages.html'),'utf8');
+process.env.FF14_EQUIP_SLOTS_CSV ||= fileURLToPath(fixtureUrl('search-equipment-slots.csv'));
+const slotCases = new Map([
+  ['head', '女仆发带'], ['body', '女仆围裙装'], ['hand', '女仆腕带'],
+  ['leg', '女仆蓬松裤'], ['foot', '女仆礼鞋'],
+].map(([part, name]) => ['/equipment_search_parts/equipment_search_' + part + '/', name]));
 const server=http.createServer((req,res)=>res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'}).end(html));
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=Number(process.env.ZHX_CDP_PORT||9223);
 try{
-  for(const route of ['/summary_weapon/','/summary_equipment_af/','/equipment/southern_seas_swimsuit/']){
+  for(const route of [...slotCases.keys(),'/summary_weapon/','/summary_equipment_af/','/equipment/southern_seas_swimsuit/']){
     const page=await newPage(port,`http://127.0.0.1:${server.address().port}${route}`);
     const c=page.cdp;
     try{
@@ -20,6 +26,19 @@ try{
         window.GM_setValue=(k,v)=>window.__v3MemoryCache.set(k,v);
         window.GM_xmlhttpRequest=request=>request.onerror?.({});`);
       await c.callFn('function(source){(0,eval)(source)}',[readDist()]);
+      if (slotCases.has(route)) {
+        await c.eval(`const field = document.querySelector('form input'); field.focus(); field.value='女仆';
+          field.dispatchEvent(new Event('input', {bubbles:true}));`);
+        await c.waitFor("document.querySelector('.zhx-suggest-zh')");
+        assert.deepEqual(await c.eval("[...document.querySelectorAll('.zhx-suggest-zh')].map(e=>e.textContent)"), [slotCases.get(route)]);
+        await c.eval(`field.value='南瓜管家'; field.dispatchEvent(new Event('input', {bubbles:true}));`);
+        await c.waitFor("document.querySelector('.zhx-suggest-empty')");
+        assert.equal(await c.eval(`let submitted; field.form.addEventListener('submit', event => {
+          event.preventDefault(); submitted=field.value;
+        }, {once:true}); field.form.requestSubmit(); submitted;`), '南瓜管家');
+        console.log('PASS FC '+route+': suggestions and submission stay within the current slot');
+        continue;
+      }
       await c.waitFor(`document.querySelector('#punctuation-name').textContent==='梦羽妖灵王剑'`);
       const actual=await c.eval(`({
         title:document.title,toc:document.querySelector('#toc').textContent,
