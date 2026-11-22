@@ -48,11 +48,17 @@ try{
         sameStrong:document.querySelector('#description')===window.__originalStrong,
         href:document.querySelector('#native-link').getAttribute('href'),official:document.querySelector('#official-item').href,
         context:document.querySelector('#context-name').textContent,
-        headers:[...document.querySelectorAll('h4')].map(e=>e.textContent),
+        headers:[...document.querySelectorAll('article > h4')].map(e=>e.textContent),
         comment:document.querySelector('.comment-body').textContent,tweet:document.querySelector('.twitter-tweet').textContent,
         unknown:document.querySelector('#unknown').textContent,ambiguous:document.querySelector('#ambiguous-name').textContent
       })`);
       assert.equal(actual.toc,'目录');assert.match(actual.title,/武器装备/);assert.doesNotMatch(actual.title,/[ぁ-ヺ]/);
+      assert.deepEqual(await c.eval(`[
+        document.querySelector('#filter-style').textContent,
+        document.querySelector('label[for="filter-mask"]').textContent,
+        document.querySelector('#filter-mask').value,
+        document.querySelector('#article-mask').textContent
+      ]`), ['外观款式', '面具与口罩 274', 'mask', '面罩']);
       const readingTime = await c.eval("document.querySelector('#reading-time').textContent");
       assert.equal(readingTime.includes('天赐祝福'), route === '/equipment/southern_seas_swimsuit/');
       assert.match(actual.intro,/本页汇总介绍/);assert.doesNotMatch(actual.rich,/[ぁ-ヺ]/);

@@ -298,7 +298,10 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
-    const next = trFC(raw);
+    const label = raw.trim();
+    const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
+    const translated = filter && fcUIValue('filter:' + label);
+    const next = translated ? raw.replace(label, translated) : trFC(raw);
     if (next !== raw) node.nodeValue = next;
   }
 
@@ -317,7 +320,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
     const v0 = n.getAttribute('value');
     if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
-      const tv = trFC(v0);
+      const tv = (n.closest('form.searchandfilter') && fcUIValue('filter:' + v0)) || trFC(v0);
       if (tv && tv !== v0) n.setAttribute('value', tv);
     }
   }

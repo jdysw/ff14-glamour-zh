@@ -41,7 +41,7 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     _fcSubstrCache = Object.keys(DICT_FC)
       // Grammatical fragments are exact-only; replacing する inside prose corrupts it.
       .filter((k) => k.length >= 2 && !/^[A-Za-z0-9]+$/.test(k)
-        && !/^[ぁ-ゖ\p{Punctuation}\s]+$/u.test(k) && !k.startsWith('rich:') && !k.startsWith('page:'))
+        && !/^[ぁ-ゖ\p{Punctuation}\s]+$/u.test(k) && !/^(?:rich|page|filter):/.test(k))
       .sort((a, b) => b.length - a.length);
     return _fcSubstrCache;
   }
