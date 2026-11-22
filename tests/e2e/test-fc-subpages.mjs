@@ -56,7 +56,7 @@ try{
       assert.equal(extended['material-exchange'],'使用1500个奖杯水晶兑换');
       assert.equal(extended['unknown-prose'],'ミチノソウビテストをする');
       assert.equal(await c.eval(`document.querySelector('#unknown-prefix').textContent`),'グリフィ');
-      assert.equal(extended['filter-count'],'休闲服装 (470)');
+      assert.equal(extended['filter-count'],'时装 (470)');
       assert.equal(await c.eval(`document.querySelector('.message-box-point').textContent`),'留言');
       assert.equal(await c.eval(`document.querySelector('.message-box p').textContent`),'ファッションアクセサリーを紹介する');
       assert.equal(await c.eval(`document.querySelector('.answer-box p').textContent`),'装備一覧にもどる');
