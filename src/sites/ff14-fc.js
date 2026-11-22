@@ -527,6 +527,9 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     { match: /banner_003|fashion_accessories|ファッションアクセ/i, zh: '时尚配饰' },
     { match: /banner_004|hair_catalog|ヘアカタログ/i, zh: '发型图鉴' },
     { match: /banner_005|weapon_search|武器シリーズ/i, zh: '武器系列' },
+    { match: /ff14_antenna\.gif/i, zh: 'FF14 资讯聚合' },
+    { match: /br_c_1412_1\.gif/i, zh: 'FF14 博客榜' },
+    { match: /message_button\.svg/i, zh: '联系与留言' },
   ];
   function fcBannerMatch(a, img) {
     const probe = ((img && (img.dataset.src || img.getAttribute('src') || img.getAttribute('title') || img.getAttribute('alt'))) || '') + ' ' + (a.getAttribute('href') || '');
@@ -536,7 +539,7 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
   function bindFCBanners(rootArg) {
     let changed = false;
     const scope = localScope(rootArg);
-    queryIn(scope, 'div.banner-wrap a').forEach((a) => {
+    queryIn(scope, 'div.banner-wrap a, #side a.ff14rank, #side a:has(img.other-site-link)').forEach((a) => {
       if (a.dataset.zhixiaBanner) return;
       const img = a.querySelector('img');
       if (!img) return;
