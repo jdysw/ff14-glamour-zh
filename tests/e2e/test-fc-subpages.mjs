@@ -54,6 +54,17 @@ try{
       })`);
       assert.equal(actual.toc,'目录');assert.match(actual.title,/武器装备/);assert.doesNotMatch(actual.title,/[ぁ-ヺ]/);
       assert.deepEqual(await c.eval(`[
+        document.querySelector('#augmented-role-set').textContent,
+        document.querySelector('#second-augmented-role-set').textContent,
+        document.querySelector('#floating-toc').getAttribute('aria-label'),
+        document.querySelector('#floating-toc').getAttribute('href'),
+        document.querySelector('#back-to-sets').textContent,
+        document.querySelector('#back-to-sets').getAttribute('href'),
+        document.querySelector('#dawntrail').textContent,
+        document.querySelector('#recommended-set').textContent
+      ]`), ['改良型星战士制敌', '改良型圣堂潜行游击', '幻想试穿', '#sub-toc-2',
+        '返回装备一览', '/equipment_series_search/', '最终幻想XIV：金曦之遗辉 典藏版', '宇宙动力套装']);
+      assert.deepEqual(await c.eval(`[
         document.querySelector('#augmented-set').textContent,
         document.querySelector('#hiroshi').textContent,
         document.querySelector('#hiroshi').getAttribute('race'),

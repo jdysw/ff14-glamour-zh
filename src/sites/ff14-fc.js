@@ -536,9 +536,47 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     for (const r of FC_BANNER_RULES) if (r.match.test(probe)) return r;
     return null;
   }
+
+  const FC_SECTION_BUTTONS = {
+    main: '页首', slider: '幻想试穿', information: '基本信息', get: '获取方式',
+    description: '装备介绍', detail: '部位详解', all: '相关物品', point: '总结',
+    head: '头部', body: '身体', hand: '手部', leg: '腿部', foot: '脚部',
+  };
+
+  function translateFCSectionButton(link) {
+    if (link.dataset.zhxFcSection) return;
+    const img = link.querySelector('img.not-hover');
+    const kind = /\/button_([a-z]+)\.svg(?:[?#]|$)/.exec(img?.dataset.src || img?.getAttribute('src') || '')?.[1];
+    const label = kind && Object.hasOwn(FC_SECTION_BUTTONS, kind) && FC_SECTION_BUTTONS[kind];
+    if (!label) return;
+    if (!document.getElementById('zhx-fc-section-style')) {
+      const style = document.createElement('style');
+      style.id = 'zhx-fc-section-style';
+      style.textContent = `
+        .link-button a[data-zhx-fc-section] { position: relative; display: block; line-height: 0; }
+        .link-button a[data-zhx-fc-section] > img { vertical-align: top; }
+        [data-zhx-fc-section] > .zhx-fc-section-label {
+          position: absolute; inset: auto 0 0; height: 30%; display: grid; place-items: center;
+          background: #a7cbea; color: #173752; font-size: clamp(10px, 1.12vw, 17px);
+          font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none;
+        }
+        [data-zhx-fc-section]:is(:hover, :focus-visible) > .zhx-fc-section-label {
+          background: #6691b7; color: #fff;
+        }`;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    link.dataset.zhxFcSection = '1';
+    link.setAttribute('aria-label', label);
+    const caption = document.createElement('span');
+    caption.className = 'zhx-fc-section-label';
+    caption.textContent = label;
+    link.appendChild(caption);
+  }
+
   function bindFCBanners(rootArg) {
     let changed = false;
     const scope = localScope(rootArg);
+    queryIn(scope, '.link-button a[href^="#sub-toc-"]').forEach(translateFCSectionButton);
     queryIn(scope, 'div.banner-wrap a, #side a.ff14rank, #side a:has(img.other-site-link)').forEach((a) => {
       if (a.dataset.zhixiaBanner) return;
       const img = a.querySelector('img');
