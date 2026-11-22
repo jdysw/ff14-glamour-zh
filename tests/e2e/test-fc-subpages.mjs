@@ -67,4 +67,8 @@ try{
       console.log('PASS FC '+route+': categories, rich prose, titles, normalized item names and native links');
     }finally{await closePage(port,page.target.id)}
   }
-}finally{await new Promise(resolve=>server.close(resolve));}
+} finally {
+  const closed = new Promise(resolve => server.close(resolve));
+  server.closeAllConnections();
+  await closed;
+}
