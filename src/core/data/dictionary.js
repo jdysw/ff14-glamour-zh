@@ -3082,6 +3082,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     '染色 クリックで切替': '点击染色切换',
     '種族 クリックで切替': '点击种族切换',
     'Galleryタップで切り替え': '点击图库切换',
+    'Gallery タップで切り替え': '点击图库切换',
     'Coming Soon……': '内容待补充',
     'TANK / タンク': '防护',
     'Melee DPS / 近接物理DPS': '近战物理输出',
