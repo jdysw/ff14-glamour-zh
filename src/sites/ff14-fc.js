@@ -88,6 +88,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['プレマジテック・キャスター', '前魔导咏咒套装'],
     ['プレマジテック・ヒーラー', '前魔导治愈套装'],
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
+    ['カーウェン', '卡文套装'],
   ]);
   function fcVerifiedSetName(name) {
     return FC_VERIFIED_SET_ALIASES.get(name) || null;
