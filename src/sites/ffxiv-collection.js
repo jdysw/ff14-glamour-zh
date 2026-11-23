@@ -49,8 +49,9 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
     // Combining a raw Japanese stem and a localized role creates false set names.
     const series = official || (stem && role ? stem + role : null);
     if (!series || /[\u3040-\u30ff]/u.test(series)) return null;
-    const variant = ['RE', 'ＲＥ'].includes(m[3]) ? '改良型'
-      : (['SP', 'ＳＰ'].includes(m[3]) ? '华美型' : '');
+    let variant = '';
+    if (['RE', 'ＲＥ'].includes(m[3])) variant = '改良型';
+    else if (['SP', 'ＳＰ'].includes(m[3])) variant = '华美型';
     const zh = variant + series + '套装';
     const i = text.indexOf(t0);
     return text.slice(0, i) + zh + text.slice(i + t0.length);

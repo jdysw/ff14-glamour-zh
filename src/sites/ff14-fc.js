@@ -269,8 +269,11 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const mappedSeries = _getSeriesMap().get(match[2]);
     const outfitArticle = match[4] === '👗' || !match[4];
     const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
-    const suffix = /(?:套装|装束)(?:·[阴阳])?$/u.test(name) ? ''
-      : (isKnownOutfit ? '套装' : (match[3] ? '装备' : ''));
+    let suffix = '';
+    if (!/(?:套装|装束)(?:·[阴阳])?$/u.test(name)) {
+      if (isKnownOutfit) suffix = '套装';
+      else if (match[3]) suffix = '装备';
+    }
     const translated = text.replace(match[0], match[1] + name + suffix);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
@@ -474,21 +477,46 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return null;
   }
 
+  function fcFindPreviousTitle(branch, accepted) {
+    let previous = branch.previousSibling;
+    for (let step = 0; previous && step < 6; step++, previous = previous.previousSibling) {
+      if (!accepted.has((previous.textContent || '').trim())) continue;
+      const node = fcHomeExactTextNode(previous, accepted);
+      if (node) return node;
+    }
+    return null;
+  }
+
   function fcHomePrimaryTitle(heading, english, chinese) {
     const accepted = new Set([english, fcUIValue(english) || english, chinese]);
     let branch = heading;
     // 兼容主标题和副标题同级、或各自嵌套在一层容器的 WordPress 模板。
     for (let depth = 0; branch && depth < 3; depth++, branch = branch.parentElement) {
-      let previous = branch.previousSibling;
-      for (let step = 0; previous && step < 6; step++, previous = previous.previousSibling) {
-        if (accepted.has((previous.textContent || '').trim())) {
-          const node = fcHomeExactTextNode(previous, accepted);
-          if (node) return node;
-        }
-      }
+      const title = fcFindPreviousTitle(branch, accepted);
+      if (title) return title;
       if (branch.parentElement?.tagName === 'BODY') break;
     }
     return null;
+  }
+
+  function fcCollapseMatchedHeading(heading, english, japanese, chinese) {
+    const label = heading.textContent.trim();
+    if (label !== japanese && label !== (fcUIValue(japanese) || japanese)) return false;
+    const primary = fcHomePrimaryTitle(heading, english, chinese);
+    if (!primary) return false;
+    const value = primary.nodeValue.trim();
+    if (value !== chinese) primary.nodeValue = primary.nodeValue.replace(value, chinese);
+    if (heading.style.display !== 'none') {
+      heading.style.display = 'none';
+      heading.setAttribute('aria-hidden', 'true');
+    }
+    // 隐藏 H2 后，给仍可见的大标题保留标题的可访问性语义。
+    const element = primary.parentElement;
+    if (element && !/^H[1-6]$/.test(element.tagName) && !element.hasAttribute('role')) {
+      element.setAttribute('role', 'heading');
+      element.setAttribute('aria-level', '2');
+    }
+    return true;
   }
 
   function collapseFCHomeHeadings() {
@@ -498,24 +526,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (!isHome && !/^\/equipment\/[^/]+\/?$/u.test(path)) return;
     const sections = isHome ? FC_HOME_SECTION_TITLES : [['Point', 'まとめ', '汇总']];
     for (const heading of document.querySelectorAll('h2')) {
-      const label = heading.textContent.trim();
       for (const [english, japanese, chinese] of sections) {
-        if (label !== japanese && label !== (fcUIValue(japanese) || japanese)) continue;
-        const primary = fcHomePrimaryTitle(heading, english, chinese);
-        if (!primary) continue;
-        const value = primary.nodeValue.trim();
-        if (value !== chinese) primary.nodeValue = primary.nodeValue.replace(value, chinese);
-        if (heading.style.display !== 'none') {
-          heading.style.display = 'none';
-          heading.setAttribute('aria-hidden', 'true');
-        }
-        // 隐藏 H2 后，给仍可见的大标题保留标题的可访问性语义。
-        const element = primary.parentElement;
-        if (element && !/^H[1-6]$/.test(element.tagName) && !element.hasAttribute('role')) {
-          element.setAttribute('role', 'heading');
-          element.setAttribute('aria-level', '2');
-        }
-        break;
+        if (fcCollapseMatchedHeading(heading, english, japanese, chinese)) break;
       }
     }
   }
