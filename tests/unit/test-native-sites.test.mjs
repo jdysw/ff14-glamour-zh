@@ -1134,6 +1134,11 @@ test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单
         const article = trFC(prefix + japanese + '装備👗各種族での見た目・入手方法');
         assert.ok(article.startsWith(prefix + chinese + '👗'),
           prefix + japanese + ' 的文章标题应完整使用套装名，且不叠加“装备”');
+        const withoutEmoji = trFC(prefix + japanese + '装備各種族での見た目・入手方法〖ID〗');
+        assert.ok(withoutEmoji.startsWith(prefix + chinese + '各种族')
+          || withoutEmoji.startsWith(prefix + chinese + '各種族'),
+        prefix + japanese + ' 省略图标的文章标题也必须保留官译套装名');
+        assert.ok(!withoutEmoji.includes('套装装备'), '无图标标题不能出现重复装备后缀');
       }
       const gallery = 'ミラプリ「' + japanese + '」装備の見た目紹介1';
       assert.ok(trFC(gallery).includes('「' + chinese + '」'),
@@ -1198,6 +1203,9 @@ test('FF14-FC 7.5/7.56 套装简称：仅在匹配详情页、卡片和链接使
       assert.ok(doc.querySelector('#article').textContent.startsWith('〖FF14〗' + official + '👗'),
         native + ' 文章主标题');
       assert.equal(doc.querySelector('#same-link').textContent, official);
+      const noIconArticle = trFC('〖FF14〗' + native + '装備各種族での見た目・入手方法');
+      assert.ok(noIconArticle.startsWith('〖FF14〗' + official),
+        '匹配详情页的 document.title 式无图标标题应使用完整套装名');
       assert.notEqual(doc.querySelector('#external').textContent, official, '站外链接不应当误判为本套装');
       assert.notEqual(doc.querySelector('#ordinary').textContent, official, '正文不能误加套装后缀');
       assert.ok(!doc.querySelector('#single').textContent.includes('套装'),
@@ -1215,6 +1223,12 @@ test('FF14-FC 7.5/7.56 套装简称：仅在匹配详情页、卡片和链接使
       const card = doc.querySelectorAll('.card')[index];
       for (const heading of card.querySelectorAll('h3, h4')) trimFCNode(heading.firstChild);
       _trFCAttr(card.querySelector('img'), 'alt');
+      const imageArticle = doc.createElement('img');
+      imageArticle.setAttribute('alt', '〖FF14〗' + sets[index][0] + '装備各種族での見た目・入手方法');
+      card.append(imageArticle);
+      _trFCAttr(imageArticle, 'alt');
+      assert.ok(imageArticle.getAttribute('alt').startsWith('〖FF14〗' + official),
+        '列表图片 alt 中的无图标文章标题也应使用完整套装名');
       assert.equal(card.querySelector('h4').textContent, official, '列表卡片的套装短名称');
       assert.ok(card.querySelector('h3').textContent.startsWith('〖FF14〗' + official + '👗'),
         '列表卡片的文章标题不能遗漏套装译名或叠加“装备”');
@@ -1255,6 +1269,7 @@ test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列
     ['染色 クリックで切替', '点击染色切换'],
     ['種族 クリックで切替', '点击种族切换'],
     ['Galleryタップで切り替え', '点击图库切换'],
+    ['Gallery タップで切り替え', '点击图库切换'],
     ['Coming Soon……', '内容待补充'],
     ['TANK / タンク', '防护'],
     ['Melee DPS / 近接物理DPS', '近战物理输出'],
