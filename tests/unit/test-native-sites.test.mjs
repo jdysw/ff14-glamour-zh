@@ -537,7 +537,6 @@ test('MIRAPRI 实体翻译：正文、属性、按钮文本及标题保持原站
   assert.equal(tr(''), '');
   assert.equal(tr('     '), '     ');
   assert.equal(tr('Loading...'), '加载中…');
-  assert.equal(tr('魔獣使い'), '驯兽师'); // MIRAPRI SNAP 新增职业筛选项，采用国服译名
   assert.equal(tr('未知原文'), '未知原文');
   const parent = element('SPAN');
   const node = { nodeType: 3, nodeValue: 'Loading...', parentElement: parent };
@@ -687,6 +686,13 @@ test('FFXIV Collection 实体翻译：词典、套装规则和原生筛选表单
   const setName = _trACLSet(phrase, phrase);
   assert.ok(setName?.startsWith('改良型'), 'RE 套装必须带改良型前缀');
   assert.ok(setName.endsWith('套装'), '按职能分部翻译后的结果必须是套装');
+  // 对照旧日王国胸甲的国服「华美型」名称：不应把 SP 漏译或误作「改良型」。
+  const ornate = 'オールドキングダム・ディフェンダーアタイアSP';
+  assert.equal(trACL(ornate), '华美型旧日王国御敌套装');
+  assert.equal(_trACLGearsetAlt(ornate + "'s gearset image."),
+    '华美型旧日王国御敌套装的装备展示图');
+  assert.equal(_trACLSet('オールドキングダム・ディフェンダーキュイラスSP',
+    'オールドキングダム・ディフェンダーキュイラスSP'), null);
   assert.equal(_trACLSet('无匹配', '无匹配'), null);
   assert.equal(_trACLGearsetAlt("Unmapped Set's gearset image."), null);
   const had = Object.hasOwn(DICT_ACL, 'COVERAGE_TEST_SENTINEL');

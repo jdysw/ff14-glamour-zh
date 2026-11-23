@@ -731,7 +731,6 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
     'ファッションチェック': '时尚品鉴',
-    '魔獣使い': '驯兽师',
     '投稿ガイドライン': '投稿指南',
     '新規会員登録': '注册新会员',
     'COLOR': '颜色',
@@ -3091,7 +3090,6 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     '製作装備': '制作装备',
     '制作装備': '制作装备',
     'ボズヤ・エウレカ（準備中）': '博兹雅与优雷卡（准备中）',
-    'ITEMレベル': '品级',
     'セット価格': '套装价格',
     '魔獣使い': '驯兽师',
     '闘獣練': '斗兽奇弈',
@@ -5085,6 +5083,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'コンテンツ報酬': '副本奖励',
     '未知との邂逅': '未知的邂逅',
     'アークエンジェル': '方舟天使',
+    'オールドキングダム': '旧日王国',
     'ダークホースチャンピオン': '黑马冠军',
     'ケーツハリー': '绿咬鹃',
     'ディフェンダー': '御敌',

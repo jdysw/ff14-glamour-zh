@@ -21,7 +21,7 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
 
   const ACL_DECOR_HEAD = /^[\s\u00a0※◆■□●○▼▽☆★]+/;
   const ACL_DECOR_TAIL = /[\s\u00a0※◆■□●○▲△☆★]{1,64}$/;
-  const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ)?$/;
+  const ACL_SET_RE = /^(.+?)・(ディフェンダー|スレイヤー|ストライカー|スカウト|レンジャー|キャスター|ヒーラー)アタイア(RE|ＲＥ|SP|ＳＰ)?$/;
 
   // v1.2.x：四步链拆为子步骤（降认知复杂度）
   // ① 词典精确（含空白归一化回退）
@@ -37,14 +37,16 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
     return text.slice(0, i) + hit + text.slice(i + t0.length);
   }
 
-  // ② 套装名规则：系列・职能アタイア[RE] → （改良型）系列职能套装
+  // ② 套装名规则：普通版、RE（改良型）、SP（华美型），只作用于整套装备名。
   //    优先 lookupSeries（与主站系列表口径一致：方舟天使御敌），兜底 DICT_ACL 逐词
   function _trACLSet(text, t0) {
     const m = t0.match(ACL_SET_RE);
     if (!m) return null;
     const series = lookupSeries(m[1] + '・' + m[2])
       || ((DICT_ACL[m[1]] || m[1]) + (DICT_ACL[m[2]] || m[2]));
-    const zh = (m[3] ? '改良型' : '') + series + '套装';
+    const variant = ['RE', 'ＲＥ'].includes(m[3]) ? '改良型'
+      : (['SP', 'ＳＰ'].includes(m[3]) ? '华美型' : '');
+    const zh = variant + series + '套装';
     const i = text.indexOf(t0);
     return text.slice(0, i) + zh + text.slice(i + t0.length);
   }
