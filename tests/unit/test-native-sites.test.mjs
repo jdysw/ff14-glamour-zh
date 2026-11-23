@@ -936,7 +936,7 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
     else globalThis.location = beforeLocation;
     if (beforeDoc === undefined) delete globalThis.document;
     else globalThis.document = beforeDoc;
-    await dom.happyDOM.close();
+    dom.close();
   }
 });
 
