@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -311,6 +311,71 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     for (const paragraph of paragraphs) translateFCParagraph(paragraph);
   }
 
+  // 首页每个区块原本以英文大字 + 日文 H2 呈现同一标题。
+  // 中文化后两者会并排重复；保留原先较醒目的大字，只隐藏核实配对的副标题。
+  const FC_HOME_SECTION_TITLES = Object.freeze([
+    ['New Equipment', '新着装備', '新装备'],
+    ['Feature', '特集', '特辑'],
+    ['Parts', '部位ごと', '按部位'],
+    ['New Fashion Accessories', 'ファッションアクセ', '新时尚配饰'],
+    ['Category', 'カテゴリ', '分类'],
+    ['Package', 'パッケージ', '资料片'],
+    ['New Modern Aesthetics', 'ヘアカタログ', '最新发型'],
+    ['New Weapon', '新着武器', '最新武器'],
+    ['Pick Up!', 'オススメ', '推荐'],
+  ]);
+
+  function fcHomeExactTextNode(node, accepted) {
+    if (node.nodeType === 3) return accepted.has(node.nodeValue.trim()) ? node : null;
+    for (const child of node.childNodes || []) {
+      const found = fcHomeExactTextNode(child, accepted);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function fcHomePrimaryTitle(heading, english, chinese) {
+    const accepted = new Set([english, fcUIValue(english) || english, chinese]);
+    let branch = heading;
+    // 兼容主标题和副标题同级、或各自嵌套在一层容器的 WordPress 模板。
+    for (let depth = 0; branch && depth < 3; depth++, branch = branch.parentElement) {
+      let previous = branch.previousSibling;
+      for (let step = 0; previous && step < 6; step++, previous = previous.previousSibling) {
+        if (accepted.has((previous.textContent || '').trim())) {
+          const node = fcHomeExactTextNode(previous, accepted);
+          if (node) return node;
+        }
+      }
+      if (branch.parentElement?.tagName === 'BODY') break;
+    }
+    return null;
+  }
+
+  function collapseFCHomeHeadings() {
+    if ((globalThis.location?.pathname || '') !== '/') return;
+    for (const heading of document.querySelectorAll('h2')) {
+      const label = heading.textContent.trim();
+      for (const [english, japanese, chinese] of FC_HOME_SECTION_TITLES) {
+        if (label !== japanese && label !== (fcUIValue(japanese) || japanese)) continue;
+        const primary = fcHomePrimaryTitle(heading, english, chinese);
+        if (!primary) continue;
+        const value = primary.nodeValue.trim();
+        if (value !== chinese) primary.nodeValue = primary.nodeValue.replace(value, chinese);
+        if (heading.style.display !== 'none') {
+          heading.style.display = 'none';
+          heading.setAttribute('aria-hidden', 'true');
+        }
+        // 隐藏 H2 后，给仍可见的大标题保留标题的可访问性语义。
+        const element = primary.parentElement;
+        if (element && !/^H[1-6]$/.test(element.tagName) && !element.hasAttribute('role')) {
+          element.setAttribute('role', 'heading');
+          element.setAttribute('aria-level', '2');
+        }
+        break;
+      }
+    }
+  }
+
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
   // 不修改物品/系列词库：同一中文名仍可作为单件物品名或 Wiki 查询键。
   const FC_FULL_SET_LABEL = /[（(]全身[）)]$/u;
@@ -415,7 +480,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     }
     try {
       translateFCParagraphs(rootArg);
-      if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
+      if (rootArg?.nodeType === 3) { trimFCNode(rootArg); collapseFCHomeHeadings(); return; }
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       if (root.nodeType === 1 && _fcAcceptNode(root) !== NodeFilter.FILTER_REJECT) _procFCNode(root);
@@ -426,6 +491,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
       const batch = [];
       while (w.nextNode()) batch.push(w.currentNode);
       for (const n of batch) _procFCNode(n);
+      collapseFCHomeHeadings();
     } finally {
       if (isFull) window.__zhixiaFcBusy = false;
     }
