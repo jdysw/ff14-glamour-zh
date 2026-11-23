@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -66,10 +66,21 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
     return lookupJp2Zh(name) || fcNormalizedItem(name);
   }
 
+  // Mirapri Life 的 GARO 整套装备标题省略「の装束」，例如「魔戒法師・陽」。
+  // 仅当完整名称在官方日中系列对照中存在时，才还原为「魔戒法师装束·阳」。
+  // 保持与单件装备独立，绝不凭「魔戒」前缀猜译未知系列。
+  const FC_GARO_SET_SHORT = /^(魔戒[^\s（）]{1,28})・([陰陽])$/u;
+  function fcGaroSetName(name) {
+    const match = FC_GARO_SET_SHORT.exec(name);
+    if (!match) return null;
+    const official = _getSeriesMap().get(match[1] + 'の装束・' + match[2]);
+    return /(?:装束|套装)·[阴阳]$/u.test(official || '') ? official : null;
+  }
+
   function fcKnownName(name) {
     // Accept an actual key, never an arbitrary longer series sharing its prefix.
     return fcUIValue(name) || fcItemName(name) || lookupDutyName(name) || _getSeriesMap().get(name)
-      || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
+      || fcGaroSetName(name) || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
   }
 
   function fcJobEquipment(text, label) {
@@ -100,7 +111,10 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
   // v1.2.8：四步链拆为子步骤（降认知复杂度）
   // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
   function _trFCExact(text, t0, path = globalThis.location?.pathname || '') {
-    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0) || lookupDutyName(t0) || resolveDyeColor(t0);
+    const fullBody = FC_FULL_SET_LABEL.exec(t0)?.[0] || '';
+    const alias = fcGaroSetName(fullBody ? t0.slice(0, -fullBody.length) : t0);
+    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0)
+      || (alias && alias + fullBody) || lookupDutyName(t0) || resolveDyeColor(t0);
     if (!hit0) return null;
     const i = text.indexOf(t0);
     return text.slice(0, i) + hit0 + text.slice(i + t0.length);
@@ -402,7 +416,7 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束)$/u.test(officialName)) {
+    if (/(?:套装|装束)(?:·[阴阳])?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
