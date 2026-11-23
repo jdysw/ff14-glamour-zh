@@ -300,6 +300,35 @@ try {
   globalThis.location = variantOldLocation;
 }
 
+// 国服官方性别变体名的套装后缀不在最末尾（如「希望套装【女】」）。
+// EC 详情页的独立 Set 标签不能再追加第二个「套装」。
+const hopeOldLocation = globalThis.location;
+try {
+  globalThis.location = { pathname: '/gearset/hope-female', hostname: 'ffxiv.eorzeacollection.com' };
+  const hopeH1 = { tagName: 'H1', nodes: [
+    { nodeValue: 'Hope [F]' }, { nodeValue: 'Set' },
+  ] };
+  scope.headings = [hopeH1];
+  api.translateECGearsetNames();
+  assert.equal(hopeH1.nodes.map(n => n.nodeValue).join(''), '希望套装【女】',
+    '性别变体不能变成「希望套装【女】套装」');
+  api.translateECGearsetNames();
+  assert.equal(hopeH1.nodes.map(n => n.nodeValue).join(''), '希望套装【女】',
+    '性别变体重复扫描不能重复追加套装后缀');
+
+  const hopeWithSource = { tagName: 'H1', nodes: [
+    { nodeValue: 'Hope [M] Battle Content Gear' }, { nodeValue: '套装' },
+  ] };
+  scope.headings = [hopeWithSource];
+  api.translateECGearsetNames();
+  assert.equal(hopeWithSource.nodes.map(n => n.nodeValue).join(''),
+    '希望套装【男】 ' + DICT_EC['Battle Content Gear'],
+    '带来源描述的性别套装也只能保留一次后缀');
+} finally {
+  scope.headings = [];
+  globalThis.location = hopeOldLocation;
+}
+
 // The EC /accessories catalogue is separate from Gearsets. The English
 // series name appears with or without "Accessories" on cards and detail H1.
 // Use multiple distinct localized jewelry item parts as automatic evidence.
