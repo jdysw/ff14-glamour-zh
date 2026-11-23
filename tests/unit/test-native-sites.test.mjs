@@ -1005,7 +1005,7 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
   }
 });
 
-test('FF14-FC 7.5 装备套装：按官译识别八种完整系列简称，不污染单件名称', () => {
+test('FF14-FC 7.5/7.55 套装：按官译识别九种系列简称，不污染单件名称', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const doc = dom.document;
@@ -1018,6 +1018,7 @@ test('FF14-FC 7.5 装备套装：按官译识别八种完整系列简称，不�
     ['プレマジテック・キャスター', '前魔导咏咒套装'],
     ['プレマジテック・ヒーラー', '前魔导治愈套装'],
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
+    ['カーウェン', '卡文套装'],
   ];
   try {
     globalThis.location = dom.location;
