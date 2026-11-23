@@ -631,8 +631,8 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
   try {
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      names: '見本・アタイア\\t正式示例装束\\t1\\t0',
-      series: 'フリースピリッツ|自由之魂\\nヘヴンスナイト|苍穹骑士\\n見本|示例',
+      names: '見本・アタイア\t正式示例装束\t1\t0',
+      series: 'フリースピリッツ|自由之魂\nヘヴンスナイト|苍穹骑士\n見本|示例',
     }), true);
     cacheReset('derived');
     cacheReset('lookup');
