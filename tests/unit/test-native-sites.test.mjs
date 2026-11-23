@@ -839,8 +839,8 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      names: '試験の腕輪\\t试验手镯\\t1\\t0',
-      series: 'アバランチブロウラー|雪崩斗手\\nグリムグリズリー・スーツ|狰狞熊套装\\nビーストハーダー|兽牧',
+      names: '試験の腕輪\t试验手镯\t1\t0',
+      series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧',
     }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
     const label = id => source.querySelector('#' + id).firstChild;
