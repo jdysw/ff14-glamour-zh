@@ -1,9 +1,7 @@
 # Temporary PR diagnostic; remove after reading the public check annotations.
 name: Sonar annotations audit
 on:
-  push:
-    branches:
-      - fix/fc-home-new-headings-20261123
+  pull_request:
 permissions:
   checks: read
   contents: read
