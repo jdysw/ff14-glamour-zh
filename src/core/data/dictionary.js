@@ -731,6 +731,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
     'ファッションチェック': '时尚品鉴',
+    '魔獣使い': '驯兽师',
     '投稿ガイドライン': '投稿指南',
     '新規会員登録': '注册新会员',
     'COLOR': '颜色',
