@@ -4915,6 +4915,14 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'filter:クラフター': '能工巧匠',
     'filter:ギャザラー': '大地使者',
     'filter:その他': '其他',
+    'ドロップで入手': '掉落获得',
+    '地図を表示': '显示地图',
+    '詳しいコンテンツ情報はこちら': '查看副本详细信息',
+    '解放条件など': '解锁条件',
+    '受注場所': '任务领取地点',
+    'クロニクルクエスト：「古代の民の迷宮」': '编年史任务：「古代人迷宫」',
+    'クロニクルクエスト：「古代アラグ文明の遺産」': '编年史任务：「古代亚拉戈文明的遗产」',
+    '異国風の男': '异国装扮的男人',
   };
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 data/dictionaries/dict-ronka.json 注入）

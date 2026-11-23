@@ -278,7 +278,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   function trFCRelated(text, label) {
     const match = /^(.{1,60})の(関連アイテム)?$/.exec(label);
     if (!match) return null;
-    const name = fcKnownName(match[1]);
+    const name = fcScopedSetName(match[1]) || fcKnownName(match[1]);
     if (!name) return null;
     const suffix = match[2] ? '的相关物品' : '的';
     return text.replace(label, name + suffix);
@@ -323,6 +323,28 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (starter !== null) return starter;
     const verifiedSet = fcVerifiedSetText(text, t0);
     if (verifiedSet !== null) return verifiedSet;
+    // Some set names appear as breadcrumbs or gallery labels, not only in heading elements.
+    const named = FC_VERIFIED_SHORT_SET_PATHS.get(t0);
+    if (named?.plain && globalThis.location?.pathname === named.path)
+      return text.replace(t0, named.zh);
+    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の宝箱からランダムでドロップする。?$/u.exec(t0);
+    if (raidDrop) {
+      const duty = lookupDutyName(raidDrop[1]);
+      if (duty) return text.replace(t0, '从团队任务“' + duty + '”的宝箱中随机掉落。');
+    }
+    const treasure = /^「([^「」]{2,80})」装備が「([^「」]{2,90})」のどの宝箱からドロップするか、ひと目でわかるツールです$/u.exec(t0);
+    if (treasure) {
+      const set = fcScopedSetName(treasure[1]) || fcVerifiedSetName(treasure[1])
+        || fcKnownName(treasure[1]);
+      const duty = lookupDutyName(treasure[2]);
+      if (set && duty)
+        return text.replace(t0, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
+    }
+    const dutyDetail = /^(▷\s*)?(.{2,90}?)\s+の詳細情報$/u.exec(t0);
+    if (dutyDetail) {
+      const duty = lookupDutyName(dutyDetail[2]);
+      if (duty) return text.replace(t0, (dutyDetail[1] || '') + duty + '的详细信息');
+    }
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
     if (level) return text.replace(t0, level[1] + '级');
     const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
@@ -484,6 +506,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   ]);
   // 这些名称在正文中也可能指人物、活动或一般物品，只允许在匹配套装页面/卡片使用。
   const FC_VERIFIED_SHORT_SET_PATHS = new Map([
+    // Here “光之套装” is an editorial set label derived from official piece names,
+    // not the separate PvP item “威望光之套装”; keep it scoped to the FC article.
+    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true }],
     ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
     ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
@@ -497,6 +522,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
       return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) && url.pathname === targetPath;
     } catch { return false; }
+  }
+
+  function fcScopedSetName(name, node = null) {
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(name);
+    if (!record) return null;
+    return globalThis.location?.pathname === record.path || (node && fcMatchingSetLink(node, record.path))
+      ? record.zh : null;
   }
 
   function fcGaroBareHeading(node, label) {
@@ -565,6 +597,23 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (articlePrefix) result = result.replace(articlePrefix + native, articlePrefix + official);
     }
     return result;
+  }
+
+  // The FC gallery alt has a stable structure that cannot be translated by word
+  // substitution without leaving Japanese particles or corrupting item names.
+  function fcGalleryAlt(value, node) {
+    const racePhoto = /^ミラプリ「([^「」]{1,80})」装備(.{1,30})での見た目紹介(\d{1,3})$/u.exec(value);
+    const allRaces = /^ミラプリ「([^「」]{1,80})」装備の見た目を各種族で紹介(\d{1,3})$/u.exec(value);
+    const native = racePhoto?.[1] || allRaces?.[1];
+    if (!native) return null;
+    const name = fcScopedSetName(native, node) || fcVerifiedSetName(native)
+      || fcGaroSetName(native) || fcItemName(native);
+    if (!name) return null;
+    if (racePhoto) {
+      const race = fcUIValue(racePhoto[2]);
+      return race ? race + '「' + name + '」外观展示图 ' + racePhoto[3] : null;
+    }
+    return '「' + name + '」各种族外观展示图 ' + allRaces[2];
   }
 
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
@@ -646,7 +695,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const group = match && DICT_FC[match[1]];
     const scoped = fcShortSetQuotedAttribute(value, n);
     if (scoped === null) return;
-    const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(scoped);
+    const translated = group ? '查看“' + group + '”分类下的全部文章'
+      : (key === 'alt' && fcGalleryAlt(value, n)) || trFC(scoped);
     if (translated !== value) n.setAttribute(key, translated);
   }
   function _procFCImg(n) {

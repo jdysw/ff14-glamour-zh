@@ -995,6 +995,52 @@ test('FF14-FC GARO 简称：资料未就绪时保留原文，按路径翻译套�
   }
 });
 
+test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明不留日文', () => {
+  const oldDoc = globalThis.document;
+  const oldLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/of_light/'});
+  try {
+    globalThis.document = dom.document;
+    globalThis.location = dom.location;
+    const doc = dom.document;
+    doc.body.innerHTML =
+      '<h5>オブ・ライト</h5><h3>オブ・ライト（全身）</h3>'
+      + '<p>オブ・ライト</p>'
+      + '<img alt="ミラプリ「オブ・ライト」装備ミコッテでの見た目紹介1">'
+      + '<a href="https://example.net/equipment/of_light/"><img alt="ミラプリ「オブ・ライト」装備ミコッテでの見た目紹介1"></a>';
+    for (const el of doc.querySelectorAll('h5,h3,p')) trimFCNode(el.firstChild);
+    assert.deepEqual([...doc.querySelectorAll('h5,h3,p')].map(x => x.textContent),
+      ['光之套装', '光之套装（全身）', '光之套装']);
+    assert.equal(trFC('オブ・ライトの関連アイテム'), '光之套装的相关物品');
+    assert.ok(trFC('〖FF14〗オブ・ライト装備👗各種族での見た目・入手方法')
+      .startsWith('〖FF14〗光之套装'));
+    _trFCAttr(doc.querySelector('img'), 'alt');
+    assert.equal(doc.querySelector('img').getAttribute('alt'),
+      '猫魅族「光之套装」外观展示图 1');
+    const duty = 'クリスタルタワー：古代の民の迷宮';
+    assert.equal(trFC('アライアンスレイド「' + duty + '」の宝箱からランダムでドロップする。'),
+      '从团队任务“水晶塔 古代人迷宫”的宝箱中随机掉落。');
+    assert.equal(trFC('▷ ' + duty + ' の詳細情報'), '▷ 水晶塔 古代人迷宫的详细信息');
+    assert.ok(trFC('「オブ・ライト」装備が「' + duty
+      + '」のどの宝箱からドロップするか、ひと目でわかるツールです').includes('光之套装'));
+    assert.equal(trFC('ドロップで入手'), '掉落获得');
+    assert.equal(trFC('地図を表示'), '显示地图');
+    assert.equal(trFC('異国風の男'), '异国装扮的男人');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
+    assert.equal(trFC('オブ・ライト'), 'オブ・ライト',
+      '不能在其他装备页面将系列简称当成通用物品名');
+    const foreign = doc.querySelector('a img');
+    _trFCAttr(foreign, 'alt');
+    assert.ok(!foreign.getAttribute('alt').includes('光之套装'));
+  } finally {
+    if (oldDoc === undefined) delete globalThis.document;
+    else globalThis.document = oldDoc;
+    if (oldLocation === undefined) delete globalThis.location;
+    else globalThis.location = oldLocation;
+    dom.close();
+  }
+});
+
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
