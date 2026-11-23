@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, fcStarterOutfitName, collapseFCHomeHeadings, fixFCMenu,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, fcStarterOutfitName, fcVerifiedSetName, collapseFCHomeHeadings, fixFCMenu,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -1003,6 +1003,89 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
     else globalThis.document = beforeDoc;
     dom.close();
   }
+});
+
+test('FF14-FC 7.5 装备套装：按官译识别八种完整系列简称，不污染单件名称', () => {
+  const before = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
+  const doc = dom.document;
+  const verified = [
+    ['プレマジテック・ディフェンダー', '前魔导御敌套装'],
+    ['プレマジテック・スレイヤー', '前魔导制敌套装'],
+    ['プレマジテック・ストライカー', '前魔导强袭套装'],
+    ['プレマジテック・スカウト', '前魔导游击套装'],
+    ['プレマジテック・レンジャー', '前魔导精准套装'],
+    ['プレマジテック・キャスター', '前魔导咏咒套装'],
+    ['プレマジテック・ヒーラー', '前魔导治愈套装'],
+    ['ネオシチズン・コスチュームセット', '新生国民套装'],
+  ];
+  try {
+    globalThis.location = dom.location;
+    for (const [japanese, chinese] of verified) {
+      assert.equal(fcVerifiedSetName(japanese), chinese);
+      assert.equal(trFC(japanese), chinese, '套装标题必须命中完整官方中文');
+      assert.equal(trFC(japanese + '（全身）'), chinese + '（全身）',
+        '全身预览仍保留原有全角括号');
+      const gallery = 'ミラプリ「' + japanese + '」装備の見た目紹介1';
+      assert.ok(trFC(gallery).includes('「' + chinese + '」'),
+        '图片说明中的套装简写必须保留成套装名');
+      const card = doc.createElement('h4');
+      card.textContent = japanese;
+      doc.body.append(card);
+      trimFCNode(card.firstChild);
+      assert.equal(card.textContent, chinese, '套装列表使用完整名称，不能重复加后缀');
+      trimFCNode(card.firstChild);
+      assert.equal(card.textContent, chinese, '重复扫描结果不变');
+    }
+    const parts = [
+      'プレマジテック・ディフェンダーバイザー',
+      'プレマジテック・スレイヤーサバトン',
+      'ネオシチズン・フーディー',
+    ];
+    for (const item of parts) {
+      assert.notEqual(fcVerifiedSetName(item), '前魔导御敌套装');
+      assert.ok(!trFC(item).includes('套装'),
+        item + ' 是单件装备，不得因前缀相同而错误包含套装');
+    }
+    assert.equal(fcVerifiedSetName('プレマジテック・未知職'), null);
+    assert.equal(trFC('前魔导御敌套装'), '前魔导御敌套装');
+  } finally {
+    if (before === undefined) delete globalThis.location;
+    else globalThis.location = before;
+    dom.close();
+  }
+});
+
+test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列表占位文案', () => {
+  const ui = [
+    ['装備部位 クリックで切替', '点击装备部位切换'],
+    ['染色 クリックで切替', '点击染色切换'],
+    ['種族 クリックで切替', '点击种族切换'],
+    ['Galleryタップで切り替え', '点击图库切换'],
+    ['Coming Soon……', '内容待补充'],
+    ['TANK / タンク', '防护'],
+    ['Melee DPS / 近接物理DPS', '近战物理输出'],
+    ['HEALER / ヒーラー', '治愈'],
+    ['製作装備', '制作装备'],
+    ['制作装備', '制作装备'],
+    ['ボズヤ・エウレカ（準備中）', '博兹雅与优雷卡（准备中）'],
+  ];
+  const dom = new TestWindow({url:'https://ff14-fc.com/weapon_search/'});
+  try {
+    for (const [source, chinese] of ui) {
+      assert.equal(trFC(source), chinese, source + ' 完整界面文案应有精确译名');
+      const node = dom.document.createElement('span');
+      node.textContent = source;
+      trimFCNode(node.firstChild);
+      assert.equal(node.textContent, chinese);
+      trimFCNode(node.firstChild);
+      assert.equal(node.textContent, chinese, '二次扫描仍应一致');
+    }
+    assert.equal(trFC('Physical Ranged DPS / 遠隔物理DPS'), '远程物理输出',
+      '原已翻译的远程物理输出不变');
+    assert.equal(trFC('Magical Ranged DPS / 遠隔魔法DPS'), '远程魔法输出',
+      '原已翻译的远程魔法输出不变');
+  } finally { dom.close(); }
 });
 
 test('FF14-FC GARO 缩写套装：用已核实官译还原阴阳装束，不重复后缀', () => {
