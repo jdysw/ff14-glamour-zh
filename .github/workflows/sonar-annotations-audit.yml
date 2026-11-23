@@ -1,0 +1,18 @@
+# Temporary PR diagnostic; remove after reading the public check annotations.
+name: Sonar annotations audit
+on:
+  push:
+    branches:
+      - fix/fc-home-new-headings-20261123
+permissions:
+  checks: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the eight SonarCloud check annotations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/check-runs/137850183856/annotations?per_page=100" --jq '.[] | {path, start_line, end_line, title, message, annotation_level}'
