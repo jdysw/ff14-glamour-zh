@@ -246,7 +246,7 @@ export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDispla
     'ルガディン', 'アウラ', 'ヴィエラ', 'ロスガル',
   ]);
   function fcStarterOutfitName(native) {
-    const match = /^(.*?)(([♂♀]))初期服$/u.exec(native);
+    const match = /^(.+?)([♂♀])初期服$/u.exec(native);
     if (!match || !FC_STARTER_RACES.has(match[1])) return null;
     const race = fcUIValue(match[1]);
     if (!race) return null;
@@ -273,7 +273,8 @@ export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDispla
 
   function trFCDynamic(text, t0) {
     const label = fcUIKey(t0);
-    const starter = fcStarterOutfitTitle(text, label);
+    // 全角括号会在 fcUIKey 的 NFKC 规范化中变成半角；组合标题应使用原文匹配并保留标点。
+    const starter = fcStarterOutfitTitle(text, t0);
     if (starter !== null) return starter;
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
     if (level) return text.replace(t0, level[1] + '级');
