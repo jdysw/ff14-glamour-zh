@@ -2607,6 +2607,12 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
   // ⚠️ 自动生成（data/dictionaries/dict-fc.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_FC = { ...DICT_COMMON,
     '部位別': '按部位',
+    'page:/summary_equipment_heavensward/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。': '本页汇总介绍《苍穹之禁城》版本的装备。',
+    'page:/summary_equipment_heavensward/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。 リンク先で各種族や男女ごとの装備の見た目や入手方法が確認できます♪': '本页汇总介绍《苍穹之禁城》版本的装备。点击链接可查看不同种族与性别的装备外观及获取方式。',
+    'page:/summary_equipment_stormblood/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。': '本页汇总介绍《红莲之狂潮》版本的装备。',
+    'page:/summary_equipment_stormblood/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。 リンク先で各種族や男女ごとの装備の見た目や入手方法が確認できます♪': '本页汇总介绍《红莲之狂潮》版本的装备。点击链接可查看不同种族与性别的装备外观及获取方式。',
+    'page:/summary_equipment_shadowbringers/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。': '本页汇总介绍《暗影之逆焰》版本的装备。',
+    'page:/summary_equipment_shadowbringers/:FF14の新生エオルゼアでの装備について一覧で紹介しているページです。 リンク先で各種族や男女ごとの装備の見た目や入手方法が確認できます♪': '本页汇总介绍《暗影之逆焰》版本的装备。点击链接可查看不同种族与性别的装备外观及获取方式。',
     'シリーズ': '系列',
     'ヘアカタログ': '发型图鉴',
     'カテゴリ別': '按分类',

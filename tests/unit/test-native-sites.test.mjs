@@ -1310,6 +1310,9 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
   assert.equal(trFC('ひろし似'), '人族（宣传片男主风）');
   assert.equal(trFC('キャスター'), '法系');
   assert.equal(trFC('漆黒'), '暗影之逆焰');
+  assert.equal(trFC('FF14の新生エオルゼアでの装備について一覧で紹介しているページです。', '/summary_equipment_heavensward/'), '本页汇总介绍《苍穹之禁城》版本的装备。');
+  assert.equal(trFC('FF14の新生エオルゼアでの装備について一覧で紹介しているページです。', '/summary_equipment_stormblood/'), '本页汇总介绍《红莲之狂潮》版本的装备。');
+  assert.equal(trFC('FF14の新生エオルゼアでの装備について一覧で紹介しているページです。', '/summary_equipment_shadowbringers/'), '本页汇总介绍《暗影之逆焰》版本的装备。');
   assert.equal(trFC('アライアンスレイド'), '团队任务', '24 人任务不能译为大型任务');
   assert.equal(trFC('ノーマルレイド'), '普通大型任务', '8 人任务须使用大型任务');
   assert.equal(trFC('ノーマルレイド・零式'), '普通与零式大型任务');
