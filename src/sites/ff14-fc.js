@@ -470,10 +470,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function collapseFCHomeHeadings() {
-    if ((globalThis.location?.pathname || '') !== '/') return;
+    const path = globalThis.location?.pathname || '';
+    // 装备详情页也有「Point / まとめ」这样的同义双标题。
+    const isHome = path === '/';
+    if (!isHome && !/^\/equipment\/[^/]+\/?$/u.test(path)) return;
+    const sections = isHome ? FC_HOME_SECTION_TITLES : [['Point', 'まとめ', '汇总']];
     for (const heading of document.querySelectorAll('h2')) {
       const label = heading.textContent.trim();
-      for (const [english, japanese, chinese] of FC_HOME_SECTION_TITLES) {
+      for (const [english, japanese, chinese] of sections) {
         if (label !== japanese && label !== (fcUIValue(japanese) || japanese)) continue;
         const primary = fcHomePrimaryTitle(heading, english, chinese);
         if (!primary) continue;
@@ -504,11 +508,16 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['白夜', '/equipment/the_white_night/'],
     ['銀狼', '/equipment/the_silver_wolf/'],
   ]);
-  // 这些名称在正文中也可能指人物、活动或一般物品，只允许在匹配套装页面/卡片使用。
+  // 装备详情页把整套装备简写为系列词。以对应详情 URL 严格定位，
+  // 按国服单件装备官方词干给系列标题加展示后缀；不是新的物品官方名称。
+  // 特别注意水晶塔的风魔/洋葱与 PvP 威望装束、深红与同名家具不得混淆。
   const FC_VERIFIED_SHORT_SET_PATHS = new Map([
-    // Here “光之套装” is an editorial set label derived from official piece names,
-    // not the separate PvP item “威望光之套装”; keep it scoped to the FC article.
-    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true }],
+    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true, strictLink: true }],
+    ['ロイヤル', { path: '/equipment/royal/', zh: '皇室套装', plain: true, strictLink: true }],
+    ['クリムゾン', { path: '/equipment/crimson/', zh: '深红套装', plain: true, strictLink: true }],
+    ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true }],
+    ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true }],
+    ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true }],
     ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
     ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
@@ -554,9 +563,10 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       && (parent.closest('h5') || (fullBody && parent.closest('h3')) || parent.closest('h1'));
     const isSeriesPage = /^\/equipment_series_search\/?$/u.test(path);
     // H3 文章标题若附有链接则严格核验目标地址；没有链接才使用系列页上下文。
-    const seriesTitle = isSeriesPage && (parent.closest('h4')
-      || (isArticle && parent.closest('h3') && !parent.closest('a[href]')));
     const matchingLink = fcMatchingSetLink(parent, detailPath);
+    const seriesTitle = isSeriesPage && (!verified?.strictLink || matchingLink)
+      && (parent.closest('h4')
+        || (isArticle && parent.closest('h3') && !parent.closest('a[href]')));
     if (!mainTitle && !seriesTitle && !matchingLink) return null;
     // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
     // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
@@ -621,8 +631,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   const FC_FULL_SET_LABEL = /[（(]全身[）)]$/u;
   function fcSetTitleContext(element, source, path) {
     if (!element?.closest) return false;
-    // 首页轮播、相关推荐等链接的目标是整套装备的详情页。
-    if (element.closest('a[href*="/equipment/"]')) return true;
+    // 首页轮播和相关推荐仅认本站的整套装备详情链接，不推断站外同路径。
+    const link = element.closest('a[href]');
+    if (link) {
+      try {
+        const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
+        if (!/^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname)) return false;
+        if (/^\/equipment\/[^/]+\/?$/u.test(url.pathname)) return true;
+      } catch { return false; }
+    }
     // 系列检索结果的 H4 是卡片套装名，不能扩大到部位检索页。
     if (/^\/equipment_series_search\/?$/u.test(path)) return !!element.closest('h4');
     if (!/^\/equipment\/[^/]+\/?$/u.test(path)) return false;
@@ -637,8 +654,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(source)?.[0] || '';
     const base = fullBody ? source.slice(0, -fullBody.length) : source;
     // 不把「整套装备详情中的单件物品链接」误判为套装卡片。
+    // 套装标题不得回退到单件物品前缀：会把「クリムゾン」误判成家具。
     const officialName = _getSeriesMap().get(base) || fcVerifiedSetName(base)
-      || _getSeriesPfx().get(base) || _getItemPfx().get(base);
+      || _getSeriesPfx().get(base);
     if (!officialName || officialName === base) return translated;
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
@@ -661,6 +679,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
       return;
     }
+    // 未取得可靠系列对应时宁可保留日文，不能用同名前缀套用单件装备译名。
+    const path = globalThis.location?.pathname || '';
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const name = fullBody ? label.slice(0, -fullBody.length) : label;
+    if (fcSetTitleContext(p, label, path)
+      && /^[\u30a0-\u30ff\u4e00-\u9fff・ー]{2,40}$/u.test(name)
+      && !(_getSeriesMap().get(name) || fcVerifiedSetName(name)
+        || _getSeriesPfx().get(name) || fcScopedSetName(name, p))) return;
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);

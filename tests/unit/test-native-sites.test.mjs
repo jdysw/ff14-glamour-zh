@@ -1028,6 +1028,44 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('ドロップで入手'), '掉落获得');
     assert.equal(trFC('地図を表示'), '显示地图');
     assert.equal(trFC('異国風の男'), '异国装扮的男人');
+    // 同一水晶塔的关联卡片：站内 URL 确认套装，外链和普通单件不能误伤。
+    const related = [
+      ['ロイヤル', '皇室套装', '/equipment/royal/'],
+      ['クリムゾン', '深红套装', '/equipment/crimson/'],
+      ['バラード', '民谣套装', '/equipment/ballad/'],
+      ['風魔', '风魔套装', '/equipment/fuma/'],
+      ['オニオン', '洋葱套装', '/equipment/onion/'],
+    ];
+    for (const [native, chinese, href] of related) {
+      const link = doc.createElement('a');
+      link.setAttribute('href', href);
+      link.innerHTML = '<span>' + native + '</span><img alt="ミラプリ「'
+        + native + '」装備ミコッテでの見た目紹介1">';
+      doc.body.append(link);
+      trimFCNode(link.querySelector('span').firstChild);
+      _trFCAttr(link.querySelector('img'), 'alt');
+      assert.equal(link.textContent, chinese, '关联卡片需按链接翻译：' + href);
+      assert.ok(link.querySelector('img').getAttribute('alt').includes('「' + chinese + '」'));
+      assert.equal(link.getAttribute('href'), href);
+    }
+    assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
+    const summary = doc.createElement('section');
+    summary.innerHTML = '<span>Point</span><h2>まとめ</h2>';
+    doc.body.append(summary);
+    for (const el of summary.children) trimFCNode(el.firstChild);
+    collapseFCHomeHeadings();
+    assert.equal(summary.querySelector('span').textContent, '汇总');
+    assert.equal(summary.querySelector('h2').style.display, 'none',
+      '已配对的详情页双语标题只显示一次');
+    const foreignSet = doc.createElement('a');
+    foreignSet.href = 'https://example.net/equipment/crimson/';
+    foreignSet.textContent = 'クリムゾン';
+    doc.body.append(foreignSet);
+    trimFCNode(foreignSet.firstChild);
+    assert.notEqual(foreignSet.textContent, '深红套装',
+      '站外相同路径不得触发 FC 套装规则');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/crimson/');
+    assert.equal(trFC('クリムゾン'), '深红套装', '详情页正文使用已核实的系列名称');
     globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
     assert.equal(trFC('オブ・ライト'), 'オブ・ライト',
       '不能在其他装备页面将系列简称当成通用物品名');
