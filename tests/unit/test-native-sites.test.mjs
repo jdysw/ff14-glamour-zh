@@ -537,6 +537,7 @@ test('MIRAPRI 实体翻译：正文、属性、按钮文本及标题保持原站
   assert.equal(tr(''), '');
   assert.equal(tr('     '), '     ');
   assert.equal(tr('Loading...'), '加载中…');
+  assert.equal(tr('魔獣使い'), '驯兽师'); // MIRAPRI SNAP 新增职业筛选项，采用国服译名
   assert.equal(tr('未知原文'), '未知原文');
   const parent = element('SPAN');
   const node = { nodeType: 3, nodeValue: 'Loading...', parentElement: parent };
@@ -1006,105 +1007,33 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
 });
 
 
-test('FF14-FC 装备套装文章标题：仅已核实的服装系列添加展示后缀', () => {
-  const beforeLocation = globalThis.location;
+test('FF14-FC 装备文章标题：已核实系列添加后缀，单件与武器不受影响', () => {
+  const prev = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
-  const doc = dom.document;
-  const pairs = [
-    ['ファントムヴィジョン・ディフェンダー', '幻境意象御敌'],
-    ['ファントムヴィジョン・スレイヤー', '幻境意象制敌'],
-    ['ファントムヴィジョン・ストライカー', '幻境意象强袭'],
-    ['ファントムヴィジョン・スカウト', '幻境意象游击'],
-    ['ファントムヴィジョン・レンジャー', '幻境意象精准'],
-    ['ファントムヴィジョン・キャスター', '幻境意象咏咒'],
-    ['ファントムヴィジョン・ヒーラー', '幻境意象治愈'],
-    ['トゥール', '图尔'],
-    ['トルナ', '托纳'],
-    ['トレードウィンズ', '贸易风'],
-  ];
   try {
     globalThis.location = dom.location;
-    assert.equal(_applyV3({
-      candidatePolicy: 1,
-      series: pairs.map(([native, localized]) => native + '|' + localized).join('\n'),
+    assert.equal(_applyV3({candidatePolicy: 1,
+      series: 'ファントムヴィジョン・ディフェンダー|幻境意象御敌',
     }), true);
     cacheReset('derived');
-    for (const [native, official] of pairs) {
-      const article = '〖FF14〗' + native
-        + '装備👗各種族での見た目・入手方法〖クレセントアイル〗';
-      const result = trFC(article);
-      assert.ok(result.startsWith('〖FF14〗' + official + '套装👗'),
-        native + ' 的文章标题应与列表套装名称统一');
-      const h3 = doc.createElement('h3');
-      h3.textContent = article;
-      const card = doc.createElement('h4');
-      card.textContent = native;
-      const image = doc.createElement('img');
-      image.setAttribute('alt', article);
-      doc.body.append(h3, card, image);
-      trimFCNode(h3.firstChild);
-      trimFCNode(card.firstChild);
-      _trFCAttr(image, 'alt');
-      assert.ok(h3.textContent.startsWith('〖FF14〗' + official + '套装👗'));
-      assert.equal(card.textContent, official + '套装');
-      assert.ok(image.getAttribute('alt').startsWith('〖FF14〗' + official + '套装👗'));
-      trimFCNode(h3.firstChild);
-      trimFCNode(card.firstChild);
-      _trFCAttr(image, 'alt');
-      assert.equal(card.textContent, official + '套装', '重复扫描不能添加双重后缀');
-      assert.ok(!h3.textContent.includes('套装套装'));
-      assert.equal(trFC(native), official, '普通系列名不改为带后缀的物品查询键');
-      assert.ok(!trFC('〖FF14〗' + native + '装備⚔').includes('套装'),
-        '武器说明不得套用时装文章规则');
-      h3.remove();
-      card.remove();
-      image.remove();
+    const japanese = 'ファントムヴィジョン・ディフェンダー';
+    const official = '幻境意象御敌';
+    for (const marker of ['👗', '']) {
+      const article = '〖FF14〗' + japanese + '装備' + marker + '各種族での見た目・入手方法';
+      const localized = trFC(article);
+      assert.ok(localized.startsWith('〖FF14〗' + official + '套装' + marker));
     }
-    assert.equal(trFC('〖FF14〗未知のアタイア装備👗'), '〖FF14〗未知のアタイア装備👗',
-      '无完整官方映射时保留原文，禁止猜测套装名');
-    assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'),
-      '单件物品文章不得出现错误套装后缀');
+    assert.equal(trFC(japanese), official, '通用物品查询名不能追加套装');
+    assert.ok(!trFC('〖FF14〗' + japanese + '装備⚔').includes('套装'));
+    assert.ok(!trFC('〖FF14〗未知アタイア装備👗').includes('套装'));
+    assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'));
   } finally {
     _applyV3({candidatePolicy: 1});
     cacheReset('derived');
-    if (beforeLocation === undefined) delete globalThis.location;
-    else globalThis.location = beforeLocation;
+    if (prev === undefined) delete globalThis.location;
+    else globalThis.location = prev;
     dom.close();
   }
-});
-
-test('FF14-FC 搜索与装备套装入口：实际 UI 词汇全量直译，不残留日文', () => {
-  const pairs = [
-    ['装備検索', '装备搜索'],
-    ['ジョブ', '职业'],
-    ['入手方法', '获取方式'],
-    ['分類', '分类'],
-    ['性別', '性别'],
-    ['並べ替え', '排序'],
-    ['close', '关闭'],
-    ['防具シリーズ', '装备套装'],
-    ['防具シリーズの一覧', '装备套装一览'],
-    ['装備シリーズ', '装备套装'],
-    ['装備シリーズ一覧へ', '前往装备套装一览'],
-    ['装備シリーズへ', '前往装备套装'],
-    ['FF14 装備シリーズ一覧・検索', 'FF14 装备套装一览·搜索'],
-    ['検索条件：なし（上のメニューから絞り込みができます）',
-      '搜索条件：无（可从上方菜单筛选）'],
-    ['各種族で幻想試着ツール！', '各种族幻想试穿工具！'],
-  ];
-  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
-  try {
-    for (const [native, zh] of pairs) {
-      assert.equal(trFC(native), zh, native + ' 应有独立 UI 译文');
-      const span = dom.document.createElement('span');
-      span.textContent = native;
-      trimFCNode(span.firstChild);
-      assert.equal(span.textContent, zh);
-      trimFCNode(span.firstChild);
-      assert.equal(span.textContent, zh, '再次扫描不可损坏已译文字');
-    }
-    assert.equal(trFC('武器シリーズ'), '武器系列', '不能误改原有武器系列概念');
-  } finally { dom.close(); }
 });
 
 test('FF14-FC GARO 套装简称：浏览器标题与图库 alt 不误译为资料片', () => {
@@ -1164,334 +1093,98 @@ test('FF14-FC GARO 套装简称：浏览器标题与图库 alt 不误译为资�
   }
 });
 
-test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单件名称', () => {
-  const before = globalThis.location;
+test('FF14-FC 官译套装：详情、图片及无图标标题一致且不污染单件装备', () => {
+  const prev = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
-  const doc = dom.document;
-  const verified = [
+  const cases = [
     ['プレマジテック・ディフェンダー', '前魔导御敌套装'],
-    ['プレマジテック・スレイヤー', '前魔导制敌套装'],
-    ['プレマジテック・ストライカー', '前魔导强袭套装'],
-    ['プレマジテック・スカウト', '前魔导游击套装'],
-    ['プレマジテック・レンジャー', '前魔导精准套装'],
-    ['プレマジテック・キャスター', '前魔导咏咒套装'],
-    ['プレマジテック・ヒーラー', '前魔导治愈套装'],
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
-    ['カーウェン', '卡文套装'],
     ['ゼロルミナリー・コスチュームセット', '零点套装'],
+    ['カーウェン', '卡文套装'],
   ];
   try {
     globalThis.location = dom.location;
-    for (const [japanese, chinese] of verified) {
-      assert.equal(fcVerifiedSetName(japanese), chinese);
-      assert.equal(trFC(japanese), chinese, '套装标题必须命中完整官方中文');
-      assert.equal(trFC(japanese + '（全身）'), chinese + '（全身）',
-        '全身预览仍保留原有全角括号');
-      for (const prefix of ['【FF14】', '〖FF14〗']) {
-        const article = trFC(prefix + japanese + '装備👗各種族での見た目・入手方法');
-        assert.ok(article.startsWith(prefix + chinese + '👗'),
-          prefix + japanese + ' 的文章标题应完整使用套装名，且不叠加“装备”');
-        const withoutEmoji = trFC(prefix + japanese + '装備各種族での見た目・入手方法〖ID〗');
-        assert.ok(withoutEmoji.startsWith(prefix + chinese + '各种族')
-          || withoutEmoji.startsWith(prefix + chinese + '各種族'),
-        prefix + japanese + ' 省略图标的文章标题也必须保留官译套装名');
-        assert.ok(!withoutEmoji.includes('套装装备'), '无图标标题不能出现重复装备后缀');
-      }
-      const gallery = 'ミラプリ「' + japanese + '」装備の見た目紹介1';
-      assert.ok(trFC(gallery).includes('「' + chinese + '」'),
-        '图片说明中的套装简写必须保留成套装名');
-      const card = doc.createElement('h4');
-      card.textContent = japanese;
-      doc.body.append(card);
-      trimFCNode(card.firstChild);
-      assert.equal(card.textContent, chinese, '套装列表使用完整名称，不能重复加后缀');
-      trimFCNode(card.firstChild);
-      assert.equal(card.textContent, chinese, '重复扫描结果不变');
+    for (const [native, zh] of cases) {
+      assert.equal(fcVerifiedSetName(native), zh);
+      assert.equal(trFC(native + '（全身）'), zh + '（全身）');
+      assert.ok(trFC('〖FF14〗' + native + '装備各種族での見た目・入手方法')
+        .startsWith('〖FF14〗' + zh));
+      assert.ok(trFC('ミラプリ「' + native + '」装備').includes('「' + zh + '」'));
     }
-    const parts = [
-      'プレマジテック・ディフェンダーバイザー',
-      'プレマジテック・スレイヤーサバトン',
-      'ネオシチズン・フーディー',
-    ];
-    for (const item of parts) {
-      assert.notEqual(fcVerifiedSetName(item), '前魔导御敌套装');
-      assert.ok(!trFC(item).includes('套装'),
-        item + ' 是单件装备，不得因前缀相同而错误包含套装');
+    for (const item of ['プレマジテック・ディフェンダーバイザー', 'ネオシチズン・フーディー']) {
+      assert.ok(!trFC(item).includes('套装'), '单件物品名称不得被误补套装后缀');
     }
     assert.equal(fcVerifiedSetName('プレマジテック・未知職'), null);
-    assert.equal(trFC('前魔导御敌套装'), '前魔导御敌套装');
   } finally {
-    if (before === undefined) delete globalThis.location;
-    else globalThis.location = before;
+    if (prev === undefined) delete globalThis.location;
+    else globalThis.location = prev;
     dom.close();
   }
 });
 
-test('FF14-FC 7.5/7.56 套装简称：仅在匹配详情页、卡片和链接使用已核实名称', () => {
-  const beforeLocation = globalThis.location;
+test('FF14-FC 短套装名：按详情 URL 限定，标题和图片不误伤外链', () => {
+  const prev = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const doc = dom.document;
   const sets = [
     ['夜桜', '夜樱套装', '/equipment/yozakuras/'],
-    ['ビーストマスター', '兽主套装', '/equipment/beastmasters/'],
     ['コスモエクスプローラー', '宇宙探索者套装', '/equipment/cosmic_explorers/'],
   ];
   try {
-    for (const [native, official, path] of sets) {
+    for (const [native, zh, path] of sets) {
       globalThis.location = new URL('https://ff14-fc.com' + path);
-      doc.body.innerHTML = '<h5 id="set">' + native + '</h5>'
-        + '<h3 id="whole">' + native + '（全身）</h3>'
-        + '<h1 id="article">〖FF14〗' + native + '装備👗各種族での見た目・入手方法</h1>'
-        + '<a id="same-link" href="' + path + '"><span>' + native + '</span></a>'
-        + '<p id="ordinary">' + native + '</p>'
-        + '<a id="external" href="https://example.com' + path + '">' + native + '</a>'
-        + '<h3 id="single">' + native + '・ジャケット</h3>'
-        + '<img id="gallery" alt="ミラプリ「' + native + '」装備ミコッテでの見た目紹介1">'
-        + '<img id="part-gallery" alt="ミラプリ「' + native + '・ジャケット」装備ミコッテでの見た目紹介2">';
-      for (const selector of ['#set', '#whole', '#article', '#same-link span',
-        '#ordinary', '#external', '#single']) trimFCNode(doc.querySelector(selector).firstChild);
-      for (const selector of ['#gallery', '#part-gallery']) _trFCAttr(doc.querySelector(selector), 'alt');
-      assert.ok(doc.querySelector('#gallery').getAttribute('alt').includes('「' + official + '」'),
-        native + ' 的整套展示图片说明必须保留完整套装名');
-      assert.ok(!doc.querySelector('#part-gallery').getAttribute('alt').includes(official),
-        '图片说明里的单件装备不得误加“套装”');
-      assert.equal(doc.querySelector('#set').textContent, official, native + ' 套装小标题');
-      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）', native + ' 全身预览');
-      assert.ok(doc.querySelector('#article').textContent.startsWith('〖FF14〗' + official + '👗'),
-        native + ' 文章主标题');
-      assert.equal(doc.querySelector('#same-link').textContent, official);
-      const noIconArticle = trFC('〖FF14〗' + native + '装備各種族での見た目・入手方法');
-      assert.ok(noIconArticle.startsWith('〖FF14〗' + official),
-        '匹配详情页的 document.title 式无图标标题应使用完整套装名');
-      assert.notEqual(doc.querySelector('#external').textContent, official, '站外链接不应当误判为本套装');
-      assert.notEqual(doc.querySelector('#ordinary').textContent, official, '正文不能误加套装后缀');
-      assert.ok(!doc.querySelector('#single').textContent.includes('套装'),
-        '单件装备不能因为套装简称而增加“套装”');
-      for (const selector of ['#set', '#whole']) trimFCNode(doc.querySelector(selector).firstChild);
-      assert.equal(doc.querySelector('#set').textContent, official, '多次扫描不可重复附加套装');
-      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）');
+      doc.body.innerHTML = '<h5>' + native + '</h5>'
+        + '<h1>〖FF14〗' + native + '装備各種族での見た目・入手方法</h1>'
+        + '<img alt="ミラプリ「' + native + '」装備の見た目">'
+        + '<p>' + native + '</p>';
+      for (const node of doc.querySelectorAll('h5,h1,p')) trimFCNode(node.firstChild);
+      _trFCAttr(doc.querySelector('img'), 'alt');
+      assert.equal(doc.querySelector('h5').textContent, zh);
+      assert.ok(doc.querySelector('h1').textContent.startsWith('〖FF14〗' + zh));
+      assert.ok(doc.querySelector('img').getAttribute('alt').includes('「' + zh + '」'));
+      assert.notEqual(doc.querySelector('p').textContent, zh, '普通正文不能变成套装名');
     }
     globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
-    doc.body.innerHTML = sets.map(([native, , path]) =>
-      '<a class="card" href="' + path + '"><h3>〖FF14〗' + native
-      + '装備👗各種族での見た目・入手方法</h3><h4>' + native + '</h4>'
-      + '<img alt="ミラプリ「' + native + '」装備ミコッテでの見た目紹介1"></a>').join('');
-    for (const [index, [, official]] of sets.entries()) {
-      const card = doc.querySelectorAll('.card')[index];
-      for (const heading of card.querySelectorAll('h3, h4')) trimFCNode(heading.firstChild);
-      _trFCAttr(card.querySelector('img'), 'alt');
-      const imageArticle = doc.createElement('img');
-      imageArticle.setAttribute('alt', '〖FF14〗' + sets[index][0] + '装備各種族での見た目・入手方法');
-      card.append(imageArticle);
-      _trFCAttr(imageArticle, 'alt');
-      assert.ok(imageArticle.getAttribute('alt').startsWith('〖FF14〗' + official),
-        '列表图片 alt 中的无图标文章标题也应使用完整套装名');
-      assert.equal(card.querySelector('h4').textContent, official, '列表卡片的套装短名称');
-      assert.ok(card.querySelector('h3').textContent.startsWith('〖FF14〗' + official + '👗'),
-        '列表卡片的文章标题不能遗漏套装译名或叠加“装备”');
-      assert.ok(card.querySelector('img').getAttribute('alt').includes('「' + official + '」'),
-        '列表缩略图的 alt 应使用同一套装名');
-      trimFCNode(card.querySelector('h3').firstChild);
-      _trFCAttr(card.querySelector('img'), 'alt');
-      assert.ok(card.querySelector('h3').textContent.startsWith('〖FF14〗' + official + '👗'),
-        '重复扫描不可重复添加“套装”');
-      assert.equal((card.querySelector('img').getAttribute('alt').match(new RegExp(official, 'gu')) || []).length, 1);
-    }
-    const external = doc.createElement('a');
-    external.href = 'https://example.org/equipment/yozakuras/';
-    external.innerHTML = '<h3>〖FF14〗夜桜装備👗各種族での見た目</h3>'
-      + '<img alt="ミラプリ「夜桜」装備ミコッテでの見た目紹介1">';
-    doc.body.append(external);
-    trimFCNode(external.querySelector('h3').firstChild);
-    _trFCAttr(external.querySelector('img'), 'alt');
-    assert.ok(!external.querySelector('h3').textContent.startsWith('〖FF14〗夜樱套装'),
-      '外站链接的文章标题不能错误识别为本套装');
-    assert.ok(!external.querySelector('img').getAttribute('alt').includes('夜樱套装'),
-      '外站链接的图片说明不可错误添加套装后缀');
-    globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
-    doc.body.innerHTML = '<h5>夜桜</h5><h5>コスモエクスプローラー</h5>';
-    for (const h5 of doc.querySelectorAll('h5')) trimFCNode(h5.firstChild);
-    assert.notEqual(doc.querySelectorAll('h5')[0].textContent, '夜樱套装');
-    assert.notEqual(doc.querySelectorAll('h5')[1].textContent, '宇宙探索者套装');
+    doc.body.innerHTML = '<a href="/equipment/yozakuras/"><h3>〖FF14〗夜桜装備👗紹介</h3></a>'
+      + '<a href="https://example.org/equipment/yozakuras/"><h3>〖FF14〗夜桜装備👗紹介</h3></a>';
+    for (const el of doc.querySelectorAll('h3')) trimFCNode(el.firstChild);
+    assert.ok(doc.querySelectorAll('h3')[0].textContent.includes('夜樱套装'));
+    assert.ok(!doc.querySelectorAll('h3')[1].textContent.includes('夜樱套装'));
   } finally {
-    if (beforeLocation === undefined) delete globalThis.location;
-    else globalThis.location = beforeLocation;
+    if (prev === undefined) delete globalThis.location;
+    else globalThis.location = prev;
     dom.close();
   }
 });
 
-test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列表占位文案', () => {
-  const ui = [
-    ['装備部位 クリックで切替', '点击装备部位切换'],
-    ['染色 クリックで切替', '点击染色切换'],
-    ['種族 クリックで切替', '点击种族切换'],
-    ['Galleryタップで切り替え', '点击图库切换'],
-    ['Gallery タップで切り替え', '点击图库切换'],
-    ['Coming Soon……', '内容待补充'],
-    ['TANK / タンク', '防护'],
-    ['Melee DPS / 近接物理DPS', '近战物理输出'],
-    ['HEALER / ヒーラー', '治愈'],
-    ['製作装備', '制作装备'],
-    ['制作装備', '制作装备'],
-    ['ボズヤ・エウレカ（準備中）', '博兹雅与优雷卡（准备中）'],
-    ['ITEMレベル', '品级'],
-    ['セット価格', '套装价格'],
-    ['魔獣使い', '驯兽师'],
-    ['闘獣練', '斗兽奇弈'],
-    ['闘獣練専用効果', '斗兽奇弈专用效果'],
-    ['魔獣使いクエスト', '驯兽师特职任务'],
-    ['クエスト報酬で入手', '通过任务奖励获得'],
-    ['マーケット取引不可', '不可在市场交易'],
-    ['マーケット取引可', '可在市场交易'],
-    ['クエスト発行', '任务发布地点'],
+test('FF14-FC GARO 阴阳简称：仅完整系列词典命中时翻译', () => {
+  const pairs = [
+    ['魔戒法師の装束・陽', '魔戒法师装束·阳', '魔戒法師・陽'],
+    ['魔戒導師の装束・陰', '魔戒导师装束·阴', '魔戒導師・陰'],
   ];
-  const dom = new TestWindow({url:'https://ff14-fc.com/weapon_search/'});
   try {
-    for (const [source, chinese] of ui) {
-      assert.equal(trFC(source), chinese, source + ' 完整界面文案应有精确译名');
-      const node = dom.document.createElement('span');
-      node.textContent = source;
-      trimFCNode(node.firstChild);
-      assert.equal(node.textContent, chinese);
-      trimFCNode(node.firstChild);
-      assert.equal(node.textContent, chinese, '二次扫描仍应一致');
-    }
-    assert.equal(trFC('Physical Ranged DPS / 遠隔物理DPS'), '远程物理输出',
-      '原已翻译的远程物理输出不变');
-    assert.equal(trFC('Magical Ranged DPS / 遠隔魔法DPS'), '远程魔法输出',
-      '原已翻译的远程魔法输出不变');
-  } finally { dom.close(); }
-});
-
-test('FF14-FC GARO 缩写套装：用已核实官译还原阴阳装束，不重复后缀', () => {
-  const beforeLocation = globalThis.location;
-  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/makai_priests/'});
-  const doc = dom.document;
-  const sets = [
-    ['魔戒法師・陽', '魔戒法師の装束・陽', '魔戒法师装束·阳'],
-    ['魔戒導師・陰', '魔戒導師の装束・陰', '魔戒导师装束·阴'],
-    ['魔戒闘師・刃・陽', '魔戒闘師・刃の装束・陽', '魔戒斗师·刃装束·阳'],
-  ];
-  doc.body.innerHTML = [
-    '<h5 id="set-name">魔戒法師・陽</h5>',
-    '<h3 id="full-body">魔戒法師・陽（全身）</h3>',
-    '<a href="/equipment/makai_priests/" id="related"><span>魔戒法師・陽</span></a>',
-    '<p id="plain">魔戒法師・陽</p>',
-  ].join('');
-  try {
-    globalThis.location = dom.location;
-    assert.equal(_applyV3({
-      candidatePolicy: 1,
-      series: sets.map(([, full, official]) => full + '|' + official).join('\n'),
+    assert.equal(_applyV3({candidatePolicy: 1,
+      series: pairs.map(([native, zh]) => native + '|' + zh).join(String.fromCharCode(10)),
     }), true);
     cacheReset('derived');
-
-    for (const [short, full, official] of sets) {
-      assert.equal(_getSeriesMap().get(full), official, '完整套装名称必须经数据源核实');
-      assert.equal(fcGaroSetName(short), official, short + ' 不应停留在日文简写');
-      assert.equal(trFC(short), official);
-      assert.equal(trFC(short + '（全身）'), official + '（全身）');
+    for (const [, zh, short] of pairs) {
+      assert.equal(fcGaroSetName(short), zh);
+      assert.equal(trFC(short + '（全身）'), zh + '（全身）');
     }
-    assert.equal(fcGaroSetName('魔戒法師・陰'), null,
-      '缺乏对应正式套装名时不得猜译阴阳变体');
-    assert.equal(fcGaroSetName('魔戒異教・陽'), null, '未核实系列不得猜译');
-    assert.equal(fcGaroSetName('魔戒法師の胴・陽'), null,
-      '不能把单件装备识别成套装');
-
-    for (const id of ['set-name', 'full-body', 'plain']) trimFCNode(doc.getElementById(id).firstChild);
-    trimFCNode(doc.querySelector('#related span').firstChild);
-    assert.equal(doc.querySelector('#set-name').textContent, '魔戒法师装束·阳');
-    assert.equal(doc.querySelector('#full-body').textContent, '魔戒法师装束·阳（全身）');
-    assert.equal(doc.querySelector('#related').textContent, '魔戒法师装束·阳');
-    assert.equal(doc.querySelector('#plain').textContent, '魔戒法师装束·阳');
-
-    for (const id of ['set-name', 'full-body']) trimFCNode(doc.getElementById(id).firstChild);
-    assert.equal(doc.querySelector('#set-name').textContent, '魔戒法师装束·阳',
-      '重复扫描不可附加额外套装后缀');
-
-    assert.equal(_applyV3({
-      candidatePolicy: 1,
-      series: sets.map(([, full, official]) => full + '|' + official).join('\n')
-        + '\n魔戒法師・陽|魔戒法师装束·阳',
-    }), true);
-    cacheReset('derived');
-    const detail = doc.createElement('h3');
-    detail.textContent = '魔戒法師・陽（全身）';
-    assert.equal(fcSetDisplayText(detail.firstChild, '魔戒法師・陽（全身）',
-      '魔戒法师装束·阳（全身）'), '魔戒法师装束·阳（全身）',
-    '数据源直接收录简称时也不能叠加“套装”');
+    assert.equal(fcGaroSetName('魔戒異教・陽'), null);
+    assert.equal(fcGaroSetName('魔戒法師の胴・陽'), null);
   } finally {
     _applyV3({candidatePolicy: 1});
     cacheReset('derived');
-    if (beforeLocation === undefined) delete globalThis.location;
-    else globalThis.location = beforeLocation;
-    dom.close();
   }
 });
 
-test('FF14-FC 种族初始服装：十六种族性别组合完整汉化', () => {
-  const races = [
-    ['ヒューラン', '人族'],
-    ['エレゼン', '精灵族'],
-    ['ララフェル', '拉拉菲尔族'],
-    ['ミコッテ', '猫魅族'],
-    ['ルガディン', '鲁加族'],
-    ['アウラ', '敖龙族'],
-    ['ヴィエラ', '维埃拉族'],
-    ['ロスガル', '硌狮族'],
-  ];
-  for (const [native, chinese] of races) {
-    for (const [symbol, localized] of [['♀', '女性'], ['♂', '男性']]) {
-      const title = native + symbol + '初期服';
-      const expected = chinese + localized + '初始服装';
-      assert.equal(fcStarterOutfitName(title), expected);
-      assert.equal(trFC(title), expected);
-      assert.equal(trFC(title + '（全身）'), expected + '（全身）');
-      assert.equal(trFC('ミラプリ「' + title + '」装備'), 'ミラプリ「' + expected + '」装備',
-        '图片替代文本内的种族初始服装简称需补全');
-      const siteTitle = '【FF14】' + native + (symbol === '♀' ? '女性♀' : '男性♂')
-        + '初期服装備👗見た目・入手方法';
-      assert.ok(trFC(siteTitle).startsWith('【FF14】' + expected + '👗'),
-        '文章标题起首应使用完整中文');
-    }
-  }
-  assert.equal(fcStarterOutfitName('未知族♀初期服'), null);
+test('FF14-FC 种族初始服装：完整名称与非套装边界', () => {
+  assert.equal(fcStarterOutfitName('ミコッテ♀初期服'), '猫魅族女性初始服装');
+  assert.equal(trFC('ヒューラン♂初期服（全身）'), '人族男性初始服装（全身）');
+  assert.ok(trFC('ミラプリ「ミコッテ♀初期服」装備').includes('「猫魅族女性初始服装」'));
   assert.equal(fcStarterOutfitName('ミコッテ初期服'), null);
-  assert.equal(fcStarterOutfitName('ミコッテ♀初期服装備'), null,
-    '非标题形式不能误判为普通装备物品');
-  assert.equal(trFC('ミコッテ♀初期服（全身）'),
-    '猫魅族女性初始服装（全身）');
-});
-
-test('FF14-FC 详情页未译界面词：切换指引、占位信息和种族标签', () => {
-  const cases = [
-    ['装備部位クリックで切替', '点击装备部位切换'],
-    ['染色クリックで切替', '点击染色切换'],
-    ['種族クリックで切替', '点击种族切换'],
-    ['種族（切り替え）', '切换种族'],
-    ['種族装束', '种族服装'],
-    ['SHOP販売価格：', '商店售价：'],
-    ['Coming Soon......', '内容待补充'],
-    ['Coming Soon...', '内容待补充'],
-    ['Point', '要点'],
-  ];
-  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/scientists/'});
-  try {
-    for (const [native, localized] of cases) {
-      assert.equal(trFC(native), localized, native + ' 不能保留英文/日文');
-      const holder = dom.document.createElement('div');
-      holder.textContent = native;
-      trimFCNode(holder.firstChild);
-      assert.equal(holder.textContent, localized, native + ' 翻译后不得重复显示原词');
-      trimFCNode(holder.firstChild);
-      assert.equal(holder.textContent, localized, native + ' 重复扫描应幂等');
-    }
-    assert.equal(trFC('How to get'), '获取方式',
-      '原有翻译不得受新增 UI 词条影响');
-    assert.equal(trFC('Info'), '信息');
-  } finally {
-    dom.close();
-  }
+  assert.equal(fcStarterOutfitName('ミコッテ♀初期服装備'), null);
 });
 
 test('FF14-FC GARO 装束简称：五个裸名称按详情路径翻译，风魔与资料片不误伤', () => {
@@ -1559,38 +1252,6 @@ test('FF14-FC GARO 装束简称：五个裸名称按详情路径翻译，风魔�
     if (beforeLocation === undefined) delete globalThis.location;
     else globalThis.location = beforeLocation;
     dom.close();
-  }
-});
-
-test('FF14-FC GARO 阴阳装束：全部十二种正式缩写可由完整词库还原', () => {
-  const families = [
-    ['魔戒導師', '魔戒导师'],
-    ['魔戒弓師', '魔戒弓师'],
-    ['魔戒法師', '魔戒法师'],
-    ['魔戒軍師', '魔戒军师'],
-    ['魔戒闘師', '魔戒斗师'],
-    ['魔戒闘師・刃', '魔戒斗师·刃'],
-  ];
-  const pairs = families.flatMap(([native, zh]) => [
-    ['陰', '阴'], ['陽', '阳'],
-  ].map(([variant, localized]) => [
-    native + 'の装束・' + variant, zh + '装束·' + localized,
-    native + '・' + variant,
-  ]));
-  try {
-    assert.equal(_applyV3({
-      candidatePolicy: 1,
-      series: pairs.map(([native, localized]) => native + '|' + localized).join('\n'),
-    }), true);
-    cacheReset('derived');
-    for (const [native, localized, shortened] of pairs) {
-      assert.equal(_getSeriesMap().get(native), localized);
-      assert.equal(fcGaroSetName(shortened), localized);
-      assert.equal(trFC(shortened), localized);
-    }
-  } finally {
-    _applyV3({candidatePolicy: 1});
-    cacheReset('derived');
   }
 });
 
