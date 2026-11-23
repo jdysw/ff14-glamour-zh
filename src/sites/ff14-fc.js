@@ -552,6 +552,18 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
         if (result.startsWith(lead)) result = prefix + record.zh + result.slice(lead.length);
       }
     }
+    for (const [native, targetPath] of FC_GARO_BARE_SET_PATHS) {
+      const quoted = '「' + native + '」';
+      const articlePrefix = ['【FF14】', '〖FF14〗'].find(prefix =>
+        result.startsWith(prefix + native + '(') || result.startsWith(prefix + native + '（'));
+      if (!result.includes(quoted) && !articlePrefix) continue;
+      if (path !== targetPath && !fcMatchingSetLink(node, targetPath)) continue;
+      const official = _getSeriesMap().get(native + 'の装束');
+      // 数据未加载时暂停这个属性的翻译，避免「漆黒」被误当成资料片名。
+      if (!/(?:套装|装束)$/u.test(official || '')) return null;
+      result = result.replaceAll(quoted, '「' + official + '」');
+      if (articlePrefix) result = result.replace(articlePrefix + native, articlePrefix + official);
+    }
     return result;
   }
 
@@ -633,6 +645,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const match = key === 'title' && value.match(/^View all posts in (.+)$/);
     const group = match && DICT_FC[match[1]];
     const scoped = fcShortSetQuotedAttribute(value, n);
+    if (scoped === null) return;
     const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(scoped);
     if (translated !== value) n.setAttribute(key, translated);
   }
@@ -686,6 +699,19 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   // <title> 汉化（子页标题：装备一覧＆検索 | ミラプリライフ 等）
   function translateFCTitle() {
     const t = document.title;
+    const path = globalThis.location?.pathname || '';
+    // GARO 详情标签使用「〖FF14〗漆黒(戦士)…」等简称，没有一般的「装備👗」模式。
+    // 等系列数据就绪后还原为装束名；在此之前避免“漆黒”误译成资料片。
+    for (const [native, detailPath] of FC_GARO_BARE_SET_PATHS) {
+      if (path !== detailPath) continue;
+      const prefix = ['【FF14】', '〖FF14〗'].find(marker =>
+        t.startsWith(marker + native + '(') || t.startsWith(marker + native + '（'));
+      if (!prefix) break;
+      const official = _getSeriesMap().get(native + 'の装束');
+      if (!/(?:套装|装束)$/u.test(official || '')) return;
+      document.title = trFC(t.replace(prefix + native, prefix + official));
+      return;
+    }
     const whole = trFC(t || '');
     if (whole && whole !== t) { document.title = whole; return; }
     if (!t || !/[\u3040-\u30ff]/.test(t)) return;
