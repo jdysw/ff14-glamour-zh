@@ -1063,7 +1063,7 @@ test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单
   }
 });
 
-test('FF14-FC 7.5/7.56 套装短称：仅在匹配详情页、系列卡片和链接使用官译', () => {
+test('FF14-FC 7.5/7.56 套装简称：仅在匹配详情页、卡片和链接使用已核实名称', () => {
   const beforeLocation = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const doc = dom.document;
@@ -1081,9 +1081,16 @@ test('FF14-FC 7.5/7.56 套装短称：仅在匹配详情页、系列卡片和链
         + '<a id="same-link" href="' + path + '"><span>' + native + '</span></a>'
         + '<p id="ordinary">' + native + '</p>'
         + '<a id="external" href="https://example.com' + path + '">' + native + '</a>'
-        + '<h3 id="single">' + native + '・ジャケット</h3>';
+        + '<h3 id="single">' + native + '・ジャケット</h3>'
+        + '<img id="gallery" alt="ミラプリ「' + native + '」装備ミコッテでの見た目紹介1">'
+        + '<img id="part-gallery" alt="ミラプリ「' + native + '・ジャケット」装備ミコッテでの見た目紹介2">';
       for (const selector of ['#set', '#whole', '#article', '#same-link span',
         '#ordinary', '#external', '#single']) trimFCNode(doc.querySelector(selector).firstChild);
+      for (const selector of ['#gallery', '#part-gallery']) _trFCAttr(doc.querySelector(selector), 'alt');
+      assert.ok(doc.querySelector('#gallery').getAttribute('alt').includes('「' + official + '」'),
+        native + ' 的整套展示图片说明必须保留完整套装名');
+      assert.ok(!doc.querySelector('#part-gallery').getAttribute('alt').includes(official),
+        '图片说明里的单件装备不得误加“套装”');
       assert.equal(doc.querySelector('#set').textContent, official, native + ' 套装小标题');
       assert.equal(doc.querySelector('#whole').textContent, official + '（全身）', native + ' 全身预览');
       assert.ok(doc.querySelector('#article').textContent.startsWith('〖FF14〗' + official + '👗'),
@@ -1098,9 +1105,36 @@ test('FF14-FC 7.5/7.56 套装短称：仅在匹配详情页、系列卡片和链
       assert.equal(doc.querySelector('#whole').textContent, official + '（全身）');
     }
     globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
-    doc.body.innerHTML = sets.map(([native]) => '<h4>' + native + '</h4>').join('');
-    for (const h4 of doc.querySelectorAll('h4')) trimFCNode(h4.firstChild);
-    sets.forEach(([, official], i) => assert.equal(doc.querySelectorAll('h4')[i].textContent, official));
+    doc.body.innerHTML = sets.map(([native, , path]) =>
+      '<a class="card" href="' + path + '"><h3>〖FF14〗' + native
+      + '装備👗各種族での見た目・入手方法</h3><h4>' + native + '</h4>'
+      + '<img alt="ミラプリ「' + native + '」装備ミコッテでの見た目紹介1"></a>').join('');
+    for (const [index, [, official]] of sets.entries()) {
+      const card = doc.querySelectorAll('.card')[index];
+      for (const heading of card.querySelectorAll('h3, h4')) trimFCNode(heading.firstChild);
+      _trFCAttr(card.querySelector('img'), 'alt');
+      assert.equal(card.querySelector('h4').textContent, official, '列表卡片的套装短名称');
+      assert.ok(card.querySelector('h3').textContent.startsWith('〖FF14〗' + official + '👗'),
+        '列表卡片的文章标题不能遗漏套装译名或叠加“装备”');
+      assert.ok(card.querySelector('img').getAttribute('alt').includes('「' + official + '」'),
+        '列表缩略图的 alt 应使用同一套装名');
+      trimFCNode(card.querySelector('h3').firstChild);
+      _trFCAttr(card.querySelector('img'), 'alt');
+      assert.ok(card.querySelector('h3').textContent.startsWith('〖FF14〗' + official + '👗'),
+        '重复扫描不可重复添加“套装”');
+      assert.equal((card.querySelector('img').getAttribute('alt').match(new RegExp(official, 'gu')) || []).length, 1);
+    }
+    const external = doc.createElement('a');
+    external.href = 'https://example.org/equipment/yozakuras/';
+    external.innerHTML = '<h3>〖FF14〗夜桜装備👗各種族での見た目</h3>'
+      + '<img alt="ミラプリ「夜桜」装備ミコッテでの見た目紹介1">';
+    doc.body.append(external);
+    trimFCNode(external.querySelector('h3').firstChild);
+    _trFCAttr(external.querySelector('img'), 'alt');
+    assert.ok(!external.querySelector('h3').textContent.startsWith('〖FF14〗夜樱套装'),
+      '外站链接的文章标题不能错误识别为本套装');
+    assert.ok(!external.querySelector('img').getAttribute('alt').includes('夜樱套装'),
+      '外站链接的图片说明不可错误添加套装后缀');
     globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
     doc.body.innerHTML = '<h5>夜桜</h5><h5>コスモエクスプローラー</h5>';
     for (const h5 of doc.querySelectorAll('h5')) trimFCNode(h5.firstChild);
@@ -1130,6 +1164,12 @@ test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列
     ['セット価格', '套装价格'],
     ['魔獣使い', '驯兽师'],
     ['闘獣練', '斗兽奇弈'],
+    ['闘獣練専用効果', '斗兽奇弈专用效果'],
+    ['魔獣使いクエスト', '驯兽师特职任务'],
+    ['クエスト報酬で入手', '通过任务奖励获得'],
+    ['マーケット取引不可', '不可在市场交易'],
+    ['マーケット取引可', '可在市场交易'],
+    ['クエスト発行', '任务发布地点'],
   ];
   const dom = new TestWindow({url:'https://ff14-fc.com/weapon_search/'});
   try {
