@@ -89,6 +89,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['プレマジテック・ヒーラー', '前魔导治愈套装'],
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
     ['カーウェン', '卡文套装'],
+    ['ゼロルミナリー・コスチュームセット', '零点套装'],
   ]);
   function fcVerifiedSetName(name) {
     return FC_VERIFIED_SET_ALIASES.get(name) || null;
@@ -253,11 +254,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function fcArticleTitle(text, label) {
-    const match = /^【FF14】(.{1,80}?)(?:装備)?(?=[👗💍✂⚔])/u.exec(label);
+    // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
+    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=[👗💍✂⚔])/u.exec(label);
     if (!match) return null;
-    const name = fcKnownName(match[1]);
-    if (!name || name === match[1]) return null;
-    const translated = text.replace(match[1], name);
+    const name = fcKnownName(match[2]);
+    if (!name || name === match[2]) return null;
+    const suffix = /(?:套装|装束)(?:·[阴阳])?$/u.test(name) ? '' : (match[3] ? '装备' : '');
+    const translated = text.replace(match[0], match[1] + name + suffix);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
 
@@ -468,6 +471,12 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['白夜', '/equipment/the_white_night/'],
     ['銀狼', '/equipment/the_silver_wolf/'],
   ]);
+  // 这些名称在正文中也可能指人物、活动或一般物品，只允许在匹配套装页面/卡片使用。
+  const FC_VERIFIED_SHORT_SET_PATHS = new Map([
+    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
+    ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
+    ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
+  ]);
 
   function fcGaroBareHeading(node, label) {
     const parent = node.parentElement;
@@ -476,12 +485,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
     const isArticle = !!parent.closest('h1');
     const core = fullBody ? label.slice(0, -fullBody.length) : label;
-    // 大标题如「【FF14】漆黒(戦士)...」只在对应详情页替换开头的套装简称。
+    // 大标题兼容【FF14】和〖FF14〗，只在对应详情页修复完整套装简称。
     const short = isArticle
-      ? [...FC_GARO_BARE_SET_PATHS.keys()].find(k => core.startsWith('【FF14】' + k + '(')
-        || core.startsWith('【FF14】' + k + '（'))
+      ? [...FC_GARO_BARE_SET_PATHS.keys(), ...FC_VERIFIED_SHORT_SET_PATHS.keys()]
+        .find(k => ['【FF14】', '〖FF14〗'].some(prefix =>
+          core.startsWith(prefix + k + '(') || core.startsWith(prefix + k + '（')
+          || core.startsWith(prefix + k + '装備')))
       : core;
-    const detailPath = FC_GARO_BARE_SET_PATHS.get(short);
+    const verified = FC_VERIFIED_SHORT_SET_PATHS.get(short);
+    const detailPath = FC_GARO_BARE_SET_PATHS.get(short) || verified?.path;
     if (!detailPath) return null;
     const mainTitle = path === detailPath
       && (parent.closest('h5') || (fullBody && parent.closest('h3')) || isArticle);
@@ -497,9 +509,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (!mainTitle && !seriesTitle && !matchingLink) return null;
     // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
     // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
-    const official = _getSeriesMap().get(short + 'の装束');
+    const official = verified?.zh || _getSeriesMap().get(short + 'の装束');
     if (!/(?:套装|装束)$/u.test(official || '')) return label;
-    if (isArticle) return trFC(label.replace(short, official));
+    if (isArticle) {
+      const replaced = label.replace(short, official);
+      // “夜樱套装装备”不是自然中文标题；保留后续说明与原链接。
+      return trFC(replaced.replace(official + '装備', official));
+    }
     return official + fullBody;
   }
 
