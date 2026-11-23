@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, collapseFCHomeHeadings, fixFCMenu,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, fcStarterOutfitName, collapseFCHomeHeadings, fixFCMenu,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -1067,6 +1067,71 @@ test('FF14-FC GARO 缩写套装：用已核实官译还原阴阳装束，不重�
     cacheReset('derived');
     if (beforeLocation === undefined) delete globalThis.location;
     else globalThis.location = beforeLocation;
+    dom.close();
+  }
+});
+
+test('FF14-FC 种族初始服装：十六种族性别组合完整汉化', () => {
+  const races = [
+    ['ヒューラン', '人族'],
+    ['エレゼン', '精灵族'],
+    ['ララフェル', '拉拉菲尔族'],
+    ['ミコッテ', '猫魅族'],
+    ['ルガディン', '鲁加族'],
+    ['アウラ', '敖龙族'],
+    ['ヴィエラ', '维埃拉族'],
+    ['ロスガル', '硌狮族'],
+  ];
+  for (const [native, chinese] of races) {
+    for (const [symbol, localized] of [['♀', '女性'], ['♂', '男性']]) {
+      const title = native + symbol + '初期服';
+      const expected = chinese + localized + '初始服装';
+      assert.equal(fcStarterOutfitName(title), expected);
+      assert.equal(trFC(title), expected);
+      assert.equal(trFC(title + '（全身）'), expected + '（全身）');
+      assert.equal(trFC('ミラプリ「' + title + '」装備'), 'ミラプリ「' + expected + '」装備',
+        '图片替代文本内的种族初始服装简称需补全');
+      const siteTitle = '【FF14】' + native + (symbol === '♀' ? '女性♀' : '男性♂')
+        + '初期服装備👗見た目・入手方法';
+      assert.ok(trFC(siteTitle).startsWith('【FF14】' + expected + '👗'),
+        '文章标题起首应使用完整中文');
+    }
+  }
+  assert.equal(fcStarterOutfitName('未知族♀初期服'), null);
+  assert.equal(fcStarterOutfitName('ミコッテ初期服'), null);
+  assert.equal(fcStarterOutfitName('ミコッテ♀初期服装備'), null,
+    '非标题形式不能误判为普通装备物品');
+  assert.equal(trFC('ミコッテ♀初期服（全身）'),
+    '猫魅族女性初始服装（全身）');
+});
+
+test('FF14-FC 详情页未译界面词：切换指引、占位信息和种族标签', () => {
+  const cases = [
+    ['装備部位クリックで切替', '点击装备部位切换'],
+    ['染色クリックで切替', '点击染色切换'],
+    ['種族クリックで切替', '点击种族切换'],
+    ['種族（切り替え）', '切换种族'],
+    ['種族装束', '种族服装'],
+    ['SHOP販売価格：', '商店售价：'],
+    ['Coming Soon......', '内容待补充'],
+    ['Coming Soon...', '内容待补充'],
+    ['Point', '要点'],
+  ];
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/scientists/'});
+  try {
+    for (const [native, localized] of cases) {
+      assert.equal(trFC(native), localized, native + ' 不能保留英文/日文');
+      const holder = dom.document.createElement('div');
+      holder.textContent = native;
+      trimFCNode(holder.firstChild);
+      assert.equal(holder.textContent, localized, native + ' 翻译后不得重复显示原词');
+      trimFCNode(holder.firstChild);
+      assert.equal(holder.textContent, localized, native + ' 重复扫描应幂等');
+    }
+    assert.equal(trFC('How to get'), '获取方式',
+      '原有翻译不得受新增 UI 词条影响');
+    assert.equal(trFC('Info'), '信息');
+  } finally {
     dom.close();
   }
 });
