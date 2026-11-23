@@ -64,7 +64,8 @@ try{
         document.querySelector('#back-to-sets').getAttribute('href'),
         document.querySelector('#dawntrail').textContent,
         document.querySelector('#recommended-set').textContent
-      ]`), ['改良型星战士制敌', '改良型圣堂潜行游击', '幻想试穿', '#sub-toc-2',
+      ]`), [route.startsWith('/equipment/') ? '改良型星战士制敌套装' : '改良型星战士制敌',
+        route.startsWith('/equipment/') ? '改良型圣堂潜行游击套装' : '改良型圣堂潜行游击', '幻想试穿', '#sub-toc-2',
         '返回装备一览', '/equipment_series_search/', '最终幻想XIV：金曦之遗辉 典藏版', '宇宙动力套装']);
       assert.deepEqual(await c.eval(`[
         document.querySelector('#augmented-set').textContent,

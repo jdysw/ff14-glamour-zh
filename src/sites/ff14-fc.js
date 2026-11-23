@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -311,6 +311,39 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     for (const paragraph of paragraphs) translateFCParagraph(paragraph);
   }
 
+  // 只在站点明确的「整套装备」标题区域附加展示后缀。
+  // 不修改物品/系列词库：同一中文名仍可作为单件物品名或 Wiki 查询键。
+  const FC_FULL_SET_LABEL = /[（(]全身[）)]$/u;
+  function fcSetTitleContext(element, source, path) {
+    if (!element?.closest) return false;
+    // 首页轮播、相关推荐等链接的目标是整套装备的详情页。
+    if (element.closest('a[href*="/equipment/"]')) return true;
+    // 系列检索结果的 H4 是卡片套装名，不能扩大到部位检索页。
+    if (/^\/equipment_series_search\/?$/u.test(path)) return !!element.closest('h4');
+    if (!/^\/equipment\/[^/]+\/?$/u.test(path)) return false;
+    // 详情页 H5 是系列标题；H3 中只有「（全身）」才是整套预览。
+    return !!element.closest('h5') || (FC_FULL_SET_LABEL.test(source) && !!element.closest('h3'));
+  }
+
+  function fcSetDisplayText(node, original, translated) {
+    const source = original.trim();
+    const path = globalThis.location?.pathname || '';
+    if (!fcSetTitleContext(node.parentElement, source, path)) return translated;
+    const fullBody = FC_FULL_SET_LABEL.exec(source)?.[0] || '';
+    const base = fullBody ? source.slice(0, -fullBody.length) : source;
+    // 不把「整套装备详情中的单件物品链接」误判为套装卡片。
+    const officialName = _getSeriesMap().get(base) || _getSeriesPfx().get(base) || _getItemPfx().get(base);
+    if (!officialName || officialName === base) return translated;
+    // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
+    const localized = translated.trim();
+    if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
+    if (/(?:套装|装束)$/u.test(officialName)) {
+      return fullBody && localized === source
+        ? original.replace(source, officialName + fullBody) : translated;
+    }
+    return translated.replace(localized, officialName + '套装' + fullBody);
+  }
+
   function trimFCNode(node) {
     const raw = node.nodeValue;
     if (!raw?.trim()) return;
@@ -319,7 +352,8 @@ export { FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL,
     const label = raw.trim();
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
-    const next = translated ? raw.replace(label, translated) : trFC(raw);
+    const resolved = translated ? raw.replace(label, translated) : trFC(raw);
+    const next = fcSetDisplayText(node, raw, resolved);
     if (next !== raw) node.nodeValue = next;
   }
 
