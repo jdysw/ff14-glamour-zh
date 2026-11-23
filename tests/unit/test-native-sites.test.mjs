@@ -658,7 +658,7 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
 
     const piece = {
       nodeValue: 'フリースピリッツ・アタイア',
-      parentElement: { closest: selector => selector.includes('h1,h2,h3') ? null : {} },
+      parentElement: { closest: () => null },
     };
     trimACLNode(piece);
     assert.equal(piece.nodeValue, 'フリースピリッツ・アタイア',
