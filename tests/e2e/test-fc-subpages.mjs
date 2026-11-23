@@ -74,7 +74,7 @@ try{
         document.querySelector('#side .title').textContent,
         document.querySelector('#side a').getAttribute('href'),
         document.querySelector('#side [data-zhixia-banner-span]').textContent
-      ]`), [route.startsWith('/equipment/') ? '改良型玄甲套装' : '改良型玄甲', '人族（宣传片男主风）', 'hiroshi', '▶ 装备推荐', '/message/', '联系与留言']);
+      ]`), ['改良型玄甲', '人族（宣传片男主风）', 'hiroshi', '▶ 装备推荐', '/message/', '联系与留言']);
       assert.deepEqual(await c.eval(`[
         document.querySelector('#filter-style').textContent,
         document.querySelector('label[for="filter-mask"]').textContent,
