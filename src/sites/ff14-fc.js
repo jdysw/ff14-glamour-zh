@@ -255,11 +255,17 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
 
   function fcArticleTitle(text, label) {
     // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
-    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=[👗💍✂⚔])/u.exec(label);
+    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔]))/u.exec(label);
     if (!match) return null;
     const name = fcKnownName(match[2]);
     if (!name || name === match[2]) return null;
-    const suffix = /(?:套装|装束)(?:·[阴阳])?$/u.test(name) ? '' : (match[3] ? '装备' : '');
+    // 衣装文章如「幻境意象御敌装備👗」在系列词库完整命中时，
+    // 应与同一列表 H4/详情 H5 显示「幻境意象御敌套装」。
+    // 只处理 👗 且含「装備」的整系列；武器与单件物品继续使用「装备」。
+    const mappedSeries = _getSeriesMap().get(match[2]);
+    const isKnownOutfit = match[3] && match[4] === '👗' && mappedSeries === name;
+    const suffix = /(?:套装|装束)(?:·[阴阳])?$/u.test(name) ? ''
+      : (isKnownOutfit ? '套装' : (match[3] ? '装备' : ''));
     const translated = text.replace(match[0], match[1] + name + suffix);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
