@@ -42,8 +42,13 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
   function _trACLSet(text, t0) {
     const m = t0.match(ACL_SET_RE);
     if (!m) return null;
-    const series = lookupSeries(m[1] + '・' + m[2])
-      || ((DICT_ACL[m[1]] || m[1]) + (DICT_ACL[m[2]] || m[2]));
+    const official = lookupSeries(m[1] + '・' + m[2]);
+    const stem = DICT_ACL[m[1]];
+    const role = DICT_ACL[m[2]];
+    // Unknown families must stay intact until their official names are available.
+    // Combining a raw Japanese stem and a localized role creates false set names.
+    const series = official || (stem && role ? stem + role : null);
+    if (!series || /[\u3040-\u30ff]/u.test(series)) return null;
     const variant = ['RE', 'ＲＥ'].includes(m[3]) ? '改良型'
       : (['SP', 'ＳＰ'].includes(m[3]) ? '华美型' : '');
     const zh = variant + series + '套装';

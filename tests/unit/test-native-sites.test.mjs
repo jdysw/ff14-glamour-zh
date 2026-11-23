@@ -682,10 +682,11 @@ test('FFXIV Collection 实体翻译：词典、套装规则和原生筛选表单
   assert.equal(trACL('漆黒のヴィランズ'), '暗影之逆焰');
   assert.equal(trACL('キャスター'), '咏咒');
   assert.equal(trACL('ロスト'), 'ロスト');
-  const phrase = 'テスト・ディフェンダーアタイアRE';
-  const setName = _trACLSet(phrase, phrase);
-  assert.ok(setName?.startsWith('改良型'), 'RE 套装必须带改良型前缀');
-  assert.ok(setName.endsWith('套装'), '按职能分部翻译后的结果必须是套装');
+  const unknown = 'テスト・ディフェンダーアタイアRE';
+  assert.equal(_trACLSet(unknown, unknown), null, '未核实系列不能生成半日半中的套装名');
+  assert.equal(trACL(unknown), unknown, '保留完整原文，等待正确系列数据');
+  const knownRe = 'オールドキングダム・ディフェンダーアタイアRE';
+  assert.equal(_trACLSet(knownRe, knownRe), '改良型旧日王国御敌套装');
   // 对照旧日王国胸甲的国服「华美型」名称：不应把 SP 漏译或误作「改良型」。
   const ornate = 'オールドキングダム・ディフェンダーアタイアSP';
   assert.equal(trACL(ornate), '华美型旧日王国御敌套装');
