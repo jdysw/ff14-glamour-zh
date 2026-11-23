@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, collapseFCHomeHeadings,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -875,43 +875,67 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
   }
 });
 
-test('FF14-FC 首页新发型和新武器标题：中英日混排完整汉化且保持原 DOM', async () => {
-  const before = globalThis.location;
+test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和链接', async () => {
+  const beforeDoc = globalThis.document;
+  const beforeLocation = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/'});
   const doc = dom.document;
-  doc.body.innerHTML = [
-    '<section id="hairstyles"><span class="en">New Modern Aesthetics</span>'
-      + '<h2>ヘアカタログ</h2><a href="/hair_catalog/">すべて見る</a></section>',
-    '<section id="weapons"><span class="en">New Weapon</span>'
-      + '<h2>新着武器</h2><a href="/weapon_search/">すべて見る</a></section>',
-    '<section id="equipment"><span class="en">New Equipment</span><h2>新着装備</h2></section>',
-  ].join('');
+  const cases = [
+    ['equipment', 'New Equipment', '新着装備', '新装备'],
+    ['feature', 'Feature', '特集', '特辑'],
+    ['parts', 'Parts', '部位ごと', '按部位'],
+    ['accessories', 'New Fashion Accessories', 'ファッションアクセ', '新时尚配饰'],
+    ['category', 'Category', 'カテゴリ', '分类'],
+    ['package', 'Package', 'パッケージ', '资料片'],
+    ['hairstyles', 'New Modern Aesthetics', 'ヘアカタログ', '最新发型'],
+    ['weapons', 'New Weapon', '新着武器', '最新武器'],
+    ['pickup', 'Pick Up!', 'オススメ', '推荐'],
+  ];
+  doc.body.innerHTML = cases.map(([id, english, japanese]) =>
+    '<section id="' + id + '"><div class="home-heading">'
+    + '<span class="en">' + english + '</span><h2>' + japanese + '</h2></div>'
+    + '<a href="/' + id + '/">すべて見る</a></section>'
+  ).join('') + '<section id="unrelated"><h2>ヘアカタログ</h2></section>'
+    + '<section id="detail"><h2>任意の題名</h2></section>';
   try {
+    globalThis.document = doc;
     globalThis.location = dom.location;
-    const textNodes = [
-      ...doc.querySelectorAll('section .en, section h2, section a'),
-    ].map(el => el.firstChild);
+    const textNodes = [...doc.querySelectorAll('section .en, section h2, section a')]
+      .map(el => el.firstChild);
     for (const node of textNodes) trimFCNode(node);
-    assert.deepEqual([...doc.querySelectorAll('#hairstyles .en, #hairstyles h2')]
-      .map(el => el.textContent), ['最新发型', '发型图鉴']);
-    assert.deepEqual([...doc.querySelectorAll('#weapons .en, #weapons h2')]
-      .map(el => el.textContent), ['最新武器', '新武器']);
-    assert.deepEqual([...doc.querySelectorAll('#equipment .en, #equipment h2')]
-      .map(el => el.textContent), ['新装备', '新装备'],
-      '已有栏目翻译保持不变');
-    assert.equal(doc.querySelector('#hairstyles a').getAttribute('href'), '/hair_catalog/');
-    assert.equal(doc.querySelector('#weapons a').getAttribute('href'), '/weapon_search/');
-    for (const node of textNodes) trimFCNode(node);
-    assert.equal(doc.querySelector('#weapons h2').textContent, '新武器',
-      '重复扫描不应造成重复翻译');
-    assert.equal(trFC('New Modern Aesthetics'), '最新发型');
-    assert.equal(trFC('New Weapon'), '最新武器');
-    assert.equal(trFC('新着武器'), '新武器');
-    assert.equal(trFC('New Fashion Accessories'), '新时尚配饰',
-      '原有新时尚配饰栏目不受影响');
+    collapseFCHomeHeadings();
+    for (const [id, , , chinese] of cases) {
+      const section = doc.getElementById(id);
+      const primary = section.querySelector('.en');
+      const subtitle = section.querySelector('h2');
+      assert.equal(primary.textContent, chinese, id + ' 主标题应全中文');
+      assert.equal(subtitle.style.display, 'none', id + ' 不显示重复的第二个标题');
+      assert.equal(subtitle.getAttribute('aria-hidden'), 'true');
+      assert.equal(primary.getAttribute('role'), 'heading',
+        '保留可见标题的语义');
+      assert.equal(section.querySelector('a').getAttribute('href'), '/' + id + '/',
+        '栏目跳转链接必须保持原样');
+      assert.equal(section.querySelector('a').textContent, '查看全部');
+    }
+    assert.notEqual(doc.querySelector('#unrelated h2').style.display, 'none',
+      '未配对的同名标题不应被隐藏');
+    assert.notEqual(doc.querySelector('#detail h2').style.display, 'none');
+    collapseFCHomeHeadings();
+    assert.equal(doc.querySelector('#hairstyles .en').textContent, '最新发型');
+    assert.equal(doc.querySelector('#weapons .en').textContent, '最新武器',
+      '重复扫描不得新增标题');
+
+    globalThis.location = new URL('https://ff14-fc.com/summary_weapon/');
+    const outside = doc.querySelector('#unrelated h2');
+    outside.textContent = '新着武器';
+    collapseFCHomeHeadings();
+    assert.notEqual(outside.style.display, 'none',
+      '该规则只对首页生效，不能影响其他页面');
   } finally {
-    if (before === undefined) delete globalThis.location;
-    else globalThis.location = before;
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
+    if (beforeDoc === undefined) delete globalThis.document;
+    else globalThis.document = beforeDoc;
     await dom.happyDOM.close();
   }
 });
