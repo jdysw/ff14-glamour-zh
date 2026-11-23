@@ -1107,6 +1107,63 @@ test('FF14-FC 搜索与装备套装入口：实际 UI 词汇全量直译，不�
   } finally { dom.close(); }
 });
 
+test('FF14-FC GARO 套装简称：浏览器标题与图库 alt 不误译为资料片', () => {
+  const beforeLocation = globalThis.location;
+  const beforeDoc = globalThis.document;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/undying_twilight/'});
+  const doc = dom.document;
+  const rawTitle = '〖FF14〗漆黒(戦士)各種族での見た目・入手方法〖牙狼コラボ〗';
+  const rawAlt = 'ミラプリ「漆黒」装備ミコッテでの見た目紹介1';
+  const img = doc.createElement('img');
+  const articleImage = doc.createElement('img');
+  try {
+    globalThis.location = dom.location;
+    globalThis.document = doc;
+    assert.equal(_applyV3({candidatePolicy: 1}), true);
+    cacheReset('derived');
+    doc.title = rawTitle;
+    img.setAttribute('alt', rawAlt);
+    articleImage.setAttribute('alt', rawTitle);
+    doc.body.append(img, articleImage);
+    translateFCTitle();
+    _trFCAttr(img, 'alt');
+    _trFCAttr(articleImage, 'alt');
+    assert.equal(doc.title, rawTitle, '系列数据未就绪时不误译成资料片');
+    assert.equal(img.getAttribute('alt'), rawAlt, '图库属性数据未就绪时保留原文');
+    assert.equal(articleImage.getAttribute('alt'), rawTitle, '文章图片标题也不得被误译');
+
+    assert.equal(_applyV3({candidatePolicy: 1, series: '漆黒の装束|漆黑装束'}), true);
+    cacheReset('derived');
+    translateFCTitle();
+    _trFCAttr(img, 'alt');
+    _trFCAttr(articleImage, 'alt');
+    assert.ok(doc.title.startsWith('〖FF14〗漆黑装束(戦士)'));
+    assert.ok(img.getAttribute('alt').includes('「漆黑装束」'));
+    assert.ok(articleImage.getAttribute('alt').startsWith('〖FF14〗漆黑装束(戦士)'));
+    translateFCTitle();
+    _trFCAttr(img, 'alt');
+    assert.ok(!doc.title.includes('装束装束'), '重复扫描不增加后缀');
+    assert.ok(!img.getAttribute('alt').includes('装束装束'));
+
+    const unrelated = doc.createElement('a');
+    unrelated.href = 'https://example.net/equipment/undying_twilight/';
+    unrelated.innerHTML = '<img alt="' + rawAlt + '">';
+    doc.body.append(unrelated);
+    globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
+    _trFCAttr(unrelated.querySelector('img'), 'alt');
+    assert.ok(!unrelated.querySelector('img').getAttribute('alt').includes('漆黑装束'),
+      '不能用外站同路径链接推断为 GARO 装束');
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
+    if (beforeDoc === undefined) delete globalThis.document;
+    else globalThis.document = beforeDoc;
+    dom.close();
+  }
+});
+
 test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单件名称', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
