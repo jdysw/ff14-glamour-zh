@@ -1005,6 +1005,108 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
   }
 });
 
+
+test('FF14-FC 装备套装文章标题：仅已核实的服装系列添加展示后缀', () => {
+  const beforeLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
+  const doc = dom.document;
+  const pairs = [
+    ['ファントムヴィジョン・ディフェンダー', '幻境意象御敌'],
+    ['ファントムヴィジョン・スレイヤー', '幻境意象制敌'],
+    ['ファントムヴィジョン・ストライカー', '幻境意象强袭'],
+    ['ファントムヴィジョン・スカウト', '幻境意象游击'],
+    ['ファントムヴィジョン・レンジャー', '幻境意象精准'],
+    ['ファントムヴィジョン・キャスター', '幻境意象咏咒'],
+    ['ファントムヴィジョン・ヒーラー', '幻境意象治愈'],
+    ['トゥール', '图尔'],
+    ['トルナ', '托纳'],
+    ['トレードウィンズ', '贸易风'],
+  ];
+  try {
+    globalThis.location = dom.location;
+    assert.equal(_applyV3({
+      candidatePolicy: 1,
+      series: pairs.map(([native, localized]) => native + '|' + localized).join('\\n'),
+    }), true);
+    cacheReset('derived');
+    for (const [native, official] of pairs) {
+      const article = '〖FF14〗' + native
+        + '装備👗各種族での見た目・入手方法〖クレセントアイル〗';
+      const result = trFC(article);
+      assert.ok(result.startsWith('〖FF14〗' + official + '套装👗'),
+        native + ' 的文章标题应与列表套装名称统一');
+      const h3 = doc.createElement('h3');
+      h3.textContent = article;
+      const card = doc.createElement('h4');
+      card.textContent = native;
+      const image = doc.createElement('img');
+      image.setAttribute('alt', article);
+      doc.body.append(h3, card, image);
+      trimFCNode(h3.firstChild);
+      trimFCNode(card.firstChild);
+      _trFCAttr(image, 'alt');
+      assert.ok(h3.textContent.startsWith('〖FF14〗' + official + '套装👗'));
+      assert.equal(card.textContent, official + '套装');
+      assert.ok(image.getAttribute('alt').startsWith('〖FF14〗' + official + '套装👗'));
+      trimFCNode(h3.firstChild);
+      trimFCNode(card.firstChild);
+      _trFCAttr(image, 'alt');
+      assert.equal(card.textContent, official + '套装', '重复扫描不能添加双重后缀');
+      assert.ok(!h3.textContent.includes('套装套装'));
+      assert.equal(trFC(native), official, '普通系列名不改为带后缀的物品查询键');
+      assert.ok(!trFC('〖FF14〗' + native + '装備⚔').includes('套装'),
+        '武器说明不得套用时装文章规则');
+      h3.remove();
+      card.remove();
+      image.remove();
+    }
+    assert.equal(trFC('〖FF14〗未知のアタイア装備👗'), '〖FF14〗未知のアタイア装備👗',
+      '无完整官方映射时保留原文，禁止猜测套装名');
+    assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'),
+      '单件物品文章不得出现错误套装后缀');
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
+    dom.close();
+  }
+});
+
+test('FF14-FC 搜索与装备套装入口：实际 UI 词汇全量直译，不残留日文', () => {
+  const pairs = [
+    ['装備検索', '装备搜索'],
+    ['ジョブ', '职业'],
+    ['入手方法', '获取方式'],
+    ['分類', '分类'],
+    ['性別', '性别'],
+    ['並べ替え', '排序'],
+    ['close', '关闭'],
+    ['防具シリーズ', '装备套装'],
+    ['防具シリーズの一覧', '装备套装一览'],
+    ['装備シリーズ', '装备套装'],
+    ['装備シリーズ一覧へ', '前往装备套装一览'],
+    ['装備シリーズへ', '前往装备套装'],
+    ['FF14 装備シリーズ一覧・検索', 'FF14 装备套装一览·搜索'],
+    ['検索条件：なし（上のメニューから絞り込みができます）',
+      '搜索条件：无（可从上方菜单筛选）'],
+    ['各種族で幻想試着ツール！', '各种族幻想试穿工具！'],
+  ];
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
+  try {
+    for (const [native, zh] of pairs) {
+      assert.equal(trFC(native), zh, native + ' 应有独立 UI 译文');
+      const span = dom.document.createElement('span');
+      span.textContent = native;
+      trimFCNode(span.firstChild);
+      assert.equal(span.textContent, zh);
+      trimFCNode(span.firstChild);
+      assert.equal(span.textContent, zh, '再次扫描不可损坏已译文字');
+    }
+    assert.equal(trFC('武器シリーズ'), '武器系列', '不能误改原有武器系列概念');
+  } finally { dom.close(); }
+});
+
 test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单件名称', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
