@@ -26,10 +26,10 @@ const manifest = structuredClone(runtime.manifest);
 const dictObj = JSON.parse(runtime.dict.text);
 
 const origSeries = dictObj.fc['装備シリーズ'];
-if (origSeries !== '装备系列') { console.error('防呆失败：「装備シリーズ」当前译 = ' + JSON.stringify(origSeries)); process.exit(1); }
+if (origSeries !== '装备套装') { console.error('防呆失败：「装備シリーズ」当前译 = ' + JSON.stringify(origSeries)); process.exit(1); }
 const newLabel = '診断用項目ＸＺ９';
 if (Object.hasOwn(dictObj.fc, newLabel)) throw new Error('新增词样本已存在于词典');
-dictObj.fc['装備シリーズ'] = '装备系列Q';
+dictObj.fc['装備シリーズ'] = '装备套装Q';
 dictObj.fc[newLabel] = '测试新增词';
 
 const dictText = JSON.stringify(dictObj);
@@ -115,10 +115,10 @@ async function probe(c) {
       const dictKey = Object.keys(localStorage).find((k) => k.startsWith('gm:zhx.v3.f.fc.dict.'));
       const dictEntry = dictKey ? localStorage.getItem(dictKey) || '' : '';
       const opts = [...document.querySelectorAll('option')].map((o) => (o.textContent || '').trim());
-      const qc = (joined.match(/.{0,26}装备系列Q.{0,26}/) || [''])[0].replace(/\\s+/g, ' ');
+      const qc = (joined.match(/.{0,26}装备套装Q.{0,26}/) || [''])[0].replace(/\\s+/g, ' ');
       return {
         noBody: false,
-        hasFix: joined.indexOf('装备系列Q') >= 0,
+        hasFix: joined.indexOf('装备套装Q') >= 0,
         hasNew: joined.includes('测试新增词'),
         randLeft: opts.filter(s => s.includes(${JSON.stringify(newLabel)})).length,
         qContext: qc,
@@ -152,7 +152,7 @@ console.log('╔══ 场景 A：下载路径（无缓存）══╗');
   if (timeout) console.log('  ⚠️ 就绪等待超时');
   const r = timeout ? await probe(c) : await waitBoth(c, 40);
   console.log('  mock 命中:', JSON.stringify(r.hits), '｜上下文:', JSON.stringify(r.qContext));
-  ok('A1 修正重译：旧译「装备系列」→「装备系列Q」', r.hasFix);
+  ok('A1 修正重译：旧译「装备套装」→「装备套装Q」', r.hasFix);
   ok('A2 新增词补扫', r.hasNew);
   ok('A3 选项无原文残留', r.randLeft === 0, `残留 ${r.randLeft}`);
   ok('A4 V3 manifest 与字典文件已下载', r.hits.manifest > 0 && r.hits.dict > 0, JSON.stringify(r.hits));
