@@ -319,50 +319,69 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return null;
   }
 
-  function trFCDynamic(text, t0) {
-    const label = fcUIKey(t0);
-    // 全角括号会在 fcUIKey 的 NFKC 规范化中变成半角；组合标题应使用原文匹配并保留标点。
-    const starter = fcStarterOutfitTitle(text, t0);
-    if (starter !== null) return starter;
-    const verifiedSet = fcVerifiedSetText(text, t0);
-    if (verifiedSet !== null) return verifiedSet;
-    // Some set names appear as breadcrumbs or gallery labels, not only in heading elements.
-    const named = FC_VERIFIED_SHORT_SET_PATHS.get(t0);
-    const setName = named?.plain && fcScopedSetName(t0);
-    if (setName) return text.replace(t0, setName);
-    const group = fcCrystalTowerSetGroup(text, t0);
-    if (group !== null) return group;
-    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の\s*宝箱\s*からランダムでドロップする。?$/u.exec(t0);
+  // Avoid a variable-length regex followed by overlapping whitespace matching.
+  // The separator immediately before の詳細情報 must be whitespace.
+  function trFCDutyDetail(text, label) {
+    const suffix = 'の詳細情報';
+    if (!label.endsWith(suffix)) return null;
+    const marker = /^▷\s*/u.exec(label)?.[0] || '';
+    const source = label.slice(marker.length, -suffix.length);
+    if (!/\s$/u.test(source)) return null;
+    const subject = source.trim();
+    if (subject.length < 2 || subject.length > 90) return null;
+    const duty = lookupDutyName(subject);
+    return duty ? text.replace(label, marker + duty + '的详细信息') : null;
+  }
+
+  function trFCRaidDetails(text, label) {
+    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の\s*宝箱\s*からランダムでドロップする。?$/u.exec(label);
     if (raidDrop) {
       const duty = lookupDutyName(raidDrop[1]);
-      if (duty) return text.replace(t0, '从团队任务“' + duty + '”的宝箱中随机掉落。');
+      if (duty) return text.replace(label, '从团队任务“' + duty + '”的宝箱中随机掉落。');
     }
-    const treasure = /^「([^「」]{2,80})」装備が「([^「」]{2,90})」のどの宝箱からドロップするか、ひと目でわかるツールです$/u.exec(t0);
+    const treasure = /^「([^「」]{2,80})」装備が「([^「」]{2,90})」のどの宝箱からドロップするか、ひと目でわかるツールです$/u.exec(label);
     if (treasure) {
       const set = fcScopedSetName(treasure[1]) || fcVerifiedSetName(treasure[1])
         || fcKnownName(treasure[1]);
       const duty = lookupDutyName(treasure[2]);
       if (set && duty)
-        return text.replace(t0, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
+        return text.replace(label, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
     }
-    const dutyDetail = /^(▷\s*)?(.{2,90}?)\s+の詳細情報$/u.exec(t0);
-    if (dutyDetail) {
-      const duty = lookupDutyName(dutyDetail[2]);
-      if (duty) return text.replace(t0, (dutyDetail[1] || '') + duty + '的详细信息');
-    }
+    return trFCDutyDetail(text, label);
+  }
+
+  function trFCControlLabel(text, source, label) {
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
-    if (level) return text.replace(t0, level[1] + '级');
+    if (level) return text.replace(source, level[1] + '级');
     const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
-    if (af) return text.replace(t0, (af[1] === '戦闘' ? '战斗职业' : '制作与采集职业') + '专属装备（AF' + af[2] + '）');
+    if (af) return text.replace(source, (af[1] === '戦闘' ? '战斗职业' : '制作与采集职业') + '专属装备（AF' + af[2] + '）');
     const afIntro = /^AF(\d{1,2})とは$/.exec(label);
-    if (afIntro) return text.replace(t0, '什么是 AF' + afIntro[1]);
-    const slide = /^Go to slide (\d+)$/.exec(t0);
-    if (slide) return text.replace(t0, '切换到第 ' + slide[1] + ' 张');
-    if (t0 === 'Previous slide') return text.replace(t0, '上一张图片');
-    if (t0 === 'Next slide') return text.replace(t0, '下一张图片');
+    if (afIntro) return text.replace(source, '什么是 AF' + afIntro[1]);
+    const slide = /^Go to slide (\d+)$/.exec(source);
+    if (slide) return text.replace(source, '切换到第 ' + slide[1] + ' 张');
+    if (source === 'Previous slide') return text.replace(source, '上一张图片');
+    if (source === 'Next slide') return text.replace(source, '下一张图片');
     const count = label.match(/^(.{1,40}?) \(([\d,]+)\)$/u);
     if (count && Object.hasOwn(DICT_FC, count[1]))
-      return text.replace(t0, DICT_FC[count[1]] + ' (' + count[2] + ')');
+      return text.replace(source, DICT_FC[count[1]] + ' (' + count[2] + ')');
+    return null;
+  }
+
+  function trFCDynamic(text, t0) {
+    // 全角括号会在 fcUIKey 的 NFKC 规范化中变成半角；组合标题使用原文匹配。
+    const starter = fcStarterOutfitTitle(text, t0);
+    if (starter !== null) return starter;
+    const verifiedSet = fcVerifiedSetText(text, t0);
+    if (verifiedSet !== null) return verifiedSet;
+    const named = FC_VERIFIED_SHORT_SET_PATHS.get(t0);
+    const setName = named?.plain && fcScopedSetName(t0);
+    if (setName) return text.replace(t0, setName);
+    const group = fcCrystalTowerSetGroup(text, t0);
+    if (group !== null) return group;
+    const raid = trFCRaidDetails(text, t0);
+    if (raid !== null) return raid;
+    const control = trFCControlLabel(text, t0, fcUIKey(t0));
+    if (control !== null) return control;
     return trFCRelated(text, t0) || trFCAcquisition(text, t0);
   }
 
@@ -628,22 +647,25 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return official + fullBody;
   }
 
-  function fcShortSetQuotedAttribute(value, node) {
+  function fcVerifiedShortAttribute(value, node) {
     const path = globalThis.location?.pathname || '';
     let result = value;
     for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
-      // 仅在详情页或对应站内链接的卡片中使用整套装备的简称。
       if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
-      // 关联卡片图片直接用短系列名做 alt；不能退化为同名单件物品译名。
+      // A related-image alt can be a bare series label rather than a sentence.
       if (result === native) return record.zh;
       result = result.replaceAll('「' + native + '」', '「' + record.zh + '」');
-      // 列表图 alt 有时是整篇文章标题而非「套装名称」的图库说明。
-      // 两种开头与无 emoji 的文章均使用完整名称，原链接不变。
       for (const prefix of ['【FF14】', '〖FF14〗']) {
         const lead = prefix + native + '装備';
         if (result.startsWith(lead)) result = prefix + record.zh + result.slice(lead.length);
       }
     }
+    return result;
+  }
+
+  function fcGaroShortAttribute(value, node) {
+    const path = globalThis.location?.pathname || '';
+    let result = value;
     for (const [native, targetPath] of FC_GARO_BARE_SET_PATHS) {
       const quoted = '「' + native + '」';
       const articlePrefix = ['【FF14】', '〖FF14〗'].find(prefix =>
@@ -651,12 +673,16 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (!result.includes(quoted) && !articlePrefix) continue;
       if (path !== targetPath && !fcMatchingSetLink(node, targetPath)) continue;
       const official = _getSeriesMap().get(native + 'の装束');
-      // 数据未加载时暂停这个属性的翻译，避免「漆黒」被误当成资料片名。
+      // Wait for official set data; otherwise 漆黒 may become the expansion title.
       if (!/(?:套装|装束)$/u.test(official || '')) return null;
       result = result.replaceAll(quoted, '「' + official + '」');
       if (articlePrefix) result = result.replace(articlePrefix + native, articlePrefix + official);
     }
     return result;
+  }
+
+  function fcShortSetQuotedAttribute(value, node) {
+    return fcGaroShortAttribute(fcVerifiedShortAttribute(value, node), node);
   }
 
   // The FC gallery alt has a stable structure that cannot be translated by word
@@ -736,7 +762,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
     const name = fullBody ? label.slice(0, -fullBody.length) : label;
     if (fcSetTitleContext(p, label, path)
-      && /^[\u30a0-\u30ff\u4e00-\u9fff・ー]{2,40}$/u.test(name)
+      && /^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
       && !(fcUIValue(name) || _getSeriesMap().get(name) || fcVerifiedSetName(name)
         || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
         || (!fcItemName(name) && _getItemPfx().get(name)))) return;
