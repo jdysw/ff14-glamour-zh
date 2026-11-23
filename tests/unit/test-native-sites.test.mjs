@@ -1032,7 +1032,6 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('異国風の男'), '异国装扮的男人');
     // Acquisition paragraphs may have emphasis or links around native words.
     const strongDrop = doc.createElement('p');
-    const duty = 'クリスタルタワー：古代の民の迷宮';
     strongDrop.innerHTML = 'アライアンスレイド「' + duty
       + '」の <strong>宝箱</strong> からランダムでドロップする。';
     doc.body.append(strongDrop);
