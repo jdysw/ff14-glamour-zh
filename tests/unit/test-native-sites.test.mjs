@@ -1026,7 +1026,7 @@ test('FF14-FC 装备套装文章标题：仅已核实的服装系列添加展示
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      series: pairs.map(([native, localized]) => native + '|' + localized).join('\\n'),
+      series: pairs.map(([native, localized]) => native + '|' + localized).join('\n'),
     }), true);
     cacheReset('derived');
     for (const [native, official] of pairs) {
