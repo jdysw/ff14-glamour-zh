@@ -390,6 +390,51 @@ export { fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULE
     }
   }
 
+  // GARO 非阴阳装束的独立卡片使用「金狼」「漆黒」等简称。
+  // 这几条必须精确对应站点的装备详情 URL，否则「漆黒」会与资料片名冲突；
+  // 「風魔」更是另一个迷宫装备系列，不能拿威望风魔装束来覆盖。
+  const FC_GARO_BARE_SET_PATHS = new Map([
+    ['金狼', '/equipment/the_golden_wolf/'],
+    ['漆黒', '/equipment/undying_twilight/'],
+    ['暗黒', '/equipment/pressing_darkness/'],
+    ['白夜', '/equipment/the_white_night/'],
+    ['銀狼', '/equipment/the_silver_wolf/'],
+  ]);
+
+  function fcGaroBareHeading(node, label) {
+    const parent = node.parentElement;
+    if (!parent) return null;
+    const path = globalThis.location?.pathname || '';
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const isArticle = !!parent.closest('h1');
+    const core = fullBody ? label.slice(0, -fullBody.length) : label;
+    // 大标题如「【FF14】漆黒(戦士)...」只在对应详情页替换开头的套装简称。
+    const short = isArticle
+      ? [...FC_GARO_BARE_SET_PATHS.keys()].find(k => core.startsWith('【FF14】' + k + '(')
+        || core.startsWith('【FF14】' + k + '（'))
+      : core;
+    const detailPath = FC_GARO_BARE_SET_PATHS.get(short);
+    if (!detailPath) return null;
+    const mainTitle = path === detailPath
+      && (parent.closest('h5') || (fullBody && parent.closest('h3')) || isArticle);
+    const seriesTitle = /^\/equipment_series_search\/?$/u.test(path) && parent.closest('h4');
+    const link = parent.closest('a[href]');
+    let matchingLink = false;
+    if (link) {
+      try {
+        const href = new URL(link.getAttribute('href'), 'https://ff14-fc.com/');
+        matchingLink = href.hostname === 'ff14-fc.com' && href.pathname === detailPath;
+      } catch { /* 无效链接不可用于推断装备系列 */ }
+    }
+    if (!mainTitle && !seriesTitle && !matchingLink) return null;
+    // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
+    // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
+    const official = _getSeriesMap().get(short + 'の装束');
+    if (!/(?:套装|装束)$/u.test(official || '')) return label;
+    if (isArticle) return trFC(label.replace(short, official));
+    return official + fullBody;
+  }
+
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
   // 不修改物品/系列词库：同一中文名仍可作为单件物品名或 Wiki 查询键。
   const FC_FULL_SET_LABEL = /[（(]全身[）)]$/u;
@@ -429,6 +474,11 @@ export { fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULE
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
     const label = raw.trim();
+    const garoBare = fcGaroBareHeading(node, label);
+    if (garoBare !== null) {
+      if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
+      return;
+    }
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);
