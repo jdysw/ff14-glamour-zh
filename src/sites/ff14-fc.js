@@ -602,6 +602,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
       // 仅在详情页或对应站内链接的卡片中使用整套装备的简称。
       if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
+      // 关联卡片图片直接用短系列名做 alt；不能退化为同名单件物品译名。
+      if (result === native) return record.zh;
       result = result.replaceAll('「' + native + '」', '「' + record.zh + '」');
       // 列表图 alt 有时是整篇文章标题而非「套装名称」的图库说明。
       // 两种开头与无 emoji 的文章均使用完整名称，原链接不变。
@@ -703,7 +705,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const name = fullBody ? label.slice(0, -fullBody.length) : label;
     if (fcSetTitleContext(p, label, path)
       && /^[\u30a0-\u30ff\u4e00-\u9fff・ー]{2,40}$/u.test(name)
-      && !(_getSeriesMap().get(name) || fcVerifiedSetName(name)
+      && !(fcUIValue(name) || _getSeriesMap().get(name) || fcVerifiedSetName(name)
         || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
         || (!fcItemName(name) && _getItemPfx().get(name)))) return;
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');

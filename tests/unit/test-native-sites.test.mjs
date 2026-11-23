@@ -1040,12 +1040,15 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       const link = doc.createElement('a');
       link.setAttribute('href', href);
       link.innerHTML = '<span>' + native + '</span><img alt="ミラプリ「'
-        + native + '」装備ミコッテでの見た目紹介1">';
+        + native + '」装備ミコッテでの見た目紹介1">'
+        + '<img class="bare-alt" alt="' + native + '">';
       doc.body.append(link);
       trimFCNode(link.querySelector('span').firstChild);
       _trFCAttr(link.querySelector('img'), 'alt');
+      _trFCAttr(link.querySelector('img.bare-alt'), 'alt');
       assert.equal(link.textContent, chinese, '关联卡片需按链接翻译：' + href);
       assert.ok(link.querySelector('img').getAttribute('alt').includes('「' + chinese + '」'));
+      assert.equal(link.querySelector('img.bare-alt').getAttribute('alt'), chinese);
       assert.equal(link.getAttribute('href'), href);
     }
     assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
