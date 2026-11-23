@@ -882,13 +882,13 @@ test('FF14-FC 顶部导航：按子页语义命名，保留国服术语与原生
   const doc = dom.document;
   const labels = [
     ['/equipment_search_parts/equipment_search_foot/', '部位別', '按部位'],
-    ['/equipment_series_search/', 'シリーズ', '防具系列'],
+    ['/equipment_series_search/', 'シリーズ', '装备套装'],
     ['/summary_equipment_fashionable/', 'おしゃれ', '时装'],
     ['/fashion_accessories_search/', 'ファッションアクセ', '时尚配饰'],
     ['/modern_aesthetics_search/', 'ヘアカタログ', '发型图鉴'],
     ['/weapon_search/', 'ウェポン', '武器'],
-    ['/summary_equipment_id/', 'ID', '迷宫装备'],
-    ['/summary_equipment/', 'カテゴリ別', '装备汇总'],
+    ['/summary_equipment_id/', 'ID', '副本装备'],
+    ['/summary_equipment/', 'カテゴリ別', '按来源汇总'],
     ['/capture_top/', 'お役立ち', '攻略'],
     ['/item_intro_top/', 'アイテム', '物品介绍'],
     ['/about/', 'About', '关于'],
@@ -898,8 +898,9 @@ test('FF14-FC 顶部导航：按子页语义命名，保留国服术语与原生
       + '"><span> ' + japanese + ' </span><i aria-hidden="true"></i></a>').join('')
     + '</nav><main><a id="other" href="/summary_equipment/">按部位</a>'
     + '<a id="not-dungeon" href="/summary_equipment_fashionable/">副本装备</a>'
-    + '<a id="nested" href="/summary_equipment_id/"><span>副本装备</span><em></em></a>'
-    + '<a id="external" href="https://example.org/summary_equipment_id/">副本装备</a></main>';
+    + '<a id="nested" href="/summary_equipment_id/"><span>ID</span><em></em></a>'
+    + '<a id="external" href="https://example.org/summary_equipment_id/">副本装备</a>'
+    + '<a id="already-localized" href="/summary_equipment_id/">副本装备</a></main>';
   try {
     globalThis.document = doc;
     globalThis.location = dom.location;
@@ -917,14 +918,17 @@ test('FF14-FC 顶部导航：按子页语义命名，保留国服术语与原生
     assert.equal(doc.querySelector('#other').textContent, '按部位',
       '同样的中文标签指向其他页面时不得错误改写');
     assert.equal(doc.querySelector('#not-dungeon').textContent, '副本装备',
-      '无关链接不应套用迷宫装备命名');
+      '无关链接不应套用副本装备命名');
     assert.equal(doc.querySelector('#external').textContent, '副本装备',
       '站外同路径链接不得修改');
     assert.equal(fixFCMenu(doc.querySelector('#nested span').firstChild), true,
       '局部文本更新时可回溯包含链接');
-    assert.equal(doc.querySelector('#nested span').textContent, '迷宫装备');
+    assert.equal(doc.querySelector('#nested span').textContent, '副本装备');
     assert.ok(doc.querySelector('#nested em'), '嵌套装饰元素保留');
     assert.equal(trFC('カテゴリ別'), '按分类', '通用站点词库不能因导航标题而被重写');
+    assert.equal(trFC('シリーズ'), '系列');
+    assert.equal(fixFCMenu(doc.querySelector('#already-localized')), false,
+      '已采用副本装备的导航无需重复替换');
     assert.equal(trFC('アイテム'), '物品');
     assert.equal(trFC('お役立ち'), '实用');
   } finally {
