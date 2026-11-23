@@ -546,18 +546,51 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
     a.removeAttribute('target');
   }
 
-  // v1.12.7：菜单「ID」→「副本装备」
-  function fixFCMenu(rootArg) {
-    let changed = false;
-    queryIn(localScope(rootArg), 'a[href*="/summary_equipment_id/"]').forEach((a) => {
-      if (a.dataset.zhixiaMenu) return;
-      const t = (a.textContent || '').trim();
-      if (t === 'ID' || t === 'id') {
-        a.dataset.zhixiaMenu = '1';
-        a.textContent = '副本装备';
-        changed = true;
+  // 导航应描述目标子页，而非将站点原文逐字直译。
+  // 仅对「匹配链接 + 匹配原标签」的短导航项生效，不改词库中的通用术语。
+  // 特别地：/summary_equipment_id/ 只收录迷宫挑战装备，并非所有副本装备。
+  const FC_MENU_LABELS = new Map([
+    ['/equipment_series_search/', { names: ['シリーズ', '系列'], zh: '防具系列' }],
+    ['/summary_equipment_id/', { names: ['ID', 'id', '副本装备'], zh: '迷宫装备' }],
+    ['/summary_equipment/', { names: ['カテゴリ別', '按分类'], zh: '装备汇总' }],
+    ['/capture_top/', { names: ['お役立ち', '实用'], zh: '攻略' }],
+    ['/item_intro_top/', { names: ['アイテム', '物品'], zh: '物品介绍' }],
+  ]);
+
+  function fcMenuTextNode(element, label) {
+    for (const child of element.childNodes || []) {
+      if (child.nodeType === 3 && child.nodeValue.trim() === label) return child;
+      if (child.nodeType === 1) {
+        const found = fcMenuTextNode(child, label);
+        if (found) return found;
       }
-    });
+    }
+    return null;
+  }
+
+  function fixFCMenu(rootArg) {
+    const scope = localScope(rootArg);
+    const links = new Set(queryIn(scope, 'a[href]'));
+    const ancestor = scope?.closest?.('a[href]');
+    if (ancestor) links.add(ancestor);
+    let changed = false;
+    for (const a of links) {
+      const href = a.getAttribute('href') || '';
+      // 不处理站外链接；相同路径不代表外站页面具有相同语义。
+      if (/^https?:\/\//iu.test(href) && !/^https?:\/\/(?:www\.)?ff14-fc\.com(?:\/|$)/iu.test(href)) continue;
+      let path;
+      try { path = new URL(href, globalThis.location?.href || 'https://ff14-fc.com/').pathname; }
+      catch { continue; }
+      const rule = FC_MENU_LABELS.get(path.endsWith('/') ? path : path + '/');
+      if (!rule) continue;
+      const label = a.textContent.trim();
+      if (!rule.names.includes(label)) continue;
+      const node = fcMenuTextNode(a, label);
+      if (!node) continue;
+      // 保留原空白、嵌套 span、图标和链接属性。
+      node.nodeValue = node.nodeValue.replace(label, rule.zh);
+      changed = true;
+    }
     return changed;
   }
 
