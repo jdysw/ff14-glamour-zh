@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -66,9 +66,52 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     return lookupJp2Zh(name) || fcNormalizedItem(name);
   }
 
+  // Mirapri Life 的 GARO 整套装备标题省略「の装束」，例如「魔戒法師・陽」。
+  // 仅当完整名称在官方日中系列对照中存在时，才还原为「魔戒法师装束·阳」。
+  // 保持与单件装备独立，绝不凭「魔戒」前缀猜译未知系列。
+  const FC_GARO_SET_SHORT = /^(魔戒[^\s（）]{1,28})・([陰陽])$/u;
+  function fcGaroSetName(name) {
+    const match = FC_GARO_SET_SHORT.exec(name);
+    if (!match) return null;
+    const official = _getSeriesMap().get(match[1] + 'の装束・' + match[2]);
+    return /(?:装束|套装)·[阴阳]$/u.test(official || '') ? official : null;
+  }
+
+  // 7.5 原站套装标题使用简写，而国服完整套装名已有正式物品记录。
+  // 仅做整名对照，不加入通用子串词典，防止「套装」污染单件装备名称。
+  const FC_VERIFIED_SET_ALIASES = new Map([
+    ['プレマジテック・ディフェンダー', '前魔导御敌套装'],
+    ['プレマジテック・スレイヤー', '前魔导制敌套装'],
+    ['プレマジテック・ストライカー', '前魔导强袭套装'],
+    ['プレマジテック・スカウト', '前魔导游击套装'],
+    ['プレマジテック・レンジャー', '前魔导精准套装'],
+    ['プレマジテック・キャスター', '前魔导咏咒套装'],
+    ['プレマジテック・ヒーラー', '前魔导治愈套装'],
+    ['ネオシチズン・コスチュームセット', '新生国民套装'],
+    ['カーウェン', '卡文套装'],
+    ['ゼロルミナリー・コスチュームセット', '零点套装'],
+  ]);
+  function fcVerifiedSetName(name) {
+    return FC_VERIFIED_SET_ALIASES.get(name) || null;
+  }
+
+  function fcVerifiedSetText(text, label) {
+    const full = /^(.*?)(（全身）)$/u.exec(label);
+    const direct = fcVerifiedSetName(full ? full[1] : label);
+    if (direct) return text.replace(label, direct + (full ? full[2] : ''));
+    // 装备图库说明中，带日文引号的是整套装备名；不匹配单件的前缀。
+    let result = text;
+    result = result.replace(/「([^「」]{2,80})」/gu, (matched, name) => {
+      const localized = fcVerifiedSetName(name);
+      return localized ? '「' + localized + '」' : matched;
+    });
+    return result !== text ? result : null;
+  }
+
   function fcKnownName(name) {
     // Accept an actual key, never an arbitrary longer series sharing its prefix.
     return fcUIValue(name) || fcItemName(name) || lookupDutyName(name) || _getSeriesMap().get(name)
+      || fcVerifiedSetName(name) || fcGaroSetName(name)
       || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
   }
 
@@ -100,7 +143,10 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
   // v1.2.8：四步链拆为子步骤（降认知复杂度）
   // ① 整串精确（v1.12.11：空白归一化回退，防空格式差异）
   function _trFCExact(text, t0, path = globalThis.location?.pathname || '') {
-    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0) || lookupDutyName(t0) || resolveDyeColor(t0);
+    const fullBody = FC_FULL_SET_LABEL.exec(t0)?.[0] || '';
+    const alias = fcGaroSetName(fullBody ? t0.slice(0, -fullBody.length) : t0);
+    const hit0 = fcUIValue('page:' + path + ':' + t0) || fcUIValue(t0)
+      || (alias && alias + fullBody) || lookupDutyName(t0) || resolveDyeColor(t0);
     if (!hit0) return null;
     const i = text.indexOf(t0);
     return text.slice(0, i) + hit0 + text.slice(i + t0.length);
@@ -208,38 +254,134 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
   }
 
   function fcArticleTitle(text, label) {
-    const match = /^【FF14】(.{1,80}?)(?:装備)?(?=[👗💍✂⚔])/u.exec(label);
+    // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
+    // 较新文章可能省略 👗，直接使用「装備各種族での見た目・入手方法」。
+    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔])|各種族での見た目・入手方法)/u.exec(label);
     if (!match) return null;
-    const name = fcKnownName(match[1]);
-    if (!name || name === match[1]) return null;
-    const translated = text.replace(match[1], name);
+    const scoped = FC_VERIFIED_SHORT_SET_PATHS.get(match[2]);
+    const path = globalThis.location?.pathname || '';
+    // 详情页标题与 document.title 并非 DOM 套装标题，需单独恢复已核实的短称。
+    const scopedName = scoped?.path === path ? scoped.zh : null;
+    const name = fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
+    if (!name || name === match[2]) return null;
+    // 仅完整系列名且确有「装備」的文章标题加“套装”；
+    // 单件物品与武器继续保留“装备”，未核实系列不猜译。
+    const mappedSeries = _getSeriesMap().get(match[2]);
+    const outfitArticle = match[4] === '👗' || !match[4];
+    const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
+    let suffix = '';
+    if (!/(?:套装|装束)(?:·[阴阳])?$/u.test(name)) {
+      if (isKnownOutfit) suffix = '套装';
+      else if (match[3]) suffix = '装备';
+    }
+    const translated = text.replace(match[0], match[1] + name + suffix);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
 
   function trFCRelated(text, label) {
     const match = /^(.{1,60})の(関連アイテム)?$/.exec(label);
     if (!match) return null;
-    const name = fcKnownName(match[1]);
+    const name = fcScopedSetName(match[1]) || fcKnownName(match[1]);
     if (!name) return null;
     const suffix = match[2] ? '的相关物品' : '的';
     return text.replace(label, name + suffix);
   }
 
-  function trFCDynamic(text, t0) {
-    const label = fcUIKey(t0);
+  // 站点「种族初始服装」是组合标题，不是物品表中的一件装备。
+  // 以游戏内正式种族名称翻译整个短标题，避免「猫魅族♀初期服」半中文化。
+  const FC_STARTER_RACES = new Set([
+    'ヒューラン', 'エレゼン', 'ララフェル', 'ミコッテ',
+    'ルガディン', 'アウラ', 'ヴィエラ', 'ロスガル',
+  ]);
+  function fcStarterOutfitName(native) {
+    const match = /^(.+?)([♂♀])初期服$/u.exec(native);
+    if (!match || !FC_STARTER_RACES.has(match[1])) return null;
+    const race = fcUIValue(match[1]);
+    if (!race) return null;
+    return race + (match[2] === '♀' ? '女性' : '男性') + '初始服装';
+  }
+
+  function fcStarterOutfitTitle(text, label) {
+    const whole = /^(.*?)(（全身）)$/u.exec(label);
+    const name = fcStarterOutfitName(whole ? whole[1] : label);
+    if (name) return text.replace(label, name + (whole ? whole[2] : ''));
+    const article = /^【FF14】(.+?)(男性♂|女性♀)初期服装備/u.exec(label);
+    if (article) {
+      const sex = article[2] === '男性♂' ? '♂' : '♀';
+      const translated = fcStarterOutfitName(article[1] + sex + '初期服');
+      if (translated) return text.replace(article[0], '【FF14】' + translated);
+    }
+    const alt = /「([^「」]{2,32}?[♂♀]初期服)」/u.exec(label);
+    if (alt) {
+      const localized = fcStarterOutfitName(alt[1]);
+      if (localized) return text.replace(alt[0], '「' + localized + '」');
+    }
+    return null;
+  }
+
+  // Avoid a variable-length regex followed by overlapping whitespace matching.
+  // The separator immediately before の詳細情報 must be whitespace.
+  function trFCDutyDetail(text, label) {
+    const suffix = 'の詳細情報';
+    if (!label.endsWith(suffix)) return null;
+    const marker = /^▷\s*/u.exec(label)?.[0] || '';
+    const source = label.slice(marker.length, -suffix.length);
+    if (!/\s$/u.test(source)) return null;
+    const subject = source.trim();
+    if (subject.length < 2 || subject.length > 90) return null;
+    const duty = lookupDutyName(subject);
+    return duty ? text.replace(label, marker + duty + '的详细信息') : null;
+  }
+
+  function trFCRaidDetails(text, label) {
+    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の\s*宝箱\s*からランダムでドロップする。?$/u.exec(label);
+    if (raidDrop) {
+      const duty = lookupDutyName(raidDrop[1]);
+      if (duty) return text.replace(label, '从团队任务“' + duty + '”的宝箱中随机掉落。');
+    }
+    const treasure = /^「([^「」]{2,80})」装備が「([^「」]{2,90})」のどの宝箱からドロップするか、ひと目でわかるツールです$/u.exec(label);
+    if (treasure) {
+      const set = fcScopedSetName(treasure[1]) || fcVerifiedSetName(treasure[1])
+        || fcKnownName(treasure[1]);
+      const duty = lookupDutyName(treasure[2]);
+      if (set && duty)
+        return text.replace(label, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
+    }
+    return trFCDutyDetail(text, label);
+  }
+
+  function trFCControlLabel(text, source, label) {
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
-    if (level) return text.replace(t0, level[1] + '级');
+    if (level) return text.replace(source, level[1] + '级');
     const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
-    if (af) return text.replace(t0, (af[1] === '戦闘' ? '战斗职业' : '制作与采集职业') + '专属装备（AF' + af[2] + '）');
+    if (af) return text.replace(source, (af[1] === '戦闘' ? '战斗职业' : '制作与采集职业') + '专属装备（AF' + af[2] + '）');
     const afIntro = /^AF(\d{1,2})とは$/.exec(label);
-    if (afIntro) return text.replace(t0, '什么是 AF' + afIntro[1]);
-    const slide = /^Go to slide (\d+)$/.exec(t0);
-    if (slide) return text.replace(t0, '切换到第 ' + slide[1] + ' 张');
-    if (t0 === 'Previous slide') return text.replace(t0, '上一张图片');
-    if (t0 === 'Next slide') return text.replace(t0, '下一张图片');
+    if (afIntro) return text.replace(source, '什么是 AF' + afIntro[1]);
+    const slide = /^Go to slide (\d+)$/.exec(source);
+    if (slide) return text.replace(source, '切换到第 ' + slide[1] + ' 张');
+    if (source === 'Previous slide') return text.replace(source, '上一张图片');
+    if (source === 'Next slide') return text.replace(source, '下一张图片');
     const count = label.match(/^(.{1,40}?) \(([\d,]+)\)$/u);
     if (count && Object.hasOwn(DICT_FC, count[1]))
-      return text.replace(t0, DICT_FC[count[1]] + ' (' + count[2] + ')');
+      return text.replace(source, DICT_FC[count[1]] + ' (' + count[2] + ')');
+    return null;
+  }
+
+  function trFCDynamic(text, t0) {
+    // 全角括号会在 fcUIKey 的 NFKC 规范化中变成半角；组合标题使用原文匹配。
+    const starter = fcStarterOutfitTitle(text, t0);
+    if (starter !== null) return starter;
+    const verifiedSet = fcVerifiedSetText(text, t0);
+    if (verifiedSet !== null) return verifiedSet;
+    const named = FC_VERIFIED_SHORT_SET_PATHS.get(t0);
+    const setName = named?.plain && fcScopedSetName(t0);
+    if (setName) return text.replace(t0, setName);
+    const group = fcCrystalTowerSetGroup(text, t0);
+    if (group !== null) return group;
+    const raid = trFCRaidDetails(text, t0);
+    if (raid !== null) return raid;
+    const control = trFCControlLabel(text, t0, fcUIKey(t0));
+    if (control !== null) return control;
     return trFCRelated(text, t0) || trFCAcquisition(text, t0);
   }
 
@@ -283,12 +425,32 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     return { key: key.replace(/\s+/gu, ' ').trim(), children };
   }
 
+  // The native acquisition paragraph sometimes wraps the duty and/or “宝箱”
+  // in links/emphasis. Translate its grammar while keeping those nodes intact.
+  function fcRaidRichDrop(model) {
+    const parts = model.children;
+    if (parts.length === 1 && parts[0].textContent.trim() === '宝箱') {
+      const match = /^アライアンスレイド「([^{}「」]{2,90})」の\s*\{0\}\s*からランダムでドロップする。?$/u.exec(model.key);
+      const duty = match && lookupDutyName(match[1]);
+      return duty ? '从团队任务“' + duty + '”的{0}中随机掉落。' : null;
+    }
+    if (parts.length === 1 && lookupDutyName(parts[0].textContent.trim())
+      && /^アライアンスレイド「\{0\}」の\s*宝箱\s*からランダムでドロップする。?$/u.test(model.key))
+      return '从团队任务“{0}”的宝箱中随机掉落。';
+    if (parts.length === 2 && parts[1].textContent.trim() === '宝箱'
+      && lookupDutyName(parts[0].textContent.trim())
+      && /^アライアンスレイド「\{0\}」の\s*\{1\}\s*からランダムでドロップする。?$/u.test(model.key))
+      return '从团队任务“{0}”的{1}中随机掉落。';
+    return null;
+  }
+
   function translateFCParagraph(element) {
     if (element.closest(FC_SKIP_SEL)) return;
     const model = fcParagraphModel(element);
     if (!model?.children.length) return;
     const key = 'rich:' + model.key;
-    const translated = fcUIValue('page:' + location.pathname + ':' + key) || fcUIValue(key);
+    const translated = fcUIValue('page:' + location.pathname + ':' + key)
+      || fcUIValue(key) || fcRaidRichDrop(model);
     if (!translated) return;
     const indices = [...translated.matchAll(/\{(\d{1,3})\}/g)].map(match => Number(match[1]));
     // Refuse malformed entries rather than dropping or duplicating native links.
@@ -311,13 +473,249 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     for (const paragraph of paragraphs) translateFCParagraph(paragraph);
   }
 
+  // 首页每个区块原本以英文大字 + 日文 H2 呈现同一标题。
+  // 中文化后两者会并排重复；保留原先较醒目的大字，只隐藏核实配对的副标题。
+  const FC_HOME_SECTION_TITLES = Object.freeze([
+    ['New Equipment', '新着装備', '新装备'],
+    ['Feature', '特集', '特辑'],
+    ['Parts', '部位ごと', '按部位'],
+    ['New Fashion Accessories', 'ファッションアクセ', '新时尚配饰'],
+    ['Category', 'カテゴリ', '分类'],
+    ['Package', 'パッケージ', '资料片'],
+    ['New Modern Aesthetics', 'ヘアカタログ', '最新发型'],
+    ['New Weapon', '新着武器', '最新武器'],
+    ['Pick Up!', 'オススメ', '推荐'],
+  ]);
+
+  function fcHomeExactTextNode(node, accepted) {
+    if (node.nodeType === 3) return accepted.has(node.nodeValue.trim()) ? node : null;
+    for (const child of node.childNodes || []) {
+      const found = fcHomeExactTextNode(child, accepted);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function fcFindPreviousTitle(branch, accepted) {
+    let previous = branch.previousSibling;
+    for (let step = 0; previous && step < 6; step++, previous = previous.previousSibling) {
+      if (!accepted.has((previous.textContent || '').trim())) continue;
+      const node = fcHomeExactTextNode(previous, accepted);
+      if (node) return node;
+    }
+    return null;
+  }
+
+  function fcHomePrimaryTitle(heading, english, chinese) {
+    const accepted = new Set([english, fcUIValue(english) || english, chinese]);
+    let branch = heading;
+    // 兼容主标题和副标题同级、或各自嵌套在一层容器的 WordPress 模板。
+    for (let depth = 0; branch && depth < 3; depth++, branch = branch.parentElement) {
+      const title = fcFindPreviousTitle(branch, accepted);
+      if (title) return title;
+      if (branch.parentElement?.tagName === 'BODY') break;
+    }
+    return null;
+  }
+
+  function fcCollapseMatchedHeading(heading, english, japanese, chinese) {
+    const label = heading.textContent.trim();
+    if (label !== japanese && label !== (fcUIValue(japanese) || japanese)) return false;
+    const primary = fcHomePrimaryTitle(heading, english, chinese);
+    if (!primary) return false;
+    const value = primary.nodeValue.trim();
+    if (value !== chinese) primary.nodeValue = primary.nodeValue.replace(value, chinese);
+    if (heading.style.display !== 'none') {
+      heading.style.display = 'none';
+      heading.setAttribute('aria-hidden', 'true');
+    }
+    // 隐藏 H2 后，给仍可见的大标题保留标题的可访问性语义。
+    const element = primary.parentElement;
+    if (element && !/^H[1-6]$/.test(element.tagName) && !element.hasAttribute('role')) {
+      element.setAttribute('role', 'heading');
+      element.setAttribute('aria-level', '2');
+    }
+    return true;
+  }
+
+  function collapseFCHomeHeadings() {
+    const path = globalThis.location?.pathname || '';
+    // 装备详情页也有「Point / まとめ」这样的同义双标题。
+    const isHome = path === '/';
+    if (!isHome && !/^\/equipment\/[^/]+\/?$/u.test(path)) return;
+    const sections = isHome ? FC_HOME_SECTION_TITLES : [['Point', 'まとめ', '汇总']];
+    for (const heading of document.querySelectorAll('h2')) {
+      for (const [english, japanese, chinese] of sections) {
+        if (fcCollapseMatchedHeading(heading, english, japanese, chinese)) break;
+      }
+    }
+  }
+
+  // GARO 非阴阳装束的独立卡片使用「金狼」「漆黒」等简称。
+  // 这几条必须精确对应站点的装备详情 URL，否则「漆黒」会与资料片名冲突；
+  // 「風魔」更是另一个迷宫装备系列，不能拿威望风魔装束来覆盖。
+  const FC_GARO_BARE_SET_PATHS = new Map([
+    ['金狼', '/equipment/the_golden_wolf/'],
+    ['漆黒', '/equipment/undying_twilight/'],
+    ['暗黒', '/equipment/pressing_darkness/'],
+    ['白夜', '/equipment/the_white_night/'],
+    ['銀狼', '/equipment/the_silver_wolf/'],
+  ]);
+  // 装备详情页把整套装备简写为系列词。以对应详情 URL 严格定位，
+  // 按国服单件装备官方词干给系列标题加展示后缀；不是新的物品官方名称。
+  // 特别注意水晶塔的风魔/洋葱与 PvP 威望装束、深红与同名家具不得混淆。
+  const FC_VERIFIED_SHORT_SET_PATHS = new Map([
+    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true, strictLink: true, crystal: true }],
+    ['ロイヤル', { path: '/equipment/royal/', zh: '皇室套装', plain: true, strictLink: true, crystal: true }],
+    ['クリムゾン', { path: '/equipment/crimson/', zh: '深红套装', plain: true, strictLink: true, crystal: true }],
+    ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true, crystal: true }],
+    ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true, crystal: true }],
+    ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true, crystal: true }],
+    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
+    ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
+    ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
+  ]);
+
+  // 唯一可信的短名称上下文：同站点同详情路径的链接。
+  function fcMatchingSetLink(element, targetPath) {
+    const link = element?.closest?.('a[href]');
+    if (!link) return false;
+    try {
+      const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
+      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) && url.pathname === targetPath;
+    } catch { return false; }
+  }
+
+  function fcScopedSetName(name, node = null) {
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(name);
+    if (!record) return null;
+    const path = globalThis.location?.pathname || '';
+    return path === record.path
+      || (record.crystal && path === '/summary/the_labyrinth_of_the_ancients/')
+      || (node && fcMatchingSetLink(node, record.path)) ? record.zh : null;
+  }
+
+  // 古代人迷宫总览的完整系列标题还包含可装备职业。
+  // 每个职业必须完整命中公共国服词典，否则保留原文，避免半译。
+  function fcCrystalTowerSetGroup(text, label) {
+    if ((globalThis.location?.pathname || '') !== '/summary/the_labyrinth_of_the_ancients/') return null;
+    const m = /^([【〖]FF14[】〗])?(.{2,32}?)（([^（）]{2,90})）(装備の見た目)?$/u.exec(label);
+    if (!m || !FC_VERIFIED_SHORT_SET_PATHS.get(m[2])?.crystal) return null;
+    const roles = m[3].split('・').map(role => fcUIValue(role.trim()));
+    if (roles.some(role => !role)) return null;
+    return text.replace(label, (m[1] || '') + fcScopedSetName(m[2])
+      + '（' + roles.join('、') + '）' + (m[4] ? '装备外观' : ''));
+  }
+
+  function fcGaroBareHeading(node, label) {
+    const parent = node.parentElement;
+    if (!parent) return null;
+    const path = globalThis.location?.pathname || '';
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const core = fullBody ? label.slice(0, -fullBody.length) : label;
+    // 列表卡片的 H3 与详情页的 H1 使用同一文章标题格式。
+    const isArticle = /^[【〖]FF14[】〗]/u.test(core)
+      && !!parent.closest('h1,h3,a[href]');
+    // 大标题兼容【FF14】和〖FF14〗，仅对已确认的整套装备简称处理。
+    const short = isArticle
+      ? [...FC_GARO_BARE_SET_PATHS.keys(), ...FC_VERIFIED_SHORT_SET_PATHS.keys()]
+        .find(k => ['【FF14】', '〖FF14〗'].some(prefix =>
+          core.startsWith(prefix + k + '(') || core.startsWith(prefix + k + '（')
+          || core.startsWith(prefix + k + '装備')))
+      : core;
+    const verified = FC_VERIFIED_SHORT_SET_PATHS.get(short);
+    const detailPath = FC_GARO_BARE_SET_PATHS.get(short) || verified?.path;
+    if (!detailPath) return null;
+    const mainTitle = path === detailPath
+      && (parent.closest('h5') || (fullBody && parent.closest('h3')) || parent.closest('h1'));
+    const isSeriesPage = /^\/equipment_series_search\/?$/u.test(path);
+    // H3 文章标题若附有链接则严格核验目标地址；没有链接才使用系列页上下文。
+    const matchingLink = fcMatchingSetLink(parent, detailPath);
+    const seriesTitle = isSeriesPage && (!verified?.strictLink || matchingLink)
+      && (parent.closest('h4')
+        || (isArticle && parent.closest('h3') && !parent.closest('a[href]')));
+    if (!mainTitle && !seriesTitle && !matchingLink) return null;
+    // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
+    // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
+    const official = verified?.zh || _getSeriesMap().get(short + 'の装束');
+    if (!/(?:套装|装束)$/u.test(official || '')) return label;
+    if (isArticle) {
+      const replaced = label.replace(short, official);
+      // “夜樱套装装备”不是自然中文标题；保留后续说明与原链接。
+      return trFC(replaced.replace(official + '装備', official));
+    }
+    return official + fullBody;
+  }
+
+  function fcVerifiedShortAttribute(value, node) {
+    const path = globalThis.location?.pathname || '';
+    let result = value;
+    for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
+      if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
+      // A related-image alt can be a bare series label rather than a sentence.
+      if (result === native) return record.zh;
+      result = result.replaceAll('「' + native + '」', '「' + record.zh + '」');
+      for (const prefix of ['【FF14】', '〖FF14〗']) {
+        const lead = prefix + native + '装備';
+        if (result.startsWith(lead)) result = prefix + record.zh + result.slice(lead.length);
+      }
+    }
+    return result;
+  }
+
+  function fcGaroShortAttribute(value, node) {
+    const path = globalThis.location?.pathname || '';
+    let result = value;
+    for (const [native, targetPath] of FC_GARO_BARE_SET_PATHS) {
+      const quoted = '「' + native + '」';
+      const articlePrefix = ['【FF14】', '〖FF14〗'].find(prefix =>
+        result.startsWith(prefix + native + '(') || result.startsWith(prefix + native + '（'));
+      if (!result.includes(quoted) && !articlePrefix) continue;
+      if (path !== targetPath && !fcMatchingSetLink(node, targetPath)) continue;
+      const official = _getSeriesMap().get(native + 'の装束');
+      // Wait for official set data; otherwise 漆黒 may become the expansion title.
+      if (!/(?:套装|装束)$/u.test(official || '')) return null;
+      result = result.replaceAll(quoted, '「' + official + '」');
+      if (articlePrefix) result = result.replace(articlePrefix + native, articlePrefix + official);
+    }
+    return result;
+  }
+
+  function fcShortSetQuotedAttribute(value, node) {
+    return fcGaroShortAttribute(fcVerifiedShortAttribute(value, node), node);
+  }
+
+  // The FC gallery alt has a stable structure that cannot be translated by word
+  // substitution without leaving Japanese particles or corrupting item names.
+  function fcGalleryAlt(value, node) {
+    const racePhoto = /^ミラプリ「([^「」]{1,80})」装備(.{1,30})での見た目紹介(\d{1,3})$/u.exec(value);
+    const allRaces = /^ミラプリ「([^「」]{1,80})」装備の見た目を各種族で紹介(\d{1,3})$/u.exec(value);
+    const native = racePhoto?.[1] || allRaces?.[1];
+    if (!native) return null;
+    const name = fcScopedSetName(native, node) || fcVerifiedSetName(native)
+      || fcGaroSetName(native) || fcItemName(native);
+    if (!name) return null;
+    if (racePhoto) {
+      const race = fcUIValue(racePhoto[2]);
+      return race ? race + '「' + name + '」外观展示图 ' + racePhoto[3] : null;
+    }
+    return '「' + name + '」各种族外观展示图 ' + allRaces[2];
+  }
+
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
   // 不修改物品/系列词库：同一中文名仍可作为单件物品名或 Wiki 查询键。
   const FC_FULL_SET_LABEL = /[（(]全身[）)]$/u;
   function fcSetTitleContext(element, source, path) {
     if (!element?.closest) return false;
-    // 首页轮播、相关推荐等链接的目标是整套装备的详情页。
-    if (element.closest('a[href*="/equipment/"]')) return true;
+    // 首页轮播和相关推荐仅认本站的整套装备详情链接，不推断站外同路径。
+    const link = element.closest('a[href]');
+    if (link) {
+      try {
+        const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
+        if (!/^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname)) return false;
+        if (/^\/equipment\/[^/]+\/?$/u.test(url.pathname)) return true;
+      } catch { return false; }
+    }
     // 系列检索结果的 H4 是卡片套装名，不能扩大到部位检索页。
     if (/^\/equipment_series_search\/?$/u.test(path)) return !!element.closest('h4');
     if (!/^\/equipment\/[^/]+\/?$/u.test(path)) return false;
@@ -332,12 +730,16 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     const fullBody = FC_FULL_SET_LABEL.exec(source)?.[0] || '';
     const base = fullBody ? source.slice(0, -fullBody.length) : source;
     // 不把「整套装备详情中的单件物品链接」误判为套装卡片。
-    const officialName = _getSeriesMap().get(base) || _getSeriesPfx().get(base) || _getItemPfx().get(base);
+    // 套装与同名单件物品冲突时禁止前缀猜译；否则仍允许真实系列词干，
+    // 例如「コスモパワード」和职业套装 RE 标题。
+    const prefix = !fcItemName(base) && _getItemPfx().get(base);
+    const officialName = _getSeriesMap().get(base) || fcVerifiedSetName(base)
+      || _getSeriesPfx().get(base) || prefix;
     if (!officialName || officialName === base) return translated;
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束)$/u.test(officialName)) {
+    if (/(?:套装|装束)(?:·[阴阳])?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
@@ -350,6 +752,20 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
     const label = raw.trim();
+    const garoBare = fcGaroBareHeading(node, label);
+    if (garoBare !== null) {
+      if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
+      return;
+    }
+    // 未取得可靠系列对应时宁可保留日文，不能用同名前缀套用单件装备译名。
+    const path = globalThis.location?.pathname || '';
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const name = fullBody ? label.slice(0, -fullBody.length) : label;
+    if (fcSetTitleContext(p, label, path)
+      && /^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
+      && !(fcUIValue(name) || _getSeriesMap().get(name) || fcVerifiedSetName(name)
+        || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
+        || (!fcItemName(name) && _getItemPfx().get(name)))) return;
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);
@@ -382,7 +798,10 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     if (!value || value.length > 160) return;
     const match = key === 'title' && value.match(/^View all posts in (.+)$/);
     const group = match && DICT_FC[match[1]];
-    const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(value);
+    const scoped = fcShortSetQuotedAttribute(value, n);
+    if (scoped === null) return;
+    const translated = group ? '查看“' + group + '”分类下的全部文章'
+      : (key === 'alt' && fcGalleryAlt(value, n)) || trFC(scoped);
     if (translated !== value) n.setAttribute(key, translated);
   }
   function _procFCImg(n) {
@@ -415,7 +834,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     }
     try {
       translateFCParagraphs(rootArg);
-      if (rootArg?.nodeType === 3) { trimFCNode(rootArg); return; }
+      if (rootArg?.nodeType === 3) { trimFCNode(rootArg); collapseFCHomeHeadings(); return; }
       const root = rootArg || document.body || document.documentElement;
       if (!root) return;
       if (root.nodeType === 1 && _fcAcceptNode(root) !== NodeFilter.FILTER_REJECT) _procFCNode(root);
@@ -426,6 +845,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
       const batch = [];
       while (w.nextNode()) batch.push(w.currentNode);
       for (const n of batch) _procFCNode(n);
+      collapseFCHomeHeadings();
     } finally {
       if (isFull) window.__zhixiaFcBusy = false;
     }
@@ -434,6 +854,19 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
   // <title> 汉化（子页标题：装备一覧＆検索 | ミラプリライフ 等）
   function translateFCTitle() {
     const t = document.title;
+    const path = globalThis.location?.pathname || '';
+    // GARO 详情标签使用「〖FF14〗漆黒(戦士)…」等简称，没有一般的「装備👗」模式。
+    // 等系列数据就绪后还原为装束名；在此之前避免“漆黒”误译成资料片。
+    for (const [native, detailPath] of FC_GARO_BARE_SET_PATHS) {
+      if (path !== detailPath) continue;
+      const prefix = ['【FF14】', '〖FF14〗'].find(marker =>
+        t.startsWith(marker + native + '(') || t.startsWith(marker + native + '（'));
+      if (!prefix) break;
+      const official = _getSeriesMap().get(native + 'の装束');
+      if (!/(?:套装|装束)$/u.test(official || '')) return;
+      document.title = trFC(t.replace(prefix + native, prefix + official));
+      return;
+    }
     const whole = trFC(t || '');
     if (whole && whole !== t) { document.title = whole; return; }
     if (!t || !/[\u3040-\u30ff]/.test(t)) return;
@@ -480,18 +913,51 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     a.removeAttribute('target');
   }
 
-  // v1.12.7：菜单「ID」→「副本装备」
-  function fixFCMenu(rootArg) {
-    let changed = false;
-    queryIn(localScope(rootArg), 'a[href*="/summary_equipment_id/"]').forEach((a) => {
-      if (a.dataset.zhixiaMenu) return;
-      const t = (a.textContent || '').trim();
-      if (t === 'ID' || t === 'id') {
-        a.dataset.zhixiaMenu = '1';
-        a.textContent = '副本装备';
-        changed = true;
+  // 导航应描述目标子页，而非将站点原文逐字直译。
+  // 仅对「匹配链接 + 匹配原标签」的短导航项生效，不改词库中的通用术语。
+  // 采用统一的导航短标签；与对应页面的正式文章标题相互独立。
+  const FC_MENU_LABELS = new Map([
+    ['/equipment_series_search/', { names: ['シリーズ', '系列'], zh: '装备套装' }],
+    ['/summary_equipment_id/', { names: ['ID', 'id'], zh: '副本装备' }],
+    ['/summary_equipment/', { names: ['カテゴリ別', '按分类'], zh: '按来源汇总' }],
+    ['/capture_top/', { names: ['お役立ち', '实用'], zh: '攻略' }],
+    ['/item_intro_top/', { names: ['アイテム', '物品'], zh: '物品介绍' }],
+  ]);
+
+  function fcMenuTextNode(element, label) {
+    for (const child of element.childNodes || []) {
+      if (child.nodeType === 3 && child.nodeValue.trim() === label) return child;
+      if (child.nodeType === 1) {
+        const found = fcMenuTextNode(child, label);
+        if (found) return found;
       }
-    });
+    }
+    return null;
+  }
+
+  function fixFCMenu(rootArg) {
+    const scope = localScope(rootArg);
+    const links = new Set(queryIn(scope, 'a[href]'));
+    const ancestor = scope?.closest?.('a[href]');
+    if (ancestor) links.add(ancestor);
+    let changed = false;
+    for (const a of links) {
+      const href = a.getAttribute('href') || '';
+      // 不处理站外链接；相同路径不代表外站页面具有相同语义。
+      if (/^https?:\/\//iu.test(href) && !/^https?:\/\/(?:www\.)?ff14-fc\.com(?:\/|$)/iu.test(href)) continue;
+      let path;
+      try { path = new URL(href, globalThis.location?.href || 'https://ff14-fc.com/').pathname; }
+      catch { continue; }
+      const rule = FC_MENU_LABELS.get(path.endsWith('/') ? path : path + '/');
+      if (!rule) continue;
+      const label = a.textContent.trim();
+      if (!rule.names.includes(label) || label === rule.zh) continue;
+      const node = fcMenuTextNode(a, label);
+      if (!node) continue;
+      // 保留原空白、嵌套 span、图标和链接属性。
+      node.nodeValue = node.nodeValue.replace(label, rule.zh);
+      changed = true;
+    }
     return changed;
   }
 
@@ -575,7 +1041,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
 
   const FC_BANNER_RULES = [
     { match: /banner_001|equipment_search_parts|部位ごと/i, zh: '部位分类' },
-    { match: /banner_002|equipment_series_search|装備シリーズ/i, zh: '装备系列' },
+    { match: /banner_002|equipment_series_search|装備シリーズ/i, zh: '装备套装' },
     { match: /banner_003|fashion_accessories|ファッションアクセ/i, zh: '时尚配饰' },
     { match: /banner_004|hair_catalog|ヘアカタログ/i, zh: '发型图鉴' },
     { match: /banner_005|weapon_search|武器シリーズ/i, zh: '武器系列' },
