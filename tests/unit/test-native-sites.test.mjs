@@ -1310,6 +1310,9 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
   assert.equal(trFC('ひろし似'), '人族（宣传片男主风）');
   assert.equal(trFC('キャスター'), '法系');
   assert.equal(trFC('漆黒'), '暗影之逆焰');
+  assert.equal(trFC('アライアンスレイド'), '团队任务', '24 人任务不能译为大型任务');
+  assert.equal(trFC('ノーマルレイド'), '普通大型任务', '8 人任务须使用大型任务');
+  assert.equal(trFC('ノーマルレイド・零式'), '普通与零式大型任务');
   assert.equal(trFC('🎉インスタンスダンジョン✨'),'🎉副本✨','Decorative emoji must survive translation');
   assert.equal(trFCSegments('不存在'), null);
   assert.equal(trFCSegments('ディフェンダー・ディフェンダー'), '御敌·御敌');
