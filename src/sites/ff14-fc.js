@@ -255,15 +255,20 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
 
   function fcArticleTitle(text, label) {
     // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
-    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔]))/u.exec(label);
+    // 较新文章可能省略 👗，直接使用「装備各種族での見た目・入手方法」。
+    const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔])|各種族での見た目・入手方法)/u.exec(label);
     if (!match) return null;
-    const name = fcKnownName(match[2]);
+    const scoped = FC_VERIFIED_SHORT_SET_PATHS.get(match[2]);
+    const path = globalThis.location?.pathname || '';
+    // 详情页标题与 document.title 并非 DOM 套装标题，需单独恢复已核实的短称。
+    const scopedName = scoped?.path === path ? scoped.zh : null;
+    const name = fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
     if (!name || name === match[2]) return null;
-    // 衣装文章如「幻境意象御敌装備👗」在系列词库完整命中时，
-    // 应与同一列表 H4/详情 H5 显示「幻境意象御敌套装」。
-    // 只处理 👗 且含「装備」的整系列；武器与单件物品继续使用「装备」。
+    // 仅完整系列名且确有「装備」的文章标题加“套装”；
+    // 单件物品与武器继续保留“装备”，未核实系列不猜译。
     const mappedSeries = _getSeriesMap().get(match[2]);
-    const isKnownOutfit = match[3] && match[4] === '👗' && mappedSeries === name;
+    const outfitArticle = match[4] === '👗' || !match[4];
+    const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
     const suffix = /(?:套装|装束)(?:·[阴阳])?$/u.test(name) ? ''
       : (isKnownOutfit ? '套装' : (match[3] ? '装备' : ''));
     const translated = text.replace(match[0], match[1] + name + suffix);
@@ -534,16 +539,20 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function fcShortSetQuotedAttribute(value, node) {
-    if (!value.includes('「')) return value;
     const path = globalThis.location?.pathname || '';
+    let result = value;
     for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
-      const quoted = '「' + native + '」';
-      if (!value.includes(quoted)) continue;
-      // 仅翻译整套装备的图片说明，不将同前缀的单件装备冒充为整套。
+      // 仅在详情页或对应站内链接的卡片中使用整套装备的简称。
       if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
-      return value.replaceAll(quoted, '「' + record.zh + '」');
+      result = result.replaceAll('「' + native + '」', '「' + record.zh + '」');
+      // 列表图 alt 有时是整篇文章标题而非「套装名称」的图库说明。
+      // 两种开头与无 emoji 的文章均使用完整名称，原链接不变。
+      for (const prefix of ['【FF14】', '〖FF14〗']) {
+        const lead = prefix + native + '装備';
+        if (result.startsWith(lead)) result = prefix + record.zh + result.slice(lead.length);
+      }
     }
-    return value;
+    return result;
   }
 
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
