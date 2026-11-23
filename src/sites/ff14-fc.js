@@ -325,8 +325,10 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (verifiedSet !== null) return verifiedSet;
     // Some set names appear as breadcrumbs or gallery labels, not only in heading elements.
     const named = FC_VERIFIED_SHORT_SET_PATHS.get(t0);
-    if (named?.plain && globalThis.location?.pathname === named.path)
-      return text.replace(t0, named.zh);
+    const setName = named?.plain && fcScopedSetName(t0);
+    if (setName) return text.replace(t0, setName);
+    const group = fcCrystalTowerSetGroup(text, t0);
+    if (group !== null) return group;
     const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の宝箱からランダムでドロップする。?$/u.exec(t0);
     if (raidDrop) {
       const duty = lookupDutyName(raidDrop[1]);
@@ -512,12 +514,12 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   // 按国服单件装备官方词干给系列标题加展示后缀；不是新的物品官方名称。
   // 特别注意水晶塔的风魔/洋葱与 PvP 威望装束、深红与同名家具不得混淆。
   const FC_VERIFIED_SHORT_SET_PATHS = new Map([
-    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true, strictLink: true }],
-    ['ロイヤル', { path: '/equipment/royal/', zh: '皇室套装', plain: true, strictLink: true }],
-    ['クリムゾン', { path: '/equipment/crimson/', zh: '深红套装', plain: true, strictLink: true }],
-    ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true }],
-    ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true }],
-    ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true }],
+    ['オブ・ライト', { path: '/equipment/of_light/', zh: '光之套装', plain: true, strictLink: true, crystal: true }],
+    ['ロイヤル', { path: '/equipment/royal/', zh: '皇室套装', plain: true, strictLink: true, crystal: true }],
+    ['クリムゾン', { path: '/equipment/crimson/', zh: '深红套装', plain: true, strictLink: true, crystal: true }],
+    ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true, crystal: true }],
+    ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true, crystal: true }],
+    ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true, crystal: true }],
     ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
     ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
@@ -536,8 +538,22 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   function fcScopedSetName(name, node = null) {
     const record = FC_VERIFIED_SHORT_SET_PATHS.get(name);
     if (!record) return null;
-    return globalThis.location?.pathname === record.path || (node && fcMatchingSetLink(node, record.path))
-      ? record.zh : null;
+    const path = globalThis.location?.pathname || '';
+    return path === record.path
+      || (record.crystal && path === '/summary/the_labyrinth_of_the_ancients/')
+      || (node && fcMatchingSetLink(node, record.path)) ? record.zh : null;
+  }
+
+  // 古代人迷宫总览的完整系列标题还包含可装备职业。
+  // 每个职业必须完整命中公共国服词典，否则保留原文，避免半译。
+  function fcCrystalTowerSetGroup(text, label) {
+    if ((globalThis.location?.pathname || '') !== '/summary/the_labyrinth_of_the_ancients/') return null;
+    const m = /^([【〖]FF14[】〗])?(.{2,32}?)（([^（）]{2,90})）(装備の見た目)?$/u.exec(label);
+    if (!m || !FC_VERIFIED_SHORT_SET_PATHS.get(m[2])?.crystal) return null;
+    const roles = m[3].split('・').map(role => fcUIValue(role.trim()));
+    if (roles.some(role => !role)) return null;
+    return text.replace(label, (m[1] || '') + fcScopedSetName(m[2])
+      + '（' + roles.join('、') + '）' + (m[4] ? '装备外观' : ''));
   }
 
   function fcGaroBareHeading(node, label) {

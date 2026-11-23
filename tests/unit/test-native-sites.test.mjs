@@ -1066,6 +1066,11 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       '站外相同路径不得触发 FC 套装规则');
     globalThis.location = new URL('https://ff14-fc.com/equipment/crimson/');
     assert.equal(trFC('クリムゾン'), '深红套装', '详情页正文使用已核实的系列名称');
+    globalThis.location = new URL('https://ff14-fc.com/summary/the_labyrinth_of_the_ancients/');
+    assert.equal(trFC('クリムゾン（黒魔道士・召喚士・赤魔道士・ピクトマンサー・青魔道士）'),
+      '深红套装（黑魔法师、召唤师、赤魔法师、绘灵法师、青魔法师）');
+    assert.equal(trFC('〖FF14〗オニオン（竜騎士・リーパー）装備の見た目'),
+      '〖FF14〗洋葱套装（龙骑士、钐镰客）装备外观');
     globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
     assert.equal(trFC('オブ・ライト'), 'オブ・ライト',
       '不能在其他装备页面将系列简称当成通用物品名');
