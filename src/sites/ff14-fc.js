@@ -478,14 +478,26 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
   ]);
 
+  // 唯一可信的短名称上下文：同站点同详情路径的链接。
+  function fcMatchingSetLink(element, targetPath) {
+    const link = element?.closest?.('a[href]');
+    if (!link) return false;
+    try {
+      const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
+      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) && url.pathname === targetPath;
+    } catch { return false; }
+  }
+
   function fcGaroBareHeading(node, label) {
     const parent = node.parentElement;
     if (!parent) return null;
     const path = globalThis.location?.pathname || '';
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
-    const isArticle = !!parent.closest('h1');
     const core = fullBody ? label.slice(0, -fullBody.length) : label;
-    // 大标题兼容【FF14】和〖FF14〗，只在对应详情页修复完整套装简称。
+    // 列表卡片的 H3 与详情页的 H1 使用同一文章标题格式。
+    const isArticle = !!parent.closest('h1')
+      || (!!parent.closest('h3') && /^[【〖]FF14[】〗]/u.test(core));
+    // 大标题兼容【FF14】和〖FF14〗，仅对已确认的整套装备简称处理。
     const short = isArticle
       ? [...FC_GARO_BARE_SET_PATHS.keys(), ...FC_VERIFIED_SHORT_SET_PATHS.keys()]
         .find(k => ['【FF14】', '〖FF14〗'].some(prefix =>
@@ -496,16 +508,12 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const detailPath = FC_GARO_BARE_SET_PATHS.get(short) || verified?.path;
     if (!detailPath) return null;
     const mainTitle = path === detailPath
-      && (parent.closest('h5') || (fullBody && parent.closest('h3')) || isArticle);
-    const seriesTitle = /^\/equipment_series_search\/?$/u.test(path) && parent.closest('h4');
-    const link = parent.closest('a[href]');
-    let matchingLink = false;
-    if (link) {
-      try {
-        const href = new URL(link.getAttribute('href'), 'https://ff14-fc.com/');
-        matchingLink = href.hostname === 'ff14-fc.com' && href.pathname === detailPath;
-      } catch { /* 无效链接不可用于推断装备系列 */ }
-    }
+      && (parent.closest('h5') || (fullBody && parent.closest('h3')) || parent.closest('h1'));
+    const isSeriesPage = /^\/equipment_series_search\/?$/u.test(path);
+    // H3 文章标题若附有链接则严格核验目标地址；没有链接才使用系列页上下文。
+    const seriesTitle = isSeriesPage && (parent.closest('h4')
+      || (isArticle && parent.closest('h3') && !parent.closest('a[href]')));
+    const matchingLink = fcMatchingSetLink(parent, detailPath);
     if (!mainTitle && !seriesTitle && !matchingLink) return null;
     // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
     // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
@@ -517,6 +525,19 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       return trFC(replaced.replace(official + '装備', official));
     }
     return official + fullBody;
+  }
+
+  function fcShortSetQuotedAttribute(value, node) {
+    if (!value.includes('「')) return value;
+    const path = globalThis.location?.pathname || '';
+    for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
+      const quoted = '「' + native + '」';
+      if (!value.includes(quoted)) continue;
+      // 仅翻译整套装备的图片说明，不将同前缀的单件装备冒充为整套。
+      if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
+      return value.replaceAll(quoted, '「' + record.zh + '」');
+    }
+    return value;
   }
 
   // 只在站点明确的「整套装备」标题区域附加展示后缀。
@@ -596,7 +617,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (!value || value.length > 160) return;
     const match = key === 'title' && value.match(/^View all posts in (.+)$/);
     const group = match && DICT_FC[match[1]];
-    const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(value);
+    const scoped = fcShortSetQuotedAttribute(value, n);
+    const translated = group ? '查看“' + group + '”分类下的全部文章' : trFC(scoped);
     if (translated !== value) n.setAttribute(key, translated);
   }
   function _procFCImg(n) {
@@ -823,7 +845,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
 
   const FC_BANNER_RULES = [
     { match: /banner_001|equipment_search_parts|部位ごと/i, zh: '部位分类' },
-    { match: /banner_002|equipment_series_search|装備シリーズ/i, zh: '装备系列' },
+    { match: /banner_002|equipment_series_search|装備シリーズ/i, zh: '装备套装' },
     { match: /banner_003|fashion_accessories|ファッションアクセ/i, zh: '时尚配饰' },
     { match: /banner_004|hair_catalog|ヘアカタログ/i, zh: '发型图鉴' },
     { match: /banner_005|weapon_search|武器シリーズ/i, zh: '武器系列' },
