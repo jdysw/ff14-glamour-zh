@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, collapseFCHomeHeadings, fixFCMenu,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, collapseFCHomeHeadings, fixFCMenu,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -1001,6 +1001,72 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
     else globalThis.location = beforeLocation;
     if (beforeDoc === undefined) delete globalThis.document;
     else globalThis.document = beforeDoc;
+    dom.close();
+  }
+});
+
+test('FF14-FC GARO 缩写套装：用已核实官译还原阴阳装束，不重复后缀', () => {
+  const beforeLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/makai_priests/'});
+  const doc = dom.document;
+  const sets = [
+    ['魔戒法師・陽', '魔戒法師の装束・陽', '魔戒法师装束·阳'],
+    ['魔戒導師・陰', '魔戒導師の装束・陰', '魔戒导师装束·阴'],
+    ['魔戒闘師・刃・陽', '魔戒闘師・刃の装束・陽', '魔戒斗师·刃装束·阳'],
+  ];
+  doc.body.innerHTML = [
+    '<h5 id="set-name">魔戒法師・陽</h5>',
+    '<h3 id="full-body">魔戒法師・陽（全身）</h3>',
+    '<a href="/equipment/makai_priests/" id="related"><span>魔戒法師・陽</span></a>',
+    '<p id="plain">魔戒法師・陽</p>',
+  ].join('');
+  try {
+    globalThis.location = dom.location;
+    assert.equal(_applyV3({
+      candidatePolicy: 1,
+      series: sets.map(([, full, official]) => full + '|' + official).join('\n'),
+    }), true);
+    cacheReset('derived');
+
+    for (const [short, full, official] of sets) {
+      assert.equal(_getSeriesMap().get(full), official, '完整套装名称必须经数据源核实');
+      assert.equal(fcGaroSetName(short), official, short + ' 不应停留在日文简写');
+      assert.equal(trFC(short), official);
+      assert.equal(trFC(short + '（全身）'), official + '（全身）');
+    }
+    assert.equal(fcGaroSetName('魔戒法師・陰'), null,
+      '缺乏对应正式套装名时不得猜译阴阳变体');
+    assert.equal(fcGaroSetName('魔戒異教・陽'), null, '未核实系列不得猜译');
+    assert.equal(fcGaroSetName('魔戒法師の胴・陽'), null,
+      '不能把单件装备识别成套装');
+
+    for (const id of ['set-name', 'full-body', 'plain']) trimFCNode(doc.getElementById(id).firstChild);
+    trimFCNode(doc.querySelector('#related span').firstChild);
+    assert.equal(doc.querySelector('#set-name').textContent, '魔戒法师装束·阳');
+    assert.equal(doc.querySelector('#full-body').textContent, '魔戒法师装束·阳（全身）');
+    assert.equal(doc.querySelector('#related').textContent, '魔戒法师装束·阳');
+    assert.equal(doc.querySelector('#plain').textContent, '魔戒法师装束·阳');
+
+    for (const id of ['set-name', 'full-body']) trimFCNode(doc.getElementById(id).firstChild);
+    assert.equal(doc.querySelector('#set-name').textContent, '魔戒法师装束·阳',
+      '重复扫描不可附加额外套装后缀');
+
+    assert.equal(_applyV3({
+      candidatePolicy: 1,
+      series: sets.map(([, full, official]) => full + '|' + official).join('\n')
+        + '\n魔戒法師・陽|魔戒法师装束·阳',
+    }), true);
+    cacheReset('derived');
+    const detail = doc.createElement('h3');
+    detail.textContent = '魔戒法師・陽（全身）';
+    assert.equal(fcSetDisplayText(detail.firstChild, '魔戒法師・陽（全身）',
+      '魔戒法师装束·阳（全身）'), '魔戒法师装束·阳（全身）',
+    '数据源直接收录简称时也不能叠加“套装”');
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
     dom.close();
   }
 });
