@@ -294,7 +294,7 @@ import {
 } from '../../src/sites/endcloset.js';
 import {
   _trACLSet, _trACLExact, trACL, _trACLLabel, _trACLGearsetAlt, _aclAcceptNode,
-  aclStandaloneSetName, trimACLNode, translateACLTitle,
+  aclStandaloneSetName, trimACLNode,
 } from '../../src/sites/ffxiv-collection.js';
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
