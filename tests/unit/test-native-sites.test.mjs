@@ -875,6 +875,47 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
   }
 });
 
+test('FF14-FC 首页新发型和新武器标题：中英日混排完整汉化且保持原 DOM', async () => {
+  const before = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/'});
+  const doc = dom.document;
+  doc.body.innerHTML = [
+    '<section id="hairstyles"><span class="en">New Modern Aesthetics</span>'
+      + '<h2>ヘアカタログ</h2><a href="/hair_catalog/">すべて見る</a></section>',
+    '<section id="weapons"><span class="en">New Weapon</span>'
+      + '<h2>新着武器</h2><a href="/weapon_search/">すべて見る</a></section>',
+    '<section id="equipment"><span class="en">New Equipment</span><h2>新着装備</h2></section>',
+  ].join('');
+  try {
+    globalThis.location = dom.location;
+    const textNodes = [
+      ...doc.querySelectorAll('section .en, section h2, section a'),
+    ].map(el => el.firstChild);
+    for (const node of textNodes) trimFCNode(node);
+    assert.deepEqual([...doc.querySelectorAll('#hairstyles .en, #hairstyles h2')]
+      .map(el => el.textContent), ['最新发型', '发型图鉴']);
+    assert.deepEqual([...doc.querySelectorAll('#weapons .en, #weapons h2')]
+      .map(el => el.textContent), ['最新武器', '新武器']);
+    assert.deepEqual([...doc.querySelectorAll('#equipment .en, #equipment h2')]
+      .map(el => el.textContent), ['新装备', '新装备'],
+      '已有栏目翻译保持不变');
+    assert.equal(doc.querySelector('#hairstyles a').getAttribute('href'), '/hair_catalog/');
+    assert.equal(doc.querySelector('#weapons a').getAttribute('href'), '/weapon_search/');
+    for (const node of textNodes) trimFCNode(node);
+    assert.equal(doc.querySelector('#weapons h2').textContent, '新武器',
+      '重复扫描不应造成重复翻译');
+    assert.equal(trFC('New Modern Aesthetics'), '最新发型');
+    assert.equal(trFC('New Weapon'), '最新武器');
+    assert.equal(trFC('新着武器'), '新武器');
+    assert.equal(trFC('New Fashion Accessories'), '新时尚配饰',
+      '原有新时尚配饰栏目不受影响');
+  } finally {
+    if (before === undefined) delete globalThis.location;
+    else globalThis.location = before;
+    await dom.happyDOM.close();
+  }
+});
+
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
