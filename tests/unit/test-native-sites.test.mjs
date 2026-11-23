@@ -298,9 +298,10 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
+import { cacheReset } from '../../src/core/cache-primitives.js';
 
 import { DICT_ACL } from '../../src/core/data/dictionary.js';
 import {
@@ -818,6 +819,47 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
     await dom.happyDOM.close();
+  }
+});
+
+test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
+  const before = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
+  const source = dom.document;
+  source.body.innerHTML = [
+    '<h4 id="series">アバランチブロウラー</h4>',
+    '<h4 id="already">グリムグリズリー・スーツ</h4>',
+    '<p id="plain">アバランチブロウラー</p>',
+    '<h4 id="item">試験の腕輪</h4>',
+    '<a href="/equipment/example/"><span id="home">ビーストハーダー</span></a>',
+    '<a href="/equipment/example/"><span id="individual">試験の腕輪</span></a>',
+  ].join('');
+  try {
+    globalThis.location = dom.location;
+    _applyV3({
+      candidatePolicy: 1,
+      names: '試験の腕輪\\t试验手镯\\t1\\t0',
+      series: 'アバランチブロウラー|雪崩斗手\\nグリムグリズリー・スーツ|狰狞熊套装\\nビーストハーダー|兽牧',
+    });
+    cacheReset('derived');
+    const label = id => source.querySelector('#' + id).firstChild;
+    assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手套装');
+    assert.equal(fcSetDisplayText(label('already'), 'グリムグリズリー・スーツ', '狰狞熊套装'), '狰狞熊套装');
+    assert.equal(fcSetDisplayText(label('plain'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
+    assert.equal(fcSetDisplayText(label('item'), '試験の腕輪', '试验手镯'), '试验手镯');
+    assert.equal(fcSetDisplayText(label('individual'), '試験の腕輪', '试验手镯'), '试验手镯');
+    assert.equal(fcSetDisplayText(label('home'), 'ビーストハーダー', '兽牧'), '兽牧套装');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/example/');
+    assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
+    const detail = source.createElement('h3');
+    detail.textContent = 'アバランチブロウラー（全身）';
+    assert.equal(fcSetDisplayText(detail.firstChild, 'アバランチブロウラー（全身）', '雪崩斗手（全身）'), '雪崩斗手套装（全身）');
+  } finally {
+    _applyV3({candidatePolicy:1});
+    cacheReset('derived');
+    if (before === undefined) delete globalThis.location;
+    else globalThis.location = before;
+    dom.close();
   }
 });
 
