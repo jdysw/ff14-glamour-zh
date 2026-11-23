@@ -548,11 +548,11 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
 
   // 导航应描述目标子页，而非将站点原文逐字直译。
   // 仅对「匹配链接 + 匹配原标签」的短导航项生效，不改词库中的通用术语。
-  // 特别地：/summary_equipment_id/ 只收录迷宫挑战装备，并非所有副本装备。
+  // 采用统一的导航短标签；与对应页面的正式文章标题相互独立。
   const FC_MENU_LABELS = new Map([
-    ['/equipment_series_search/', { names: ['シリーズ', '系列'], zh: '防具系列' }],
-    ['/summary_equipment_id/', { names: ['ID', 'id', '副本装备'], zh: '迷宫装备' }],
-    ['/summary_equipment/', { names: ['カテゴリ別', '按分类'], zh: '装备汇总' }],
+    ['/equipment_series_search/', { names: ['シリーズ', '系列'], zh: '装备套装' }],
+    ['/summary_equipment_id/', { names: ['ID', 'id'], zh: '副本装备' }],
+    ['/summary_equipment/', { names: ['カテゴリ別', '按分类'], zh: '按来源汇总' }],
     ['/capture_top/', { names: ['お役立ち', '实用'], zh: '攻略' }],
     ['/item_intro_top/', { names: ['アイテム', '物品'], zh: '物品介绍' }],
   ]);
@@ -584,7 +584,7 @@ export { collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEA
       const rule = FC_MENU_LABELS.get(path.endsWith('/') ? path : path + '/');
       if (!rule) continue;
       const label = a.textContent.trim();
-      if (!rule.names.includes(label)) continue;
+      if (!rule.names.includes(label) || label === rule.zh) continue;
       const node = fcMenuTextNode(a, label);
       if (!node) continue;
       // 保留原空白、嵌套 span、图标和链接属性。
