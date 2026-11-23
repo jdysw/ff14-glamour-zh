@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, collapseFCHomeHeadings,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, collapseFCHomeHeadings, fixFCMenu,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -872,6 +872,67 @@ test('灰机 Wiki 鸟甲：按 EC 目录编号和部位生成反查', async () =
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
     await dom.happyDOM.close();
+  }
+});
+
+test('FF14-FC 顶部导航：按子页语义命名，保留国服术语与原生链接', () => {
+  const previousDocument = globalThis.document;
+  const previousLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/'});
+  const doc = dom.document;
+  const labels = [
+    ['/equipment_search_parts/equipment_search_foot/', '部位別', '按部位'],
+    ['/equipment_series_search/', 'シリーズ', '防具系列'],
+    ['/summary_equipment_fashionable/', 'おしゃれ', '时装'],
+    ['/fashion_accessories_search/', 'ファッションアクセ', '时尚配饰'],
+    ['/modern_aesthetics_search/', 'ヘアカタログ', '发型图鉴'],
+    ['/weapon_search/', 'ウェポン', '武器'],
+    ['/summary_equipment_id/', 'ID', '迷宫装备'],
+    ['/summary_equipment/', 'カテゴリ別', '装备汇总'],
+    ['/capture_top/', 'お役立ち', '攻略'],
+    ['/item_intro_top/', 'アイテム', '物品介绍'],
+    ['/about/', 'About', '关于'],
+  ];
+  doc.body.innerHTML = '<nav id="fc-top">'
+    + labels.map(([url, japanese], i) => '<a id="nav-' + i + '" href="' + url
+      + '"><span> ' + japanese + ' </span><i aria-hidden="true"></i></a>').join('')
+    + '</nav><main><a id="other" href="/summary_equipment/">按部位</a>'
+    + '<a id="not-dungeon" href="/summary_equipment_fashionable/">副本装备</a>'
+    + '<a id="nested" href="/summary_equipment_id/"><span>副本装备</span><em></em></a>'
+    + '<a id="external" href="https://example.org/summary_equipment_id/">副本装备</a></main>';
+  try {
+    globalThis.document = doc;
+    globalThis.location = dom.location;
+    for (const anchor of doc.querySelectorAll('#fc-top a')) trimFCNode(anchor.querySelector('span').firstChild);
+    assert.equal(fixFCMenu(doc.querySelector('#fc-top')), true);
+    for (const [url, , expected] of labels) {
+      const anchor = doc.querySelector('#fc-top a[href="' + url + '"]');
+      assert.equal(anchor.textContent.trim(), expected, '导航链接 ' + url + ' 必须准确描述其子页');
+      assert.equal(anchor.getAttribute('href'), url, '原生 href 不得变化');
+      assert.ok(anchor.querySelector('span') && anchor.querySelector('i'),
+        '翻译不得破坏现有图标及文本容器');
+    }
+    assert.equal(fixFCMenu(doc.querySelector('#fc-top')), false,
+      '重复扫描不得二次替换');
+    assert.equal(doc.querySelector('#other').textContent, '按部位',
+      '同样的中文标签指向其他页面时不得错误改写');
+    assert.equal(doc.querySelector('#not-dungeon').textContent, '副本装备',
+      '无关链接不应套用迷宫装备命名');
+    assert.equal(doc.querySelector('#external').textContent, '副本装备',
+      '站外同路径链接不得修改');
+    assert.equal(fixFCMenu(doc.querySelector('#nested span').firstChild), true,
+      '局部文本更新时可回溯包含链接');
+    assert.equal(doc.querySelector('#nested span').textContent, '迷宫装备');
+    assert.ok(doc.querySelector('#nested em'), '嵌套装饰元素保留');
+    assert.equal(trFC('カテゴリ別'), '按分类', '通用站点词库不能因导航标题而被重写');
+    assert.equal(trFC('アイテム'), '物品');
+    assert.equal(trFC('お役立ち'), '实用');
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousLocation === undefined) delete globalThis.location;
+    else globalThis.location = previousLocation;
+    dom.close();
   }
 });
 
