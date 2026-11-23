@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -77,10 +77,40 @@ export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDispla
     return /(?:装束|套装)·[阴阳]$/u.test(official || '') ? official : null;
   }
 
+  // 7.5 原站套装标题使用简写，而国服完整套装名已有正式物品记录。
+  // 仅做整名对照，不加入通用子串词典，防止「套装」污染单件装备名称。
+  const FC_VERIFIED_SET_ALIASES = new Map([
+    ['プレマジテック・ディフェンダー', '前魔导御敌套装'],
+    ['プレマジテック・スレイヤー', '前魔导制敌套装'],
+    ['プレマジテック・ストライカー', '前魔导强袭套装'],
+    ['プレマジテック・スカウト', '前魔导游击套装'],
+    ['プレマジテック・レンジャー', '前魔导精准套装'],
+    ['プレマジテック・キャスター', '前魔导咏咒套装'],
+    ['プレマジテック・ヒーラー', '前魔导治愈套装'],
+    ['ネオシチズン・コスチュームセット', '新生国民套装'],
+  ]);
+  function fcVerifiedSetName(name) {
+    return FC_VERIFIED_SET_ALIASES.get(name) || null;
+  }
+
+  function fcVerifiedSetText(text, label) {
+    const full = /^(.*?)(（全身）)$/u.exec(label);
+    const direct = fcVerifiedSetName(full ? full[1] : label);
+    if (direct) return text.replace(label, direct + (full ? full[2] : ''));
+    // 装备图库说明中，带日文引号的是整套装备名；不匹配单件的前缀。
+    let result = text;
+    result = result.replace(/「([^「」]{2,80})」/gu, (matched, name) => {
+      const localized = fcVerifiedSetName(name);
+      return localized ? '「' + localized + '」' : matched;
+    });
+    return result !== text ? result : null;
+  }
+
   function fcKnownName(name) {
     // Accept an actual key, never an arbitrary longer series sharing its prefix.
     return fcUIValue(name) || fcItemName(name) || lookupDutyName(name) || _getSeriesMap().get(name)
-      || fcGaroSetName(name) || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
+      || fcVerifiedSetName(name) || fcGaroSetName(name)
+      || _getSeriesPfx().get(name) || _getItemPfx().get(name) || null;
   }
 
   function fcJobEquipment(text, label) {
@@ -276,6 +306,8 @@ export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDispla
     // 全角括号会在 fcUIKey 的 NFKC 规范化中变成半角；组合标题应使用原文匹配并保留标点。
     const starter = fcStarterOutfitTitle(text, t0);
     if (starter !== null) return starter;
+    const verifiedSet = fcVerifiedSetText(text, t0);
+    if (verifiedSet !== null) return verifiedSet;
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
     if (level) return text.replace(t0, level[1] + '级');
     const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
@@ -491,7 +523,8 @@ export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDispla
     const fullBody = FC_FULL_SET_LABEL.exec(source)?.[0] || '';
     const base = fullBody ? source.slice(0, -fullBody.length) : source;
     // 不把「整套装备详情中的单件物品链接」误判为套装卡片。
-    const officialName = _getSeriesMap().get(base) || _getSeriesPfx().get(base) || _getItemPfx().get(base);
+    const officialName = _getSeriesMap().get(base) || fcVerifiedSetName(base)
+      || _getSeriesPfx().get(base) || _getItemPfx().get(base);
     if (!officialName || officialName === base) return translated;
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
