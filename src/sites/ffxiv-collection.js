@@ -1,13 +1,14 @@
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
+import { _getItemPfx, _getSeriesMap, _getSeriesPfx } from '../core/cache.js';
 import { DATA_TEXT } from '../core/data/data-manager.js';
 import { DICT_ACL, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
+export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 
   /* ===================================================================== */
@@ -48,7 +49,22 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     return text.slice(0, i) + zh + text.slice(i + t0.length);
   }
 
-  // ③ 日文装备名（JP2ZH 对照表单条查找）
+  // ③ 无职能「系列・アタイア／アーマー」也是独立套装标题。
+  // 只供明确的套装标题、相关文章链接和 gearset 图片说明调用，
+  // 不参与单件物品通用翻译，避免覆盖国服正式装备名。
+  function aclStandaloneSetName(native) {
+    if (ACL_SET_RE.test(native)) return null; // 角色系列交给现有职能规则。
+    const match = /^(.+?)・(?:アタイア|アーマー)$/u.exec(native);
+    if (!match) return null;
+    const official = lookupJp2Zh(native);
+    if (official && /(?:套装|装束)$/u.test(official)) return official;
+    const series = _getSeriesMap().get(match[1]) || _getSeriesPfx().get(match[1])
+      || _getItemPfx().get(match[1]);
+    if (!series || /[\u3040-\u30ff]/u.test(series) || !/[\u3400-\u9fff]/u.test(series)) return null;
+    return /(?:套装|装束)$/u.test(series) ? series : series + '套装';
+  }
+
+  // ④ 日文装备名（JP2ZH 对照表单条查找）
   // v1.2.1：判定前剥【…】标记（与 trFC 同修；「纯汉字+全角标记」名此前不查表）
   function _trACLItem(text, t0) {
     const core = (t0.replace(ACL_DECOR_HEAD, '').replace(ACL_DECOR_TAIL, '')).trim() || t0;
@@ -180,8 +196,13 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     if (!raw?.trim()) return;
     const pe = node.parentElement;
     if (pe?.closest?.(ACL_SKIP_SEL)) return;
-    const next = raw.trim() === 'of' && pe?.closest?.('#navigation')
-      ? raw.replace('of', '/') : trACL(raw);
+    const label = raw.trim();
+    const setTitle = pe?.closest?.('h1,h2,h3,.related-equipment a')
+      && !pe?.closest?.('.item-name,.item-panel')
+      ? aclStandaloneSetName(label) : null;
+    const next = setTitle ? raw.replace(label, setTitle)
+      : label === 'of' && pe?.closest?.('#navigation')
+        ? raw.replace('of', '/') : trACL(raw);
     if (next !== raw) {
       node.nodeValue = next;
       markACLItem(node, next);
@@ -200,7 +221,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
   function _trACLGearsetAlt(value) {
     const match = value.match(/^(.+?)'s gearset image(?: (female|male) model)?\.$/i);
     if (!match) return null;
-    const setName = trACL(match[1]);
+    const setName = aclStandaloneSetName(match[1]) || trACL(match[1]);
     if (setName === match[1] || /[ぁ-んァ-ヶー]/.test(setName)) return null;
     let model = '';
     if (match[2]) {
@@ -255,7 +276,7 @@ export { ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNod
     const t = document.title;
     if (!t || !/[\u3040-\u30ff]/.test(t)) return;
     const parts = t.split(/[|｜]/);
-    const nt = parts.map((x) => trACL(x.trim())).join(' ｜ ');
+    const nt = parts.map((x) => aclStandaloneSetName(x.trim()) || trACL(x.trim())).join(' ｜ ');
     if (nt && nt !== t && nt.length <= 160) document.title = nt;
   }
 

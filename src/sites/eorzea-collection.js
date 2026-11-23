@@ -639,7 +639,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     node.nodeValue = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
     // Split H1 labels must contribute the suffix exactly once, including when
     // the title also contains an acquisition source (e.g. Dungeon Drop).
-    const redundant = hasInlineSuffix || zh.endsWith('装束') || zh.includes(suffix + ' ');
+    // 官方套装名的性别变体可在「套装」后带【男】／【女】；
+    // H1 的独立 Set 标记不能再次附加后缀。
+    const hasVariantSuffix = suffix === '套装'
+      && /(?:套装|装束)(?:【[^】]{1,16}】|（[^）]{1,16}）)(?:\s|$)/u.test(zh);
+    const redundant = hasInlineSuffix || zh.endsWith('装束') || zh.includes(suffix + ' ')
+      || hasVariantSuffix;
     if (redundant) for (const trailing of suffixNodes) trailing.nodeValue = '';
   }
 
