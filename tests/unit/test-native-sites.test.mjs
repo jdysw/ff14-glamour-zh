@@ -302,6 +302,7 @@ import {
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
+import { _getSeriesMap } from '../../src/core/cache.js';
 
 import { DICT_ACL } from '../../src/core/data/dictionary.js';
 import {
@@ -836,13 +837,15 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
   ].join('');
   try {
     globalThis.location = dom.location;
-    _applyV3({
+    assert.equal(_applyV3({
       candidatePolicy: 1,
       names: '試験の腕輪\\t试验手镯\\t1\\t0',
       series: 'アバランチブロウラー|雪崩斗手\\nグリムグリズリー・スーツ|狰狞熊套装\\nビーストハーダー|兽牧',
-    });
+    }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
     const label = id => source.querySelector('#' + id).firstChild;
+    assert.equal(dom.location.pathname, '/equipment_series_search/');
+    assert.equal(_getSeriesMap().get('アバランチブロウラー'), '雪崩斗手');
     assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手套装');
     assert.equal(fcSetDisplayText(label('already'), 'グリムグリズリー・スーツ', '狰狞熊套装'), '狰狞熊套装');
     assert.equal(fcSetDisplayText(label('plain'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
