@@ -353,7 +353,7 @@ export { fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROL
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);
-    const next = fcSetDisplayText(n, raw, resolved);
+    const next = fcSetDisplayText(node, raw, resolved);
     if (next !== raw) node.nodeValue = next;
   }
 
