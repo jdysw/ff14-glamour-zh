@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -239,8 +239,42 @@ export { fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULE
     return text.replace(label, name + suffix);
   }
 
+  // 站点「种族初始服装」是组合标题，不是物品表中的一件装备。
+  // 以游戏内正式种族名称翻译整个短标题，避免「猫魅族♀初期服」半中文化。
+  const FC_STARTER_RACES = new Set([
+    'ヒューラン', 'エレゼン', 'ララフェル', 'ミコッテ',
+    'ルガディン', 'アウラ', 'ヴィエラ', 'ロスガル',
+  ]);
+  function fcStarterOutfitName(native) {
+    const match = /^(.*?)(([♂♀]))初期服$/u.exec(native);
+    if (!match || !FC_STARTER_RACES.has(match[1])) return null;
+    const race = fcUIValue(match[1]);
+    if (!race) return null;
+    return race + (match[2] === '♀' ? '女性' : '男性') + '初始服装';
+  }
+
+  function fcStarterOutfitTitle(text, label) {
+    const whole = /^(.*?)(（全身）)$/u.exec(label);
+    const name = fcStarterOutfitName(whole ? whole[1] : label);
+    if (name) return text.replace(label, name + (whole ? whole[2] : ''));
+    const article = /^【FF14】(.+?)(男性♂|女性♀)初期服装備/u.exec(label);
+    if (article) {
+      const sex = article[2] === '男性♂' ? '♂' : '♀';
+      const translated = fcStarterOutfitName(article[1] + sex + '初期服');
+      if (translated) return text.replace(article[0], '【FF14】' + translated);
+    }
+    const alt = /「([^「」]{2,32}?[♂♀]初期服)」/u.exec(label);
+    if (alt) {
+      const localized = fcStarterOutfitName(alt[1]);
+      if (localized) return text.replace(alt[0], '「' + localized + '」');
+    }
+    return null;
+  }
+
   function trFCDynamic(text, t0) {
     const label = fcUIKey(t0);
+    const starter = fcStarterOutfitTitle(text, label);
+    if (starter !== null) return starter;
     const level = /^レベル\s*(\d{1,3})$/.exec(label);
     if (level) return text.replace(t0, level[1] + '级');
     const af = /^(戦闘|クラフター・ギャザラー)ジョブ専用装備\(AF(\d{1,2})\)$/.exec(label);
