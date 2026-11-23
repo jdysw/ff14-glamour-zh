@@ -294,6 +294,7 @@ import {
 } from '../../src/sites/endcloset.js';
 import {
   _trACLSet, _trACLExact, trACL, _trACLLabel, _trACLGearsetAlt, _aclAcceptNode,
+  aclStandaloneSetName, trimACLNode, translateACLTitle,
 } from '../../src/sites/ffxiv-collection.js';
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
@@ -622,6 +623,57 @@ test('End Closet 实体翻译：英文统计、属性和装备标记', () => {
   } finally {
     if (old === undefined) delete globalThis.NodeFilter;
     else globalThis.NodeFilter = old;
+  }
+});
+
+test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词库保持原样', () => {
+  const previousDoc = globalThis.document;
+  try {
+    assert.equal(_applyV3({
+      candidatePolicy: 1,
+      names: '見本・アタイア\\t正式示例装束\\t1\\t0',
+      series: 'フリースピリッツ|自由之魂\\nヘヴンスナイト|苍穹骑士\\n見本|示例',
+    }), true);
+    cacheReset('derived');
+    cacheReset('lookup');
+    assert.equal(aclStandaloneSetName('フリースピリッツ・アタイア'), '自由之魂套装');
+    assert.equal(aclStandaloneSetName('ヘヴンスナイト・アーマー'), '苍穹骑士套装');
+    assert.equal(aclStandaloneSetName('見本・アタイア'), '正式示例装束',
+      '官方套装道具名优先于系列的通用后缀');
+    assert.equal(aclStandaloneSetName('未知系列・アタイア'), null,
+      '未核对译名的系列不能猜造中文');
+    assert.equal(aclStandaloneSetName('フリースピリッツ・ハット'), null,
+      '不将单件帽子识别为套装');
+    assert.equal(trACL('フリースピリッツ・アタイア'), 'フリースピリッツ・アタイア',
+      '普通装备名翻译链不能因为展示规则而改写');
+
+    const heading = {
+      nodeValue: 'フリースピリッツ・アタイア',
+      parentElement: { closest: selector => selector.includes('h1,h2,h3') ? {} : null },
+    };
+    trimACLNode(heading);
+    assert.equal(heading.nodeValue, '自由之魂套装');
+    trimACLNode(heading);
+    assert.equal(heading.nodeValue, '自由之魂套装', '二次扫描不可追加第二次套装');
+
+    const piece = {
+      nodeValue: 'フリースピリッツ・アタイア',
+      parentElement: { closest: selector => selector.includes('h1,h2,h3') ? null : {} },
+    };
+    trimACLNode(piece);
+    assert.equal(piece.nodeValue, 'フリースピリッツ・アタイア',
+      '单件装备描述区域不得被套装标题规则污染');
+    assert.equal(_trACLGearsetAlt("フリースピリッツ・アタイア's gearset image."),
+      '自由之魂套装的装备展示图');
+    globalThis.document = { title: 'フリースピリッツ・アタイア ｜ FFXIV ARMOURY COLLECTION' };
+    translateACLTitle();
+    assert.equal(globalThis.document.title, '自由之魂套装 ｜ FFXIV ARMOURY COLLECTION');
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+    cacheReset('lookup');
+    if (previousDoc === undefined) delete globalThis.document;
+    else globalThis.document = previousDoc;
   }
 });
 
