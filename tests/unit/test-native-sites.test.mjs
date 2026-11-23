@@ -1023,6 +1023,8 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('▷ ' + duty + ' の詳細情報'), '▷ 水晶塔 古代人迷宫的详细信息');
     assert.ok(trFC('「オブ・ライト」装備が「' + duty
       + '」のどの宝箱からドロップするか、ひと目でわかるツールです').includes('光之套装'));
+    assert.equal(trFC('レイド'), '团队任务');
+    assert.equal(trFC('大型任务'), '团队任务');
     assert.equal(trFC('ドロップで入手'), '掉落获得');
     assert.equal(trFC('地図を表示'), '显示地图');
     assert.equal(trFC('異国風の男'), '异国装扮的男人');

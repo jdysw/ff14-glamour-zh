@@ -4923,6 +4923,8 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'クロニクルクエスト：「古代の民の迷宮」': '编年史任务：「古代人迷宫」',
     'クロニクルクエスト：「古代アラグ文明の遺産」': '编年史任务：「古代亚拉戈文明的遗产」',
     '異国風の男': '异国装扮的男人',
+    'page:/equipment/of_light/:レイド': '团队任务',
+    'page:/equipment/of_light/:大型任务': '团队任务',
   };
 
   // ronka（lookbook.ronkacloset.com）界面 + 染剂词典（由 data/dictionaries/dict-ronka.json 注入）
