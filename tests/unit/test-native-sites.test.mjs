@@ -1005,7 +1005,7 @@ test('FF14-FC 首页双语栏目标题只显示一处中文，不改变正文和
   }
 });
 
-test('FF14-FC 7.5/7.55 套装：按官译识别九种系列简称，不污染单件名称', () => {
+test('FF14-FC 7.5/7.55 套装：按官译识别十种系列简称，不污染单件名称', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const doc = dom.document;
@@ -1019,6 +1019,7 @@ test('FF14-FC 7.5/7.55 套装：按官译识别九种系列简称，不污染单
     ['プレマジテック・ヒーラー', '前魔导治愈套装'],
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
     ['カーウェン', '卡文套装'],
+    ['ゼロルミナリー・コスチュームセット', '零点套装'],
   ];
   try {
     globalThis.location = dom.location;
@@ -1027,6 +1028,11 @@ test('FF14-FC 7.5/7.55 套装：按官译识别九种系列简称，不污染单
       assert.equal(trFC(japanese), chinese, '套装标题必须命中完整官方中文');
       assert.equal(trFC(japanese + '（全身）'), chinese + '（全身）',
         '全身预览仍保留原有全角括号');
+      for (const prefix of ['【FF14】', '〖FF14〗']) {
+        const article = trFC(prefix + japanese + '装備👗各種族での見た目・入手方法');
+        assert.ok(article.startsWith(prefix + chinese + '👗'),
+          prefix + japanese + ' 的文章标题应完整使用套装名，且不叠加“装备”');
+      }
       const gallery = 'ミラプリ「' + japanese + '」装備の見た目紹介1';
       assert.ok(trFC(gallery).includes('「' + chinese + '」'),
         '图片说明中的套装简写必须保留成套装名');
@@ -1057,6 +1063,56 @@ test('FF14-FC 7.5/7.55 套装：按官译识别九种系列简称，不污染单
   }
 });
 
+test('FF14-FC 7.5/7.56 套装短称：仅在匹配详情页、系列卡片和链接使用官译', () => {
+  const beforeLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
+  const doc = dom.document;
+  const sets = [
+    ['夜桜', '夜樱套装', '/equipment/yozakuras/'],
+    ['ビーストマスター', '兽主套装', '/equipment/beastmasters/'],
+    ['コスモエクスプローラー', '宇宙探索者套装', '/equipment/cosmic_explorers/'],
+  ];
+  try {
+    for (const [native, official, path] of sets) {
+      globalThis.location = new URL('https://ff14-fc.com' + path);
+      doc.body.innerHTML = '<h5 id="set">' + native + '</h5>'
+        + '<h3 id="whole">' + native + '（全身）</h3>'
+        + '<h1 id="article">〖FF14〗' + native + '装備👗各種族での見た目・入手方法</h1>'
+        + '<a id="same-link" href="' + path + '"><span>' + native + '</span></a>'
+        + '<p id="ordinary">' + native + '</p>'
+        + '<a id="external" href="https://example.com' + path + '">' + native + '</a>'
+        + '<h3 id="single">' + native + '・ジャケット</h3>';
+      for (const selector of ['#set', '#whole', '#article', '#same-link span',
+        '#ordinary', '#external', '#single']) trimFCNode(doc.querySelector(selector).firstChild);
+      assert.equal(doc.querySelector('#set').textContent, official, native + ' 套装小标题');
+      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）', native + ' 全身预览');
+      assert.ok(doc.querySelector('#article').textContent.startsWith('〖FF14〗' + official + '👗'),
+        native + ' 文章主标题');
+      assert.equal(doc.querySelector('#same-link').textContent, official);
+      assert.notEqual(doc.querySelector('#external').textContent, official, '站外链接不应当误判为本套装');
+      assert.notEqual(doc.querySelector('#ordinary').textContent, official, '正文不能误加套装后缀');
+      assert.ok(!doc.querySelector('#single').textContent.includes('套装'),
+        '单件装备不能因为套装简称而增加“套装”');
+      for (const selector of ['#set', '#whole']) trimFCNode(doc.querySelector(selector).firstChild);
+      assert.equal(doc.querySelector('#set').textContent, official, '多次扫描不可重复附加套装');
+      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）');
+    }
+    globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
+    doc.body.innerHTML = sets.map(([native]) => '<h4>' + native + '</h4>').join('');
+    for (const h4 of doc.querySelectorAll('h4')) trimFCNode(h4.firstChild);
+    sets.forEach(([, official], i) => assert.equal(doc.querySelectorAll('h4')[i].textContent, official));
+    globalThis.location = new URL('https://ff14-fc.com/equipment/unrelated/');
+    doc.body.innerHTML = '<h5>夜桜</h5><h5>コスモエクスプローラー</h5>';
+    for (const h5 of doc.querySelectorAll('h5')) trimFCNode(h5.firstChild);
+    assert.notEqual(doc.querySelectorAll('h5')[0].textContent, '夜樱套装');
+    assert.notEqual(doc.querySelectorAll('h5')[1].textContent, '宇宙探索者套装');
+  } finally {
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
+    dom.close();
+  }
+});
+
 test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列表占位文案', () => {
   const ui = [
     ['装備部位 クリックで切替', '点击装备部位切换'],
@@ -1070,6 +1126,10 @@ test('FF14-FC 真实页面残留词：切换提示的空格、武器职能、列
     ['製作装備', '制作装备'],
     ['制作装備', '制作装备'],
     ['ボズヤ・エウレカ（準備中）', '博兹雅与优雷卡（准备中）'],
+    ['ITEMレベル', '品级'],
+    ['セット価格', '套装价格'],
+    ['魔獣使い', '驯兽师'],
+    ['闘獣練', '斗兽奇弈'],
   ];
   const dom = new TestWindow({url:'https://ff14-fc.com/weapon_search/'});
   try {
