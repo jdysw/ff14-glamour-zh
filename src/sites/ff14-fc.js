@@ -654,9 +654,11 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(source)?.[0] || '';
     const base = fullBody ? source.slice(0, -fullBody.length) : source;
     // 不把「整套装备详情中的单件物品链接」误判为套装卡片。
-    // 套装标题不得回退到单件物品前缀：会把「クリムゾン」误判成家具。
+    // 套装与同名单件物品冲突时禁止前缀猜译；否则仍允许真实系列词干，
+    // 例如「コスモパワード」和职业套装 RE 标题。
+    const prefix = !fcItemName(base) && _getItemPfx().get(base);
     const officialName = _getSeriesMap().get(base) || fcVerifiedSetName(base)
-      || _getSeriesPfx().get(base);
+      || _getSeriesPfx().get(base) || prefix;
     if (!officialName || officialName === base) return translated;
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
@@ -686,7 +688,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (fcSetTitleContext(p, label, path)
       && /^[\u30a0-\u30ff\u4e00-\u9fff・ー]{2,40}$/u.test(name)
       && !(_getSeriesMap().get(name) || fcVerifiedSetName(name)
-        || _getSeriesPfx().get(name) || fcScopedSetName(name, p))) return;
+        || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
+        || (!fcItemName(name) && _getItemPfx().get(name)))) return;
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);
