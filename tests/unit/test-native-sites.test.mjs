@@ -1071,6 +1071,106 @@ test('FF14-FC GARO 缩写套装：用已核实官译还原阴阳装束，不重�
   }
 });
 
+test('FF14-FC GARO 装束简称：五个裸名称按详情路径翻译，风魔与资料片不误伤', () => {
+  const beforeLocation = globalThis.location;
+  const dom = new TestWindow({url:'https://ff14-fc.com/equipment/undying_twilight/'});
+  const doc = dom.document;
+  const sets = [
+    ['金狼', '金狼装束', '/equipment/the_golden_wolf/'],
+    ['漆黒', '漆黑装束', '/equipment/undying_twilight/'],
+    ['暗黒', '暗黑装束', '/equipment/pressing_darkness/'],
+    ['白夜', '白夜装束', '/equipment/the_white_night/'],
+    ['銀狼', '银狼装束', '/equipment/the_silver_wolf/'],
+  ];
+  const series = sets.map(([native, official]) => native + 'の装束|' + official)
+    .concat('風魔の装束|威望风魔装束').join('\n');
+  try {
+    globalThis.location = dom.location;
+    // 数据未到达前不准把特殊的「漆黒」装备标题错误锁定为资料片「暗影之逆焰」。
+    assert.equal(_applyV3({candidatePolicy: 1}), true);
+    cacheReset('derived');
+    doc.body.innerHTML = '<h5 id="before">漆黒</h5>';
+    trimFCNode(doc.querySelector('#before').firstChild);
+    assert.equal(doc.querySelector('#before').textContent, '漆黒');
+    assert.equal(trFC('漆黒'), '暗影之逆焰', '普通 UI 资料片翻译不得被更改');
+    assert.equal(_applyV3({candidatePolicy: 1, series}), true);
+    cacheReset('derived');
+    trimFCNode(doc.querySelector('#before').firstChild);
+    assert.equal(doc.querySelector('#before').textContent, '漆黑装束',
+      '加载正式系列词库后应可补译已有 DOM 节点');
+
+    for (const [native, official, path] of sets) {
+      globalThis.location = new URL('https://ff14-fc.com' + path);
+      doc.body.innerHTML = '<h5 id="set">' + native + '</h5>'
+        + '<h3 id="whole">' + native + '（全身）</h3>'
+        + '<h1 id="article">【FF14】' + native + '(戦士) 各種族での見た目</h1>'
+        + '<a id="same-link" href="' + path + '"><span>' + native + '</span></a>'
+        + '<p id="ordinary">' + native + '</p>'
+        + '<a id="external" href="https://example.com' + path + '">' + native + '</a>';
+      for (const selector of ['#set', '#whole', '#article', '#same-link span',
+        '#ordinary', '#external']) trimFCNode(doc.querySelector(selector).firstChild);
+      assert.equal(doc.querySelector('#set').textContent, official, native + ' 套装小标题');
+      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）', native + ' 全身预览');
+      assert.ok(doc.querySelector('#article').textContent.startsWith('【FF14】' + official),
+        native + ' 文章主标题');
+      assert.equal(doc.querySelector('#same-link').textContent, official, native + ' 详情链接');
+      assert.notEqual(doc.querySelector('#external').textContent, official,
+        '不同域名的同路径链接不得识别成该装备');
+      assert.notEqual(doc.querySelector('#ordinary').textContent, official,
+        '普通正文中不可把简称无条件改成套装名');
+      for (const selector of ['#set', '#whole']) trimFCNode(doc.querySelector(selector).firstChild);
+      assert.equal(doc.querySelector('#set').textContent, official, '多次扫描不可重复追加后缀');
+      assert.equal(doc.querySelector('#whole').textContent, official + '（全身）');
+    }
+
+    globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
+    doc.body.innerHTML = '<h4>金狼</h4><h4>漆黒</h4><h4>風魔</h4>';
+    for (const h4 of doc.querySelectorAll('h4')) trimFCNode(h4.firstChild);
+    assert.equal(doc.querySelectorAll('h4')[0].textContent, '金狼装束');
+    assert.equal(doc.querySelectorAll('h4')[1].textContent, '漆黑装束');
+    assert.notEqual(doc.querySelectorAll('h4')[2].textContent, '威望风魔装束',
+      '迷宫风魔装备不能误匹配威望风魔装束');
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+    if (beforeLocation === undefined) delete globalThis.location;
+    else globalThis.location = beforeLocation;
+    dom.close();
+  }
+});
+
+test('FF14-FC GARO 阴阳装束：全部十二种正式缩写可由完整词库还原', () => {
+  const families = [
+    ['魔戒導師', '魔戒导师'],
+    ['魔戒弓師', '魔戒弓师'],
+    ['魔戒法師', '魔戒法师'],
+    ['魔戒軍師', '魔戒军师'],
+    ['魔戒闘師', '魔戒斗师'],
+    ['魔戒闘師・刃', '魔戒斗师·刃'],
+  ];
+  const pairs = families.flatMap(([native, zh]) => [
+    ['陰', '阴'], ['陽', '阳'],
+  ].map(([variant, localized]) => [
+    native + 'の装束・' + variant, zh + '装束·' + localized,
+    native + '・' + variant,
+  ]));
+  try {
+    assert.equal(_applyV3({
+      candidatePolicy: 1,
+      series: pairs.map(([native, localized]) => native + '|' + localized).join('\n'),
+    }), true);
+    cacheReset('derived');
+    for (const [native, localized, shortened] of pairs) {
+      assert.equal(_getSeriesMap().get(native), localized);
+      assert.equal(fcGaroSetName(shortened), localized);
+      assert.equal(trFC(shortened), localized);
+    }
+  } finally {
+    _applyV3({candidatePolicy: 1});
+    cacheReset('derived');
+  }
+});
+
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
   const before = globalThis.location;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
