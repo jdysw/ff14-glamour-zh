@@ -299,7 +299,7 @@ import {
 import {
   trFC, trFCSegments, _trFCExact, _trFCDecor, _trFCName, _trFCSubstr,
   _fcCanReplaceAt, _wowFCInput, _trFCAttr, _procFCNode, _fcAcceptNode,
-  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, trimFCNode, fcSetDisplayText, fcGaroSetName, fcStarterOutfitName, fcVerifiedSetName, collapseFCHomeHeadings, fixFCMenu,
+  fcLinkZhName, rewriteFCForeignLink, translateFCTitle, translateFCPage, trimFCNode, fcSetDisplayText, fcGaroSetName, fcStarterOutfitName, fcVerifiedSetName, collapseFCHomeHeadings, fixFCMenu,
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
@@ -998,10 +998,12 @@ test('FF14-FC GARO 简称：资料未就绪时保留原文，按路径翻译套�
 test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明不留日文', () => {
   const oldDoc = globalThis.document;
   const oldLocation = globalThis.location;
+  const oldNodeFilter = globalThis.NodeFilter;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment/of_light/'});
   try {
     globalThis.document = dom.document;
     globalThis.location = dom.location;
+    globalThis.NodeFilter = dom.NodeFilter;
     const doc = dom.document;
     doc.body.innerHTML =
       '<h5>オブ・ライト</h5><h3>オブ・ライト（全身）</h3>'
@@ -1028,6 +1030,27 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('ドロップで入手'), '掉落获得');
     assert.equal(trFC('地図を表示'), '显示地图');
     assert.equal(trFC('異国風の男'), '异国装扮的男人');
+    // Acquisition paragraphs may have emphasis or links around native words.
+    const strongDrop = doc.createElement('p');
+    const duty = 'クリスタルタワー：古代の民の迷宮';
+    strongDrop.innerHTML = 'アライアンスレイド「' + duty
+      + '」の <strong>宝箱</strong> からランダムでドロップする。';
+    doc.body.append(strongDrop);
+    const originalStrong = strongDrop.querySelector('strong');
+    translateFCPage(strongDrop);
+    assert.equal(strongDrop.textContent, '从团队任务“水晶塔 古代人迷宫”的宝箱中随机掉落。');
+    assert.equal(strongDrop.querySelector('strong'), originalStrong);
+    const linkDrop = doc.createElement('p');
+    linkDrop.innerHTML = 'アライアンスレイド「<a href="/summary/the_labyrinth_of_the_ancients/">'
+      + duty + '</a>」の <strong>宝箱</strong> からランダムでドロップする。';
+    doc.body.append(linkDrop);
+    const linkedDuty = linkDrop.querySelector('a');
+    const linkedStrong = linkDrop.querySelector('strong');
+    translateFCPage(linkDrop);
+    assert.equal(linkDrop.textContent, '从团队任务“水晶塔 古代人迷宫”的宝箱中随机掉落。');
+    assert.equal(linkDrop.querySelector('a'), linkedDuty);
+    assert.equal(linkDrop.querySelector('a').getAttribute('href'), '/summary/the_labyrinth_of_the_ancients/');
+    assert.equal(linkDrop.querySelector('strong'), linkedStrong);
     // 同一水晶塔的关联卡片：站内 URL 确认套装，外链和普通单件不能误伤。
     const related = [
       ['ロイヤル', '皇室套装', '/equipment/royal/'],
@@ -1070,6 +1093,14 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     globalThis.location = new URL('https://ff14-fc.com/equipment/crimson/');
     assert.equal(trFC('クリムゾン'), '深红套装', '详情页正文使用已核实的系列名称');
     globalThis.location = new URL('https://ff14-fc.com/summary/the_labyrinth_of_the_ancients/');
+    const linkedArticle = doc.createElement('a');
+    linkedArticle.setAttribute('href', '/equipment/crimson/');
+    linkedArticle.textContent = '〖FF14〗クリムゾン装備各種族での見た目・入手方法';
+    doc.body.append(linkedArticle);
+    trimFCNode(linkedArticle.firstChild);
+    assert.ok(linkedArticle.textContent.startsWith('〖FF14〗深红套装'));
+    assert.ok(!linkedArticle.textContent.includes('鲜红纤维毯'));
+    assert.equal(linkedArticle.getAttribute('href'), '/equipment/crimson/');
     assert.equal(trFC('クリムゾン（黒魔道士・召喚士・赤魔道士・ピクトマンサー・青魔道士）'),
       '深红套装（黑魔法师、召唤师、赤魔法师、绘灵法师、青魔法师）');
     assert.equal(trFC('〖FF14〗オニオン（竜騎士・リーパー）装備の見た目'),
@@ -1085,6 +1116,8 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     else globalThis.document = oldDoc;
     if (oldLocation === undefined) delete globalThis.location;
     else globalThis.location = oldLocation;
+    if (oldNodeFilter === undefined) delete globalThis.NodeFilter;
+    else globalThis.NodeFilter = oldNodeFilter;
     dom.close();
   }
 });

@@ -329,7 +329,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (setName) return text.replace(t0, setName);
     const group = fcCrystalTowerSetGroup(text, t0);
     if (group !== null) return group;
-    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の宝箱からランダムでドロップする。?$/u.exec(t0);
+    const raidDrop = /^アライアンスレイド「([^「」]{2,90})」の\s*宝箱\s*からランダムでドロップする。?$/u.exec(t0);
     if (raidDrop) {
       const duty = lookupDutyName(raidDrop[1]);
       if (duty) return text.replace(t0, '从团队任务“' + duty + '”的宝箱中随机掉落。');
@@ -403,12 +403,32 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return { key: key.replace(/\s+/gu, ' ').trim(), children };
   }
 
+  // The native acquisition paragraph sometimes wraps the duty and/or “宝箱”
+  // in links/emphasis. Translate its grammar while keeping those nodes intact.
+  function fcRaidRichDrop(model) {
+    const parts = model.children;
+    if (parts.length === 1 && parts[0].textContent.trim() === '宝箱') {
+      const match = /^アライアンスレイド「([^{}「」]{2,90})」の\s*\{0\}\s*からランダムでドロップする。?$/u.exec(model.key);
+      const duty = match && lookupDutyName(match[1]);
+      return duty ? '从团队任务“' + duty + '”的{0}中随机掉落。' : null;
+    }
+    if (parts.length === 1 && lookupDutyName(parts[0].textContent.trim())
+      && /^アライアンスレイド「\{0\}」の\s*宝箱\s*からランダムでドロップする。?$/u.test(model.key))
+      return '从团队任务“{0}”的宝箱中随机掉落。';
+    if (parts.length === 2 && parts[1].textContent.trim() === '宝箱'
+      && lookupDutyName(parts[0].textContent.trim())
+      && /^アライアンスレイド「\{0\}」の\s*\{1\}\s*からランダムでドロップする。?$/u.test(model.key))
+      return '从团队任务“{0}”的{1}中随机掉落。';
+    return null;
+  }
+
   function translateFCParagraph(element) {
     if (element.closest(FC_SKIP_SEL)) return;
     const model = fcParagraphModel(element);
     if (!model?.children.length) return;
     const key = 'rich:' + model.key;
-    const translated = fcUIValue('page:' + location.pathname + ':' + key) || fcUIValue(key);
+    const translated = fcUIValue('page:' + location.pathname + ':' + key)
+      || fcUIValue(key) || fcRaidRichDrop(model);
     if (!translated) return;
     const indices = [...translated.matchAll(/\{(\d{1,3})\}/g)].map(match => Number(match[1]));
     // Refuse malformed entries rather than dropping or duplicating native links.
@@ -563,8 +583,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
     const core = fullBody ? label.slice(0, -fullBody.length) : label;
     // 列表卡片的 H3 与详情页的 H1 使用同一文章标题格式。
-    const isArticle = !!parent.closest('h1')
-      || (!!parent.closest('h3') && /^[【〖]FF14[】〗]/u.test(core));
+    const isArticle = /^[【〖]FF14[】〗]/u.test(core)
+      && !!parent.closest('h1,h3,a[href]');
     // 大标题兼容【FF14】和〖FF14〗，仅对已确认的整套装备简称处理。
     const short = isArticle
       ? [...FC_GARO_BARE_SET_PATHS.keys(), ...FC_VERIFIED_SHORT_SET_PATHS.keys()]
