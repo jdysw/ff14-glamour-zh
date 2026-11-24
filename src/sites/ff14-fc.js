@@ -576,14 +576,18 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
   ]);
 
-  // 唯一可信的短名称上下文：同站点同详情路径的链接。
-  function fcMatchingSetLink(element, targetPath) {
+  // 无链接时可按页面判断；站外或无法解析的链接不得借用页面上下文。
+  function fcLinkedPath(element) {
     const link = element?.closest?.('a[href]');
-    if (!link) return false;
+    if (!link) return undefined;
     try {
       const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
-      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) && url.pathname === targetPath;
-    } catch { return false; }
+      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) ? url.pathname : null;
+    } catch { return null; }
+  }
+
+  function fcMatchingSetLink(element, targetPath) {
+    return fcLinkedPath(element) === targetPath;
   }
 
   function fcScopedSetName(name, node = null) {
@@ -708,14 +712,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   function fcSetTitleContext(element, source, path) {
     if (!element?.closest) return false;
     // 首页轮播和相关推荐仅认本站的整套装备详情链接，不推断站外同路径。
-    const link = element.closest('a[href]');
-    if (link) {
-      try {
-        const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
-        if (!/^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname)) return false;
-        if (/^\/equipment\/[^/]+\/?$/u.test(url.pathname)) return true;
-      } catch { return false; }
-    }
+    const linkedPath = fcLinkedPath(element);
+    if (linkedPath === null) return false;
+    if (linkedPath && /^\/equipment\/[^/]+\/?$/u.test(linkedPath)) return true;
     // 系列检索结果的 H4 是卡片套装名，不能扩大到部位检索页。
     if (/^\/equipment_series_search\/?$/u.test(path)) return !!element.closest('h4');
     if (!/^\/equipment\/[^/]+\/?$/u.test(path)) return false;

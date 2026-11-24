@@ -9,12 +9,16 @@ const SITE_POLICY = 'src/core/site-policy.js';
 const SITE_CONFIG = 'src/core/site-config.json';
 const PURE_MODULES = new Set(['src/core/runtime.js', SITE_POLICY]);
 
+// A site entry (src/sites/<name>.js) and its private directory share a namespace.
+const siteName = file => /^src\/sites\/([^/]+?)(?:\/|\.js$)/u.exec(file)?.[1];
+
 function validateEdge(owner, dependency, sources, errors) {
   if (!sources.has(dependency)) errors.push(`${owner}: missing module ${dependency}`);
   if (owner.startsWith('src/core/') && dependency.startsWith('src/sites/')
     && !SITE_IMPORTERS.has(owner))
     errors.push(`${owner}: Core imports site ${dependency}`);
-  if (owner.startsWith('src/sites/') && dependency.startsWith('src/sites/'))
+  const ownerSite = siteName(owner);
+  if (ownerSite && dependency.startsWith('src/sites/') && ownerSite !== siteName(dependency))
     errors.push(`${owner}: cross-site dependency ${dependency}`);
 }
 
