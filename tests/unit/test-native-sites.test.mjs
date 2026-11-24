@@ -9,7 +9,7 @@ import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
-import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
+import { trMiramiru, translateMiramiruPage, translateMiramiruTitle } from '../../src/sites/miramiru.js';
 import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
 import { startXivc, translateXivcPage, trXivc } from '../../src/sites/xivc.js';
 
@@ -213,7 +213,11 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
   assert.equal(trMiramiru('  '), '  ');
   assert.equal(trMiramiru('Unknown player title'), 'Unknown player title');
   const old = globalThis.document;
+  const oldLocation = globalThis.location;
+  const oldNodeFilter = globalThis.NodeFilter;
+  const dom = new TestWindow({url:'https://miramiru.co/'});
   try {
+    globalThis.location = dom.location;
     for (const suffix of ['FFXIV Glamour Showcase','FFXIV ミラプリ紹介サイト','FFXIV 투영 소개 사이트']) {
       globalThis.document = {title:'Miramiru - ' + suffix};
       translateMiramiruTitle();
@@ -222,7 +226,35 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     globalThis.document={title:'Miramiru 소개 | Miramiru'};
     translateMiramiruTitle();
     assert.equal(document.title,'关于 Miramiru | Miramiru');
-  } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
+
+    globalThis.document = dom.document;
+    globalThis.NodeFilter = dom.NodeFilter;
+    document.body.innerHTML = '<h1><span class="text-shimmer">Mira</span><span>miru</span>' +
+      '<span class="sr-only"> - FFXIV ミラプリ紹介サイト</span></h1>';
+    const visibleBrand = document.querySelector('.text-shimmer');
+    const subtitle = document.querySelector('.sr-only');
+    translateMiramiruPage(subtitle.firstChild);
+    translateMiramiruPage();
+    assert.equal(document.querySelector('h1').textContent, 'Miramiru - FF14 幻化展示');
+    assert.equal(document.querySelector('.text-shimmer'), visibleBrand);
+    assert.equal(document.querySelector('.sr-only'), subtitle);
+
+    globalThis.location = new URL('https://miramiru.co/ja/collection');
+    document.title = 'コレクション — Miramiru | Miramiru';
+    translateMiramiruTitle();
+    translateMiramiruTitle();
+    assert.equal(document.title, '收藏集 | Miramiru');
+    globalThis.location = new URL('https://miramiru.co/ja/mirapuri/player-title');
+    document.title = 'コレクション | Miramiru';
+    translateMiramiruTitle();
+    assert.equal(document.title, 'コレクション | Miramiru', '玩家作品标签页标题不按 UI 词典翻译');
+  } finally {
+    if (old === undefined) delete globalThis.document;
+    else globalThis.document = old;
+    globalThis.location = oldLocation;
+    globalThis.NodeFilter = oldNodeFilter;
+    dom.close();
+  }
 });
 
 test('Miramiru 用户可见规则：官方标签、数量、未知名称和原型键', () => {

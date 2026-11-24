@@ -116,7 +116,22 @@ function markMiramiruNativeOption(raw, element) {
   if (option && resolveByName(raw.trim())) option.dataset.zhxMiramiruNative = raw.trim();
 }
 
+function miramiruPathname() {
+  const value = globalThis.location?.pathname || '/';
+  return value.replace(/^\/(?:ja|en|ko)(?=\/|$)/u, '').replace(/\/$/u, '') || '/';
+}
+
+function translateMiramiruTagline(source) {
+  return source.replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/gu, 'FF14 幻化展示');
+}
+
 function translateMiramiruText(raw, element) {
+  // The visible brand spans are separate from the screen-reader subtitle.
+  if (element.classList?.contains('sr-only') && element.parentElement?.tagName === 'H1'
+      && miramiruPathname() === '/') {
+    const subtitle = translateMiramiruTagline(raw);
+    if (subtitle !== raw) return subtitle;
+  }
   markMiramiruNativeOption(raw, element);
   const officialTag = isMiramiruOfficialTag(element);
   const badge = element.closest('[data-slot="badge"],[role="option"] .truncate');
@@ -184,10 +199,18 @@ function translateMiramiruPage(rootArg) {
 }
 
 function translateMiramiruTitle() {
-  const source=document.title;
-  const next = (source.endsWith(' | Miramiru') ? trMiramiru(source.slice(0,-11))+' | Miramiru' : trMiramiru(source))
-    .replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/g, 'FF14 幻化展示');
-  if (next !== document.title) document.title = next;
+  const path = miramiruPathname();
+  if (/^\/(?:mirapuri|users)\/[^/]+/u.test(path)) return;
+  const source = document.title;
+  const suffix = ' | Miramiru';
+  const hasSuffix = source.endsWith(suffix);
+  let label = hasSuffix ? source.slice(0, -suffix.length) : source;
+  const repeatedBrand = ' — Miramiru';
+  if (path === '/collection' && hasSuffix && label.endsWith(repeatedBrand)) {
+    label = label.slice(0, -repeatedBrand.length);
+  }
+  const next = translateMiramiruTagline(trMiramiru(label)) + (hasSuffix ? suffix : '');
+  if (next !== source) document.title = next;
 }
 
 function startMiramiru() {
