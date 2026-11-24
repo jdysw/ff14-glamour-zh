@@ -1884,7 +1884,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'Last Month': '上个月',
     'Last Week': '上周',
     'Last Year': '去年',
-    'Latest Companion Glamours': '最新搭档幻化',
+    'Latest Companion Glamours': '最新陆行鸟幻化',
     'Latest Gearsets': '最新套装',
     'Latest Glamours': '最新幻化',
     'Latest Lodestone News': '最新 Lodestone 新闻',
@@ -2031,7 +2031,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'Submit Glamour': '投稿幻化',
     'Submit Your Own': '投稿你的幻化',
     'Submit a Glamour': '投稿幻化',
-    'Submit your own': '提交你自己的',
+    'Submit your own': '投稿作品',
     'Submitted on:': '投稿于：',
     'Submitted:': '提交时间：',
     'Successor\'s': '继承者套装',
@@ -2637,6 +2637,7 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     'Chocobo color preview': '陆行鸟颜色预览',
     'Color': '颜色',
     'Related Glamour': '关联幻化',
+    'Submit your own glamour': '投稿幻化作品',
   };
 
   /* =====================================================================

@@ -35,6 +35,8 @@ export function isECAuthoredPath(path) {
 
 export function isECAuthoredContent(element) {
   if (!element?.closest) return false;
+  const host = globalThis.location?.hostname;
+  if (host && host !== 'ffxiv.eorzeacollection.com' && globalThis.window?.__zhxTestSite !== 'ec') return false;
   if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
   const href = element.closest('a[href]')?.getAttribute?.('href') || '';
   const path = href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');

@@ -15,9 +15,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // patch 7.5 the original individual dyes may be retired, but their
   // official color names remain useful. Handle the site's attached NEW
   // badge and inconsistent capitalization without guessing unknown colors.
-  function ecDyePreviewText(label) {
+  function ecIsDyePreview() {
     const path = globalThis.location?.pathname;
-    if (path !== '/dyes' && path !== '/dyes/') return null;
+    return path === '/dyes' || path === '/dyes/';
+  }
+
+  function ecDyePreviewText(label) {
+    if (!ecIsDyePreview()) return null;
     const isNew = label.endsWith(' NEW');
     const name = isNew ? label.slice(0, -4).trimEnd() : label;
     if (!/^[A-Za-z][A-Za-z -]{1,45}$/u.test(name)) return null;
@@ -827,10 +831,25 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     '5.0': '暗影之逆焰', '6.0': '晓月之终途', '7.0': '金曦之遗辉',
   });
   const EC_CONTENT_BY_ROUTE = Object.freeze({
-    glamour: '制作幻化', raid: '副本装备', tomes: '神典石兑换',
-    pvp: 'PvP 装备', seasonal: '季节活动装备',
-    mogstation: '商城套装', job: '职业校服',
+    glamour: ['Crafted Glamour', '制作幻化'],
+    raid: ['Raid Gear', '副本装备'],
+    tomes: ['Tomestones Exchange', '神典石兑换'],
+    pvp: ['PvP Gear', 'PvP 装备'],
+    seasonal: ['Seasonal Event Gear', '季节活动装备'],
+    mogstation: ['Mogstation Set', '商城套装'],
+    job: ['Job Artifact Armor', '职业校服'],
   });
+
+  function ecContentNavLabel(content, label) {
+    const entry = EC_CONTENT_BY_ROUTE[content];
+    if (!Array.isArray(entry)) return null;
+    const [native, zh] = entry;
+    const tight = label.replace(/\s+/gu, '');
+    if (label === native || tight === zh.replace(/\s+/gu, '')) return zh;
+    // The native menu's Job Artifact Armor caption can be translated as two
+    // independent nodes, leaving an extra “护甲” after “职业校服”.
+    return content === 'job' && tight === '职业校服护甲' ? zh : null;
+  }
 
   // Rewrite only visible text nodes: keep images, links and native handlers.
   function ecSetVisibleText(element, text) {
@@ -862,11 +881,14 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       target = new URL(href, globalThis.location?.href || 'https://ffxiv.eorzeacollection.com/');
     } catch { return null; }
     if (target.hostname !== 'ffxiv.eorzeacollection.com' || target.pathname !== '/gearsets') return null;
-    const content = EC_CONTENT_BY_ROUTE[target.searchParams.get('content')];
-    if (content) return content;
-    const patchName = EC_EXPANSION_BY_PATCH[target.searchParams.get('patch')];
-    if (!patchName) return null;
+    // The same query parameter also occurs in pagination and filter-result
+    // URLs. Only recognize a single navigation parameter and its caption.
+    if (target.searchParams.size !== 1) return null;
     const old = (a.textContent || '').replace(/\s+/gu, ' ').trim();
+    const content = target.searchParams.get('content');
+    if (content) return ecContentNavLabel(content, old);
+    const patchName = EC_EXPANSION_BY_PATCH[target.searchParams.get('patch')];
+    if (typeof patchName !== 'string') return null;
     // Preserve the separate "Current Expansion" browse link on the same URL.
     return /^(?:From [A-Za-z ]{3,45}|自[\u3400-\u9fff·]{2,20}起)$/u.test(old)
       ? '自' + patchName + '起' : null;
@@ -877,7 +899,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     // translator below is homepage-specific.
     for (const anchor of ecHomeCandidates(rootArg, 'a[href*="/gearsets?"]')) {
       const localized = ecHomeGearsetNavLabel(anchor);
-      if (localized) ecSetVisibleText(anchor, localized);
+      if (!localized) continue;
+      ecSetVisibleText(anchor, localized);
+      // Menu image captions must describe their destination, not a reused
+      // model icon caption (the Tomestones icon previously said Midlander).
+      if (Object.values(EC_CONTENT_BY_ROUTE).some(([, zh]) => zh === localized)) {
+        const image = anchor.querySelector('img[alt]');
+        if (image?.getAttribute('alt') && image.getAttribute('alt') !== localized)
+          image.setAttribute('alt', localized);
+      }
     }
   }
 
@@ -1103,7 +1133,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       attributes: true,
       attributeFilter: ['title', 'alt', 'aria-label', 'placeholder', 'label'],
       characterData: true,
-      filter: (mutation) => mutation.type !== 'characterData'
+      filter: (mutation) => mutation.type !== 'characterData' || ecIsDyePreview()
         || Boolean(mutation.target.parentElement?.closest(EC_SERVER_TEXT_SEL + ', #filter_server option')),
       handler: (nodes, textNodes) => {
         for (const n of [...nodes, ...textNodes]) {

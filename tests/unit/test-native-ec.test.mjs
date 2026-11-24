@@ -116,7 +116,10 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     '<a id="old" href="/gearsets?patch=6.0">From Endwalker</a>',
     '<a id="current" href="/gearsets?patch=7.0">当前资料片</a>',
     '<a id="foreign" href="https://example.com/gearsets?patch=7.0">From Endwalker</a>',
-    '<a id="tomes" href="/gearsets?content=tomes"><img alt="icon"><span>神典石</span> 兑换</a>',
+    '<a id="tomes" href="/gearsets?content=tomes"><img alt="Female Midlander"><span>神典石</span> 兑换</a>',
+    '<a id="first-page" href="/gearsets?content=tomes">1</a>',
+    '<a id="page-two" href="/gearsets?content=tomes&page=2">2</a>',
+    '<a id="combined-filter" href="/gearsets?content=tomes&maximumLvl=70">Tomestones Exchange</a>',
     '<a id="seasonal" href="/gearsets?content=seasonal"><img alt="seasonal">季节活动 <b>装备</b></a>',
     '<a id="job" href="/gearsets?content=job">职业校服 <i>护甲</i></a>',
     '</nav>',
@@ -146,6 +149,10 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#tomes').textContent, '神典石兑换');
     assert.equal(d.querySelector('#tomes').getAttribute('href'), savedHref);
     assert.equal(d.querySelector('#tomes img'), savedImage);
+    assert.equal(savedImage.alt, '神典石兑换');
+    assert.equal(d.querySelector('#first-page').textContent, '1');
+    assert.equal(d.querySelector('#page-two').textContent, '2');
+    assert.equal(d.querySelector('#combined-filter').textContent, 'Tomestones Exchange');
     assert.equal(d.querySelector('#seasonal').textContent, '季节活动装备');
     assert.equal(d.querySelector('#job').textContent, '职业校服');
     assert.equal(d.querySelector('#section').textContent, '— 新闻与文章 —');
