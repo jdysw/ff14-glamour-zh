@@ -1,5 +1,5 @@
 import { DICT_EC, dictGetRevision } from '../core/data/dictionary.js';
-import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
 import { dataGetIndex, resolveDyeColor } from '../core/data/data-manager.js';
 import { isECAuthoredContent, isECAuthoredPath, isECSeriesLink } from '../core/content-scope.js';
@@ -1454,20 +1454,16 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
       translateECNavigation(rootArg);
       translateECDyePreviewHeading(rootArg);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-        acceptNode: (n) => {
-          if (n.nodeType === 1) {
-            if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
-            // 选择器级剪枝：忽略区域整棵子树不再进入（v1.11.1，借 github-chinese FILTER_REJECT）
-            if (n.closest?.(EC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
-            // 同 trimECNode：物品链管辖的子树（装备名 / 卡片）不在文本链处理
-            if (n.closest?.(EC_ITEM_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        },
+      const batch = snapshotTranslationNodes(root, (n) => {
+        if (n.nodeType === 1) {
+          if (SKIP_TAGS.has(n.tagName)) return NodeFilter.FILTER_REJECT;
+          // 选择器级剪枝：忽略区域整棵子树不再进入（v1.11.1，借 github-chinese FILTER_REJECT）
+          if (n.closest?.(EC_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+          // 同 trimECNode：物品链管辖的子树（装备名 / 卡片）不在文本链处理
+          if (n.closest?.(EC_ITEM_SKIP_SEL)) return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
       });
-      const batch = [];
-      while (w.nextNode()) batch.push(w.currentNode);
       translateECGearsetNames(rootArg);
       for (const n of batch) {
         if (n.nodeType === 3) trimECNode(n);

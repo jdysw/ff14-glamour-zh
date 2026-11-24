@@ -3,7 +3,7 @@ import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/data/dictionary.js';
 import { resolveDyeColor } from '../core/data/data-manager.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { isAuthoredContent } from '../core/content-scope.js';
@@ -265,12 +265,7 @@ export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, transla
     }
     bindRonkaItemLists(rootArg);
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: _ronkaAcceptNode,
-    });
-    const batch = [];
-    while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) _procRonkaNode(n);
+    for (const n of snapshotTranslationNodes(root, _ronkaAcceptNode)) _procRonkaNode(n);
     safe(replaceRonkaLodestone, 'Ronka lodestone 替换')(rootArg);
   }
 

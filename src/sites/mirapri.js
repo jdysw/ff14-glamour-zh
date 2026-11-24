@@ -1,5 +1,5 @@
 export { SKIP_TAGS } from '../core/dom.js';
-import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, snapshotTranslationNodes } from '../core/dom.js';
 import { DICT } from '../core/data/dictionary.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -106,14 +106,10 @@ export { PATTERNS, busy, startMirapri, tr, trEl, trNode, translatePage, translat
       if (!root) return;
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       if (root.nodeType === 1) trEl(root);
-      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-        acceptNode: (n) => {
-          if (n.nodeType === 1 && (SKIP_TAGS.has(n.tagName) || isMirapriAuthored(n))) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        },
+      const batch = snapshotTranslationNodes(root, (n) => {
+        if (n.nodeType === 1 && (SKIP_TAGS.has(n.tagName) || isMirapriAuthored(n))) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
       });
-      const batch = [];
-      while (w.nextNode()) batch.push(w.currentNode);
       for (const n of batch) {
         if (n.nodeType === 3) trNode(n);
         else if (n.nodeType === 1) trEl(n);

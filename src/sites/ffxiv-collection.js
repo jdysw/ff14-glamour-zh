@@ -3,7 +3,7 @@ import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { _getItemPfx, _getSeriesMap, _getSeriesPfx } from '../core/cache.js';
 import { DATA_TEXT } from '../core/data/data-manager.js';
 import { DICT_ACL, lookupDutyName } from '../core/data/dictionary.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -271,12 +271,7 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: _aclAcceptNode,
-    });
-    const batch = [];
-    while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) _procACLNode(n);
+    for (const n of snapshotTranslationNodes(root, _aclAcceptNode)) _procACLNode(n);
     safe(replaceACLLodestone, 'ACL lodestone 替换')(rootArg);
   }
 
