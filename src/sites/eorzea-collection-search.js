@@ -1,4 +1,4 @@
-import { EC_ACCESSORY_SLOT_NATIVES, EC_BARDING_NATIVES, EC_FACEWEAR_ROWS } from '../core/search-equipment-categories.js';
+import { EC_FACEWEAR_ROWS, getBardingNatives, getAccessoryNatives, getAllAccessoryNatives } from '../core/search-equipment-categories.js';
 import { normalizeSearchQuery, isChineseSearchQuery } from '../core/chinese-search-submit.js';
 
 // 只有装备库列表页的查询可以按“套装系列 + 职能”映射。其它 EC 页面
@@ -9,11 +9,6 @@ function isECGearsetsPage() {
   return /^\/gearsets(?:\/[a-z-]+)?\/?$/i.test(loc?.pathname || '')
     && /(^|\.)eorzeacollection\.com$/i.test(loc?.hostname || '');
 }
-
-// The unscoped accessories search includes only the four official jewelry slots.
-const EC_ALL_ACCESSORY_NATIVES = new Set(
-  Object.values(EC_ACCESSORY_SLOT_NATIVES).flatMap(slotNames => [...slotNames])
-);
 
 const ownsKeyboard = input => /\bvs__search\b/.test(String(input?.className || ''));
 
@@ -131,12 +126,12 @@ export function createECSearchStrategy(resolveCatalog, suggestCatalog) {
       return terms.length < 2 ? direct : direct.concat(EC_FACEWEAR_ROWS.filter(row =>
         !row.zh.includes(query) && terms.every(term => row.zh.includes(term))));
     }
-    if (context?.kind === 'barding') return suggestByZh(query, 0, EC_BARDING_NATIVES);
+    if (context?.kind === 'barding') return suggestByZh(query, 0, getBardingNatives());
     if (context?.kind === 'slot') return suggestByZh(query, 0, context.slot, language);
     if (context?.kind === 'accessory-slot') {
-      return suggestByZh(query, 0, EC_ACCESSORY_SLOT_NATIVES[context.slot]);
+      return suggestByZh(query, 0, getAccessoryNatives(context.slot));
     }
-    if (context?.kind === 'accessories') return suggestByZh(query, 0, EC_ALL_ACCESSORY_NATIVES);
+    if (context?.kind === 'accessories') return suggestByZh(query, 0, getAllAccessoryNatives());
     return isECGearsetsPage() && !ownsKeyboard(input)
       ? suggestCatalog(query) : undefined;
   }

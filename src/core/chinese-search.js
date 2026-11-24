@@ -1,5 +1,5 @@
 import * as searchData from './data/data-manager.js';
-import { EC_ACCESSORY_SLOT_NATIVES } from './search-equipment-categories.js';
+import { getAccessoryNatives } from './search-equipment-categories.js';
 import { itemNames, miramiruLanguage, nativeLanguage } from './item-languages.js';
 import { createSearchPanel, isSuggestionQuery } from './chinese-search-panel.js';
 import { normalizeSearchQuery, isChineseSearchQuery, submitNativeForm,
@@ -102,7 +102,7 @@ export function createChineseSearchController(data = searchData) {
 
   function miramiruScopedSuggestions(query, input) {
     const key = input.dataset.zhxMiramiruSlot;
-    const slot = EC_ACCESSORY_SLOT_NATIVES[key] || Number(key);
+    const slot = getAccessoryNatives(key) || Number(key);
     const rows = new Map();
     const language = controlSearchLanguage(input);
     if (hasItemIdentities()) return suggestByZh(query, 0, slot, language);

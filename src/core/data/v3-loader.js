@@ -8,6 +8,104 @@ import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract
 import { parseItemIds } from './item-identity.js';
 import { validateV3Payload } from './v3-payload.js';
 
+async function _v3ReadCachedFile(key, fingerprint) {
+  try {
+    const raw = await storeGetAsync(key);
+    if (!raw) return null;
+    const split = raw.indexOf('\n');
+    return split > 0 && raw.slice(0, split) === fingerprint ? raw.slice(split + 1) : null;
+  } catch (e) {
+    _zhxErr('v3cacheRead', e);
+    return null; // 缓存损坏时继续尝试网络下载。
+  }
+}
+
+async function _v3VerifyFile(text, fingerprint, expectedBytes) {
+  // 两端共享 SHA-256 + UTF-8 字节长度契约；禁止字节数不同的数据污染缓存。
+  if (typeof TextEncoder !== 'function') return false;
+  let encoded;
+  try {
+    encoded = new TextEncoder().encode(text);
+    if (encoded.byteLength !== expectedBytes) return false;
+    // 无 WebCrypto 时拒绝未经摘要验证的数据，而不是降级为仅检查长度。
+    // 加载流程会正常进入 degraded 并通知订阅者，不会无限等待。
+    if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle?.digest) return false;
+    const buf = await crypto.subtle.digest('SHA-256', encoded);
+    const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    return actual === fingerprint;
+  } catch (e) {
+    _zhxErr('v3verify', e);
+    return false;
+  }
+}
+
+// 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
+async function readCachedManifest(siteId = '') {
+  try {
+    const key = siteId ? 'zhx.v3.manifest.' + siteId : 'zhx.v3.manifest';
+    const mraw = await storeGetAsync(key);
+    if (mraw) {
+      const i = mraw.indexOf('\n');
+      if (i > 0) {
+        const timestamp=Number(mraw.slice(0,i));
+        const manT=Number.isSafeInteger(timestamp)&&timestamp>0&&timestamp<=Date.now()?timestamp:0;
+        return { manT, man: JSON.parse(mraw.slice(i + 1)) };
+      }
+    }
+  } catch (e) { _zhxErr('v3manifest', e); }
+  return { manT: 0, man: null };
+}
+
+// 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
+async function _requestV3Manifest() {
+  let txt = null;
+  try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, { fresh: true }); }
+  catch (e) { txt = null; /* 请求失败时由 loadManifest 决定是否复用旧清单 */ }
+  if (typeof txt !== 'string' || !txt) return null;
+  try {
+    const manifest = JSON.parse(txt);
+    if (validV3Manifest(manifest)) return manifest;
+  } catch (e) { /* manifest 解析或 schema/policy 校验失败 */ }
+  return false;
+}
+
+function _freshV3Manifest(snapshot) {
+  return snapshot.manT > 0 && Date.now() - snapshot.manT < DAY_MS && validV3Manifest(snapshot.man);
+}
+
+function allFilesReady(names, files, sharedDict) {
+  for (const n of names) { if (files[n] == null) return false; }
+  return !(sharedDict && files.dict == null);
+}
+
+// v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
+// 任何一步失败或缺文件均返回 false；调用方保持安全空索引。
+async function _commitV3Bundle(staged, manifest, siteId, commitSnapshot, commitManifest, canPublish) {
+  for (const [key, value] of staged) {
+    if (!await storeSetAsync(key, value)) return false;
+  }
+  const value = String(Date.now()) + '\n' + JSON.stringify(manifest);
+  if (canPublish && !await canPublish()) return false;
+  if (commitSnapshot && !await storeSetAsync('zhx.v3.manifest.' + siteId, value)) {
+    return false;
+  }
+  if (commitManifest && ((canPublish && !await canPublish()) || !await storeSetAsync('zhx.v3.manifest', value))) {
+    return false;
+  }
+  return true;
+}
+
+function _manifestSiteFiles(manifest, site, need) {
+  const sm = manifest?.sites?.[site.id]?.files;
+  if (!sm || typeof sm !== 'object') return null;
+  const names = Object.keys(sm);
+  const required = requiredV3Files(site);
+  if (!names.length || required.some((name) => !sm[name])) return null;
+  const sharedDict = (need.includes('dict') && manifest.shared?.dict) || null;
+  if (need.includes('dict') && !sharedDict) return null;
+  return { sm, names, sharedDict, itemIds: manifest.sites[site.id].itemIds };
+}
+
 // 负责清单、内容寻址文件、提交快照及缓存淘汰。索引与就绪状态由调用方持有：
 // applyPayload 和 recordReady 是同步回调，代际检查与当前页发布之间不引入等待。
 export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
@@ -19,37 +117,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
   // 清单值为时间戳 + '\n' + JSON，文件值为 SHA-256 + '\n' + 文本。
   const v3FileCachePrefix = (siteId) => 'zhx.v3.f.' + siteId + '.';
   const v3FileCacheKey = (siteId, name, fingerprint) => v3FileCachePrefix(siteId) + name + '.' + fingerprint;
-
-  async function _v3ReadCachedFile(key, fingerprint) {
-    try {
-      const raw = await storeGetAsync(key);
-      if (!raw) return null;
-      const split = raw.indexOf('\n');
-      return split > 0 && raw.slice(0, split) === fingerprint ? raw.slice(split + 1) : null;
-    } catch (e) {
-      _zhxErr('v3cacheRead', e);
-      return null; // 缓存损坏时继续尝试网络下载。
-    }
-  }
-
-  async function _v3VerifyFile(text, fingerprint, expectedBytes) {
-    // 两端共享 SHA-256 + UTF-8 字节长度契约；禁止字节数不同的数据污染缓存。
-    if (typeof TextEncoder !== 'function') return false;
-    let encoded;
-    try {
-      encoded = new TextEncoder().encode(text);
-      if (encoded.byteLength !== expectedBytes) return false;
-      // 无 WebCrypto 时拒绝未经摘要验证的数据，而不是降级为仅检查长度。
-      // 加载流程会正常进入 degraded 并通知订阅者，不会无限等待。
-      if (!fingerprint || typeof crypto === 'undefined' || !crypto?.subtle?.digest) return false;
-      const buf = await crypto.subtle.digest('SHA-256', encoded);
-      const actual = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-      return actual === fingerprint;
-    } catch (e) {
-      _zhxErr('v3verify', e);
-      return false;
-    }
-  }
 
   async function _v3FindCachedFile(key, fingerprint, expectedBytes) {
     const current = await _v3ReadCachedFile(key, fingerprint);
@@ -84,36 +151,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
     return text;
   }
 
-  // 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
-  async function readCachedManifest(siteId = '') {
-    try {
-      const key = siteId ? 'zhx.v3.manifest.' + siteId : 'zhx.v3.manifest';
-      const mraw = await storeGetAsync(key);
-      if (mraw) {
-        const i = mraw.indexOf('\n');
-        if (i > 0) {
-          const timestamp=Number(mraw.slice(0,i));
-          const manT=Number.isSafeInteger(timestamp)&&timestamp>0&&timestamp<=Date.now()?timestamp:0;
-          return { manT, man: JSON.parse(mraw.slice(i + 1)) };
-        }
-      }
-    } catch (e) { _zhxErr('v3manifest', e); }
-    return { manT: 0, man: null };
-  }
-
-  // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
-  async function _requestV3Manifest() {
-    let txt = null;
-    try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, { fresh: true }); }
-    catch (e) { txt = null; /* 请求失败时由 loadManifest 决定是否复用旧清单 */ }
-    if (typeof txt !== 'string' || !txt) return null;
-    try {
-      const manifest = JSON.parse(txt);
-      if (validV3Manifest(manifest)) return manifest;
-    } catch (e) { /* manifest 解析或 schema/policy 校验失败 */ }
-    return false;
-  }
-
   async function fetchManifest() {
     _manifestNetworkAttempted = true;
     _manifestNeedsCommit = false;
@@ -122,10 +159,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
     _manifestNeedsCommit = Boolean(manifest);
     _manifestRejected = manifest === false;
     return manifest;
-  }
-
-  function _freshV3Manifest(snapshot) {
-    return snapshot.manT > 0 && Date.now() - snapshot.manT < DAY_MS && validV3Manifest(snapshot.man);
   }
 
   // 缓存优先 → 必要时网络（站点是否在列由 tryLoad 统一判断）
@@ -152,28 +185,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
     return files;
   }
 
-  function allFilesReady(names, files, sharedDict) {
-    for (const n of names) { if (files[n] == null) return false; }
-    return !(sharedDict && files.dict == null);
-  }
-
-  // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
-  // 任何一步失败或缺文件均返回 false；调用方保持安全空索引。
-  async function _commitV3Bundle(staged, manifest, siteId, commitSnapshot, commitManifest, canPublish) {
-    for (const [key, value] of staged) {
-      if (!await storeSetAsync(key, value)) return false;
-    }
-    const value = String(Date.now()) + '\n' + JSON.stringify(manifest);
-    if (canPublish && !await canPublish()) return false;
-    if (commitSnapshot && !await storeSetAsync('zhx.v3.manifest.' + siteId, value)) {
-      return false;
-    }
-    if (commitManifest && ((canPublish && !await canPublish()) || !await storeSetAsync('zhx.v3.manifest', value))) {
-      return false;
-    }
-    return true;
-  }
-
   function _v3SiteCacheKeys(siteId, manifest) {
     const site = manifest?.sites?.[siteId];
     const entries = Object.entries(site?.files || {});
@@ -195,17 +206,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
     let listed = null;
     try { listed = await storeListAsync(); } catch (e) { listed = null; }
     await _deleteStaleV3Files(siteId, previousManifest, currentManifest, listed);
-  }
-
-  function _manifestSiteFiles(manifest, site, need) {
-    const sm = manifest?.sites?.[site.id]?.files;
-    if (!sm || typeof sm !== 'object') return null;
-    const names = Object.keys(sm);
-    const required = requiredV3Files(site);
-    if (!names.length || required.some((name) => !sm[name])) return null;
-    const sharedDict = (need.includes('dict') && manifest.shared?.dict) || null;
-    if (need.includes('dict') && !sharedDict) return null;
-    return { sm, names, sharedDict, itemIds: manifest.sites[site.id].itemIds };
   }
 
   async function _readPreviousV3Manifest(siteId) {
