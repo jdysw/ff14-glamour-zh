@@ -31,6 +31,19 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     return color + (isNew ? ' 新增' : '');
   }
 
+  // Pin official terminology even when the deployed runtime dictionary
+  // still contains the older EC abbreviations.
+  const EC_UI_LABELS = new Map([
+    ['Facewear', '面部配饰'], ['FACE', '面部配饰'], ['Face', '面部配饰'],
+    ['Any facewear', '任意面部配饰'],
+    ['Exclude promotional facewear', '排除促销面部配饰'],
+    ['Exclude seasonal facewear', '排除季节活动面部配饰'],
+    ['Pair Of Wings', '双翼'], ['Creature Designs', '生物造型'],
+  ]);
+  function ecUiLabel(label) {
+    return EC_UI_LABELS.get(label) || DICT_EC[label];
+  }
+
   function trEC(text) {
     if (!text) return text;
     const t = text.trim();
@@ -38,7 +51,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
     // Editorial paragraphs contain source indentation/newlines between words.
     // Match their normalized text while retaining the surrounding inline markup.
-    const hit = DICT_EC[t] || DICT_EC[t.replace(/\s+/g, ' ')] || ecDyePreviewText(t);
+    const hit = ecUiLabel(t) || ecUiLabel(t.replace(/\s+/g, ' ')) || ecDyePreviewText(t);
     if (hit) {
       const i = text.indexOf(t);
       return text.slice(0, i) + hit + text.slice(i + t.length);
@@ -61,8 +74,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     [/^(\s*)Last updated:\s*/i, '$1最后更新：'],
     [/^(\s*)in The Firmament (\(X:\s*\d+(?:\.\d+)?\s+Y:\s*\d+(?:\.\d+)?\))(\s*)$/i, '$1位于天穹街 $2$3'],
     // 面饰页动态文案
-    [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (DICT_EC[x] || x) + ' —'],
-    [/^—\s{0,8}Next\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 下一个' + (DICT_EC[x] || x) + ' —'],
+    [/^—\s{0,8}Previous\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 上一个' + (ecUiLabel(x) || x) + ' —'],
+    [/^—\s{0,8}Next\s{1,8}(.{1,200}?)\s{0,8}—$/, (m0, x) => '— 下一个' + (ecUiLabel(x) || x) + ' —'],
     // 分类标题 em-dash 包裹（— Weapon — 等）+ Shader 前缀（v1.14.2）
     [/^[—–-]\s{0,8}(.{1,200}?)\s{0,8}[—–-]$/, (m0, x) => '— ' + (DICT_EC[x] || x) + ' —'],
     [/^Shader:\s{0,8}(.{1,200})$/i, (m0, x) => '滤镜：' + (DICT_EC[x] || x)],
@@ -840,6 +853,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
+    if (ecWearableKind(globalThis.location?.pathname) && p?.closest?.(EC_WEARABLE_DETAIL_TITLE)) return;
+    // Do not consume the native title with the generic dictionary before
+    // the official Item data becomes available and the ready scan runs.
+    if (p?.closest?.(EC_WEARABLE_LINK_TITLE) && p.closest(EC_WEARABLE_LINKS)) return;
     // Gearset H1 has split name/Set nodes: generic trEC would append 套装 to
     // known series BEFORE the dedicated structure-aware pass can inspect it.
     // Only the Gearsets title translator is allowed to touch this H1.
@@ -855,6 +872,74 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   let ecBusy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
+
+  const EC_WEARABLE_LINKS = 'a[href^="/facewear/"], a[href^="/fashion-accessory/"]';
+  const EC_WEARABLE_DETAIL_TITLE = 'h1.title.has-negative-letter-spacing > span.has-text-primary';
+  const EC_WEARABLE_LINK_TITLE = 'p.title.has-text-text, .media-content span.subtitle';
+
+  function ecWearableKind(path) {
+    return /^\/(facewear|fashion-accessory)\/[a-z\d-]+\/?$/u.exec(path || '')?.[1];
+  }
+
+  function ecWearableName(name, kind) {
+    if (kind === 'facewear') {
+      // Facewear names can exist only as official unlock manuals in V3 Item.
+      const manualName = name === 'Monocle' ? 'Monocles' : name;
+      const manual = tryEnToZh('The Faces We Wear - ' + manualName);
+      if (manual?.startsWith('面部配饰：')) return manual.slice('面部配饰：'.length);
+      return tryEnToZh(name);
+    }
+    return tryEnToZh(name) || DICT_EC[name];
+  }
+
+  function localizeECWearableTitle(title, kind) {
+    const translation = ecWearableName(title.textContent.trim(), kind);
+    if (translation) ecSetVisibleText(title, translation);
+  }
+
+  function translateECWearableNames(rootArg) {
+    const scope = localScope(rootArg);
+    for (const link of ecGearsetTitleRoots(scope, EC_WEARABLE_LINKS)) {
+      const kind = ecWearableKind(link.getAttribute('href'));
+      if (!kind) continue;
+      for (const title of link.querySelectorAll(EC_WEARABLE_LINK_TITLE)) {
+        localizeECWearableTitle(title, kind);
+      }
+    }
+
+    const kind = ecWearableKind(globalThis.location?.pathname);
+    if (!kind) return;
+    for (const title of ecHomeCandidates(rootArg, EC_WEARABLE_DETAIL_TITLE)) localizeECWearableTitle(title, kind);
+  }
+
+  function ecWearableImageLabel(label, kind) {
+    if (!label.endsWith(' Icon')) return ecWearableName(label, kind);
+    const name = ecWearableName(label.slice(0, -5), kind);
+    return name ? name + '图标' : null;
+  }
+
+  const EC_CREATOR_STATS = new Map([
+    ['Albums', '相册'], ['Followers', '关注者'], ['Following', '正在关注'],
+  ]);
+
+  function translateECCreatorUI(rootArg) {
+    const path = globalThis.location?.pathname || '';
+    const page = /^\/creator\/\d+(?:\/(followers|following))?\/?$/u.exec(path);
+    if (!page) return;
+    for (const stat of ecHomeCandidates(rootArg, 'aside nav.level p.heading')) {
+      const label = EC_CREATOR_STATS.get(stat.textContent.trim());
+      if (label) ecSetVisibleText(stat, label);
+    }
+    if (!page[1]) return;
+    const name = document.querySelector('aside h1.title.has-negative-letter-spacing')?.textContent.trim();
+    if (!name) return;
+    const followers = page[1] === 'followers';
+    const source = followers ? 'Creators Following ' + name : 'Creators ' + name + ' Follows';
+    const localized = followers ? name + '的关注者' : name + '关注的创作者';
+    for (const heading of ecHomeCandidates(rootArg, '.column > h1.title.has-negative-letter-spacing')) {
+      if (heading.textContent.trim() === source) ecSetVisibleText(heading, localized);
+    }
+  }
 
   // The homepage navigation is split across nodes; derive the label from its
   // *destination*, not a stale English menu caption. In particular, 7.0 is
@@ -1021,7 +1106,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   function ecCensusYear(path) {
-    return /^\/year-in-review\/([0-9]{4})\/?$/u.exec(path || '')?.[1];
+    return /^\/year-in-review\/(\d{4})\/?$/u.exec(path || '')?.[1];
   }
 
   function ecInterviewTitle(label) {
@@ -1173,6 +1258,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (attr === 'title' && _zhixiaTitleKeep.has(el)) return;
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
+    const kind = el.tagName === 'IMG' ? ecWearableKind(el.closest('a[href]')?.getAttribute('href')) : null;
+    if (kind && (attr === 'alt' || attr === 'title')) {
+      const label = ecWearableImageLabel(old, kind);
+      if (label) el.setAttribute(attr, label);
+      return;
+    }
     let translated = trEC(old);
     if (attr === 'alt') translated = ecEditorialImageLabel(el, old) || translated;
     if (attr === 'alt') {
@@ -1205,8 +1296,15 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     }
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
+    const kind = ecWearableKind(globalThis.location?.pathname);
+    if (kind) {
+      const localized = ecWearableName(parts[0], kind);
+      if (localized) document.title = localized + ' | Eorzea Collection';
+      return;
+    }
     const isInterview = ecIsInterviewDetail();
-    const translated = parts.map((part) => (isInterview && ecInterviewTitle(part)) || ecChallengeTabTitle(part)
+    const translated = parts.map((part) => EC_UI_LABELS.get(part)
+      || (isInterview && ecInterviewTitle(part)) || ecChallengeTabTitle(part)
       || ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
       || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
@@ -1227,6 +1325,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECChallengeEditorial(rootArg);
       translateECInterviewHeading(rootArg);
       translateECCensusHeadings(rootArg);
+      translateECWearableNames(rootArg);
+      translateECCreatorUI(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
       translateECDyePreviewHeading(rootArg);

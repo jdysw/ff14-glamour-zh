@@ -43,17 +43,22 @@ function ecLinkPath(element) {
   return href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
 }
 
-// Series details are native catalogue destinations, not single item Wiki links.
+// Native catalogue destinations retain their site links rather than becoming Wiki links.
 export function isECSeriesLink(element) {
-  return isECContext() && /^\/(?:gearset|accessories)\/[^/?#]+(?:[/?#]|$)/u.test(ecLinkPath(element));
+  return isECContext() && /^\/(?:gearset|accessories|facewear|fashion-accessory)\/[^/?#]+(?:[/?#]|$)/u.test(ecLinkPath(element));
 }
 
 export function isECAuthoredContent(element) {
   if (!element?.closest || !isECContext()) return false;
   if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
-  // The site's mega menu also uses h1 elements; these are UI, not work titles.
-  return isECAuthoredPath(ecLinkPath(element))
-    || (isECAuthoredPath(globalThis.location?.pathname) && !!element.closest('h1.title.has-negative-letter-spacing'));
+  if (isECAuthoredPath(ecLinkPath(element))) return true;
+  const path = globalThis.location?.pathname || '';
+  if (/^\/creator\/\d+(?:\/|$)/u.test(path)) {
+    // The main follower-list heading contains UI text; only the sidebar
+    // contains the authored profile name, biography and portrait.
+    return !!element.closest('aside :is(h1.title.has-negative-letter-spacing, p.content.has-text-light.mt-4.mb-2.pt-2, .image.is-relative img[alt])');
+  }
+  return isECAuthoredPath(path) && !!element.closest('h1.title.has-negative-letter-spacing');
 }
 
 // Authored text must not become UI or an item merely by matching a dictionary.

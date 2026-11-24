@@ -287,7 +287,10 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
   const raw = 'Rolanberry Red Dye';
   assert.equal(_applyV3({ candidatePolicy: 1, names:
     raw + '\t罗兰莓染剂\t1\t0\nInk Blue Dye\t油墨蓝染剂\t1\t0\n' +
-    'Ink Blue\t油墨蓝染剂\t1\t0\n' }), true);
+    'Ink Blue\t油墨蓝染剂\t1\t0\n' +
+    'The Faces We Wear - Simple Spectacles\t面部配饰：基础款眼镜\t0\t0\n' +
+    'The Faces We Wear - Monocles\t面部配饰：单眼镜\t0\t0\n' +
+    'Angel Wings\t天使之翼\t1\t0\n' }), true);
   try {
     withGlobals({ document: d, window: dom, location: dom.location, Node: dom.Node, NodeFilter: dom.NodeFilter }, () => {
       d.title = 'Dyes Preview | Eorzea Collection';
@@ -326,6 +329,65 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         assert.equal(d.querySelector('[href="/accessories/avalanche-brawlers"]').textContent, '雪崩斗手饰品 代币兑换');
         assert.equal(d.querySelector('[href="/gearset/festival-neotunic"]').textContent, '欢庆新式文化衫套装 商城');
       });
+      withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/facewear') }, () => {
+        d.title = 'Facewear | Eorzea Collection';
+        translateECTitle();
+        assert.equal(d.title, '面部配饰 | Eorzea Collection',
+          '页面标题中官译优先于运行时词典旧译');
+      });
+      withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/facewear/simple-spectacles') }, () => {
+        d.title = 'Simple Spectacles | Eorzea Collection';
+        d.body.innerHTML = '<a href="/facewear">Facewear</a>' +
+          '<h1 class="title has-negative-letter-spacing"><span class="has-text-primary">Simple Spectacles</span></h1>' +
+          '<h2>— Next Facewear —</h2><a href="/facewear/monocle"><img alt="Monocle Icon">' +
+          '<p class="title has-text-text">Monocle</p></a><a href="/glamour/21/sample"><p class="title has-text-text">Monocle</p></a>';
+        const catalogue = d.querySelector('a[href="/facewear/monocle"]');
+        translateECPage(catalogue.querySelector('p').firstChild);
+        translateECPage();
+        translateECTitle();
+        assert.equal(d.querySelector('a[href="/facewear"]').textContent, '面部配饰');
+        assert.equal(d.querySelector('h1').textContent, '基础款眼镜');
+        assert.equal(d.querySelector('h2').textContent, '— 下一个面部配饰 —');
+        assert.equal(d.title, '基础款眼镜 | Eorzea Collection');
+        assert.equal(catalogue.querySelector('p').textContent, '单眼镜');
+        assert.equal(catalogue.querySelector('img').alt, '单眼镜图标');
+        assert.equal(catalogue.getAttribute('href'), '/facewear/monocle');
+        assert.equal(d.querySelector('a[href^="/glamour/"] p').textContent, 'Monocle');
+        bindGlobalWikiJump();
+        const click = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
+        catalogue.querySelector('p').dispatchEvent(click);
+        assert.equal(click.defaultPrevented, false, '面部配饰详情保留原站链接');
+      });
+      withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/fashion-accessory/angel-wings') }, () => {
+        d.title = 'Angel Wings | Eorzea Collection';
+        d.body.innerHTML = '<h1 class="title has-negative-letter-spacing"><span class="has-text-primary">Angel Wings</span></h1>' +
+          '<a href="/fashion-accessories?subtype=back-2wings">Pair Of Wings</a>';
+        translateECPage();
+        translateECTitle();
+        assert.equal(d.querySelector('h1').textContent, '天使之翼');
+        assert.equal(d.title, '天使之翼 | Eorzea Collection');
+        assert.equal(d.querySelector('a').textContent, '双翼');
+        assert.equal(d.querySelector('a').getAttribute('href'), '/fashion-accessories?subtype=back-2wings');
+      });
+      for (const [route, english, localized] of [
+        ['following', 'Creators Ink Blue Follows', 'Ink Blue关注的创作者'],
+        ['followers', 'Creators Following Ink Blue', 'Ink Blue的关注者'],
+      ]) {
+        withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/creator/42/' + route) }, () => {
+          d.body.innerHTML = '<aside><h1 class="title has-negative-letter-spacing">Ink Blue</h1>' +
+            '<div class="image is-relative"><img alt="Ink Blue"></div>' +
+            '<p class="content has-text-light mt-4 mb-2 pt-2">Ink Blue</p><nav class="level">' +
+            '<p class="heading">Albums</p></nav></aside><div class="column">' +
+            '<h1 class="title has-negative-letter-spacing">' + english + '</h1></div>';
+          translateECPage();
+          translateECPage();
+          assert.equal(d.querySelector('.column h1').textContent, localized);
+          assert.equal(d.querySelector('aside h1').textContent, 'Ink Blue');
+          assert.equal(d.querySelector('aside .content').textContent, 'Ink Blue');
+          assert.equal(d.querySelector('aside img').alt, 'Ink Blue');
+          assert.equal(d.querySelector('.heading').textContent, '相册');
+        });
+      }
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/companion-glamour/231/adventurers-basics') }, () => {
         d.title = 'Ink Blue | Eorzea Collection';
         d.body.innerHTML = '<h1 class="minititle is-mega-menu-title">Browse all</h1>' +
