@@ -2,7 +2,7 @@ import * as searchData from './data/data-manager.js';
 import { EC_ACCESSORY_SLOT_NATIVES } from './search-equipment-categories.js';
 import { itemNames, miramiruLanguage, nativeLanguage } from './item-languages.js';
 import { createSearchPanel, isSuggestionQuery } from './chinese-search-panel.js';
-import { normalizeSearchQuery, isChineseSearchQuery, buildSearchUrl, submitNativeForm,
+import { normalizeSearchQuery, isChineseSearchQuery, submitNativeForm,
   createNativeOptionPicker, createSearchInputTransport } from './chinese-search-submit.js';
 
 // Controlled inputs keep the native value. Ordinary standalone searches restore
@@ -86,6 +86,10 @@ function findSearchInput(form) {
   return result;
 }
 
+function searchLanguage(value) {
+  const lang = String(value || '').replaceAll('"', '').toLowerCase().split(/[-_]/)[0];
+  return ['en', 'ja', 'ko'].includes(lang) ? lang : null;
+}
 
 export function createChineseSearchController(data = searchData) {
   const { onTablesReady, resolveByZh, resolveByName, resolvePartialByZh, suggestByZh,
@@ -111,11 +115,6 @@ export function createChineseSearchController(data = searchData) {
   }
 
   const SEARCH_LANGUAGES = { fc: 'ja', mirapri: 'ja', collection: 'ja', ec: 'en', ronka: 'ko', eden: 'ja' };
-  function searchLanguage(value) {
-    const lang = String(value || '').replaceAll('"', '').toLowerCase().split(/[-_]/)[0];
-    return ['en', 'ja', 'ko'].includes(lang) ? lang : null;
-  }
-
   function controlSearchLanguage(input, site = _activeSearchSiteId) {
     const explicit = searchLanguage(input?.dataset?.searchLanguage || input?.getAttribute?.('lang'));
     if (explicit) return explicit;
@@ -592,7 +591,8 @@ export function createChineseSearchController(data = searchData) {
 
 const { startChineseSearch, handleChineseSearchSubmit } = createChineseSearchController();
 
+export { buildSearchUrl } from './chinese-search-submit.js';
 export {
-  buildSearchUrl, findSearchInput, handleChineseSearchSubmit, isChineseSearchQuery,
+  findSearchInput, handleChineseSearchSubmit, isChineseSearchQuery,
   normalizeSearchQuery, searchInputScore, startChineseSearch,
 };

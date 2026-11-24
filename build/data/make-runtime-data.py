@@ -51,29 +51,16 @@ SCHEMA = 3
 LANGS = ('en', 'ja', 'ko')
 DICT_JSON = 'dict.json'
 
-# 站点文件清单（与 src SITE_REGISTRY 的 indexes 对应）
-SITE_FILES = {
-    'mirapri':    ['names', 'hash', 'alias', 'dup'],
-    'ec':         ['names', 'hash', 'alias', 'dup'],
-    'fc':         ['names', 'hash', 'alias', 'dup', 'series'],
-    'ronka':      ['names', 'alias', 'dup'],
-    'collection': ['names', 'alias', 'dup', 'series', 'acl'],
-    'endcloset':  ['names', 'alias', 'dup'],
-    'miramiru':   ['names', 'hash', 'alias', 'dup'],
-    'wiki':       ['ecid', 'ko'],
-}
+# 站点与发布数据集共享同一配置；datasets 顺序参与清单版本指纹。
+site_config = json.loads((ROOT / 'src' / 'core' / 'site-config.json').read_text(encoding='utf-8'))
+DATASETS = site_config['datasets']
+SITE_FILES = {site: dataset['files'] for site, dataset in DATASETS.items()}
+SITE_LANGS = {site: dataset['languages'] for site, dataset in DATASETS.items()}
+V3_FILE_TYPES = site_config['fileTypes']
 
-# Phase 13：每站 names / dup 的语言键（各站翻译链实际查询语言）
-SITE_LANGS = {
-    'mirapri': ['ja'],
-    'ec': ['en'],
-    'fc': ['ja'],
-    'ronka': ['ko'],
-    'collection': ['ja'],
-    'endcloset': ['ko', 'en', 'ja'],
-    'miramiru': ['en', 'ja', 'ko'],
-    'wiki': [],
-}
+
+def _site_filename(name):
+    return f'{name}.{V3_FILE_TYPES[name]}'
 
 
 # EquipSlotCategory: 3 Head, 4 Body, 5 Gloves, 7 Legs, 8 Feet。
@@ -306,26 +293,24 @@ def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_t
     slot_names = slot_names or {lang: {} for lang in LANGS}
 
     shared = {
-        'hash': ('hash.tsv', _join_pairs(hashes.items()).encode('utf-8')),
-        'alias': ('alias.tsv', _join_multi(ali.items()).encode('utf-8')),
-        'ecid': ('ecid.tsv', _join_pairs(ecid.items()).encode('utf-8')),
-        'ko': ('ko.tsv', _join_pairs(ko_by_zh.items()).encode('utf-8')),
-        'series': ('series.txt', series_text.encode('utf-8')),
-        'acl': ('acl.txt', acl_text.encode('utf-8')),
+        'hash': _join_pairs(hashes.items()).encode('utf-8'),
+        'alias': _join_multi(ali.items()).encode('utf-8'),
+        'ecid': _join_pairs(ecid.items()).encode('utf-8'),
+        'ko': _join_pairs(ko_by_zh.items()).encode('utf-8'),
+        'series': series_text.encode('utf-8'),
+        'acl': acl_text.encode('utf-8'),
     }
     for site, want in SITE_FILES.items():
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                filename = 'names.tsv'
                 data = _join_triples(_site_name_pairs(site, langs, names, glams, slot_names)).encode('utf-8')
             elif name == 'dup':
-                filename = 'dup.tsv'
                 pairs = (kv for lang in langs for kv in dup_by_lang[lang].items())
                 data = _join_multi(pairs).encode('utf-8')
             else:
-                filename, data = shared[name]
-            out[site, filename] = data
+                data = shared[name]
+            out[site, _site_filename(name)] = data
     return out
 
 
@@ -348,7 +333,7 @@ def _write_sites(out_dir, files):
         site_dir.mkdir(parents=True, exist_ok=True)
         sm = {}
         for name in want:
-            fname = f'{name}.txt' if name in ('series', 'acl') else f'{name}.tsv'
+            fname = _site_filename(name)
             data = files[(site, fname)]
             s = sha256_hex(data)
             (site_dir / fname).write_bytes(data)

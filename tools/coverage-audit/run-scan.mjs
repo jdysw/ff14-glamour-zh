@@ -12,7 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, REPO_ROOT, DIST_FILE } from './audit.mjs';
+import { renderUserscriptHeader } from '../../build/userscript/metadata.mjs';
+import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, DIST_FILE } from './audit.mjs';
 import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
 import { discoverSitemapUrls } from './sitemap.mjs';
 import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
@@ -215,7 +216,7 @@ async function main() {
   if (!siteArg) { usage(); process.exit(2); }
 
   const sites = siteArg === 'all' ? Object.keys(SITES) : [siteArg];
-  const header = fs.readFileSync(path.join(REPO_ROOT, 'build/userscript/userscript-header.txt'), 'utf8');
+  const header = renderUserscriptHeader();
   // Never claim host coverage on a host where the released userscript cannot run.
   for (const site of sites) {
     const cfg = SITES[site];

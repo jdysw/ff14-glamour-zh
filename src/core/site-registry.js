@@ -1,6 +1,6 @@
 import { dataGetStatus, ensureTables, onTablesReady } from './data/data-manager.js';
 import { observeUntilDomReady } from './observer.js';
-import { findSitePolicy } from './site-policy.js';
+import { findSitePolicy, SITE_POLICIES } from './site-policy.js';
 import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, EARLY_EQUIPMENT_SEL, startItems, translateEarlyEquipment, translateKnownEquipmentText } from './targets.js';
 import { bindECPieceTiles, resolveECGearsetSearch, suggestECGearsetsByZh, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
@@ -21,7 +21,7 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
 
   /* @zhixia:site-registry-start */
   /* ── Site Registry：站点启动行为与 DOM 适配器 ──────────────────
-     域名、数据表、索引需求统一由 site-policy.js 提供，禁止在此重复维护。
+     域名、数据表、索引需求和站点顺序来自 site-policy.js。
      本模块只绑定站点启动函数和页面生命周期回调；启动与数据策略分层后，
      数据管理器不需要加载站点启动适配器。 */
   // Register only the lifecycle hooks used by main.js and data readiness.
@@ -55,17 +55,13 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
     };
   }
 
-  const SITE_REGISTRY = [
-    // 站点顺序须与 site-policy.js 的配置一致。
-    // （注册顺序 = 匹配优先级，保持 Phase 3 金标准不变）
-    createSiteAdapter({
-      id: 'mirapri',
+  const SITE_HOOKS = {
+    mirapri: {
       early: { selector: EARLY_EQUIPMENT_SEL, translate: translateEarlyEquipment },
       start() { startMirapri(); startItems(); },
       onPageShow() { safe(translatePage, 'pageshow')(); safe(applyItemZh, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'ec',
+    },
+    ec: {
       chineseSearch: createECSearchStrategy(resolveECGearsetSearch, suggestECGearsetsByZh),
       early: {
         selector: EARLY_EQUIPMENT_SEL,
@@ -92,18 +88,16 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
         safe(bindECPieceTiles, 'pageshow')();
         safe(applyItemZh, 'pageshow')();
       },
-    }),
-    createSiteAdapter({
-      id: 'wiki',
+    },
+    wiki: {
       start() {
         startWiki();
         applyWikiReading().catch(err => _zhxErr('Wiki 阅读排版', err));
       },
       onDataReady() { safe(injectWikiButton, 'Wiki 反查刷新')(); },
       onPageShow() { safe(injectWikiButton, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'fc',
+    },
+    fc: {
       early: {
         selector: FC_EARLY_EQUIPMENT,
         translate: root => translateKnownEquipmentText(root, FC_EARLY_EQUIPMENT, translateFCPage),
@@ -111,15 +105,13 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
       start() { startFC(); },
       onDataReady() { safe(translateFCPage, 'FC 补扫')(); safe(translateFCTitle, 'FC 标题')(); safe(fixFCMenu, 'FC 菜单')(); safe(bindFCBanners, 'FC 横幅')(); },
       onPageShow() { safe(translateFCPage, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'ronka',
+    },
+    ronka: {
       start() { startRonka(); },
       onDataReady() { safe(translateRonkaPage, 'Ronka 补扫')(); safe(translateRonkaTitle, 'Ronka 标题')(); },
       onPageShow() { safe(translateRonkaPage, 'pageshow')(); safe(translateRonkaTitle, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'collection',
+    },
+    collection: {
       early: {
         selector: ACL_EARLY_EQUIPMENT,
         translate: root => translateKnownEquipmentText(root, ACL_EARLY_EQUIPMENT, translateACLPage),
@@ -127,22 +119,28 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
       start() { startACL(); },
       onDataReady() { safe(translateACLPage, 'ACL 补扫')(); safe(translateACLTitle, 'ACL 标题')(); },
       onPageShow() { safe(translateACLPage, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'endcloset',
+    },
+    endcloset: {
       start() { startEndCloset(); },
       onDataReady() { safe(translateEndClosetPage, 'EndCloset 补扫')(); safe(translateEndClosetTitle, 'EndCloset 标题')(); },
       onPageShow() { safe(translateEndClosetPage, 'pageshow')(); safe(translateEndClosetTitle, 'pageshow')(); },
-    }),
-    createSiteAdapter({
-      id: 'miramiru',
+    },
+    miramiru: {
       start: startMiramiru,
       onDataReady() { translateMiramiruPage(); },
       onPageShow: translateMiramiruPage,
-    }),
-    createSiteAdapter({ id: 'eden', start: startEden,
-      onDataReady() { translateEdenPage(); }, onPageShow: translateEdenPage }),
-  ];
+    },
+    eden: {
+      start: startEden,
+      onDataReady() { translateEdenPage(); },
+      onPageShow: translateEdenPage,
+    },
+  };
+
+  const SITE_REGISTRY = SITE_POLICIES.map(({ id }) => {
+    if (!Object.hasOwn(SITE_HOOKS, id)) throw new Error('站点缺少生命周期配置：' + id);
+    return createSiteAdapter({ id, ...SITE_HOOKS[id] });
+  });
 
   // 只保留站点启动行为；站点选择和数据需求由纯策略模块负责。
   function findSite() {

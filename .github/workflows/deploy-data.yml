@@ -21,6 +21,7 @@ on:
       - 'src/core/data/v3-contract.js'
       - 'src/core/data/dict-contract.js'
       - 'src/core/site-policy.js'
+      - 'src/core/site-config.json'
       - '.github/workflows/deploy-data.yml'
       - '.github/deploy/**'
   workflow_dispatch:

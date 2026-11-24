@@ -1,20 +1,15 @@
-export { SITE_POLICIES, DATA_POLICIES, findSitePolicy, neededTables, _siteIndexes, onHost };
-// 站点数据需求与宿主匹配属于纯配置，不依赖翻译器、数据加载器或 DOM 适配器。
-// 数据层通过本模块查询当前站点，避免反向引入启动适配器而形成循环依赖。
-/* @zhixia:site-policy-start */
-const SITE_POLICIES = Object.freeze([
-  { id: 'mirapri', hosts: ['mirapri.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
-  { id: 'ec', hosts: ['eorzeacollection.com'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
-  { id: 'wiki', hosts: ['huijiwiki.com'], tables: ['items', 'dict'], indexes: ['ecidMap', 'koByZh'] },
-  { id: 'fc', hosts: ['ff14-fc.com'], tables: ['items', 'series', 'dict'], indexes: ['nameMap', 'itemHash'] },
-  { id: 'ronka', hosts: ['ronkacloset.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
-  { id: 'collection', hosts: ['ffxivcollection.com'], tables: ['items', 'series', 'acl', 'dict'], indexes: ['nameMap'] },
-  { id: 'endcloset', hosts: ['end-closet.com'], tables: ['items', 'dict'], indexes: ['nameMap'] },
-  { id: 'miramiru', hosts: ['miramiru.co'], tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
-  { id: 'eden', hosts: ['mirapri.ff14eden.work'], dataSite: 'miramiru', tables: ['items', 'dict'], indexes: ['nameMap', 'itemHash'] },
-]);
-// Eden 的制作器使用多语装备名，复用 Miramiru 的现有多语索引与缓存。
-// 应用站点与发布数据集分开，新增界面适配无需新增重复数据或改变现行清单。
+import config from './site-config.json' with { type: 'json' };
+export { SITE_POLICIES, DATA_POLICIES, V3_FILE_TYPES, findSitePolicy, neededTables, _siteIndexes, onHost };
+
+// 与发布顺序独立：保持客户端原有的 V3 文件读取顺序。
+const V3_FILE_TYPES = Object.freeze(config.fileTypes);
+const INDEX_FILES = { nameMap: 'names', itemHash: 'hash', ecidMap: 'ecid', koByZh: 'ko' };
+const SITE_POLICIES = Object.freeze(config.sites.map(({ id, hosts, dataSite }) => {
+  const files = Object.freeze(Object.keys(V3_FILE_TYPES).filter(name => config.datasets[dataSite ?? id].files.includes(name)));
+  const tables = ['items', ...['series', 'acl'].filter(name => files.includes(name)), 'dict'];
+  const indexes = Object.keys(INDEX_FILES).filter(index => files.includes(INDEX_FILES[index]));
+  return { id, hosts, ...(dataSite ? { dataSite } : {}), tables, indexes, files };
+}));
 const DATA_POLICIES = Object.freeze(SITE_POLICIES.filter(site => !site.dataSite));
 
 // 必须精确匹配主域或子域，不能让 evilmirapri.com 绕过宿主限制。
@@ -40,5 +35,3 @@ function _siteIndexes() {
   if (window.__zhxTestIndexes) return window.__zhxTestIndexes;
   return findSitePolicy()?.indexes || null;
 }
-/* @zhixia:site-policy-end */
-

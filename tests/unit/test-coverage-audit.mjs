@@ -1,8 +1,6 @@
 // Offline audit engine regression tests. Do not require Chrome, networking, or the live sites.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { renderUserscriptHeader } from '../../build/userscript/metadata.mjs';
 import {
   SITES, COLLECTOR_JS, classify, classifyResiduals, buildReport, isResidual,
 } from '../../tools/coverage-audit/audit.mjs';
@@ -13,8 +11,7 @@ import {
 import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const header = fs.readFileSync(path.join(root, 'build/userscript/userscript-header.txt'), 'utf8');
+const header = renderUserscriptHeader();
 assert.equal(classify('Miramiru',{ui:true}),'exempt');
 assert.equal(classify('FFXIV WEAPON COLLECTION',{ui:true}),'exempt');
 assert.equal(classify('关于 Miramiru',{ui:true,before:'About Miramiru'}),'ok');

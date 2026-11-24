@@ -5,17 +5,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
+import config from '../../src/core/site-config.json' with { type: 'json' };
+import { siteMatchLines } from './metadata.mjs';
 import { findPython } from '../python.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const siteId = process.argv[2];
-const sites = {
-  miramiru: { label: 'Miramiru', host: 'miramiru.co', dataSite: 'miramiru' },
-  eden: { label: 'Mirapri Eden', host: 'mirapri.ff14eden.work', dataSite: 'miramiru' },
-};
-const site = Object.hasOwn(sites, siteId) ? sites[siteId] : null;
-if (!site) throw new Error('Specify site: miramiru or eden');
-const { dataSite } = site;
+const labels = new Map([['miramiru', 'Miramiru'], ['eden', 'Mirapri Eden']]);
+const label = labels.get(siteId);
+const site = config.sites.find(site => site.id === siteId);
+if (!site || !label) throw new Error('Specify site: miramiru or eden');
+const dataSite = site.dataSite ?? site.id;
 const dataDir = path.join(root, '.cache', siteId + '-test-data');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 execFileSync(findPython(), ['build/data/make-runtime-data.py', '--out', dataDir], {
@@ -43,10 +43,10 @@ if (end < '// ==/UserScript=='.length) throw new Error('Build the production scr
 const header = production.slice(0, end).split(/\r?\n/)
   .filter(line => !/^\/\/ @(?:match|grant|connect|updateURL|downloadURL)\s/.test(line))
   .map(line => {
-    if (line.startsWith('// @name ')) return `// @name         FF14 ${site.label} 中文支持 · ${version} 测试版`;
+    if (line.startsWith('// @name ')) return `// @name         FF14 ${label} 中文支持 · ${version} 测试版`;
     if (line.startsWith('// @namespace ')) return `// @namespace    https://github.com/jdysw/ff14-glamour-zh/${siteId}-test`;
-    if (line.startsWith('// @description ')) return `// @description  ${site.label} 中文、装备 Wiki 跳转与搜索测试。内置数据；独立安装，不写正式版缓存。测试结束后请停用。`;
-    if (line === '// ==/UserScript==') return `// @match        https://${site.host}/*\n// @grant        none\n` + line;
+    if (line.startsWith('// @description ')) return `// @description  ${label} 中文、装备 Wiki 跳转与搜索测试。内置数据；独立安装，不写正式版缓存。测试结束后请停用。`;
+    if (line === '// ==/UserScript==') return `${siteMatchLines([site]).join('\n')}\n// @grant        none\n` + line;
     return line;
   }).join('\n');
 const source = String.raw`${header}
@@ -69,7 +69,7 @@ const source = String.raw`${header}
   const GM_deleteValue = key => { cache.delete(key); };
   const GM_xmlhttpRequest = options => { queueMicrotask(() => options.onerror?.({status:0})); };
   ${production.slice(end)}
-})().catch(error => console.error('[${site.label} test]', error));
+})().catch(error => console.error('[${label} test]', error));
 `;
 const target = path.join(root, 'dist', `ff14-${siteId}-zh-${version}-test.user.js`);
 fs.writeFileSync(target, source);

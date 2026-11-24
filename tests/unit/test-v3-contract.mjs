@@ -3,7 +3,9 @@ import { findPython } from '../../build/python.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DATA_POLICIES, SITE_POLICIES } from '../../src/core/site-policy.js';
+import { renderUserscriptHeader } from '../../build/userscript/metadata.mjs';
+import { DATA_POLICIES, SITE_POLICIES, onHost } from '../../src/core/site-policy.js';
+import { SITE_REGISTRY } from '../../src/core/site-registry.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from '../../src/core/data/v3-contract.js';
 import { RUNTIME_DICT_LAYERS, validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 
@@ -18,7 +20,27 @@ const python = [
 const published = JSON.parse(execFileSync(findPython(), ['-c', python], { cwd: root, encoding: 'utf8' }));
 assert.equal(DATA_POLICIES.length, 8);
 assert.deepEqual(Object.keys(published).sort(), DATA_POLICIES.map(site => site.id).sort(),
-  'Python 发布器与 JavaScript 应用层必须服务相同七站');
+  'Python 发布器与 JavaScript 应用层必须服务相同数据集');
+assert.deepEqual(Object.keys(published), ['mirapri', 'ec', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'wiki'],
+  '数据集顺序参与发布指纹');
+assert.deepEqual(SITE_REGISTRY.map(site => site.id), SITE_POLICIES.map(site => site.id));
+const matches = [...renderUserscriptHeader().matchAll(/^\/\/ @match +(.+)$/gm)].map(match => match[1]);
+assert.deepEqual(matches, [
+  'https://mirapri.com/*',
+  'https://ffxiv.eorzeacollection.com/*',
+  'https://ff14.huijiwiki.com/wiki/*',
+  'https://ff14-fc.com/*',
+  'https://lookbook.ronkacloset.com/*',
+  'https://www.ffxivcollection.com/*',
+  'https://weapon.ffxivcollection.com/*',
+  'https://end-closet.com/*',
+  'https://miramiru.co/*',
+  'https://mirapri.ff14eden.work/*',
+]);
+for (const match of matches) {
+  const { hostname } = new URL(match);
+  assert.equal(SITE_POLICIES.filter(site => site.hosts.some(host => onHost(hostname, host))).length, 1);
+}
 for (const site of DATA_POLICIES) {
   assert.deepEqual([...requiredV3Files(site)].sort(), [...published[site.id]].sort(),
     site.id + ' 必需 V3 数据文件与生成器输出必须严格一致');

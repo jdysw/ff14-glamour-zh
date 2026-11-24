@@ -87,6 +87,16 @@ function ecSearchContext(input) {
   return accessoryPage ? { kind: 'accessories' } : null;
 }
 
+function ecGearsetsSearchUrl(native, href) {
+  if (!native) return null;
+  try {
+    const url = new URL(href);
+    url.searchParams.set('search', native);
+    url.searchParams.delete('page'); // 换关键词后必须回到第一页，否则会误报无结果。
+    return url.toString();
+  } catch { return null; }
+}
+
 export function createECSearchStrategy(resolveCatalog, suggestCatalog) {
   // Vue 的动态表单不会保证在 input 事件时同步读取被临时改写的值；因此只在明确提交时用站点原生 URL 查询。
   // 仅识别 Gearsets 主搜索框，不接管筛选部位、职业或其他页面的输入框。
@@ -100,16 +110,6 @@ export function createECSearchStrategy(resolveCatalog, suggestCatalog) {
     if (/search by (title|player)|author|username|creator|filter by|作者|玩家|标题|標題/i.test(meta)) return false;
     // translateECAttrs 会将 "Search..." 翻译为 "搜索…"，识别不能只依赖英文占位符。
     return /\b(search|keyword)\b/i.test(meta) || /搜索|搜尋|检索|檢索/.test(meta);
-  }
-
-  function ecGearsetsSearchUrl(native, href) {
-    if (!native) return null;
-    try {
-      const url = new URL(href);
-      url.searchParams.set('search', native);
-      url.searchParams.delete('page'); // 换关键词后必须回到第一页，否则会误报无结果。
-      return url.toString();
-    } catch { return null; }
   }
 
   function submitECGearsetsSearch(input, selectedNative = null) {

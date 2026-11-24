@@ -3,10 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {siteMatchLines} from './metadata.mjs';
 import {ensureChineseFont} from '../../src/core/dom.js';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..','..');
 const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
-const matches=fs.readFileSync(path.join(root,'build/userscript/userscript-header.txt'),'utf8').split(/\r?\n/).filter(line=>line.startsWith('// @match '));
+const matches=siteMatchLines();
 if(!matches.length)throw new Error('No supported sites in userscript header');
 const source=`// ==UserScript==
 // @name         FF14 中文字体统一 · 测试版
