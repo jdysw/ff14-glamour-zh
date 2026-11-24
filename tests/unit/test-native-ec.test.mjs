@@ -218,6 +218,64 @@ test('EC 导航与编辑文案：按目标链接翻译，并区别挑战与玩�
       assert.equal(d.title, '❄️ 凛冬：8 月幻化挑战 | Eorzea Collection');
       assert.equal(d.querySelector('a p').textContent, '❄️ Verycold');
     });
+    // News-card prefixes must be tied to a matching editorial destination,
+    // including the exact census year. Links and personal names stay native.
+    withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/news') }, () => {
+      const card = (href, title) => '<a href="' + href + '"><article class="card"><img alt="' + title +
+        '"><div class="card-content"><p class="title">' + title + '</p></div></article></a>';
+      const cards = [
+        ['/interview/snow-white', 'We interviewed Snow White!', '专访：Snow White!'],
+        ['/interview/edeon-vails', 'Interview with the Creator - Edeon Vails!', '创作者访谈：Edeon Vails!'],
+        ['/year-in-review/2025', '2025 in Review', '2025 年度回顾'],
+        ['/year-in-review/2024', '2025 in Review', '2025 in Review'],
+        ['/glamour/241/example', 'We interviewed Snow White!', 'We interviewed Snow White!'],
+      ];
+      d.body.innerHTML = cards.map(([href, title]) => card(href, title)).join('');
+      d.querySelector('a[href^="/interview/"] .card').insertAdjacentHTML('afterbegin', '<div class="ribbon">Interview</div>');
+      const teaser = '<div class="content">Check out the 2025 census to find out what were the hottest gear pieces, the most used colors and which server was the most glamourous, among other things!</div>';
+      for (const content of d.querySelectorAll('a[href^="/year-in-review/"] .card-content')) {
+        content.insertAdjacentHTML('beforeend', teaser);
+      }
+      translateECPage();
+      translateECPage();
+      assert.equal(d.querySelector('.ribbon').textContent, '社区访谈');
+      assert.match(d.querySelector('[href="/year-in-review/2025"] .content').textContent, /^查看 2025 年度统计/u);
+      assert.match(d.querySelector('[href="/year-in-review/2024"] .content').textContent, /^Check out the 2025 census/u);
+      assert.deepEqual([...d.querySelectorAll('a')].map(a =>
+        [a.getAttribute('href'), a.querySelector('p').textContent, a.querySelector('img').alt]),
+      cards.map(([href, , expected]) => [href, expected, expected]));
+    });
+    withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/interview/snow-white'), Node: dom.Node }, () => {
+      d.title = 'Community Interview - Snow White | Eorzea Collection';
+      d.body.innerHTML = '<h1 class="b-title-text">Community <b class="b-title-text-bold">Interview</b></h1>' +
+        '<article class="b-article"><h3 class="c-author-name">Snow White</h3>' +
+        '<img class="c-author-image" alt="Snow White"><p>Our original interview answer.</p></article>';
+      const bold = d.querySelector('h1 b');
+      translateECPage(bold.previousSibling);
+      translateECPage();
+      translateECTitle();
+      assert.equal(d.querySelector('h1').textContent, '社区访谈');
+      assert.equal(d.querySelector('h1 b'), bold);
+      assert.equal(d.title, '社区访谈：Snow White | Eorzea Collection');
+      assert.equal(d.querySelector('.c-author-name').textContent, 'Snow White');
+      assert.equal(d.querySelector('.c-author-image').alt, 'Snow White');
+      assert.equal(d.querySelector('article p').textContent, 'Our original interview answer.');
+    });
+    withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/year-in-review/2025'), Node: dom.Node }, () => {
+      d.title = '2025 with EC';
+      d.body.innerHTML = '<section><h1 class="title has-negative-letter-spacing"><span><span>Eorzea Collection</span> in 2025</span></h1>' +
+        '<h4 class="subtitle">Most popular</h4><h3 class="title">GEARSETS</h3><p class="subtitle">279583</p></section>';
+      const brand = d.querySelector('h1 span span');
+      translateECPage(brand.nextSibling);
+      translateECPage();
+      translateECTitle();
+      assert.equal(d.querySelector('h1').textContent, 'Eorzea Collection 2025 年度回顾');
+      assert.equal(d.querySelector('h1 span span'), brand);
+      assert.equal(d.title, 'Eorzea Collection 2025 年度回顾');
+      assert.equal(d.querySelector('h4').textContent, '最受欢迎的');
+      assert.equal(d.querySelector('h3').textContent, '装备套装');
+      assert.equal(d.querySelector('p').textContent, '279583');
+    });
 
   });
   dom.close();

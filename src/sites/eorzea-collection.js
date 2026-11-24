@@ -836,7 +836,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.('#filter_server option')) return;
-    if (p?.closest?.(EC_SKIP_SEL) || isECAuthoredContent(p)) return;
+    if (p?.closest?.(EC_SKIP_SEL) || isECAuthoredContent(p) || isECInterviewByline(p)) return;
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
@@ -982,7 +982,26 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
-  const EC_CHALLENGE_CARD = 'a[href^="/challenges/"] .card';
+  const EC_EDITORIAL_CARD = 'a:is([href^="/challenges/"],[href^="/interview/"],[href^="/year-in-review/"]) .card';
+  const EC_INTERVIEW_TITLES = [
+    ['We interviewed ', '专访：'],
+    ['Community Interview - ', '社区访谈：'],
+    ['Interview with the Creator - ', '创作者访谈：'],
+  ];
+  const EC_CENSUS_HEADINGS = new Map([
+    ['GLAMOURS', '幻化投稿'], ['Number of glamours by', '幻化投稿数统计'],
+    ['RACE', '种族'], ['GENDER', '性别'], ['ROLE', '职能'], ['DISCIPLE', '职业门类'],
+    ['SERVER', '服务器'], ['CREATOR', '创作者'],
+    ['Most used', '使用最多的'], ['COLORS', '染色'],
+    ['HEAD PIECE', '头部装备'], ['CHEST PIECE', '身体装备'], ['HAND PIECE', '手部装备'],
+    ['LEG PIECE', '腿部装备'], ['FEET PIECE', '脚部装备'], ['WEAPON', '武器'],
+    ['FASHION ACCESSORY', '时尚配饰'], ['Most popular', '最受欢迎的'],
+    ['GEARSETS', '装备套装'], ['CHOCOBO GLAMOURS', '陆行鸟幻化'],
+    ['FASHION ASSISTANT', '时尚助手'], ['TAGS', '标签'],
+    ['PROFILE COLORS', '个人主页配色'], ['PROFILE BACKGROUNDS', '个人主页背景'],
+    ['NEW LINES OF CODE', '新增代码行数'], ['CHANGED FILES', '修改文件数'],
+    ['NEW USERS REGISTERED', '新注册用户'], ['USERS BECAME PATRONS', '新增赞助用户'],
+  ]);
 
   function ecIsNewsListing() {
     const path = globalThis.location?.pathname || '';
@@ -991,6 +1010,34 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   function ecIsChallengeDetail() {
     return /^\/challenges\/[a-z0-9-]+\/?$/u.test(globalThis.location?.pathname || '');
+  }
+
+  function ecIsInterviewDetail() {
+    return /^\/interview\/[a-z0-9-]+\/?$/u.test(globalThis.location?.pathname || '');
+  }
+
+  function isECInterviewByline(element) {
+    return ecIsInterviewDetail() && !!element?.closest?.('.c-author-name, .c-author-image');
+  }
+
+  function ecCensusYear(path) {
+    return /^\/year-in-review\/([0-9]{4})\/?$/u.exec(path || '')?.[1];
+  }
+
+  function ecInterviewTitle(label) {
+    for (const [source, localized] of EC_INTERVIEW_TITLES) {
+      if (label.startsWith(source) && label.length > source.length) return localized + label.slice(source.length);
+    }
+    return null;
+  }
+
+  function ecEditorialCardTitle(element, label) {
+    if (!element.closest(EC_EDITORIAL_CARD)) return null;
+    const href = element.closest('a[href]')?.getAttribute('href') || '';
+    if (href.startsWith('/challenges/')) return ecChallengeTitle(label);
+    if (href.startsWith('/interview/')) return ecInterviewTitle(label);
+    const year = ecCensusYear(href);
+    return year && label === year + ' in Review' ? year + ' 年度回顾' : null;
   }
 
   function ecChallengeMonthLabel(label) {
@@ -1010,11 +1057,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     return title && monthLabel ? title + '：' + monthLabel : null;
   }
 
-  function ecChallengeImageLabel(element, label) {
-    if (globalThis.location?.pathname === '/' ||
-        (ecIsNewsListing() && element.closest(EC_CHALLENGE_CARD))) {
-      return ecChallengeTitle(label);
-    }
+  function ecEditorialImageLabel(element, label) {
+    if (globalThis.location?.pathname === '/') return ecChallengeTitle(label);
+    if (ecIsNewsListing()) return ecEditorialCardTitle(element, label);
     const suffix = ' Glamour Challenge';
     if (ecIsChallengeDetail() && element.closest('.b-article-content') && label.endsWith(suffix)) {
       const title = ecChallengeTitle(label.slice(0, -suffix.length));
@@ -1023,19 +1068,72 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     return null;
   }
 
-  function translateECChallengeEditorial(rootArg) {
-    if (ecIsNewsListing()) {
-      // Match only published editorial cards, never entries in a glamour grid.
-      for (const title of ecHomeCandidates(rootArg, EC_CHALLENGE_CARD + ' .card-content .title')) {
-        const localized = ecChallengeTitle((title.textContent || '').trim());
-        if (localized) ecSetVisibleText(title, localized);
+  function translateECEditorialCards(rootArg) {
+    if (!ecIsNewsListing()) return;
+    // Match only published editorial cards, never entries in a glamour grid.
+    for (const title of ecHomeCandidates(rootArg, EC_EDITORIAL_CARD + ' .card-content .title')) {
+      const localized = ecEditorialCardTitle(title, (title.textContent || '').trim());
+      if (localized) ecSetVisibleText(title, localized);
+    }
+    for (const ribbon of ecHomeCandidates(rootArg, 'a[href^="/interview/"] .card .ribbon')) {
+      if (ribbon.textContent.trim() === 'Interview') ecSetVisibleText(ribbon, '社区访谈');
+    }
+    for (const teaser of ecHomeCandidates(rootArg, 'a[href^="/year-in-review/"] .card-content .content')) {
+      const year = ecCensusYear(teaser.closest('a[href]')?.getAttribute('href'));
+      if (!year) continue;
+      const original = 'Check out the ' + year + ' census to find out what were the hottest gear pieces, the most used colors and which server was the most glamourous, among other things!';
+      if (teaser.textContent.replace(/\s+/gu, ' ').trim() === original) {
+        ecSetVisibleText(teaser, '查看 ' + year + ' 年度统计，了解最热门的装备、最常用的染色，以及最爱幻化的服务器等。');
       }
     }
+  }
+
+  function translateECChallengeEditorial(rootArg) {
     if (!ecIsChallengeDetail()) return;
     translateECSplitHeading(rootArg, 'Challenge', '挑战', ecChallengeTitle);
     for (const subtitle of ecHomeCandidates(rootArg, 'h2.b-title-sub')) {
       const localized = ecChallengeMonthLabel((subtitle.textContent || '').trim());
       if (localized) ecSetVisibleText(subtitle, localized);
+    }
+  }
+
+  function translateECInterviewHeading(rootArg) {
+    if (!ecIsInterviewDetail()) return;
+    for (const bold of ecHomeCandidates(rootArg, 'h1.b-title-text > b.b-title-text-bold')) {
+      const lead = bold.previousSibling;
+      if (lead?.nodeType !== Node.TEXT_NODE) continue;
+      const source = lead.nodeValue.trim() + ' ' + bold.textContent.trim();
+      if (source === 'Community Interview') {
+        lead.nodeValue = '社区';
+        bold.textContent = '访谈';
+      } else if (source === 'Interview with the Creator') {
+        lead.nodeValue = '';
+        bold.textContent = '创作者访谈';
+      }
+    }
+    for (const role of ecHomeCandidates(rootArg, '.c-author-label')) {
+      if (role.textContent.trim() === '- The Creator -') ecSetVisibleText(role, '— 创作者 —');
+    }
+  }
+
+  function ecCensusTitle(year) {
+    return 'Eorzea Collection ' + year + ' 年度回顾';
+  }
+
+  function translateECCensusHeadings(rootArg) {
+    const year = ecCensusYear(globalThis.location?.pathname);
+    if (!year) return;
+    // The brand already occupies a styled native span. Change only its suffix.
+    for (const brand of ecHomeCandidates(rootArg, 'h1.title.has-negative-letter-spacing > span > span')) {
+      const tail = brand.nextSibling;
+      if (brand.textContent.trim() === 'Eorzea Collection'
+          && tail?.nodeType === Node.TEXT_NODE && tail.nodeValue.trim() === 'in ' + year) {
+        tail.nodeValue = ' ' + year + ' 年度回顾';
+      }
+    }
+    for (const heading of ecHomeCandidates(rootArg, 'section h3.title, section h4.subtitle')) {
+      const localized = EC_CENSUS_HEADINGS.get(heading.textContent.trim());
+      if (localized) ecSetVisibleText(heading, localized);
     }
   }
 
@@ -1071,12 +1169,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // Site hydration updates tooltips and accessibility labels after the initial scan.
   // Translate each current attribute value: sticky 'done' flags hide later updates.
   function _translateECAttr(el, attr) {
-    if (el.closest?.(EC_SKIP_SEL) || isECAuthoredContent(el)) return;
+    if (el.closest?.(EC_SKIP_SEL) || isECAuthoredContent(el) || isECInterviewByline(el)) return;
     if (attr === 'title' && _zhixiaTitleKeep.has(el)) return;
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
     let translated = trEC(old);
-    if (attr === 'alt') translated = ecChallengeImageLabel(el, old) || translated;
+    if (attr === 'alt') translated = ecEditorialImageLabel(el, old) || translated;
     if (attr === 'alt') {
       if (old === 'male') translated = '男性';
       else if (old === 'female') translated = '女性';
@@ -1100,10 +1198,17 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   function translateECTitle() {
     if (isECAuthoredPath(globalThis.location?.pathname)) return;
     const old = document.title;
+    const year = ecCensusYear(globalThis.location?.pathname);
+    if (year && old === year + ' with EC') {
+      document.title = ecCensusTitle(year);
+      return;
+    }
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
-    const translated = parts.map((part) => ecChallengeTabTitle(part) || ecAccessoryDisplayName(part)
-      || ecGearsetDisplayName(part) || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    const isInterview = ecIsInterviewDetail();
+    const translated = parts.map((part) => (isInterview && ecInterviewTitle(part)) || ecChallengeTabTitle(part)
+      || ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
+      || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }
 
@@ -1118,7 +1223,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECServers(rootArg);
       // Resolve full editorial sentences before individual text fragments.
       translateECHomeEditorial(rootArg);
+      translateECEditorialCards(rootArg);
       translateECChallengeEditorial(rootArg);
+      translateECInterviewHeading(rootArg);
+      translateECCensusHeadings(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
       translateECDyePreviewHeading(rootArg);
