@@ -122,6 +122,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     '<h3 id="updates">— <span>Latest Updates</span> —</h3>',
     '<h3 id="event">❄️ <em>Verycold</em></h3>',
     '<p id="promo">The Eorzea Collection 周边系列 is finally here!</p>',
+    '<p id="challenge-intro">Every month, our Patrons vote on a theme for the glamour challenge and come up with a glamour that fits that theme. For August, we challenged them to prepare for the frozen lands of Evercold with frosty and blustery glamours.</p>',
     '<img id="model" alt="Female Midlander">',
     '<img id="challenge" alt="🎃 Spooky Season">',
     '</section>',
@@ -149,6 +150,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#updates').textContent, '— 最新更新 —');
     assert.equal(d.querySelector('#event').textContent, '❄️ 凛冬');
     assert.equal(d.querySelector('#promo').textContent, 'Eorzea Collection 周边商品系列正式推出！');
+    assert.equal(d.querySelector('#challenge-intro').textContent, '每个月，赞助人都会投票选出幻化挑战主题，并围绕主题创作。8 月的挑战是为永冻之地做好准备，设计充满冰雪与寒风气息的幻化。');
     assert.equal(d.querySelector('#model').alt, '人族·中原之民女性');
     assert.equal(d.querySelector('#challenge').alt, '🎃 惊魂季');
     assert.equal(d.querySelector('#authored').textContent, 'Verycold');
@@ -157,6 +159,11 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#job').textContent, '职业校服');
     // Same sitewide header repeats outside the homepage.
     withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/gearsets') }, () => {
+      const raw = d.querySelector('#challenge-intro');
+      raw.textContent = 'Every month, our Patrons vote on a theme for the glamour challenge and come up with a glamour that fits that theme. For August, we challenged them to prepare for the frozen lands of Evercold with frosty and blustery glamours.';
+      translateECHomeEditorial();
+      assert.ok(raw.textContent.startsWith('Every month, our Patrons vote'),
+        '编辑正文仅限首页，不翻译其他页面正文');
       d.querySelector('#expansion').textContent = 'From Endwalker';
       translateECNavigation();
       assert.equal(d.querySelector('#expansion').textContent, '自金曦之遗辉起');
