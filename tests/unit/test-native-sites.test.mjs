@@ -894,7 +894,7 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
   }
 });
 
-test('灰机 Wiki 面部配饰：解锁道具反查 EC 面饰详情', async () => {
+test('灰机 Wiki 面部及时尚配饰：杂货解锁道具反查 EC 目录详情', async () => {
   const originalDocument = globalThis.document;
   const dom = createTestDom(`
     <h1 id="firstHeading"><span class="mw-page-title-main">面部配饰：窄框眼镜</span></h1>
@@ -916,6 +916,23 @@ test('灰机 Wiki 面部配饰：解锁道具反查 EC 面饰详情', async () =
     document.querySelector('.mw-page-title-main').textContent = '面部配饰：暂无站点收录';
     injectWikiButton();
     assert.equal(document.querySelector('.zhixia-reverse-block'), null);
+
+    const nativeLink = blockByTitle('数据库链接').querySelector('a');
+    nativeLink.href = 'https://garlandtools.org/db/#item/33041';
+    nativeLink.textContent = 'Garland Data';
+    document.querySelector('.mw-page-title-main').textContent = '天使之翼';
+    injectWikiButton();
+    injectWikiButton();
+    assert.equal(document.querySelectorAll('.zhixia-reverse-block').length, 1);
+    assert.deepEqual([...document.querySelectorAll('.zhixia-reverse-block a')].map(a => a.href),
+      ['https://ffxiv.eorzeacollection.com/fashion-accessory/angel-wings']);
+    assert.equal(blockByTitle('数据库链接').querySelector('a'), nativeLink);
+    assert.equal(nativeLink.href, 'https://garlandtools.org/db/#item/33041');
+
+    document.querySelector('.mw-page-title-main').textContent = '尚未收录的配饰';
+    injectWikiButton();
+    assert.equal(document.querySelector('.zhixia-reverse-block'), null);
+    assert.equal(blockByTitle('数据库链接').querySelector('a'), nativeLink);
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;

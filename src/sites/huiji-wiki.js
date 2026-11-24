@@ -75,6 +75,58 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
   ]);
   const FACEWEAR_PREFIX = /^面部配饰\s*[:：]\s*/;
 
+  // Wiki 把时尚配饰解锁道具归入杂货。只收录 EC 实际目录链接与官方物品名的精确匹配。
+  const EC_FASHION_ACCESSORY_SLUGS = new Map([
+    ['阳伞', 'parasol'],
+    ['天蓝阳伞', 'sky-blue-parasol'],
+    ['红漆油纸伞', 'vermilion-paper-parasol'],
+    ['紫漆油纸伞', 'plum-paper-parasol'],
+    ['黄漆油纸伞', 'gold-paper-parasol'],
+    ['沉稳方格阳伞', 'calming-checkered-parasol'],
+    ['活力方格阳伞', 'cheerful-checkered-parasol'],
+    ['典雅方格阳伞', 'classy-checkered-parasol'],
+    ['趣味圆点阳伞', 'pleasant-dot-parasol'],
+    ['端庄圆点阳伞', 'prim-dot-parasol'],
+    ['田园圆点阳伞', 'pastoral-dot-parasol'],
+    ['金碟阳伞', 'gold-parasaucer'],
+    ['隆卡的水蛇伞？', 'great-paraserpent'],
+    ['猫小胖阳伞', 'fat-cat-parasol'],
+    ['红月油纸伞', 'red-moon-parasol'],
+    ['白色花边阳伞', 'white-lace-parasol'],
+    ['蓝色印花阳伞', 'blue-blossom-parasol'],
+    ['防雨系统', 'raindrop-defense-system'],
+    ['仙人刺阳伞', 'sabotender-parasol'],
+    ['猫耳小员伞', 'felicitous-furball-umbrella'],
+    ['监工小员伞', 'tactful-taskmaster-umbrella'],
+    ['天使之翼', 'angel-wings'],
+    ['堕天使之翼', 'fallen-angel-wings'],
+    ['大天使之翼', 'archangel-wings'],
+    ['迪亚波罗斯之翼', 'diabolos-wings'],
+    ['付丧神油纸伞', 'tsukumogami-parasol'],
+    ['仙子族之翼', 'pixie-wings'],
+    ['斯塔缇丝之翼', 'statices-wings'],
+    ['蓝色仙子族之翼', 'bluepowder-pixie-wings'],
+    ['大叶伞', 'giant-leaf-parasol'],
+    ['胡萝卜阳伞', 'colorful-carrotsol'],
+    ['蔓德拉阳伞', 'mandragora-parasol'],
+    ['预言蛋阳伞', 'archon-egg-parasol'],
+    ['黑色蕾丝阳伞', 'black-embroidered-parasol'],
+    ['獭獭先生背包', 'senor-otter-pack'],
+    ['拾穗人背包', 'knapsack'],
+    ['白色蕾丝阳伞', 'white-embroidered-parasol'],
+    ['霓虹阳伞', 'neon-parasol'],
+    ['兔兔阳伞', 'loparasol'],
+    ['爆弹怪阳伞', 'bomb-parasol'],
+    ['火炬', 'torch'],
+    ['缎带阳伞', 'ribboned-parasol'],
+    ['泡狐龙猫花伞', 'mizutsune-parasol'],
+    ['仙子阳伞', 'pixie-parasol'],
+    ['蓝色仙子阳伞', 'blue-pixie-parasol'],
+    ['佩鲁佩鲁族背包', 'pelupack'],
+    ['天方阳伞', 'corvosi-parasol'],
+    ['魔石精阳伞', 'spriggan-parasol'],
+  ]);
+
   // EC 同伴幻化筛选目录与国服物品表按英文名精确匹配。
   // 同名的 EC 重复记录使用其主编号（与 XIVApiId 一致的记录）。
   const EC_BARDING_IDS = new Map([
@@ -304,6 +356,8 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     // Wiki 可将面部配饰解锁道具归入杂货，此时由物品名识别。
     const zh = getItemZhName();
     if (FACEWEAR_PREFIX.test(zh)) return { key: 'facePiece', label: '面部配饰' };
+    const fashionSlug = EC_FASHION_ACCESSORY_SLUGS.get(zh);
+    if (fashionSlug) return { key: 'fashionAccessory', label: '时尚配饰', slug: fashionSlug };
     const bardingId = EC_BARDING_IDS.get(zh);
     if (bardingId) return { key: 'barding', label: '陆行鸟装甲', bardingId };
     let r = _slotHit(document.querySelector('.infobox-item--name-category'));
@@ -319,6 +373,10 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
     if (!slot) { cb(null); return; }
     const zh = getItemZhName();
     if (!zh) { cb(null); return; }
+    if (slot.key === 'fashionAccessory') {
+      cb({ href: new URL('/fashion-accessory/' + slot.slug, EC_BASE).href, why: slot.label + ' · ' + zh });
+      return;
+    }
     if (slot.key === 'facePiece') {
       const slug = EC_FACEWEAR_SLUGS.get(zh.replace(FACEWEAR_PREFIX, ''));
       cb(slug ? { href: new URL('/facewear/' + slug, EC_BASE).href, why: slot.label + ' · ' + zh } : null);
@@ -341,7 +399,7 @@ export { EC_BASE, EC_SLOT, MIRAPRI_BASE, RONKA_BASE, _buildReverseBlock, _mountR
       ]);
     }
     const items = [];
-    if (slot?.key === 'facePiece') {
+    if (slot?.key === 'facePiece' || slot?.key === 'fashionAccessory') {
       eorzeaLink((ec) => { if (ec) items.push([ec.href, 'Eorzea Collection', 'ec']); }, slot);
       return items;
     }
