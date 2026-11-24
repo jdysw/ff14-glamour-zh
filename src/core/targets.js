@@ -2,6 +2,7 @@ import { createTranslationObserver } from './observer.js';
 import { WIKI_ITEM } from './constants.js';
 import { ensureTables, resolve, resolveByName } from './data/data-manager.js';
 import { localScope, queryIn } from './dom.js';
+import { isECAuthoredContent, isECSeriesLink } from './content-scope.js';
 import { _perfNow, safe } from './runtime.js';
 export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMENT_SEL, PLACEHOLDER, _domStats, applyItemZh, applyPlaceholder, bindGlobalWikiJump, collectTargets, dispatchTargets, processRoot, startItems, translateEarlyEquipment, translateKnownEquipmentText, zhApply, zhApplyCards, zhApplyDye, zhApplyPlain };
 
@@ -66,8 +67,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     const pushItems = () => {
       // item：装备链接（两站均用 eorzeadb_link 标记）
       for (const a of scan(EC_ITEM_LINK_SEL)) {
-        if (isECSearchOption(a) || a.getAttribute('href')?.includes(EC_SHOP_PATH) ||
-            a.classList.contains('zhixia-item-zh')) continue;
+        if (isECSearchOption(a) || a.getAttribute('href')?.includes(EC_SHOP_PATH)
+            || a.classList.contains('zhixia-item-zh') || isECAuthoredContent(a)) continue;
         const el = a.querySelector('span') || a;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 2 || name.length > 48) continue;
@@ -78,7 +79,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     const pushPlainItems = () => {
       // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
       for (const sp of scan(EC_PLAIN_ITEM_SEL)) {
-        if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')) continue;
+        if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')
+            || isECSeriesLink(sp) || isECAuthoredContent(sp)) continue;
         const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
         if (!resolveByName(name)) continue;
@@ -88,7 +90,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     const pushCards = () => {
       // card：EC 列表页卡片标题（外层 <a> 指向站内页）
       for (const el of scan(EC_CARD_SEL)) {
-        if (isECSearchOption(el) || el.dataset.zhixiaCard) continue;
+        if (isECSearchOption(el) || el.dataset.zhixiaCard
+            || isECAuthoredContent(el) || isECSeriesLink(el)) continue;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
         if (!resolveByName(name)) continue;
@@ -265,7 +268,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     window.__zhixiaWikiJumpBound = true;
     document.addEventListener('click', (e) => {
       const el0 = e.target;
-      if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)) return;
+      if (!el0?.closest || isECSearchOption(el0) || isECNativeControl(el0)
+          || isECAuthoredContent(el0) || isECSeriesLink(el0)) return;
       const a = el0.closest('a[href*="lodestone"], a[href*="eorzeadb"], a.eorzeadb_link, a[href*="/gear/"], a[href*="garland"], a[href*="eriones"], a[href*="gamerescape"], a[href*="ffxivdb"]');
       if (a?.getAttribute('href')?.includes(EC_SHOP_PATH)) return;
       let probe = a || el0;

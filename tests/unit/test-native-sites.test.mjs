@@ -9,7 +9,7 @@ import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
-import { trMiramiru, translateMiramiruTitle } from '../../src/sites/miramiru.js';
+import { trMiramiru, translateMiramiruPage, translateMiramiruTitle } from '../../src/sites/miramiru.js';
 import { trEden, translateEdenPage, startEden, edenImageKey, indexEdenRecipes, loadEdenRecipes } from '../../src/sites/mirapri-eden.js';
 import { startXivc, translateXivcPage, trXivc } from '../../src/sites/xivc.js';
 
@@ -71,6 +71,21 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
     assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
     assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
+    assert.equal(trEden('画像をダウンサンプリング→ΔEベースのクラスタリングで同系色を統合。ほぼ白（L>95）／ほぼ黒（L<5）は除外。 出力数は最大6色。'),
+      '缩小图片并按 ΔE 色差合并近似颜色。排除近白（L > 95）和近黑（L < 5），最多显示 6 种颜色。');
+    assert.equal(trEden('反対主 / 20%'), '主色的互补色 / 20%');
+    assert.equal(trEden('主 40% #de0b16'), '主色 40% #de0b16');
+    const ranking = document.createElement('div');
+    ranking.innerHTML = '<a class="matched" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/?patch=latest">...</a>'
+      + '<a class="unknown" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/ffff00/?patch=latest">...</a>'
+      + '<a class="historical" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/?patch=6.0">...</a>'
+      + '<a class="external" href="https://example.test/lodestone/playguide/db/item/abcdef/?patch=latest">...</a>';
+    document.body.append(ranking);
+    const unchanged = [...ranking.querySelectorAll('a:not(.matched)')].map(a => a.href);
+    translateEdenPage(ranking);
+    assert.ok(ranking.querySelector('.matched').href.endsWith(encodeURIComponent('测试装备')));
+    assert.deepEqual([...ranking.querySelectorAll('a:not(.matched)')].map(a => a.href), unchanged);
+    ranking.remove();
     assert.equal(trEden('不认识的玩家标题'),'不认识的玩家标题');
     startEden();
     assert.equal(title.textContent,'装备排行榜');assert.equal(name.textContent,'测试装备');
@@ -213,7 +228,11 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
   assert.equal(trMiramiru('  '), '  ');
   assert.equal(trMiramiru('Unknown player title'), 'Unknown player title');
   const old = globalThis.document;
+  const oldLocation = globalThis.location;
+  const oldNodeFilter = globalThis.NodeFilter;
+  const dom = new TestWindow({url:'https://miramiru.co/'});
   try {
+    globalThis.location = dom.location;
     for (const suffix of ['FFXIV Glamour Showcase','FFXIV ミラプリ紹介サイト','FFXIV 투영 소개 사이트']) {
       globalThis.document = {title:'Miramiru - ' + suffix};
       translateMiramiruTitle();
@@ -222,7 +241,35 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     globalThis.document={title:'Miramiru 소개 | Miramiru'};
     translateMiramiruTitle();
     assert.equal(document.title,'关于 Miramiru | Miramiru');
-  } finally { if(old === undefined)delete globalThis.document;else globalThis.document=old; }
+
+    globalThis.document = dom.document;
+    globalThis.NodeFilter = dom.NodeFilter;
+    document.body.innerHTML = '<h1><span class="text-shimmer">Mira</span><span>miru</span>' +
+      '<span class="sr-only"> - FFXIV ミラプリ紹介サイト</span></h1>';
+    const visibleBrand = document.querySelector('.text-shimmer');
+    const subtitle = document.querySelector('.sr-only');
+    translateMiramiruPage(subtitle.firstChild);
+    translateMiramiruPage();
+    assert.equal(document.querySelector('h1').textContent, 'Miramiru - FF14 幻化展示');
+    assert.equal(document.querySelector('.text-shimmer'), visibleBrand);
+    assert.equal(document.querySelector('.sr-only'), subtitle);
+
+    globalThis.location = new URL('https://miramiru.co/ja/collection');
+    document.title = 'コレクション — Miramiru | Miramiru';
+    translateMiramiruTitle();
+    translateMiramiruTitle();
+    assert.equal(document.title, '收藏集 | Miramiru');
+    globalThis.location = new URL('https://miramiru.co/ja/mirapuri/player-title');
+    document.title = 'コレクション | Miramiru';
+    translateMiramiruTitle();
+    assert.equal(document.title, 'コレクション | Miramiru', '玩家作品标签页标题不按 UI 词典翻译');
+  } finally {
+    if (old === undefined) delete globalThis.document;
+    else globalThis.document = old;
+    globalThis.location = oldLocation;
+    globalThis.NodeFilter = oldNodeFilter;
+    dom.close();
+  }
 });
 
 test('Miramiru 用户可见规则：官方标签、数量、未知名称和原型键', () => {
@@ -286,7 +333,7 @@ import {
   tr, trNode, trEl, translateMirapriTitle,
 } from '../../src/sites/mirapri.js';
 import {
-  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem,
+  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage,
 } from '../../src/sites/ronka.js';
 import {
   _trEndClosetDye, _trEndClosetItem, trEndCloset,
@@ -594,6 +641,72 @@ test('Ronka 实体翻译：韩文补丁前缀和装备标记', () => {
   assert.equal(p.getAttribute('title'), '点击查看灰机 wiki 物品页');
   markRonkaItem(node, '测试中文装备');
   trimRonkaNode({ nodeValue: source, parentElement: element('SPAN') });
+
+  const globals = ['document', 'location', 'NodeFilter', 'MutationObserver'];
+  const previous = Object.fromEntries(globals.map(key => [key, globalThis[key]]));
+  const dom = new TestWindow({url:'https://lookbook.ronkacloset.com/about'});
+  const guide = 'https://guide.ff14.co.kr/lodestone/search?keyword=경비원 권총집 조끼';
+  try {
+    for (const key of globals) globalThis[key] = dom[key];
+    assert.equal(_applyV3({ candidatePolicy: 1, names: '경비원 권총집 조끼\t保镖枪带背心\t1\t1' }), true);
+    const doc = dom.document;
+    doc.body.innerHTML = '<div class="rule-list-wrap"><ul>'
+      + '<li>반드시 <strong>파이널판타지14 게임 내 배경</strong>을 사용해야 합니다.</li>'
+      + '<li>게시물 중<!-- --> <a href="https://www.ff14.co.kr/support/policy">파이널판타지14 운영정책</a> <!-- -->제7.4항 에 해당하는 ‘홈페이지 제재 항목’ 대상의 경우 작성자에게 사전통지 없이 해당 게시물을 삭제할 수 있으며, 이를 작성한 계정은 경고 1회 후 게시글 삭제</li>'
+      + '</ul></div><p class="post-title">코디아이템</p><img class="post-image" alt="코디아이템">'
+      + '<div class="item-searcher"><div class="post-item-information"><p>경비원 권총집 조끼</p></div>'
+      + '<div class="post-search-modal"><a href="' + guide + '">공식 가이드</a></div></div>';
+    const policy = doc.querySelector('.rule-list-wrap a');
+    const reinserted = policy.parentElement.cloneNode(true);
+    const emphasis = doc.querySelector('.rule-list-wrap strong');
+    translateRonkaPage();
+    translateRonkaPage();
+    assert.equal(doc.querySelector('.rule-list-wrap a'), policy);
+    assert.equal(policy.getAttribute('href'), 'https://www.ff14.co.kr/support/policy');
+    assert.match(policy.parentElement.textContent, /^如帖子属于《最终幻想14运营政策》第 7\.4 条/u);
+    assert.equal(doc.querySelector('.rule-list-wrap strong'), emphasis);
+    assert.equal(emphasis.parentElement.textContent, '必须使用最终幻想14游戏内背景。');
+    const itemWiki = doc.querySelector('.post-search-modal a');
+    assert.ok(itemWiki.href.endsWith(encodeURIComponent('保镖枪带背心')));
+    assert.equal(itemWiki.textContent, '灰机 wiki');
+    assert.equal(doc.querySelector('.post-item-information p').dataset.zhxItem, '保镖枪带背心');
+    assert.equal(doc.querySelector('.post-title').textContent, '코디아이템');
+    assert.equal(doc.querySelector('.post-image').alt, '코디아이템');
+    policy.parentElement.replaceWith(reinserted);
+    const restoredPolicy = reinserted.querySelector('a');
+    translateRonkaPage(restoredPolicy.firstChild);
+    assert.equal(reinserted.querySelector('a'), restoredPolicy);
+    assert.equal(restoredPolicy.href, policy.href);
+    assert.equal(restoredPolicy.textContent, '最终幻想14运营政策');
+
+    doc.body.innerHTML = `<div class="item-search-keyword">'유저'이 포함된 룩북 전체보기</div>`
+      + '<button class="primary-filter filter-keyword">검색: 유저<img alt="modal open button"></button>'
+      + '<div class="filter-layout-block"><p class="filter-title">검색어</p><div class="filter-item-align">'
+      + '<p class="filter-item filter-item-active">유저 X</p></div></div>'
+      + '<div class="search-result-user"><span>유저</span></div><div class="search-result-title">유저</div>'
+      + '<div class="palette-name-info"><img alt="add_color_icon">1염색 색상추가</div>'
+      + '<div class="palette-name-info"><div class="palette-name-color"></div>2<!-- -->염색 - <!-- -->기본색</div>';
+    const shortcut = doc.querySelector('.item-search-keyword');
+    const chip = doc.querySelector('button.filter-keyword');
+    const icon = chip.firstElementChild;
+    translateRonkaPage(doc.body);
+    assert.equal(shortcut.textContent, '查看包含“유저”的全部作品');
+    assert.equal(chip.textContent, '搜索： 유저');
+    assert.equal(chip.firstElementChild, icon);
+    assert.equal(doc.querySelector('.filter-title').textContent, '关键词');
+    assert.equal(doc.querySelector('.filter-item').textContent, '유저 X');
+    assert.equal(doc.querySelector('.search-result-user').textContent, '유저');
+    assert.equal(doc.querySelector('.search-result-title').textContent, '用户');
+    assert.deepEqual([...doc.querySelectorAll('.palette-name-info')].map(el => el.textContent),
+      ['1号染色：添加颜色', '2号染色：基础色']);
+  } finally {
+    _applyV3({ candidatePolicy: 1 });
+    cacheReset('lookup');
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    dom.close();
+  }
 });
 
 test('End Closet 实体翻译：英文统计、属性和装备标记', () => {
@@ -781,7 +894,7 @@ test('灰机 Wiki 实体适配：装备 ID、部位筛选和页面标题', () =>
   }
 });
 
-test('灰机 Wiki 面部配饰：解锁道具反查 EC 面饰详情', async () => {
+test('灰机 Wiki 面部及时尚配饰：杂货解锁道具反查 EC 目录详情', async () => {
   const originalDocument = globalThis.document;
   const dom = createTestDom(`
     <h1 id="firstHeading"><span class="mw-page-title-main">面部配饰：窄框眼镜</span></h1>
@@ -803,6 +916,23 @@ test('灰机 Wiki 面部配饰：解锁道具反查 EC 面饰详情', async () =
     document.querySelector('.mw-page-title-main').textContent = '面部配饰：暂无站点收录';
     injectWikiButton();
     assert.equal(document.querySelector('.zhixia-reverse-block'), null);
+
+    const nativeLink = blockByTitle('数据库链接').querySelector('a');
+    nativeLink.href = 'https://garlandtools.org/db/#item/33041';
+    nativeLink.textContent = 'Garland Data';
+    document.querySelector('.mw-page-title-main').textContent = '天使之翼';
+    injectWikiButton();
+    injectWikiButton();
+    assert.equal(document.querySelectorAll('.zhixia-reverse-block').length, 1);
+    assert.deepEqual([...document.querySelectorAll('.zhixia-reverse-block a')].map(a => a.href),
+      ['https://ffxiv.eorzeacollection.com/fashion-accessory/angel-wings']);
+    assert.equal(blockByTitle('数据库链接').querySelector('a'), nativeLink);
+    assert.equal(nativeLink.href, 'https://garlandtools.org/db/#item/33041');
+
+    document.querySelector('.mw-page-title-main').textContent = '尚未收录的配饰';
+    injectWikiButton();
+    assert.equal(document.querySelector('.zhixia-reverse-block'), null);
+    assert.equal(blockByTitle('数据库链接').querySelector('a'), nativeLink);
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;

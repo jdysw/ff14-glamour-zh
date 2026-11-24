@@ -113,21 +113,61 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     }
   }
 
-  // 规则区整行翻译（about 页 rule-list：逐节点拼接会语序错位的行，整行替换）
-  // 仅对命中词典的 li 生效；标记防重入，React 重渲染后韩文重现时会再次命中。
-  const RONKA_RULE_FULL = {
-    '반드시 파이널판타지14 게임 내 배경을 사용해야 합니다.': '必须使用最终幻想14游戏内背景。',
-    '게시물 중 파이널판타지14 운영정책 제7.4항 에 해당하는 ‘홈페이지 제재 항목’ 대상의 경우 작성자에게 사전통지 없이 해당 게시물을 삭제할 수 있으며, 이를 작성한 계정은 경고 1회 후 게시글 삭제': '帖子中属于最终幻想14运营政策第 7.4 条「官网处罚事项」的，可在不事先通知作者的情况下删除该帖子，相关账号警告 1 次后删除帖子',
-  };
-  function translateRonkaRules() {
-    const lis = queryIn(null, '.rule-list-wrap li, .rule-block-wrap li');   // v1.4.1：统一查询入口（全页调用）
-    for (const li of lis) {
-      if (li.dataset.zhxRule) continue;
-      const key = (li.textContent || '').trim();
-      if (!key || !RONKA_KR.test(key)) continue;
-      const zh = RONKA_RULE_FULL[key];
-      if (zh) { li.textContent = zh; li.dataset.zhxRule = '1'; }
+  // Two policy sentences need Chinese word order, but the site owns the
+  // inline policy link and emphasis. Update the existing text nodes in place.
+  const RONKA_RULE_FULL = new Map([
+    ['반드시 파이널판타지14 게임 내 배경을 사용해야 합니다.',
+      ['strong', '必须使用', '最终幻想14游戏内背景', '。']],
+    ['게시물 중 파이널판타지14 운영정책 제7.4항 에 해당하는 ‘홈페이지 제재 항목’ 대상의 경우 작성자에게 사전통지 없이 해당 게시물을 삭제할 수 있으며, 이를 작성한 계정은 경고 1회 후 게시글 삭제',
+      ['a[href]', '如帖子属于《', '最终幻想14运营政策', '》第 7.4 条所列的“官网处罚事项”，可不经事先通知删除，并对发帖账号记一次警告。']],
+  ]);
+
+  function translateRonkaRule(li) {
+    const rule = RONKA_RULE_FULL.get(li.textContent.trim().replace(/\s+/g, ' '));
+    if (!rule || li.children.length !== 1) return;
+    const [selector, before, label, after] = rule;
+    const inline = li.firstElementChild;
+    if (!inline.matches(selector) || inline.childNodes.length !== 1 || inline.firstChild.nodeType !== 3) return;
+    const text = [...li.childNodes].filter(node => node.nodeType === 3);
+    if (text.length < 2) return;
+    for (const node of text.slice(1, -1)) node.nodeValue = '';
+    text[0].nodeValue = before;
+    inline.firstChild.nodeValue = label;
+    text.at(-1).nodeValue = after;
+  }
+
+  function translateRonkaRules(rootArg) {
+    const scope = localScope(rootArg);
+    const selector = '.rule-list-wrap li, .rule-block-wrap li';
+    const current = scope?.closest(selector);
+    for (const li of current ? [current] : queryIn(scope, selector)) translateRonkaRule(li);
+  }
+
+  function translateRonkaPalette(raw) {
+    // React can render the channel, label and color as separate text nodes.
+    const match = /^([12]?)염색 (?:(색상추가)|-(.*))$/u.exec(raw);
+    if (!match) return trRonka(raw);
+    const [, channel, empty, color] = match;
+    return channel + '号染色：' + (empty ? '添加颜色' : trRonka(color.replace(/^ +/u, '')));
+  }
+
+  function isRonkaFilterKeyword(element) {
+    if (!element?.matches?.('.filter-item-active')) return false;
+    const title = element.parentElement?.previousElementSibling;
+    return title?.matches('.filter-title') && /^(?:검색어|关键词)$/u.test(title.textContent.trim());
+  }
+
+  function translateRonkaText(node, element, raw) {
+    if (element?.matches?.('.palette-name-info')) return translateRonkaPalette(raw);
+    if (element?.matches?.('.item-search-keyword')) {
+      return raw.replace(/^'(.+)'이 포함된 룩북 전체보기$/su, '查看包含“$1”的全部作品');
     }
+    // Only the leading label is UI; the other text is the native search query.
+    if (element?.matches?.('.filter-keyword')) {
+      return node === element.firstChild ? raw.replace(/^검색:(?=\s|$)/u, '搜索：') : raw;
+    }
+    if (isRonkaFilterKeyword(element)) return raw;
+    return trRonka(raw);
   }
 
   function trimRonkaNode(node) {
@@ -136,7 +176,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     const p = node.parentElement;
     if (p?.closest?.(RONKA_SKIP_SEL)) return;
     if (isAuthoredContent(p, 'ronka')) return;
-    const next = trRonka(raw);
+    const next = translateRonkaText(node, p, raw);
     if (next !== raw) {
       node.nodeValue = next;
       markRonkaItem(node, next);
@@ -216,8 +256,8 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   }
 
   function translateRonkaPage(rootArg) {
+    if (globalThis.location?.pathname === '/about') safe(translateRonkaRules, 'Ronka 规则整行')(rootArg);
     if (rootArg?.nodeType === 3) { trimRonkaNode(rootArg); return; }
-    if (!rootArg) safe(translateRonkaRules, 'Ronka 规则整行')();
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
     if (root.nodeType === 1) {

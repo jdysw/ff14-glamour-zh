@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isECSeriesLink } from '../../src/core/content-scope.js';
 import { DICT_EC } from '../../src/core/data/dictionary.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -28,14 +29,20 @@ const doc = {
     };
   },
 };
-const mockQuery = (_root, selector) => selector.includes('/accessories/') ? scope.accessoryAnchors
-  : selector.startsWith('a[href') ? scope.anchors : selector === 'h1' ? scope.headings : [];
+function mockQuery(_root, selector) {
+  if (!selector.startsWith('a[href')) return selector === 'h1' ? scope.headings : [];
+  const anchors = selector.includes('/accessories/') ? scope.accessoryAnchors : scope.anchors;
+  return anchors.map(anchor => Object.assign(anchor, {
+    closest: query => query === 'a[href]' && anchor.href ? anchor : null,
+    getAttribute: name => name === 'href' ? anchor.href ?? null : null,
+  }));
+}
 let dictRevision = 0;
 let itemIndex = Object.create(null);
-const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', source.slice(start, end) +
+const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', 'isECSeriesLink', source.slice(start, end) +
   '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, ecAccessoryDeepStatSeriesZh, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
-  doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery);
+  doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery, isECSeriesLink);
 
 const tr = api.ecGearsetDisplayName;
 assert.equal(tr('Phantom Vision Fending'), '幻境意象御敌套装');
@@ -96,6 +103,12 @@ assert.equal(tr('Praemagitek Healing'), '前魔导治愈套装');
 assert.equal(tr('Beastmaster\u0027s'), '兽主套装');
 assert.equal(tr('Yozakura'), '夜樱装束');
 assert.equal(tr('Graffiti Neotunic'), '涂鸦新式上衣套装');
+// An EC Gearset with one item must not gain the same suffix as a real pack.
+assert.equal(tr('Blooming Eyeglasses Set'), '彩花装饰眼镜');
+assert.equal(tr('Chicken Eyeglasses Seasonal Event Gear'), '彩蛋小鸡眼镜 季节活动装备');
+assert.equal(tr('Masha Neotunic'), '大码马夏文化衫');
+assert.equal(tr("Aunt Tii's Neotunic Set"), '缇姨塔可饼新式文化衫套装');
+assert.equal(tr('Unverified Eyeglasses'), null);
 assert.equal(tr('Plain Hooded'), '素色卫衣套装');
 // Regress all 3 verified Hoodie base models with standard/oversized/form-fitting
 // fit, instead of hardcoding one user-reported untranslated heading.
@@ -280,7 +293,7 @@ const variantH1 = {
     { nodeValue: 'Wintertide (Culottes)' }, { nodeValue: '套装' },
   ],
 };
-const variantLink = { nodes: [{ nodeValue: 'Wintertide (Sheath Skirt)' }] };
+const variantLink = { href: '/gearset/wintertide-sheath-skirt', nodes: [{ nodeValue: 'Wintertide (Sheath Skirt)' }] };
 const variantOldLocation = globalThis.location;
 try {
   globalThis.location = { pathname: '/gearset/wintertide', hostname: 'ffxiv.eorzeacollection.com' };
@@ -645,6 +658,7 @@ try {
     nodes: [{ nodeValue: native }, { nodeValue: suffix }],
   });
   for (const [native, expected] of [
+    ['Festival Neotunic ', '欢庆新式文化衫'],
     ['Ceremonial Scouting', '仪仗游击'],
     ['Phantom Vision Fending', '幻境意象御敌'],
     ['Hempen Viera Male', '维埃拉族男性贴身衣'],

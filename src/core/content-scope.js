@@ -10,6 +10,9 @@ function isEndClosetAuthored(element) {
     if (element.closest('h3') || element.tagName === 'IMG') return true;
   }
   if (element.closest('.whitespace-pre-wrap,.whitespace-pre-line')) return true;
+  // The concept's detail heading and cover alt are both set from its authored title.
+  if (/^\/concepts\/[^/]+\/?$/u.test(globalThis.location?.pathname || '')
+    && element.closest('main h1.tracking-tight.truncate, main img.rounded-xl.shadow-lg.object-cover')) return true;
   const author = element.closest('button[title]');
   return !!author && /^(?:作者|작성자|Author)\s*[:：]/i.test(author.title)
     && element !== author && element !== author.firstElementChild;
@@ -27,12 +30,56 @@ function isMiramiruAuthored(element) {
   return false;
 }
 
+// EC detail and related-work links carry creator-owned names, even when
+// those names happen to match a UI label or an actual equipment item.
+export function isECAuthoredPath(path) {
+  return /^\/(?:glamour|companion-glamour|creator)\/\d+(?:[/?#]|$)/u.test(path || '');
+}
+
+function isECContext() {
+  const host = globalThis.location?.hostname;
+  return !host || host === 'ffxiv.eorzeacollection.com' || globalThis.window?.__zhxTestSite === 'ec';
+}
+
+function ecLinkPath(element) {
+  const href = element?.closest?.('a[href]')?.getAttribute?.('href') || '';
+  return href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
+}
+
+// Native catalogue destinations retain their site links rather than becoming Wiki links.
+export function isECSeriesLink(element) {
+  return isECContext() && /^\/(?:gearset|accessories|facewear|fashion-accessory)\/[^/?#]+(?:[/?#]|$)/u.test(ecLinkPath(element));
+}
+
+function isECWorkDescription(element) {
+  const heading = element.closest('div.box')?.previousElementSibling;
+  if (!heading?.matches('div.divider, h2.minititle')) return false;
+  // EC uses a plain box after the Description heading in both layouts.
+  // The heading itself may already have been localized by an earlier pass.
+  return /^(?:[—–-]\s*)?(?:Description|描述)(?:\s*[—–-])?$/u.test(heading.textContent.trim());
+}
+
+export function isECAuthoredContent(element) {
+  if (!element?.closest || !isECContext()) return false;
+  if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
+  if (isECAuthoredPath(ecLinkPath(element))) return true;
+  const path = globalThis.location?.pathname || '';
+  if (/^\/creator\/\d+(?:\/|$)/u.test(path)) {
+    // The main follower-list heading contains UI text; only the sidebar
+    // contains the authored profile name, biography and portrait.
+    return !!element.closest('aside :is(h1.title.has-negative-letter-spacing, p.content.has-text-light.mt-4.mb-2.pt-2, .image.is-relative img[alt])');
+  }
+  if (!isECAuthoredPath(path)) return false;
+  return !!element.closest('h1.title.has-negative-letter-spacing') || isECWorkDescription(element);
+}
+
 // Authored text must not become UI or an item merely by matching a dictionary.
 export function isAuthoredContent(element, site) {
   if (!element) return false;
   if (element.closest('.post-item-information,.item-color-information,.item-image,a.eorzeadb_link')) return false;
   if (element.closest(AUTHORED)) return true;
-  if (site === 'ronka') return !!element.closest('.post-subtitle-box a');
+  if (site === 'ronka') return !!element.closest('.post-subtitle-box a, .post-image, a.post-sns, .search-result-user');
   if (site === 'endcloset') return isEndClosetAuthored(element);
+  if (site === 'ec') return isECAuthoredContent(element);
   return site === 'miramiru' && isMiramiruAuthored(element);
 }
