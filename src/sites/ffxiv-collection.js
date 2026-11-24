@@ -1,5 +1,4 @@
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
-export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { _getItemPfx, _getSeriesMap, _getSeriesPfx } from '../core/cache.js';
 import { DATA_TEXT } from '../core/data/data-manager.js';
