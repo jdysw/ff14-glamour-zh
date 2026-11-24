@@ -4,7 +4,7 @@ import { _zhxErr } from '../runtime.js';
 import { findSitePolicy as findSite, neededTables } from '../site-policy.js';
 import { httpGet } from './http.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
-import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
+import { requiredV3Files, validV3FileMeta, validV3Manifest, v3FileUrl } from './v3-contract.js';
 import { parseItemIds } from './item-identity.js';
 import { validateV3Payload } from './v3-payload.js';
 
@@ -136,10 +136,7 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
 
   // 只读取按站点、文件名和 SHA-256 指纹寻址的当前缓存。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
-    const extension = name === 'series' || name === 'acl' ? '.txt' : '.tsv';
-    const filename = name === 'itemIds' ? 'item-ids.tsv' : name + extension;
-    const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + filename;
-    if (!validV3FileMeta(meta, expectedUrl)) return null;
+    if (!validV3FileMeta(meta, v3FileUrl(name, siteId))) return null;
     const key = v3FileCacheKey(siteId, name, meta.sha256);
     const cached = force ? null : await _v3FindCachedFile(key, meta.sha256, meta.bytes);
     if (cached !== null) {
