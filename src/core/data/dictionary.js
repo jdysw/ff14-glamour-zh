@@ -8414,7 +8414,13 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
     '따뜻한 마음에 진심으로 감사드립니다.': '衷心感谢您的支持与厚爱。',
     'Glamour Set': '幻化套装',
     'looks': '套穿搭',
+    'Looks': '套穿搭',
     'FF14 글래머 투영': 'FF14 幻化投影',
+    'FF14 Glamour Collection': 'FF14 幻化投影',
+    'FF14 ミラプリコレクション': 'FF14 幻化投影',
+    'Author carousel indicators': '作者轮播页码',
+    'データがありません。': '暂无数据。',
+    'ホームに戻る': '返回首页',
     'All company names, product names, and system names mentioned are trademarks or registered trademarks of their respective owners.': '所列公司名、产品名和系统名均为其各自所有者的商标或注册商标。',
   };
 

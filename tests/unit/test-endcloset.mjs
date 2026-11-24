@@ -18,7 +18,7 @@ const ctx = vm.createContext({
   DICT_ENDCLOSET,
   isAuthoredContent,
   resolveDyeColor,
-  resolveByName: (name) => ({ '메이드 드레스': '女仆礼服' })[name] || null,
+  resolveByName: (name) => ({ '메이드 드레스': '女仆礼服', '불꽃축제 모자': '月火帽', 'Moonfire Hat': '月火帽', 'ムーンファイアハット': '月火帽' })[name] || null,
   SKIP_TAGS: new Set(['SCRIPT', 'STYLE', 'TEXTAREA']),
   NodeFilter: { FILTER_REJECT: 2, FILTER_ACCEPT: 1, SHOW_TEXT: 4, SHOW_ELEMENT: 1 },
   document: { title: '', documentElement: {}, createTreeWalker: () => ({ nextNode: () => false }) },
@@ -78,7 +78,7 @@ check('Search candidate UI is excluded from translation', () => {
 check('导航、筛选与三语界面词均有译文', () => {
   for (const [raw, zh] of [['좋아요 목록', '我的点赞'], ['Run search (Enter)', '执行搜索（回车）'],
     ['フィルター', '筛选'], ['선택 모드', '选择模式'], ['나이트', '骑士'], ['하얀눈색', '素雪白'],
-    ['ミコッテ', '猫魅族'], ['Weaver', '裁衣匠'], ['Ash Grey', '苍白灰'], ['Jet Black', '煤玉黑'],
+    ['種族', '种族'], ['ミコッテ', '猫魅族'], ['Weaver', '裁衣匠'], ['Ash Grey', '苍白灰'], ['Jet Black', '煤玉黑'],
     ['ジェットブラックEX', '特制煤玉黑'], ['1-칠흑색 (거래 불가)', '1-特制煤玉黑']]) {
     assert.equal(ctx.trEndCloset(raw), zh);
   }
@@ -106,10 +106,14 @@ check('属性更新仅监听翻译所需字段', () => {
   assert.deepEqual(Array.from(observer.attributeFilter), ['placeholder', 'title', 'alt', 'aria-label']);
   assert.equal(observer.filter({ type: 'attributes', attributeName: 'title', target: { getAttribute: () => '검색' } }), true);
   assert.equal(observer.filter({ type: 'attributes', attributeName: 'title', target: { getAttribute: () => '搜索' } }), false);
+  assert.equal(observer.filter({ type: 'characterData', target: { nodeValue: '種族' } }), true);
 });
 check('动态结果数量翻译', () => {
   assert.equal(ctx.trEndCloset('총 739개의 투영 세트 중 20개 표시'), '共 739 套幻化，显示 20 项');
   assert.equal(ctx.trEndCloset('3개 선택됨'), '3 项已选择');
+  for (const limit of ['최대 3개까지 선택할 수 있어요', 'Select up to 3 colors', '最大3つまで選択可能']) {
+    assert.equal(ctx.trEndCloset(limit), '最多可选 3 种颜色');
+  }
 });
 
 check('Manual audit: 28 Korean style taxonomy tags have consistent Chinese translations', () => {
@@ -140,6 +144,8 @@ check('Dynamic item list totals and image identifiers are translated without alt
   assert.equal(ctx.trEndCloset('Showing 1 of 2 items'), '显示 1 / 共 2 件装备');
   assert.equal(ctx.trEndCloset('Glamour Set e34aOLptvLMcOZC3wPut'), '幻化套装 e34aOLptvLMcOZC3wPut');
   assert.equal(ctx.trEndCloset('Glamour Set'), '幻化套装');
+  assert.equal(ctx.trEndCloset('Looks'), '套穿搭');
+  assert.equal(ctx.trEndCloset('Look 2'), '穿搭 2');
 });
 check('Only primary navigation gets its English landmark translated', () => {
   const attrs1 = { 'aria-label': 'primary' };
@@ -155,13 +161,35 @@ check('Dynamic author title translates prefix without changing author identity',
   assert.equal(attrs.title, '作者：B');
   assert.equal(ctx.trEndCloset('작성자: 바람'), '作者：바람');
 });
-check('Document title translates site suffix but does not invent unknown gear names', () => {
-  ctx.document.title='알라미고 채집가용 터번, 에투알 손등장갑... - FF14 글래머 투영';
+check('Only a native item detail title localizes known names, preserving unrecognized names and ellipsis', () => {
+  ctx.location = { pathname: '/detail/fggVMnUV2J4pteHaPOfx' };
+  ctx.document.title = '불꽃축제 모자, 에투알 손등장갑... - FF14 글래머 투영';
   ctx.translateEndClosetTitle();
-  assert.equal(ctx.document.title,'알라미고 채집가용 터번, 에투알 손등장갑... - FF14 幻化投影');
-  ctx.document.title='End Closet'; ctx.translateEndClosetTitle();
-  assert.equal(ctx.document.title,'End Closet');
+  assert.equal(ctx.document.title, '月火帽, 에투알 손등장갑... - FF14 幻化投影');
+  ctx.location.pathname = '/items/example';
+  for (const raw of ['Moonfire Hat - FF14 Glamour Collection', 'ムーンファイアハット - FF14 ミラプリコレクション']) {
+    ctx.document.title = raw;
+    ctx.translateEndClosetTitle();
+    assert.equal(ctx.document.title, '月火帽 - FF14 幻化投影');
+  }
+  const lookup = ctx.resolveByName;
+  ctx.resolveByName = () => null;
+  ctx.document.title = 'Moonfire Hat - FF14 Glamour Collection';
+  ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title, 'Moonfire Hat - FF14 幻化投影');
+  ctx.resolveByName = lookup;
+  ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title, '月火帽 - FF14 幻化投影');
+  ctx.document.title = 'FF14 Glamour Collection - FF14 Glamour Collection';
+  ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title, 'FF14 幻化投影');
+  ctx.location.pathname = '/concepts/example';
+  ctx.document.title = 'Moonfire Hat - FF14 Glamour Collection';
+  ctx.translateEndClosetTitle();
+  assert.equal(ctx.document.title, 'Moonfire Hat - FF14 Glamour Collection');
+  delete ctx.location;
 });
+
 check('No forced translation of user-submitted titles or official publisher names', () => {
   assert.equal(ctx.trEndCloset('차원의 방랑자'), '차원의 방랑자');
   assert.equal(ctx.trEndCloset('©2010-2026 SQUARE ENIX CO., LTD. All Rights Reserved. Published in Korea by Actoz Soft CO., LTD.'),

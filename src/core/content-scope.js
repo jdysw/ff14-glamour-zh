@@ -10,6 +10,9 @@ function isEndClosetAuthored(element) {
     if (element.closest('h3') || element.tagName === 'IMG') return true;
   }
   if (element.closest('.whitespace-pre-wrap,.whitespace-pre-line')) return true;
+  // The concept's detail heading and cover alt are both set from its authored title.
+  if (/^\/concepts\/[^/]+\/?$/u.test(globalThis.location?.pathname || '')
+    && element.closest('main h1.tracking-tight.truncate, main img.rounded-xl.shadow-lg.object-cover')) return true;
   const author = element.closest('button[title]');
   return !!author && /^(?:作者|작성자|Author)\s*[:：]/i.test(author.title)
     && element !== author && element !== author.firstElementChild;

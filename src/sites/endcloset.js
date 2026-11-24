@@ -37,6 +37,9 @@ const EC_SKIP_SEL = 'script, style, noscript, textarea, .zhx-skip, #zhx-chinese-
 const EC_KR = /[\uac00-\ud7a3]/;
 const EC_EN_WORD = /[A-Za-z]{2,}/;
 const EC_JA = /[\u3040-\u30ff]/;
+const exactUiLabel = text => Object.hasOwn(DICT_ENDCLOSET, text) ? DICT_ENDCLOSET[text] : null;
+// Keep recognizing the localized suffix for the pass after name data loads.
+const DETAIL_TITLE_SUFFIXES = new Set(['FF14 글래머 투영', 'FF14 Glamour Collection', 'FF14 ミラプリコレクション', 'FF14 幻化投影']);
 // 装备名识别辅助：韩文装备名通常较长且包含 FF14 特征词；UI 词短。
 // 用「DICT 未命中 + resolveByName 命中」判定装备名。
 
@@ -64,6 +67,8 @@ function trEndClosetCount(text) {
   if (english) return '显示 ' + english[1] + ' / 共 ' + english[2] + ' 件装备';
   const glamourId = text.match(/^Glamour Set\s+([a-zA-Z0-9_-]{8,40})$/);
   if (glamourId) return '幻化套装 ' + glamourId[1];
+  const look = /^Look (\d+)$/u.exec(text);
+  if (look) return '穿搭 ' + look[1];
   const author = text.match(/^작성자\s*:\s*(.{1,80})$/);
   if (author) return '作者：' + author[1];
   const total = text.match(/^총\s+([\d,]+)개의\s+(투영 세트|아이템)\s+중\s+([\d,]+)개\s+표시$/);
@@ -71,16 +76,21 @@ function trEndClosetCount(text) {
   return null;
 }
 
+function trEndClosetDyeLimit(text) {
+  const limit = /^(?:최대 (\d+)개까지 선택할 수 있어요|Select up to (\d+) colors|最大(\d+)つまで選択可能)$/u.exec(text);
+  return limit ? '最多可选 ' + (limit[1] ?? limit[2] ?? limit[3]) + ' 种颜色' : null;
+}
+
 function trEndCloset(text) {
   if (!text) return text;
   const t0 = text.trim();
   if (!t0) return text;
-  const exact = DICT_ENDCLOSET[t0];
+  const exact = exactUiLabel(t0);
   if (t0.length > 120 && !exact) return text;
   const hasForeign = EC_KR.test(t0) || EC_EN_WORD.test(t0) || EC_JA.test(t0);
-  if (!hasForeign) return text;
+  if (!hasForeign && !exact) return text;
   let zh = exact || resolveDyeColor(t0);
-  if (zh == null) zh = trEndClosetCount(t0);
+  if (zh == null) zh = trEndClosetDyeLimit(t0) || trEndClosetCount(t0);
   if (zh == null) zh = _trEndClosetDye(t0);
   if (zh == null) zh = _trEndClosetItem(t0);
   if (zh == null) {
@@ -180,16 +190,28 @@ function translateEndClosetPage(rootArg) {
   for (const n of root.querySelectorAll?.('textarea') || []) _ecProcNode(n);
 }
 
+function translateEndClosetDetailTitle(title) {
+  // The site's detail title is generated from at most three equipment names,
+  // unlike authored concept titles. Preserve unknown names and truncation.
+  const separator = title.lastIndexOf(' - ');
+  if (separator < 0) return null;
+  const suffix = title.slice(separator + 3);
+  if (!DETAIL_TITLE_SUFFIXES.has(suffix)) return null;
+  const source = title.slice(0, separator);
+  const siteName = trEndCloset(suffix);
+  if (source === suffix) return siteName;
+  const truncated = source.endsWith('...');
+  const names = (truncated ? source.slice(0, -3) : source).split(', ');
+  const translated = names.map(name => _trEndClosetItem(name) || name).join(', ');
+  return translated + (truncated ? '...' : '') + ' - ' + siteName;
+}
+
 function translateEndClosetTitle() {
   const t = document.title;
   if (!t) return;
-  // Detail-page titles contain gear names. Translate only verified terms and
-  // the fixed site suffix; keep unmapped item names rather than guessing.
-  let nt = trEndCloset(t);
-  if (nt === t && t.includes('FF14 글래머 투영')) {
-    nt = t.replace('FF14 글래머 투영', 'FF14 幻化投影');
-  }
-  if (nt && nt !== t && nt.length <= 160) document.title = nt;
+  const isDetail = /^\/(?:detail|items)\/[^/]+\/?$/u.test(globalThis.location?.pathname || '');
+  const nt = (isDetail && translateEndClosetDetailTitle(t)) || (DETAIL_TITLE_SUFFIXES.has(t) ? trEndCloset(t) : t);
+  if (nt !== t && nt.length <= 160) document.title = nt;
 }
 
 function startEndCloset() {
@@ -205,7 +227,11 @@ function startEndCloset() {
     attributeFilter: ['placeholder', 'title', 'alt', 'aria-label'],
     filter: (m) => {
       const text = m.type === 'attributes' ? m.target?.getAttribute(m.attributeName) : m.target?.nodeValue;
-      return !!text && (EC_KR.test(text) || EC_EN_WORD.test(text) || EC_JA.test(text));
+      if (!text) return false;
+      const raw = text.trim();
+      const exact = exactUiLabel(raw);
+      // A known Japanese UI label may contain only kanji (e.g. 種族).
+      return (exact && exact !== raw) || EC_KR.test(text) || EC_EN_WORD.test(text) || EC_JA.test(text);
     },
     debounce: 120,
     handler: (nodes, cds = []) => {
