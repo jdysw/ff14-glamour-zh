@@ -3,8 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as TestWindow } from 'happy-dom';
-import { _applyV3, dataInvalidate } from '../../src/core/data/data-manager.js';
+import { _applyV3, _fireTablesReady, dataInvalidate } from '../../src/core/data/data-manager.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
+import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { collectTargets, bindGlobalWikiJump } from '../../src/core/targets.js';
 import {
   ecGearsetDisplayName, suggestECGearsetsByZh, resolveECGearsetSearch,
@@ -640,4 +641,44 @@ test('EC 重置筛选：先遵循站点处理，失败时清理 /glamours/<slot>
   });
   if (oldBound) Object.defineProperty(globalThis, '__zhxECResetBound', oldBound);
   else delete globalThis.__zhxECResetBound;
+});
+
+test('EC 发布数据驱动套装检索和饰品详情，不给未知系列造译名', () => {
+  const { siteFiles } = readRuntimeV3('ec');
+  const page = new TestWindow({ url: 'https://ffxiv.eorzeacollection.com/accessories/occult-deep' });
+  dataInvalidate();
+  try {
+    const document = page.document;
+    withGlobals({ document, window: page, location: page.location, NodeFilter: page.NodeFilter }, () => {
+      assert.equal(_applyV3({ candidatePolicy: 1, names: siteFiles.names.text }), true);
+      _fireTablesReady();
+      // 无手工白名单时，由国服物品表推导职能系列，并用站点英文名提交。
+      assert.equal(ecGearsetDisplayName('Ceremonial Scouting'), '仪仗游击套装');
+      assert.equal(resolveECGearsetSearch('仪仗游击'), 'Ceremonial Scouting');
+      assert.equal(ecGearsetDisplayName('Hempen Auri Male'), '敖龙族男性贴身衣套装');
+      assert.equal(ecGearsetDisplayName("Eastern Socialite's"), '辨天装束');
+      const variants = suggestECGearsetsByZh('冬季').filter(({ native }) => native.startsWith('Wintertide ('));
+      assert.deepEqual(new Set(variants.map(({ native }) => native)),
+        new Set(['Wintertide (Culottes)', 'Wintertide (Sheath Skirt)']));
+      assert.equal(ecGearsetDisplayName('Wintertide (Unverified Variant)'), null);
+
+      document.body.innerHTML = '<h1>Occult Deep <span>Accessories</span></h1>' +
+        '<a href="/accessories/occult">Occult Accessories</a>' +
+        '<a href="/accessories/sea-folk">Sea-folk Accessories</a>' +
+        '<a href="/accessories/praemagitek">Praemagitek Accessories</a>' +
+        '<a href="/accessories/unverified">Unverified Accessories</a>';
+      translateECGearsetNames();
+      assert.equal(document.querySelector('h1').textContent, '超新月魔饰品');
+      assert.equal(document.querySelector('h1 span').textContent, '饰品');
+      assert.deepEqual([...document.querySelectorAll('a')].map(a => [a.getAttribute('href'), a.textContent]), [
+        ['/accessories/occult', '新月魔饰品'],
+        ['/accessories/sea-folk', '海族饰品'],
+        ['/accessories/praemagitek', '前魔导饰品'],
+        ['/accessories/unverified', 'Unverified Accessories'],
+      ]);
+    });
+  } finally {
+    dataInvalidate();
+    void page.happyDOM.close();
+  }
 });
