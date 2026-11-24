@@ -7,7 +7,7 @@ import {
   ecGearsetDisplayName, suggestECGearsetsByZh, resolveECGearsetSearch,
   trimECNode, translateECTitle, translateECAttrs, translateECPage,
   translateECGearsetNames, bindECPieceTiles, bindECResetFilters,
-  translateECHomeNavigation, translateECHomeEditorial,
+  translateECNavigation, translateECHomeEditorial,
 } from '../../src/sites/eorzea-collection.js';
 
 function withGlobals(values, fn) {
@@ -130,7 +130,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
   withGlobals({
     document: d, location: dom.location, NodeFilter: dom.NodeFilter,
   }, () => {
-    translateECHomeNavigation();
+    translateECNavigation();
     translateECHomeEditorial();
     translateECAttrs();
     assert.equal(d.querySelector('#expansion').textContent, '自金曦之遗辉起');
@@ -148,9 +148,15 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#model').alt, '人族·中原之民女性');
     assert.equal(d.querySelector('#challenge').alt, '🎃 惊魂季');
     assert.equal(d.querySelector('#authored').textContent, 'Verycold');
-    translateECHomeNavigation();
+    translateECNavigation();
     translateECHomeEditorial();
     assert.equal(d.querySelector('#job').textContent, '职业校服');
+    // Same sitewide header repeats outside the homepage.
+    withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/gearsets') }, () => {
+      d.querySelector('#expansion').textContent = 'From Endwalker';
+      translateECNavigation();
+      assert.equal(d.querySelector('#expansion').textContent, '自金曦之遗辉起');
+    });
   });
   dom.close();
 });

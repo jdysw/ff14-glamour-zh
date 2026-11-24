@@ -5,7 +5,7 @@ import { dataGetIndex } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, translateECHomeNavigation, translateECHomeEditorial };
+export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, translateECNavigation, translateECHomeEditorial };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
@@ -855,8 +855,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       ? '自' + patchName + '起' : null;
   }
 
-  function translateECHomeNavigation(rootArg) {
-    if ((globalThis.location?.pathname || '') !== '/') return;
+  function translateECNavigation(rootArg) {
+    // Header gearset links repeat on every EC page; only the editorial copy
+    // translator below is homepage-specific.
     for (const anchor of ecHomeCandidates(rootArg, 'a[href*="/gearsets?"]')) {
       const localized = ecHomeGearsetNavLabel(anchor);
       if (localized) ecSetVisibleText(anchor, localized);
@@ -967,7 +968,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
-      translateECHomeNavigation(rootArg);
+      translateECNavigation(rootArg);
       translateECHomeEditorial(rootArg);
     } finally {
       ecBusy = false;
