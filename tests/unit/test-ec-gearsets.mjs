@@ -11,10 +11,9 @@ import { DICT_EC } from '../../src/core/data/dictionary.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection.js'), 'utf8');
-const start = source.indexOf('  const EC_GEARSET_ROLES =');
-const end = source.indexOf('  // 用户产出的内容：绝不翻译', start);
-assert.ok(start >= 0 && end > start, 'EC Gearsets 源区段必须存在');
+const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection/catalog.js'), 'utf8');
+const start = source.indexOf('const EC_GEARSET_ROLES =');
+assert.ok(start >= 0, 'EC Gearsets 源区段必须存在');
 
 const scope = { anchors: [], accessoryAnchors: [], headings: [] };
 const doc = {
@@ -41,7 +40,7 @@ function mockQuery(_root, selector) {
 }
 let dictRevision = 0;
 let itemIndex = Object.create(null);
-const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', 'isECSeriesLink', source.slice(start, end) +
+const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', 'isECSeriesLink', source.slice(start) +
   '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, ecAccessoryDeepStatSeriesZh, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
   doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery, isECSeriesLink);
