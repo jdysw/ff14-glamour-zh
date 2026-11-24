@@ -107,7 +107,7 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
   });
 });
 
-test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文本与编辑文案', () => {
+test('EC 导航与编辑文案：按目标链接翻译，并区别挑战与玩家作品', () => {
   const dom = new TestWindow({ url: 'https://ffxiv.eorzeacollection.com/' });
   const d = dom.document;
   d.body.innerHTML = [
@@ -180,6 +180,45 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
       translateECNavigation();
       assert.equal(d.querySelector('#expansion').textContent, '自金曦之遗辉起');
     });
+    withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/news/patron-challenge') }, () => {
+      d.body.innerHTML = '<a href="/challenges/verycold"><article class="card">' +
+        '<img alt="❄️ Verycold"><div class="card-content"><p class="title">❄️ Verycold</p></div></article></a>' +
+        '<a href="/glamour/241/example"><img alt="❄️ Verycold">' +
+        '<p class="c-glamour-grid-item-content-title">❄️ Verycold</p></a>';
+      const editorial = d.querySelector('a[href^="/challenges/"]');
+      const authored = d.querySelector('a[href^="/glamour/"]');
+      translateECPage(editorial.querySelector('p').firstChild);
+      translateECPage();
+      assert.equal(editorial.querySelector('p').textContent, '❄️ 凛冬');
+      assert.equal(editorial.querySelector('img').alt, '❄️ 凛冬');
+      assert.equal(editorial.getAttribute('href'), '/challenges/verycold');
+      assert.equal(authored.querySelector('p').textContent, '❄️ Verycold');
+      assert.equal(authored.querySelector('img').alt, '❄️ Verycold');
+    });
+    withGlobals({
+      location: new URL('https://ffxiv.eorzeacollection.com/challenges/verycold'),
+      Node: dom.Node,
+    }, () => {
+      d.title = "❄️ Verycold - August's Glamour Challenge | Eorzea Collection";
+      d.body.innerHTML = '<h1 class="b-title-text"><b class="b-title-text-bold">❄️ Verycold</b> Challenge</h1>' +
+        "<h2 class=\"b-title-sub\">August's Glamour Theme</h2>" +
+        '<article class="b-article-content"><img alt="❄️ Verycold Glamour Challenge">' +
+        '<p>For this challenge, we asked patrons to submit frosty and blustery glamours to  prepare for the frozen lands of Evercold.</p></article>' +
+        '<a href="/glamour/241/example"><p class="c-glamour-grid-item-content-title">❄️ Verycold</p></a>';
+      const bold = d.querySelector('h1 b');
+      translateECPage(bold.nextSibling);
+      assert.equal(d.querySelector('h1').textContent, '❄️ 凛冬挑战');
+      translateECPage();
+      translateECTitle();
+      assert.equal(d.querySelector('h1 b'), bold);
+      assert.equal(d.querySelector('h1').textContent, '❄️ 凛冬挑战');
+      assert.equal(d.querySelector('h2').textContent, '8 月幻化主题');
+      assert.equal(d.querySelector('article img').alt, '❄️ 凛冬幻化挑战');
+      assert.match(d.querySelector('article p').textContent, /《银海之天舟》/u);
+      assert.equal(d.title, '❄️ 凛冬：8 月幻化挑战 | Eorzea Collection');
+      assert.equal(d.querySelector('a p').textContent, '❄️ Verycold');
+    });
+
   });
   dom.close();
 });

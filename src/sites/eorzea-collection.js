@@ -889,16 +889,21 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     return nodes;
   }
 
-  function translateECDyePreviewHeading(rootArg) {
-    if (!ecIsDyePreview()) return;
+  function translateECSplitHeading(rootArg, suffix, localizedSuffix, translateLead) {
     for (const bold of ecHomeCandidates(rootArg, 'h1.b-title-text > b.b-title-text-bold')) {
       const tail = bold.nextSibling;
-      if (bold.textContent.trim() !== 'Dyes'
-          || tail?.nodeType !== Node.TEXT_NODE || tail.nodeValue.trim() !== 'Preview') continue;
-      // The live heading styles only the first word. Keep that node and
-      // translate the phrase without adding a space between the Chinese parts.
-      bold.textContent = '染色';
-      tail.nodeValue = '预览';
+      if (tail?.nodeType !== Node.TEXT_NODE || tail.nodeValue.trim() !== suffix) continue;
+      const localizedLead = translateLead(bold.textContent.trim());
+      if (!localizedLead) continue;
+      // Keep the native distinction between the styled and unstyled parts.
+      bold.textContent = localizedLead;
+      tail.nodeValue = localizedSuffix;
+    }
+  }
+
+  function translateECDyePreviewHeading(rootArg) {
+    if (ecIsDyePreview()) {
+      translateECSplitHeading(rootArg, 'Preview', '预览', lead => lead === 'Dyes' ? '染色' : null);
     }
   }
 
@@ -945,15 +950,76 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     'Latest Lodestone News', '— Latest Lodestone News —',
     'Latest Updates', '— Latest Updates —',
   ]);
-  const EC_HOME_CHALLENGES = new Set([
+  const EC_EDITORIAL_CHALLENGES = new Set([
     'Spooky Season', 'Verycold', 'Living Canvas',
     'Into the Void', 'Master of Beasts',
   ]);
 
-  function ecHomeChallengeTitle(text) {
+  function ecChallengeTitle(text) {
     const match = /^([^\p{L}\p{N}]{0,12})([A-Za-z][A-Za-z '’-]{2,40})$/u.exec(text);
-    if (!match || !EC_HOME_CHALLENGES.has(match[2])) return null;
+    if (!match || !EC_EDITORIAL_CHALLENGES.has(match[2])) return null;
     return match[1] + DICT_EC[match[2]];
+  }
+
+  const EC_CHALLENGE_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const EC_CHALLENGE_CARD = 'a[href^="/challenges/"] .card';
+
+  function ecIsNewsListing() {
+    const path = globalThis.location?.pathname || '';
+    return path === '/news' || path.startsWith('/news/');
+  }
+
+  function ecIsChallengeDetail() {
+    return /^\/challenges\/[a-z0-9-]+\/?$/u.test(globalThis.location?.pathname || '');
+  }
+
+  function ecChallengeMonthLabel(label) {
+    const match = /^([A-Z][a-z]+)['’]s Glamour (Theme|Challenge)$/u.exec(label);
+    if (!match) return null;
+    const month = EC_CHALLENGE_MONTHS.indexOf(match[1]) + 1;
+    if (!month) return null;
+    return month + ' 月幻化' + (match[2] === 'Theme' ? '主题' : '挑战');
+  }
+
+  function ecChallengeTabTitle(part) {
+    if (!ecIsChallengeDetail()) return null;
+    const split = part.lastIndexOf(' - ');
+    if (split < 0) return null;
+    const title = ecChallengeTitle(part.slice(0, split));
+    const monthLabel = ecChallengeMonthLabel(part.slice(split + 3));
+    return title && monthLabel ? title + '：' + monthLabel : null;
+  }
+
+  function ecChallengeImageLabel(element, label) {
+    if (globalThis.location?.pathname === '/' ||
+        (ecIsNewsListing() && element.closest(EC_CHALLENGE_CARD))) {
+      return ecChallengeTitle(label);
+    }
+    const suffix = ' Glamour Challenge';
+    if (ecIsChallengeDetail() && element.closest('.b-article-content') && label.endsWith(suffix)) {
+      const title = ecChallengeTitle(label.slice(0, -suffix.length));
+      if (title) return title + '幻化挑战';
+    }
+    return null;
+  }
+
+  function translateECChallengeEditorial(rootArg) {
+    if (ecIsNewsListing()) {
+      // Match only published editorial cards, never entries in a glamour grid.
+      for (const title of ecHomeCandidates(rootArg, EC_CHALLENGE_CARD + ' .card-content .title')) {
+        const localized = ecChallengeTitle((title.textContent || '').trim());
+        if (localized) ecSetVisibleText(title, localized);
+      }
+    }
+    if (!ecIsChallengeDetail()) return;
+    translateECSplitHeading(rootArg, 'Challenge', '挑战', ecChallengeTitle);
+    for (const subtitle of ecHomeCandidates(rootArg, 'h2.b-title-sub')) {
+      const localized = ecChallengeMonthLabel((subtitle.textContent || '').trim());
+      if (localized) ecSetVisibleText(subtitle, localized);
+    }
   }
 
   function ecHomeEditorialZh(source, tagName) {
@@ -966,7 +1032,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
         const inner = source.slice(1, -1).trim();
         return DICT_EC[inner] ? '— ' + DICT_EC[inner] + ' —' : null;
       }
-      return ecHomeChallengeTitle(source);
+      return ecChallengeTitle(source);
     }
     if (tagName !== 'P') return null;
     // Only the site's official news/challenge/merchandise copy.
@@ -993,9 +1059,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
     let translated = trEC(old);
-    if (attr === 'alt' && (globalThis.location?.pathname || '') === '/') {
-      translated = ecHomeChallengeTitle(old) || translated;
-    }
+    if (attr === 'alt') translated = ecChallengeImageLabel(el, old) || translated;
     if (attr === 'alt') {
       if (old === 'male') translated = '男性';
       else if (old === 'female') translated = '女性';
@@ -1021,8 +1085,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const old = document.title;
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
-    const translated = parts.map((part) => ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
-      || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
+    const translated = parts.map((part) => ecChallengeTabTitle(part) || ecAccessoryDisplayName(part)
+      || ecGearsetDisplayName(part) || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }
 
@@ -1037,6 +1101,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECServers(rootArg);
       // Resolve full editorial sentences before individual text fragments.
       translateECHomeEditorial(rootArg);
+      translateECChallengeEditorial(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
       translateECDyePreviewHeading(rootArg);
