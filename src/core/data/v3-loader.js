@@ -39,6 +39,12 @@ async function _v3VerifyFile(text, fingerprint, expectedBytes) {
   }
 }
 
+async function _v3FindCachedFile(key, fingerprint, expectedBytes) {
+  const current = await _v3ReadCachedFile(key, fingerprint);
+  if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
+  return null;
+}
+
 // 缓存 manifest 读取（读取/解析失败视为无缓存；返回 {manT, man}）
 async function readCachedManifest(siteId = '') {
   try {
@@ -54,6 +60,16 @@ async function readCachedManifest(siteId = '') {
     }
   } catch (e) { _zhxErr('v3manifest', e); }
   return { manT: 0, man: null };
+}
+
+async function _readPreviousV3Manifest(siteId) {
+  const [siteSnapshot, globalSnapshot] = await Promise.all([
+    readCachedManifest(siteId),
+    readCachedManifest(),
+  ]);
+  const siteSnapshotValid = validV3Manifest(siteSnapshot.man);
+  const previous = siteSnapshotValid ? siteSnapshot : globalSnapshot;
+  return { siteSnapshot, siteSnapshotValid, globalSnapshot, previous, previousValid: validV3Manifest(previous.man) };
 }
 
 // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
@@ -117,12 +133,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
   // 清单值为时间戳 + '\n' + JSON，文件值为 SHA-256 + '\n' + 文本。
   const v3FileCachePrefix = (siteId) => 'zhx.v3.f.' + siteId + '.';
   const v3FileCacheKey = (siteId, name, fingerprint) => v3FileCachePrefix(siteId) + name + '.' + fingerprint;
-
-  async function _v3FindCachedFile(key, fingerprint, expectedBytes) {
-    const current = await _v3ReadCachedFile(key, fingerprint);
-    if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
-    return null;
-  }
 
   // 只读取按站点、文件名和 SHA-256 指纹寻址的当前缓存。
   async function _v3FetchFile(siteId, name, meta, force = false, staged = null, networkAllowed = true) {
@@ -206,16 +216,6 @@ export function createV3Loader({ getGeneration, applyPayload, recordReady }) {
     let listed = null;
     try { listed = await storeListAsync(); } catch (e) { listed = null; }
     await _deleteStaleV3Files(siteId, previousManifest, currentManifest, listed);
-  }
-
-  async function _readPreviousV3Manifest(siteId) {
-    const [siteSnapshot, globalSnapshot] = await Promise.all([
-      readCachedManifest(siteId),
-      readCachedManifest(),
-    ]);
-    const siteSnapshotValid = validV3Manifest(siteSnapshot.man);
-    const previous = siteSnapshotValid ? siteSnapshot : globalSnapshot;
-    return { siteSnapshot, siteSnapshotValid, globalSnapshot, previous, previousValid: validV3Manifest(previous.man) };
   }
 
   async function _selectV3Manifest(force, refreshManifest, snapshots) {
