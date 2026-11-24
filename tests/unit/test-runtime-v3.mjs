@@ -5,11 +5,11 @@ import { findPython } from '../../build/python.mjs';
 //   A. 校验 build/data/make-runtime-data.py 的产物（.cache/runtime-v3/）：manifest 结构、
 //      逐文件 sha256/bytes、names 去重与染剂回退、站点清单、Phase 13 语言裁剪
 //      （各站 names/dup 仅含其翻译链语言：ja 表无韩文、en 表无韩文/假名、ko 表无假名）。
-//   B. 用桩装配 data-manager 段，钉死 v3 加载路径：成功应用（含缓存写入）、
+//   B. 经 GM 接口测试真实 V3 模块，钉死 v3 加载路径：成功应用（含缓存写入）、
 //      离线快路径、manifest/schema/hash 失败时安全空索引且无旧数据请求，
 //      每站 manifest 快照、ready 广播、旧格式拒绝与内容寻址缓存。
 //
-// 机制：从规范模块源码提取区段以桩装配，不依赖构建变量名、Chrome 或外网。
+// 机制：导入真实生产模块，用内存 GM 存储和网络，不依赖构建变量名、Chrome 或外网。
 //
 // 运行：node tests/unit/test-runtime-v3.mjs
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -28,9 +28,10 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
+import { makeV3Runtime } from '../helpers/v3-runtime.mjs';
+import { dictGetRevision } from '../../src/core/data/dictionary.js';
+import { _v3Pairs, validateV3Payload } from '../../src/core/data/v3-payload.js';
 import { parseItemIds } from '../../src/core/data/item-identity.js';
-import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
 import { verifyV3Publish } from '../../tools/data/verify-publish-contract.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -250,99 +251,16 @@ ok('A8b 发布包包含所有需校验字节', publishInfo.files > 20 && publish
 console.log('\n── B. 运行时 v3 加载 ──');
 
 // 直接使用规范模块源，避免 Rollup 对同名探测钩子的变量重命名影响测试装配。
-const DIST_TEXT = [
-  'src/core/cache-primitives.js',
-  'src/core/cache.js',
-  'src/core/data/data-manager.js',
-].map(file => readFileSync(new URL('../../' + file, import.meta.url), 'utf8')).join('\n');
-
-function sliceAll(s, tag) {
-  const startTag = `/* @zhixia:${tag}-start */`;
-  const endTag = `/* @zhixia:${tag}-end */`;
-  const out = [];
-  let from = 0;
-  for (;;) {
-    const i = s.indexOf(startTag, from);
-    if (i < 0) break;
-    const j = s.indexOf(endTag, i + startTag.length);
-    if (j < 0) throw new Error(`区段未闭合：${tag}`);
-    out.push(s.slice(i, j + endTag.length));
-    from = j + endTag.length;
-  }
-  if (!out.length) throw new Error(`区段缺失：${tag}`);
-  return out;
+async function makeWorld({ store, http, site = 'mirapri' } = {}) {
+  const world = await makeV3Runtime({ store: new Map(Object.entries(store || {})), download: http, site });
+  world.fires = [];
+  world.api.onTablesReady(status => world.fires.push(status));
+  return world;
 }
 
-const CACHE_SEGS = [...sliceAll(DIST_TEXT, 'core-cache-primitives'), ...sliceAll(DIST_TEXT, 'core-cache')];
-const DM_SEGS = sliceAll(DIST_TEXT, 'core-data-manager');
-
-const NAMES = [
-  'storeGetAsync', 'storeListAsync', 'storeDeleteAsync', 'storeSetAsync', 'httpGet',
-  'SERIES_TEXT', 'ACL_CFC_TEXT',
-  'itemHash', 'nameMap', 'ecidMap', 'koByZh',
-  'DATA_VER', 'DATA_BASE_V3', '_manifestRefreshRequested', '_manifestNeedsCommit',
-  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files', 'validRuntimeDictionary', 'parseItemIds',
-  'neededTables', '_fireTablesReady',
-  'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
-  '_replaceMap',
-  '__zhxMark', 'document', 'window', 'console', 'setTimeout', 'clearTimeout',
-];
-
-function makeWorld(over = {}) {
-  const rec = { xhr: [], set: [], deleted: [], timers: [], fires: [], dict: [], errs: [] };
-  const store = Object.assign({}, over.store || {});
-  const args = {
-    storeGetAsync: (k) => Promise.resolve(store[k] === undefined ? null : store[k]),
-    storeSetAsync: async (k, v) => { if (over.writeFail) return false; store[k] = String(v); rec.set.push([k, v]); return true; },
-    storeListAsync: async () => over.listUnavailable ? null : Object.keys(store),
-    storeDeleteAsync: async (k) => { rec.deleted.push(k); if (over.deleteFail) return false; delete store[k]; return true; },
-    httpGet: (url) => { rec.xhr.push(url); return (over.http || (() => Promise.reject(new Error('net down'))))(url); },
-    SERIES_TEXT: '', ACL_CFC_TEXT: '',
-    itemHash: Object.create(null), nameMap: Object.create(null), ecidMap: Object.create(null), koByZh: Object.create(null),
-    DATA_VER: '',
-
-    _manifestRefreshRequested: false, _manifestNeedsCommit: false,
-
-    DATA_BASE_V3: 'https://example.test/ff14/v3/',
-    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary, parseItemIds,
-    neededTables: () => over.need || ['items', 'dict'],
-    _fireTablesReady: () => { rec.fires.push(1); },
-    // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。
-    findSitePolicy: () => (over.site === null ? null : (over.site || { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] })),
-    applyRuntimeDict: (t) => { rec.dict.push(t); },
-    _irAliasMap: null, _irDupMap: null, _irSearchSlotByNative: null, _irCandidatePolicy: 0,
-    _replaceMap: (t, s) => { for (const k of Object.keys(t)) delete t[k]; if (s && typeof s === 'object') Object.assign(t, s); },
-    _zhxErr: (where, e) => { rec.errs.push([String(where), String((e && e.message) || e)]); },
-    __zhxMark: () => {},
-    document: { readyState: 'complete' },
-    window: { addEventListener: () => {} },
-    console: { info: () => {}, warn: () => {}, log: () => {} },
-    setTimeout: (fn) => { rec.timers.push(fn); return rec.timers.length; },
-    clearTimeout: () => {},
-  };
-  const flushTimers = () => {
-    let guard = 0;
-    while (rec.timers.length && guard++ < 100) {
-      const fn = rec.timers.shift();
-      try { fn(); } catch (e) { rec.timerErr = String(e && e.message); }
-    }
-  };
-  return { rec, args, store, flushTimers };
-}
-
-function buildDM(world) {
-  // 规范模块把 findSitePolicy 作为 findSite 导入；隔离装配时保留同一别名绑定。
-  const body = 'const findSite = findSitePolicy;\n' + [...CACHE_SEGS, ...DM_SEGS].join('\n');
-  const ret = [
-    'return {',
-    '  ensureTables,',
-    '  _ensureTryV3, _applyV3, _v3Pairs, _ensureMain, _ensureFinalize, _v3FetchFile, fetchManifest, loadManifest, readCachedManifest, fetchStationFiles, allFilesReady, dataInvalidate, _dlStats,',
-
-    '  _peek: () => ({ nm: nameMap, ih: itemHash, em: ecidMap, kb: koByZh, ali: _irAliasMap, dup: _irDupMap, gl: _irGlamMap, slots: _irSearchSlotByNative, policy: _irCandidatePolicy, series: SERIES_TEXT, acl: ACL_CFC_TEXT }),',
-    '};',
-  ].join('\n');
-  const fn = new Function(...NAMES, body + '\n' + ret);
-  return fn(...NAMES.map((n) => world.args[n]));
+async function load(api) {
+  await api.ensureTables();
+  return api.dataGetStatus().state === 'ready';
 }
 
 // 准备：从 .cache/runtime-v3 读入 mirapri 全部文件 + shared dict（真 sha）
@@ -358,7 +276,7 @@ const manText = JSON.stringify(man);
 
 // B1: v3 成功路径（manifest + 全文件经网络拉取 → 应用 + 缓存）
 {
-  const w = makeWorld({
+  const w = await makeWorld({
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(manText);
       const site = man.sites.mirapri.files;
@@ -369,17 +287,25 @@ const manText = JSON.stringify(man);
       return Promise.reject(new Error('404'));
     },
   });
-  const dm = buildDM(w);
-  const r = await dm._ensureTryV3();
+  const dm = w.api;
+  const revision = dictGetRevision();
+  const r = await load(dm);
   eq('B1 v3 成功返回 true', r, true);
-  const pk = dm._peek();
-  ok('B2 nameMap 已赋值且含预期键', !!pk.nm && Object.keys(pk.nm).length > 45000, `keys=${pk.nm ? Object.keys(pk.nm).length : 'null'}`);
-  ok('B3 itemHash 已赋值', !!pk.ih && Object.keys(pk.ih).length > 30000);
-  ok('B4 V3 文件成功映射运行时索引', !!pk.nm && !!pk.ih);
-  eq('B4b v3 manifest trust enables candidate policy', pk.policy, 1);
-  eq('B4c English dye mapping is present but candidate-disabled', pk.gl['Snow White Dye'], '0');
-  ok('B5 dict 已应用', w.rec.dict.length === 1);
-  const cacheKeys = w.rec.set.map(([k]) => k);
+  const names = dm.dataGetIndex('nameMap');
+  const hashes = dm.dataGetIndex('itemHash');
+  ok('B2 nameMap 已赋值且含预期键', names && Object.keys(names).length > 45000);
+  ok('B3 itemHash 已赋值', hashes && Object.keys(hashes).length > 30000);
+  eq('B4 正常翻译仍可按名称查找', dm.resolveByName('Snow White Dye'), '素雪白染剂');
+  ok('B4b v3 manifest trust enables in-game search candidates', dm.suggestByZh('女仆').length > 0);
+  eq('B4c English dye mapping is present but candidate-disabled', dm.suggestByZh('素雪白').some(row => row.native === 'Snow White Dye'), false);
+  eq('B5 dict 已应用', dictGetRevision(), revision + 1);
+  const expectedPaths = ['manifest.json', 'dict.json', ...Object.values(man.sites.mirapri.files).map(meta => meta.url)];
+  if (man.sites.mirapri.itemIds) expectedPaths.push(man.sites.mirapri.itemIds.url);
+  ok('B5a requests use only V3 URLs with fresh-cache headers and timeouts',
+    w.requests.every(({ path, refresh, headers, timeout }) => expectedPaths.includes(path) && refresh
+      && headers?.['Cache-Control'] === 'no-cache, no-store' && headers?.Pragma === 'no-cache'
+      && timeout === (path === 'manifest.json' ? 10000 : 25000)));
+  const cacheKeys = w.writes;
   ok('B6 manifest 已写缓存', cacheKeys.includes('zhx.v3.manifest'));
   ok('B7 站点文件内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.names.')) && cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.hash.')));
   ok('B8 dict 内容寻址缓存已写入', cacheKeys.some((k) => k.startsWith('zhx.v3.f.mirapri.dict.')));
@@ -387,14 +313,14 @@ const manText = JSON.stringify(man);
 
 // B1b: 当前 names 必须提供部位列，拒绝旧行时保持已提交索引。
 {
-  const world = makeWorld();
-  const dm = buildDM(world);
+  const world = await makeWorld();
+  const dm = world.api;
   const items = { candidatePolicy: 1, names: '日文头盔\t中文头盔\t1\t0\n日文长袍\t中文长袍\t1\t1\n日文戒指\t中文戒指\t1\t5\n' };
   eq('B1b 带装备分类列的 V3 正常应用', dm._applyV3(items), true);
-  eq('B1c 能识别头部类别', dm._peek().slots['日文头盔'], 0);
-  eq('B1d 能识别身体类别', dm._peek().slots['日文长袍'], 1);
+  eq('B1c 能识别头部类别', dm.suggestByZh('中文', 0, 0)[0]?.native, '日文头盔');
+  eq('B1d 能识别身体类别', dm.suggestByZh('中文', 0, 1)[0]?.native, '日文长袍');
   eq('B1f 拒绝无部位列的旧 V3', dm._applyV3({candidatePolicy: 1, names: '旧装备\t中文旧装备\t1\n'}), false);
-  eq('B1g 被拒绝数据不能改变已提交索引', dm._peek().slots['日文头盔'], 0);
+  eq('B1g 被拒绝数据不能改变已提交索引', dm.suggestByZh('中文', 0, 0)[0]?.native, '日文头盔');
 }
 
 // B2: 零网络快路径（缓存齐全 + manifest 新鲜 → 不发任何请求）
@@ -411,63 +337,63 @@ const manText = JSON.stringify(man);
       itemIds.sha256 + '\n' + readFileSync(new URL(itemIds.url, V3_DIR), 'utf8');
   }
   store['zhx.v3.f.mirapri.dict.' + dictFile.sha256] = dictFile.sha256 + '\n' + dictFile.text;
-  const w = makeWorld({ store });
-  const dm = buildDM(w);
-  const r = await dm._ensureTryV3();
+  const w = await makeWorld({ store });
+  const dm = w.api;
+  const r = await load(dm);
   eq('B9 缓存快路径返回 true', r, true);
   await new Promise(resolve => setImmediate(resolve));
-  eq('B10 快路径零网络请求', w.rec.xhr.length, 0);
-  eq('B11 快路径完成应用', dm._peek().nm['メイドホワイトブリム'], '女仆发带');
+  eq('B10 快路径零网络请求', w.requests.length, 0);
+  eq('B11 快路径完成应用', dm.resolveByName('メイドホワイトブリム'), '女仆发带');
 }
 
 // B3: manifest 获取失败 → false（回退）
 {
-  const w = makeWorld({ http: () => Promise.reject(new Error('404')) });
-  const dm = buildDM(w);
-  const r = await dm._ensureTryV3();
+  const w = await makeWorld({ http: () => Promise.reject(new Error('404')) });
+  const dm = w.api;
+  const r = await load(dm);
   eq('B12 manifest 404 → false', r, false);
-  eq('B13 失败时不应用（nameMap 为空容器）', Object.keys(dm._peek().nm).length, 0);
+  eq('B13 失败时不应用（nameMap 为空容器）', Object.keys(dm.dataGetIndex('nameMap')).length, 0);
 }
 
 // B4: schema 不兼容 → false
 {
   const bad = JSON.stringify({ schema: 2, sites: { mirapri: { files: {} } } });
-  const w = makeWorld({ http: () => Promise.resolve(bad) });
-  const dm = buildDM(w);
-  eq('B14 schema=2 → false', await dm._ensureTryV3(), false);
+  const w = await makeWorld({ http: () => Promise.resolve(bad) });
+  const dm = w.api;
+  eq('B14 schema=2 → false', await load(dm), false);
 }
 
 // B5: 站点不在 manifest → false
 {
   const bad = JSON.stringify({ schema: 3, sites: { ec: { files: { names: { url: 'ec/names.tsv', sha256: 'x', bytes: 1 } } } } });
-  const w = makeWorld({ http: () => Promise.resolve(bad), site: { id: 'mirapri' } });
-  const dm = buildDM(w);
-  eq('B15 站点缺失 → false', await dm._ensureTryV3(), false);
+  const w = await makeWorld({ http: () => Promise.resolve(bad), site: 'mirapri' });
+  const dm = w.api;
+  eq('B15 站点缺失 → false', await load(dm), false);
 }
 
 // B6: 文件 sha 不匹配 → false（不应用）
 {
-  const w = makeWorld({
+  const w = await makeWorld({
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(manText);
       return Promise.resolve('corrupted content that will not match sha');
     },
   });
-  const dm = buildDM(w);
-  eq('B16 文件 sha 不匹配 → false', await dm._ensureTryV3(), false);
-  eq('B17 校验失败不更改既有索引', Object.keys(dm._peek().nm).length, 0);
+  const dm = w.api;
+  eq('B16 文件 sha 不匹配 → false', await load(dm), false);
+  eq('B17 校验失败不更改既有索引', Object.keys(dm.dataGetIndex('nameMap')).length, 0);
 }
 
 // B7: 无站点（findSite null）→ false
 {
-  const w = makeWorld({ site: null });
-  const dm = buildDM(w);
-  eq('B18 未知站点 → false', await dm._ensureTryV3(), false);
+  const w = await makeWorld({ site: 'unsupported' });
+  const dm = w.api;
+  eq('B18 未知站点 → false', await load(dm), false);
 }
 
 // B8: _ensureMain 成功时只走当前 V3 manifest/files endpoint
 {
-  const w = makeWorld({
+  const w = await makeWorld({
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(manText);
       for (const [name, meta] of Object.entries(man.sites.mirapri.files)) {
@@ -477,70 +403,63 @@ const manText = JSON.stringify(man);
       return Promise.reject(new Error('404'));
     },
   });
-  const dm = buildDM(w);
-  await dm._ensureMain();
-  ok('B19 V3成功只使用manifest/files请求', !w.rec.xhr.some((u) => u.includes('/v2/')),
-    `xhr=${w.rec.xhr.join(' | ')}`);
-  ok('B20 _ensureMain 完成后索引就绪', !!dm._peek().nm);
+  const dm = w.api;
+  await dm.ensureTables();
+  ok('B19 V3成功只使用manifest/files请求', !w.requests.some(({ path }) => path.includes('/v2/')),
+    `xhr=${w.requests.map(({ path }) => path).join(' | ')}`);
+  ok('B20 _ensureMain 完成后索引就绪', dm.dataGetStatus().ready);
 }
 
 // B9: V3 失败时不尝试旧路径；空索引仍完成就绪广播。
 {
-  const w = makeWorld({ http: () => Promise.reject(new Error('404')) });
-  const dm = buildDM(w);
-  await dm._ensureMain();
-  await dm._ensureFinalize();
-  ok('B21 V3 failure issues no retired version/table request', !w.rec.xhr.some((u) => u.includes('/v2/') || u.endsWith('version.json')),
-    'xhr=' + w.rec.xhr.join(' | '));
-  eq('B21b V3失败后索引保持空', Object.keys(dm._peek().nm).length, 0);
-  eq('B21c V3失败仍广播就绪', w.rec.fires.length, 1);
+  const w = await makeWorld({ http: () => Promise.reject(new Error('404')) });
+  const dm = w.api;
+  await dm.ensureTables();
+  ok('B21 V3 failure issues no retired version/table request', !w.requests.some(({ path }) => path.includes('/v2/') || path.endsWith('version.json')),
+    'xhr=' + w.requests.map(({ path }) => path).join(' | '));
+  eq('B21b V3失败后索引保持空', Object.keys(dm.dataGetIndex('nameMap')).length, 0);
+  eq('B21c V3失败仍广播就绪', w.fires.length, 1);
 }
 
 // B10: _ensureFinalize announces V3-ready data and retains side-table text
 {
-  const w = makeWorld({});
-  const dm = buildDM(w);
+  const w = await makeWorld({});
+  const dm = w.api;
   dm._applyV3({ candidatePolicy:1, names: 'A\t甲\t1\t0\n', series: 'S1\t系列1\n' });
-  const p = dm._ensureFinalize();
-  w.flushTimers();
-  await p;
-  eq('B23 就绪广播仍发出', w.rec.fires.length, 1);
-  eq('B24 series text keeps its V3 runtime prefix', dm._peek().series, '\nS1\t系列1\n');
+  await dm._ensureFinalize();
+  eq('B23 就绪广播仍发出', w.fires.length, 1);
+  eq('B24 series text keeps its V3 runtime prefix', dm.DATA_TEXT.series, '\nS1\t系列1\n');
 }
 
 // B11: empty-data finalize also releases ready waiters
 {
-  const w = makeWorld({});
-  const dm = buildDM(w);
-  const p = dm._ensureFinalize();
-  w.flushTimers();
-  await p;
-  eq('B25 失败路径仍广播就绪', w.rec.fires.length, 1);
+  const w = await makeWorld({});
+  const dm = w.api;
+  await dm._ensureFinalize();
+  eq('B25 失败路径仍广播就绪', w.fires.length, 1);
 }
 
 // B12: _v3Pairs 多值语义
 {
-  const w = makeWorld({});
-  const dm = buildDM(w);
-  const m = dm._v3Pairs('A\t甲\t乙\nA\t甲\t丙\nB\t丁\n', true);
+  const m = _v3Pairs('A\t甲\t乙\nA\t甲\t丙\nB\t丁\n', true);
   eq('B26 多值去重追加', JSON.stringify(m.A), JSON.stringify(['甲', '乙', '丙']));
-  const single = dm._v3Pairs('A\t甲\nA\t乙\n', false);
+  const single = _v3Pairs('A\t甲\nA\t乙\n', false);
   eq('B27 单值首行胜', single.A, '甲');
 }
 
 // B13: v3 glam 解析——'1'/'0'/缺失三态（v1.4.2 后续：候选过滤；应用级见 test-item-resolver）
 {
-  const w = makeWorld({});
-  const dm = buildDM(w);
+  const w = await makeWorld({});
+  const dm = w.api;
   dm._applyV3({ candidatePolicy:1, names: 'A\t甲乙\t1\t0\nB\t乙丙\t0\t5\n' });
-  const gl = dm._peek().gl || {};
-  eq('B28 glam=1 解析', gl['A'], '1');
-  eq('B29 glam=0 解析', gl['B'], '0');
-  eq('B30 CRLF glam trim', dm._applyV3({ candidatePolicy:1, names: 'D\t丁戊\t 1 \t5\r\n' }) && dm._peek().gl.D, '1');
-  eq('B31 无 glam 列 → 不标记', Object.prototype.hasOwnProperty.call(gl, 'C'), false);
-  const invalid = buildDM(makeWorld());
+  const { glam } = validateV3Payload({ candidatePolicy: 1, names: 'A\t甲乙\t1\t0\nB\t乙丙\t0\t5\n' });
+  eq('B28 glam=1 解析', glam.A, '1');
+  eq('B29 glam=0 解析', glam.B, '0');
+  eq('B30 CRLF glam trim', validateV3Payload({ candidatePolicy:1, names: 'D\t丁戊\t 1 \t5\r\n' })?.glam.D, '1');
+  eq('B31 无 glam 列 → 不标记', Object.hasOwn(glam, 'C'), false);
+  const { api: invalid } = await makeWorld();
   eq('B31c candidatePolicy 1 rejects two-column names', invalid._applyV3({ names: 'Old\\t旧名\\n', candidatePolicy: 1 }), false);
-  eq('B31d rejected v3 format does not confirm policy', invalid._peek().policy, 0);
+  eq('B31d rejected v3 format does not confirm policy', invalid.suggestByZh('旧名').length, 0);
   eq('B31e candidatePolicy 1 rejects unknown flag', invalid._applyV3({ names: 'A\\t甲\\t2\\n', candidatePolicy: 1 }), false);
 
 }
@@ -551,18 +470,18 @@ const manText = JSON.stringify(man);
   const store = { 'zhx.v3.manifest': expired };
   for (const [name, f] of Object.entries(siteFiles)) store['zhx.v3.f.mirapri.' + name + '.' + f.sha256] = f.sha256 + '\n' + f.text;
   store['zhx.v3.f.mirapri.dict.' + dictFile.sha256] = dictFile.sha256 + '\n' + dictFile.text;
-  const w = makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
-  const dm = buildDM(w);
-  eq('B62 expired verified manifest falls back offline', await dm._ensureTryV3(), true);
-  eq('B63 verified offline manifest retains candidate policy', dm._peek().policy, 1);
-  eq('B64 old verifiable names still map for translation', dm._peek().nm['メイドホワイトブリム'], '女仆发带');
+  const w = await makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
+  const dm = w.api;
+  eq('B62 expired verified manifest falls back offline', await load(dm), true);
+  eq('B63 verified offline manifest retains candidate policy', dm.dataGetStatus().version, man.version);
+  eq('B64 old verifiable names still map for translation', dm.resolveByName('メイドホワイトブリム'), '女仆发带');
 }
 
 // B20a: wiki profiles use ecid/ko without requiring a names.tsv file.
 {
   const wikiFiles = man.sites.wiki.files;
-  const w = makeWorld({
-    site: { id: 'wiki', indexes: ['ecidMap', 'koByZh'], tables: ['items', 'dict'] },
+  const w = await makeWorld({
+    site: 'wiki',
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(manText);
       for (const [name, meta] of Object.entries(wikiFiles)) {
@@ -572,10 +491,10 @@ const manText = JSON.stringify(man);
       return Promise.reject(new Error('404'));
     },
   });
-  const dm = buildDM(w);
-  eq('B69 wiki v3 accepts its ecid/ko-only profile', await dm._ensureTryV3(), true);
-  eq('B70 wiki policy is confirmed by manifest', dm._peek().policy, 1);
-  eq('B71 wiki normal ECID index is populated', Object.keys(dm._peek().em).length > 20000, true);
+  const dm = w.api;
+  eq('B69 wiki v3 accepts its ecid/ko-only profile', await load(dm), true);
+  eq('B70 wiki policy is confirmed by manifest', dm.dataGetStatus().version, man.version);
+  eq('B71 wiki normal ECID index is populated', Object.keys(dm.dataGetIndex('ecidMap')).length > 20000, true);
 }
 
 // B23: Site B retains its committed manifest when Site A advances the shared daily manifest.
@@ -591,9 +510,9 @@ const manText = JSON.stringify(man);
   for (const [name, f] of Object.entries(man.sites.ec.files))
     store['zhx.v3.f.ec.' + name + '.' + f.sha256] = f.sha256 + String.fromCharCode(10) + readFileSync(new URL(f.url, V3_DIR), 'utf8');
   store['zhx.v3.f.ec.dict.' + dictFile.sha256] = dictFile.sha256 + String.fromCharCode(10) + dictFile.text;
-  const a = makeWorld({
+  const a = await makeWorld({
     store,
-    site: { id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] },
+    site: 'mirapri',
     http: (url) => {
       if (url.endsWith('manifest.json')) return Promise.resolve(newText);
       for (const [name, f] of Object.entries(man.sites.mirapri.files))
@@ -602,19 +521,19 @@ const manText = JSON.stringify(man);
       return Promise.reject(new Error('offline A: ' + url));
     },
   });
-  const dmA = buildDM(a);
-  eq('B23a Site A applies V3 update', await dmA._ensureTryV3(), true);
-  eq('B23b Site A commits global manifest', JSON.parse(a.store['zhx.v3.manifest'].split(String.fromCharCode(10))[1]).version, 'cross-site-new');
-  ok('B23c Site B snapshot survives Site A update', !!a.store['zhx.v3.manifest.ec']);
+  const dmA = a.api;
+  eq('B23a Site A applies V3 update', await load(dmA), true);
+  eq('B23b Site A commits global manifest', JSON.parse(a.store.get('zhx.v3.manifest').split(String.fromCharCode(10))[1]).version, 'cross-site-new');
+  ok('B23c Site B snapshot survives Site A update', !!a.store.has('zhx.v3.manifest.ec'));
 
-  const b = makeWorld({
-    site: { id: 'ec', indexes: ['nameMap', 'itemHash'], tables: ['items', 'dict'] },
-    store: { ...a.store },
+  const b = await makeWorld({
+    site: 'ec',
+    store: Object.fromEntries(a.store),
     http: () => Promise.reject(new Error('offline B')),
   });
-  const dmB = buildDM(b);
-  eq('B23d Site B uses old verified snapshot offline', await dmB._ensureTryV3(), true);
-  eq('B23e Site B keeps ordinary mapping', dmB._peek().nm['Snow White Dye'], '素雪白染剂');
+  const dmB = b.api;
+  eq('B23d Site B uses old verified snapshot offline', await load(dmB), true);
+  eq('B23e Site B keeps ordinary mapping', dmB.resolveByName('Snow White Dye'), '素雪白染剂');
   ok('B23f old-site fallback was recorded', dmB._dlStats.fallback >= 1);
 }
 
@@ -624,10 +543,10 @@ const manText = JSON.stringify(man);
   for (const [name, f] of Object.entries(siteFiles))
     store['zhx.v3.f.mirapri.' + name] = f.sha256 + String.fromCharCode(10) + f.text;
   store['zhx.v3.f.mirapri.dict'] = dictFile.sha256 + String.fromCharCode(10) + dictFile.text;
-  const w = makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
-  const dm = buildDM(w);
-  eq('B24a 无指纹旧键不能离线加载', await dm._ensureTryV3(), false);
-  eq('B24b 不再迁移无指纹旧键', Object.hasOwn(w.store, 'zhx.v3.f.mirapri.names.' + siteFiles.names.sha256), false);
+  const w = await makeWorld({ store, http: () => Promise.reject(new Error('offline')) });
+  const dm = w.api;
+  eq('B24a 无指纹旧键不能离线加载', await load(dm), false);
+  eq('B24b 不再迁移无指纹旧键', w.store.has('zhx.v3.f.mirapri.names.' + siteFiles.names.sha256), false);
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-runtime-v3：${pass}/${pass + fail} 通过`);

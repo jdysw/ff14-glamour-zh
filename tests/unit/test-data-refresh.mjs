@@ -2,18 +2,9 @@ import {currentDictionaryText} from '../helpers/current-dictionary.mjs';
 // 使用内存网络与 GM 存储桩，测试真实的 V3 数据生命周期函数。
 // 不为迎合待测实现而放宽断言。
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { createHash, webcrypto } from 'node:crypto';
-import { repoRoot } from '../helpers/paths.mjs';
-import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
-import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
-import { createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText } from '../../src/core/data/chinese-search-index.js';
+import { createHash } from 'node:crypto';
+import { makeV3Runtime } from '../helpers/v3-runtime.mjs';
 
-const source = fs.readFileSync(path.join(repoRoot, 'src/core/data/data-manager.js'), 'utf8');
-const implementation = source.split('\n')
-  .filter((line) => !/^import\s/.test(line) && !/^export\s*\{/.test(line))
-  .join('\n');
 function sha(text) { return createHash('sha256').update(text).digest('hex'); }
 function makeBundle(version) {
   const zh = version === 1 ? '中文甲' : '中文乙';
@@ -40,34 +31,8 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
-function buildHarness(download, requiredTables = ['items'], cryptoProvider = webcrypto) {
-  const store = new Map();
-  const marks = [];
-  const errors = [];
-  const deps = {
-    DATA_BASE_V3: 'https://unit.test/ff14/v3/',
-    DAY_MS: 86400000,
-    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
-    cacheReset: () => {},
-    createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText,
-    applyRuntimeDict: () => {},
-    httpGet: download,
-    // 英文兜底现由规范 data-manager 源码实现，不再注入会重名的假函数。
-    __zhxMark: (mark) => marks.push(mark),
-    _zhxErr: (where, error) => errors.push([where, error]),
-    findSite: () => ({ id: 'mirapri', indexes: ['nameMap', 'itemHash'], tables: requiredTables }),
-    neededTables: () => requiredTables,
-    storeGetAsync: async (key) => store.get(key) ?? null,
-    storeSetAsync: async (key, value) => { store.set(key, value); return true; },
-    storeListAsync: async () => [...store.keys()],
-    storeDeleteAsync: async (key) => { store.delete(key); return true; },
-    crypto: cryptoProvider,
-    TextEncoder,
-  };
-  const bindings = Object.keys(deps).join(', ');
-  const factory = new Function('deps', 'const { ' + bindings + ' } = deps;\n' +
-    implementation + '\nreturn { dataInvalidate, dataGetIndex, dataGetStatus, ensureTables, onTablesReady, resolveByName, resolveByZh, suggestByZh };');
-  return { api: factory(deps), store, marks, errors };
+function buildHarness(download, tables = ['items'], cryptoProvider) {
+  return makeV3Runtime({ download, tables, cryptoProvider });
 }
 
 function network(getVersion) {
@@ -97,7 +62,7 @@ function cachedVersion(store) {
 // 完整的热缓存无需重写文件或枚举存储键，页面在校验后直接使用它。
 {
   let requests = 0;
-  const { api, store } = buildHarness(async () => { requests++; throw new Error('unexpected network'); });
+  const { api, store } = await buildHarness(async () => { requests++; throw new Error('unexpected network'); });
   seedExpired(store, makeBundle(1));
   for (const key of ['zhx.v3.manifest', 'zhx.v3.manifest.mirapri']) {
     store.set(key, Date.now() + '\n' + JSON.stringify(makeBundle(1).manifest));
@@ -129,7 +94,7 @@ async function waitFor(condition) {
   const newer = makeBundle(2);
   let requested = 0;
   let waitingForNames = false;
-  const { api, store, errors } = buildHarness(async url => {
+  const { api, store, errors } = await buildHarness(async url => {
     if (url.endsWith('/manifest.json')) {
       requested++;
       return manifestGate.promise;
@@ -161,7 +126,7 @@ async function waitFor(condition) {
   assert.equal(statuses.length, 1, '后台更新不应触发当前页重翻');
   assert.equal(api.resolveByName('English One'), '中文甲');
 
-  const reopened = buildHarness(async url => assert.fail('重新打开应零网络命中新版：' + url));
+  const reopened = await buildHarness(async url => assert.fail('重新打开应零网络命中新版：' + url));
   for (const [key, value] of store) reopened.store.set(key, value);
   await reopened.api.ensureTables();
   assert.equal(reopened.api.resolveByName('English Two'), '中文乙');
@@ -183,7 +148,7 @@ async function waitFor(condition) {
     if (digest.toString('hex') === meta.sha256) verifiedNewNames = true;
     return Promise.resolve(digest);
   } } };
-  const { api, store, errors } = buildHarness(async url => {
+  const { api, store, errors } = await buildHarness(async url => {
     if (url.endsWith('/manifest.json')) return JSON.stringify(newer.manifest);
     const name = /\/mirapri\/(names|hash|alias|dup)\.tsv$/.exec(url)?.[1];
     assert.ok(name, 'unexpected remote file: ' + url);
@@ -201,7 +166,7 @@ async function waitFor(condition) {
 {
   const background = deferred();
   let manifests = 0;
-  const { api, store, errors } = buildHarness(async url => {
+  const { api, store, errors } = await buildHarness(async url => {
     if (url.endsWith('/manifest.json') && ++manifests === 1) return background.promise;
     return network(() => 2)(url);
   });
@@ -218,11 +183,65 @@ async function waitFor(condition) {
   assert.deepEqual(errors, []);
 }
 
+// 另一个页面在后台更新暂存文件时已提交：旧后台不能覆盖指针或清理新数据。
+{
+  const sitesKey = 'zhx.v3.manifest.mirapri';
+  const globalKey = 'zhx.v3.manifest';
+  const cache = new Map();
+  const releaseStagedWrite = deferred();
+  let staged = false;
+  let checkedOtherPage = false;
+  let manifestReadCount = 0;
+  const originalGet = cache.get.bind(cache);
+  cache.get = key => {
+    if (staged && (key === globalKey || key === sitesKey)) {
+      if (++manifestReadCount === 2) checkedOtherPage = true;
+    }
+    return originalGet(key);
+  };
+
+  const { api, writes, deletes } = await makeV3Runtime({
+    download: network(() => 2),
+    store: cache,
+    tables: ['items'],
+    writeValue(key, value) {
+      cache.set(key, value);
+      if (!staged) {
+        staged = true;
+        return releaseStagedWrite.promise;
+      }
+    },
+  });
+  const oldBundle = makeBundle(1);
+  const otherTab = makeBundle(3);
+  seedExpired(cache, oldBundle);
+  const observed = [];
+  api.onTablesReady(status => observed.push(status));
+  await api.ensureTables();
+  await waitFor(() => staged);
+  seedExpired(cache, otherTab);
+  const pinned = String(Date.now()) + '\n' + JSON.stringify(otherTab.manifest);
+  cache.set(sitesKey, pinned);
+  cache.set(globalKey, pinned);
+  const pinnedFiles = [...cache.keys()].filter(key => key.startsWith('zhx.v3.f.')
+    && Object.values(otherTab.manifest.sites.mirapri.files).some(meta => key.endsWith(meta.sha256)));
+  assert.equal(pinnedFiles.length, Object.keys(otherTab.files).length);
+  releaseStagedWrite.resolve();
+  await waitFor(() => checkedOtherPage);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual([cache.get(sitesKey), cache.get(globalKey)], [pinned, pinned]);
+  assert.equal(writes.some(key => key === sitesKey || key === globalKey), false);
+  assert.ok(pinnedFiles.every(key => cache.has(key)));
+  assert.deepEqual(deletes, [], 'superseded background job must not prune cache');
+  assert.deepEqual(observed.map(status => status.version), ['unit-v1']);
+  assert.equal(api.resolveByName('English One'), '中文甲');
+}
+
 // 刷新会产生新的就绪代际：旧索引立即失效，
 // 原有订阅者应在数据重新就绪时再次收到通知。
 {
   let version = 1;
-  const { api, errors } = buildHarness(network(() => version));
+  const { api, errors } = await buildHarness(network(() => version));
   let readyCount = 0;
   const statuses = [];
   api.onTablesReady(status => { readyCount++; statuses.push(status); });
@@ -274,8 +293,14 @@ async function waitFor(condition) {
   let version = 1;
   let blocked = false;
   const pending = deferred();
+  const nextManifest = deferred();
+  let secondManifestRequested = false;
   const download = async (url) => {
-    if (url.endsWith('/manifest.json')) return JSON.stringify(makeBundle(version).manifest);
+    if (url.endsWith('/manifest.json')) {
+      if (version === 1) return JSON.stringify(makeBundle(1).manifest);
+      secondManifestRequested = true;
+      return nextManifest.promise;
+    }
     const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
     assert.ok(match, 'unexpected remote file: ' + url);
     if (match[1] === 'names' && version === 1) {
@@ -284,7 +309,7 @@ async function waitFor(condition) {
     }
     return makeBundle(version).files[match[1]];
   };
-  const { api, errors } = buildHarness(download);
+  const { api, errors, writes } = await buildHarness(download);
   let readyCount = 0;
   api.onTablesReady(() => { readyCount++; });
   const oldLoad = api.ensureTables();
@@ -296,7 +321,15 @@ async function waitFor(condition) {
   api.dataInvalidate();
   const newLoad = api.ensureTables();
   pending.resolve(makeBundle(1).files.names);
-  await Promise.all([oldLoad, newLoad]);
+  await oldLoad;
+  await waitFor(() => secondManifestRequested);
+  assert.equal(api.resolveByName('English One'), null, 'superseded bundle was never visible');
+  assert.equal(api.dataGetStatus().version, null);
+  assert.equal(api.dataGetStatus().ready, false);
+  assert.equal(readyCount, 0);
+  assert.deepEqual(writes, [], 'superseded foreground bundle cannot be committed before new data arrives');
+  nextManifest.resolve(JSON.stringify(makeBundle(2).manifest));
+  await newLoad;
   assert.equal(api.resolveByName('English One'), null);
   assert.equal(api.resolveByName('English Two'), '中文乙');
   assert.equal(readyCount, 1, 'only the latest generation may announce readiness');
@@ -305,7 +338,7 @@ async function waitFor(condition) {
 
 // 网络失败仍广播结束，以免翻译等待永远悬挂；但状态必须区分失败与有效索引。
 {
-  const { api, errors } = buildHarness(async () => { throw new Error('offline'); });
+  const { api, errors } = await buildHarness(async () => { throw new Error('offline'); });
   const observations = [];
   api.onTablesReady(status => observations.push(status));
   await api.ensureTables();
@@ -320,21 +353,22 @@ async function waitFor(condition) {
 
 // 缺失 WebCrypto 时，不允许用字节长度代替 SHA-256 校验。
 {
-  const { api } = buildHarness(network(() => 1), ['items'], undefined);
+  const normal = await buildHarness(network(() => 1));
   // 显式传入不具备 digest 的实现，模拟受限浏览器环境。
-  const { api: restricted } = buildHarness(network(() => 1), ['items'], {});
+  const { api: restricted } = await buildHarness(network(() => 1), ['items'], {});
   await restricted.ensureTables();
   assert.equal(restricted.dataGetStatus().state, 'degraded');
   assert.equal(restricted.resolveByName('English One'), null);
-  await api.ensureTables();
-  assert.equal(api.dataGetStatus().state, 'ready', '正常 WebCrypto 必须继续工作');
+  normal.activate();
+  await normal.api.ensureTables();
+  assert.equal(normal.api.dataGetStatus().state, 'ready', '正常 WebCrypto 必须继续工作');
 }
 
 // 生成器提供字节数后，同 SHA 的缓存和下载体仍必须逐字节匹配。
 {
   const { manifest, files } = makeBundle(1);
   manifest.sites.mirapri.files.names.bytes += 1;
-  const { api } = buildHarness(async url => {
+  const { api } = await buildHarness(async url => {
     if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
     const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
     assert.ok(match, '只允许请求选定站点的预期文件');
@@ -352,7 +386,7 @@ async function waitFor(condition) {
     url: 'mirapri/ecid.tsv', sha256: 'a'.repeat(64), bytes: 12,
   };
   const requests = [];
-  const { api } = buildHarness(async url => {
+  const { api } = await buildHarness(async url => {
     requests.push(url);
     if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
     throw new Error('意外下载额外站点文件：' + url);
@@ -366,7 +400,7 @@ async function waitFor(condition) {
 // 无指纹旧键不参与离线恢复，当前指纹键损坏后必须拒绝。
 {
   const { manifest, files } = makeBundle(1);
-  const { api, store } = buildHarness(async url => {
+  const { api, store } = await buildHarness(async url => {
     throw new Error('应完全离线命中缓存：' + url);
   });
   store.set('zhx.v3.manifest', Date.now() + '\n' + JSON.stringify(manifest));
@@ -387,7 +421,7 @@ async function waitFor(condition) {
   manifest.shared = { dict: {
     url: 'dict.json', sha256: sha(dictionary), bytes: Buffer.byteLength(dictionary),
   } };
-  const { api } = buildHarness(async url => {
+  const { api } = await buildHarness(async url => {
     if (url.endsWith('/manifest.json')) return JSON.stringify(manifest);
     if (url.endsWith('/dict.json')) return dictionary;
     const match = /\/mirapri\/(names|hash|alias|dup)\.tsv/.exec(url);
