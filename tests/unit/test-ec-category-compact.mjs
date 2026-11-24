@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repoRoot } from '../helpers/paths.mjs';
 
-const source = fs.readFileSync(path.join(repoRoot, 'src/core/chinese-search.js'), 'utf8');
+const source = fs.readFileSync(path.join(repoRoot, 'src/core/search-equipment-categories.js'), 'utf8');
 const beginTag = '// BEGIN GENERATED EC SEARCH CATEGORIES';
 const endTag = '// END GENERATED EC SEARCH CATEGORIES';
 const from = source.indexOf('\n', source.indexOf(beginTag)) + 1;

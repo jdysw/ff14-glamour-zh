@@ -2,9 +2,8 @@
 //
 // 目的：冻结搜索输入识别、中文查询判定、GET URL 重写等纯逻辑。
 //       不依赖真实站点与网络；站点实际表单由 live / 人工验证覆盖。
-import fs from 'node:fs';
-import path from 'node:path';
-import { repoRoot } from '../helpers/paths.mjs';
+import { buildSearchUrl, createChineseSearchController, findSearchInput, isChineseSearchQuery,
+  normalizeSearchQuery, searchInputScore } from '../../src/core/chinese-search.js';
 
 let pass = 0;
 let fail = 0;
@@ -15,30 +14,16 @@ const ok = (name, cond, extra = '') => {
 const eq = (name, actual, expected) => ok(name, actual === expected,
   `实际=${JSON.stringify(actual)} 期望=${JSON.stringify(expected)}`);
 
-const SOURCE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/chinese-search.js'), 'utf8');
-
-function sliceSource(s) {
-  const start = s.indexOf('const SEARCH_SITES = Object.freeze({');
-  const end = s.indexOf('\nexport {', start);
-  if (start < 0 || end < 0) throw new Error('中文装备搜索源码区段缺失');
-  return s.slice(start, end);
-}
-
 function buildSearch() {
-  const seg = sliceSource(SOURCE_TEXT);
-  const body = [
-    'const hasItemIdentities = () => false;',
-    'const resolveByZh = (v) => ({\'甲\': \'ア\', \'乙\': \'ガ\'}[v] || null);',
-    'const resolvePartialByZh = (v) => ({\'丙\': \'ウ\'}[v] || null);',
-    seg,
-    'return { buildSearchUrl, findSearchInput, handleChineseSearchSubmit, isChineseSearchQuery, normalizeSearchQuery, searchInputScore };',
-  ].join('\n');
-  try {
-    return new Function(body)();
-  } catch (e) {
-    throw new Error('中文装备搜索区段装配失败：' + e.message);
-  }
+  const { handleChineseSearchSubmit } = createChineseSearchController({
+    hasItemIdentities: () => false,
+    resolveByZh: value => ({ 甲: 'ア', 乙: 'ガ' })[value] || null,
+    resolvePartialByZh: value => value === '丙' ? 'ウ' : null,
+  });
+  return { buildSearchUrl, findSearchInput, handleChineseSearchSubmit,
+    isChineseSearchQuery, normalizeSearchQuery, searchInputScore };
 }
+
 function fakeInput(attrs = {}) {
   return {
     disabled: false,

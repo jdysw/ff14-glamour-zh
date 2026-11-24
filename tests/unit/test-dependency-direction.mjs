@@ -13,7 +13,7 @@ assert.match(errors({'src/core/a.js':['../sites/a.js'],'src/sites/a.js':[]}), /C
 assert.match(errors({'src/sites/a.js':['./b.js'],'src/sites/b.js':[]}), /cross-site dependency/);
 assert.equal(errors({'src/core/site-registry.js':['../sites/a.js'],'src/sites/a.js':[]}), '');
 assert.equal(errors({'src/core/probe.js':['../sites/a.js'],'src/sites/a.js':[]}), '');
-assert.equal(errors({'src/core/chinese-search.js':['../sites/eorzea-collection.js'],'src/sites/eorzea-collection.js':[]}), '');
+assert.match(errors({'src/core/chinese-search.js':['../sites/eorzea-collection.js'],'src/sites/eorzea-collection.js':[]}), /Core imports site/);
 assert.match(analyzeDependencies(new Map([
   ['src/core/a.js', "export * from '../sites/a.js';"], ['src/sites/a.js',''],
 ])).errors.join('\n'), /Core imports site/);

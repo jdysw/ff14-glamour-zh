@@ -20,7 +20,7 @@ import { startUserTools } from './core/user-tools.js';
     if (!__site) return;
     safe(startUserTools, '脚本菜单')(__site.id);
     safe(ensureChineseFont, '中文字体')();
-    safe(startChineseSearch, '中文装备搜索')(__site.id);
+    safe(startChineseSearch, '中文装备搜索')(__site.id, __site.chineseSearch);
     try { __site.boot(); } catch (e) { _zhxErr('boot:' + __site.id, e); }
   };
   const bootWhenReady = () => {

@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { _applyV3, dataInvalidate, suggestByZh } from '../../src/core/data/data-manager.js';
 import { handleChineseSearchSubmit, startChineseSearch } from '../../src/core/chinese-search.js';
+import { SITE_REGISTRY } from '../../src/core/site-registry.js';
 import { suggestECGearsetsByZh } from '../../src/sites/eorzea-collection.js';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
@@ -101,14 +102,14 @@ const event = (target, key = '') => ({
   stopPropagation() { this.stopped = true; },
 });
 
-test('七站搜索入口：只绑定一次，表单输入组合态中不得弹候选', () => {
+test('中文搜索入口：只绑定一次，表单输入组合态中不得弹候选', () => {
   assert.equal(startChineseSearch('unknown'), undefined);
-  startChineseSearch('ec');
+  startChineseSearch('ec', SITE_REGISTRY.find(site => site.id === 'ec').chineseSearch);
   assert.equal(globalThis.__zhxChineseSearchBound, true);
-  assert.equal(handlers.get('input').length, 2);
+  assert.equal(handlers.get('input').length, 1);
   assert.equal(handlers.get('submit').length, 1);
-  startChineseSearch('ec');
-  assert.equal(handlers.get('input').length, 2, '必须避免 SPA 重入重复注册');
+  startChineseSearch('ec', SITE_REGISTRY.find(site => site.id === 'ec').chineseSearch);
+  assert.equal(handlers.get('input').length, 1, '必须避免 SPA 重入重复注册');
 
   const form = {
     querySelectorAll() { return [this.input]; },

@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src/core/chinese-search.js"
+SOURCE = ROOT / "src/core/search-equipment-categories.js"
 BEGIN = "// BEGIN GENERATED EC SEARCH CATEGORIES — tools/update-ec-search-categories.py"
 END = "// END GENERATED EC SEARCH CATEGORIES"
 

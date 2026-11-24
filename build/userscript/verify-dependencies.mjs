@@ -10,8 +10,7 @@ const PURE_MODULES = new Set(['src/core/runtime.js', 'src/core/site-policy.js'])
 function validateEdge(owner, dependency, sources, errors) {
   if (!sources.has(dependency)) errors.push(`${owner}: missing module ${dependency}`);
   if (owner.startsWith('src/core/') && dependency.startsWith('src/sites/')
-    && !SITE_IMPORTERS.has(owner)
-    && !(owner === 'src/core/chinese-search.js' && dependency === 'src/sites/eorzea-collection.js'))
+    && !SITE_IMPORTERS.has(owner))
     errors.push(`${owner}: Core imports site ${dependency}`);
   if (owner.startsWith('src/sites/') && dependency.startsWith('src/sites/'))
     errors.push(`${owner}: cross-site dependency ${dependency}`);

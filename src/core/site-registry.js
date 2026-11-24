@@ -3,7 +3,8 @@ import { observeUntilDomReady } from './observer.js';
 import { findSitePolicy } from './site-policy.js';
 import { _zhxErr, safe } from './runtime.js';
 import { applyItemZh, EARLY_EQUIPMENT_SEL, startItems, translateEarlyEquipment, translateKnownEquipmentText } from './targets.js';
-import { bindECPieceTiles, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
+import { bindECPieceTiles, resolveECGearsetSearch, suggestECGearsetsByZh, startEC, translateECPage, translateECTitle } from '../sites/eorzea-collection.js';
+import { createECSearchStrategy } from '../sites/eorzea-collection-search.js';
 import { bindFCBanners, fixFCMenu, startFC, translateFCPage, translateFCTitle } from '../sites/ff14-fc.js';
 import { startACL, translateACLPage, translateACLTitle } from '../sites/ffxiv-collection.js';
 import { injectWikiButton, startWiki } from '../sites/huiji-wiki.js';
@@ -29,6 +30,7 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
     const c = cfg || {};
     return {
       id: c.id,
+      chineseSearch: c.chineseSearch,
       prepare() {
         const early = c.early;
         if (!early || (early.matches && !early.matches(location.pathname))) return;
@@ -64,6 +66,7 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
     }),
     createSiteAdapter({
       id: 'ec',
+      chineseSearch: createECSearchStrategy(resolveECGearsetSearch, suggestECGearsetsByZh),
       early: {
         selector: EARLY_EQUIPMENT_SEL,
         matches: path => /^\/glamour\/\d+(?:\/|$)/.test(path),

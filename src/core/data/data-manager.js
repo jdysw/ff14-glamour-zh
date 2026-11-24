@@ -626,12 +626,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
   function getChineseSearchIndex() {
-    return chineseSearchIndex ??= createChineseSearchIndex({
+    chineseSearchIndex ??= createChineseSearchIndex({
       names: nameMap, aliases: _irAliasMap, glam: _irGlamMap, slots: _irSearchSlotByNative,
       candidatePolicy: _irCandidatePolicy,
       preferJapanese: _irCandidatePolicy === 1 && typeof window !== 'undefined' && findSite()?.id === 'eden',
       lookupIdentities: itemIdRows ? findItemsByName : null,
     });
+    return chineseSearchIndex;
   }
 
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）

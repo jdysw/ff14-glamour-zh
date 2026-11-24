@@ -95,6 +95,21 @@ function diffObject(name, actual, expected, label) {
   return same;
 }
 
+function compareLayers(layers, readExpected, label) {
+  let allSame = true;
+  for (const [key, name] of LAYERS) {
+    const actual = layers.get(name);
+    const expected = readExpected(key);
+    if (!actual || !expected || typeof expected !== 'object' || Array.isArray(expected)) {
+      console.error(name, '缺失或格式无效');
+      allSame = false;
+      continue;
+    }
+    if (!diffObject(name, actual, expected, label)) allSame = false;
+  }
+  return allSame;
+}
+
 function main(args) {
   const [source, flag, filename] = args;
   if (!source || !(args.length === 1 || (args.length === 3 && flag === '--dict-json' && filename))) {
@@ -103,17 +118,8 @@ function main(args) {
   const layers = embeddedLayers(readRepoFile(source).toString('utf8'));
   const blob = filename ? readRepoFile(filename) : null;
   const runtime = blob ? JSON.parse(blob.toString('utf8')) : null;
-  let allSame = true;
-  for (const [key, name] of LAYERS) {
-    const actual = layers.get(name);
-    const expected = blob ? runtime?.[key] : readSource(key);
-    if (!actual || !expected || typeof expected !== 'object' || Array.isArray(expected)) {
-      console.error(name, '缺失或格式无效');
-      allSame = false;
-      continue;
-    }
-    if (!diffObject(name, actual, expected, blob ? 'dict.json' : 'json')) allSame = false;
-  }
+  const readExpected = blob ? key => runtime?.[key] : readSource;
+  const allSame = compareLayers(layers, readExpected, blob ? 'dict.json' : 'json');
   if (blob) console.log(`（对照物: ${filename}  fp=${crypto.createHash('sha256').update(blob).digest('hex').slice(0, 12)}）`);
   console.log(allSame ? '\n=== 全部一致 ✅ ===' : '\n=== 存在差异 ⚠️ ===');
   return allSame ? 0 : 1;

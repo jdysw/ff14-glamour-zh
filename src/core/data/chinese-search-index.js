@@ -10,43 +10,50 @@ const ALIAS = 1;
 const MAX_PARTIAL_NAMES = 1000;
 const SUGGEST_ABS_MAX = 3000;
 
-function searchNames({ names, aliases, glam, candidatePolicy, preferJapanese }) {
-  const matches = Object.create(null);
-  const kinds = Object.create(null);
-  const put = (zh, native, kind) => {
-    if (!zh || !native) return;
+function addCanonicalNames(entries, glam, matches, kinds, eligible = null) {
+  for (const [native, zh] of entries) {
+    if (!zh || !native || glam?.[native] !== '1') continue;
+    if (eligible && !eligible(native)) continue;
     const key = normalizeSearchText(zh);
     const value = normalizeSearchText(native);
-    if (!key || !value || matches[key] !== undefined) return;
+    if (!key || !value || matches[key] !== undefined) continue;
     matches[key] = value;
-    kinds[key] = kind;
-  };
-  if (candidatePolicy !== 1) return { matches, kinds };
+    kinds[key] = CANONICAL;
+  }
+}
 
-  const entries = Object.entries(names || {});
-  if (preferJapanese) {
-    // Eden 首页候选优先日文，避免同一装备的英文查询无结果。
-    for (const [native, zh] of entries) {
-      if (glam?.[native] === '1' && /[\u3040-\u30ff\u3400-\u9fff]/u.test(native) && !/[\uac00-\ud7af]/u.test(native))
-        put(zh, native, CANONICAL);
-    }
+function firstAliasMatch(value, matches) {
+  const list = Array.isArray(value) ? value : [value];
+  for (const zh of list) {
+    const native = matches[normalizeSearchText(zh)];
+    if (native) return native;
   }
-  for (const [native, zh] of entries) {
-    if (glam?.[native] === '1') put(zh, native, CANONICAL);
-  }
+  return null;
+}
+
+function addAliasNames(aliases, matches, kinds) {
   for (const [alias, zhs] of Object.entries(aliases || {})) {
     const key = normalizeSearchText(alias);
     if (!key || matches[key] !== undefined) continue;
-    const list = Array.isArray(zhs) ? zhs : [zhs];
-    for (const zh of list) {
-      const native = matches[normalizeSearchText(zh)];
-      if (native) {
-        matches[key] = native;
-        kinds[key] = ALIAS;
-        break;
-      }
-    }
+    const native = firstAliasMatch(zhs, matches);
+    if (!native) continue;
+    matches[key] = native;
+    kinds[key] = ALIAS;
   }
+}
+
+// Eden 的原生装备搜索优先匹配日文；不能把同一装备的韩文名误当日文。
+const isJapaneseName = name => /[\u3040-\u30ff\u3400-\u9fff]/u.test(name) && !/[\uac00-\ud7af]/u.test(name);
+
+function searchNames({ names, aliases, glam, candidatePolicy, preferJapanese }) {
+  const matches = Object.create(null);
+  const kinds = Object.create(null);
+  if (candidatePolicy !== 1) return { matches, kinds };
+
+  const entries = Object.entries(names || {});
+  if (preferJapanese) addCanonicalNames(entries, glam, matches, kinds, isJapaneseName);
+  addCanonicalNames(entries, glam, matches, kinds);
+  addAliasNames(aliases, matches, kinds);
   return { matches, kinds };
 }
 
@@ -109,15 +116,19 @@ function hasWordEdge(needle, names) {
   return false;
 }
 
+function appendPartialMatches(catalog, query, kind, nativeNames) {
+  for (const name of catalog.candidates(kind, [query])) {
+    if (name === query || !name.includes(query)) continue;
+    const native = catalog.lookup(name);
+    if (native) nativeNames.push(native);
+    if (nativeNames.length > MAX_PARTIAL_NAMES) return;
+  }
+}
+
 function partialMatch(catalog, query) {
   const nativeNames = [];
   for (const kind of [CANONICAL, ALIAS]) {
-    for (const name of catalog.candidates(kind, [query])) {
-      if (name === query || !name.includes(query)) continue;
-      const native = catalog.lookup(name);
-      if (native) nativeNames.push(native);
-      if (nativeNames.length > MAX_PARTIAL_NAMES) break;
-    }
+    appendPartialMatches(catalog, query, kind, nativeNames);
     if (nativeNames.length > MAX_PARTIAL_NAMES) break;
   }
   if (!nativeNames.length) return null;
