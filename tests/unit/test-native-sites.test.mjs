@@ -71,6 +71,21 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
     assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
     assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
+    assert.equal(trEden('画像をダウンサンプリング→ΔEベースのクラスタリングで同系色を統合。ほぼ白（L>95）／ほぼ黒（L<5）は除外。 出力数は最大6色。'),
+      '缩小图片并按 ΔE 色差合并近似颜色。排除近白（L > 95）和近黑（L < 5），最多显示 6 种颜色。');
+    assert.equal(trEden('反対主 / 20%'), '主色的互补色 / 20%');
+    assert.equal(trEden('主 40% #de0b16'), '主色 40% #de0b16');
+    const ranking = document.createElement('div');
+    ranking.innerHTML = '<a class="matched" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/?patch=latest">...</a>'
+      + '<a class="unknown" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/ffff00/?patch=latest">...</a>'
+      + '<a class="historical" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/abcdef/?patch=6.0">...</a>'
+      + '<a class="external" href="https://example.test/lodestone/playguide/db/item/abcdef/?patch=latest">...</a>';
+    document.body.append(ranking);
+    const unchanged = [...ranking.querySelectorAll('a:not(.matched)')].map(a => a.href);
+    translateEdenPage(ranking);
+    assert.ok(ranking.querySelector('.matched').href.endsWith(encodeURIComponent('测试装备')));
+    assert.deepEqual([...ranking.querySelectorAll('a:not(.matched)')].map(a => a.href), unchanged);
+    ranking.remove();
     assert.equal(trEden('不认识的玩家标题'),'不认识的玩家标题');
     startEden();
     assert.equal(title.textContent,'装备排行榜');assert.equal(name.textContent,'测试装备');

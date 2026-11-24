@@ -145,10 +145,10 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
 
   function translateRonkaPalette(raw) {
     // React can render the channel, label and color as separate text nodes.
-    const match = /^([12]?)염색 (?:(색상추가)|- *(.*))$/u.exec(raw);
+    const match = /^([12]?)염색 (?:(색상추가)|-(.*))$/u.exec(raw);
     if (!match) return trRonka(raw);
     const [, channel, empty, color] = match;
-    return channel + '号染色：' + (empty ? '添加颜色' : trRonka(color));
+    return channel + '号染色：' + (empty ? '添加颜色' : trRonka(color.replace(/^ +/u, '')));
   }
 
   function isRonkaFilterKeyword(element) {

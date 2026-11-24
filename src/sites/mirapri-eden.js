@@ -14,7 +14,7 @@ const SKIP = 'script,style,noscript,textarea,input,[contenteditable]:not([conten
   + '.gallery-hero-text,.gallery-tile-title,.gallery-tile-img,.zhx-skip';
 const EQUIPMENT = '.v-data-table td,.v-list-item__title,.v-select__selection,#equipment-view h6';
 const ITEM_TARGET = 'a,.flex-grow-1,.v-data-table td,#equipment-view h6';
-const ITEM_URL = /^https:\/\/(?:jp|na|eu|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?$/i;
+const ITEM_URL = /^https:\/\/(?:jp|na|eu|de|fr)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([a-f0-9]+)\/?(?:\?patch=latest)?$/i;
 const known = raw => Object.hasOwn(DICT, 'eden:' + raw) ? DICT['eden:' + raw] : null;
 
 const RECIPE_DATA = 'https://mirapri.ff14eden.work/glamour/all_users_glamour.json';
@@ -190,11 +190,28 @@ function edenMutationRelevant(mutation) {
     && !mutation.target.closest('.'+RECIPE_PANEL);
 }
 
+const DYE_ROLE_LABELS = new Map([
+  ['ベース', '底色'], ['アクセント', '点缀色'], ['主', '主色'], ['従', '辅色'],
+  ['反対主', '主色的互补色'], ['反対従', '辅色的互补色'],
+]);
+
+function translateDyeRole(raw) {
+  // Visible swatches include the slash; the ratio-bar title includes a hex value.
+  const match = /^([^ ]+)( \/ \d+%| \d+% #[a-f0-9]{6})$/iu.exec(raw);
+  const label = match && DYE_ROLE_LABELS.get(match[1]);
+  return label ? label + match[2] : null;
+}
+
+function translateDyeHistogram(raw) {
+  const match = /^画像をダウンサンプリング→ΔEベースのクラスタリングで同系色を統合。ほぼ白（L>(\d+)）／ほぼ黒（L<(\d+)）は除外。 出力数は最大(\d+)色。$/u.exec(raw);
+  return match && `缩小图片并按 ΔE 色差合并近似颜色。排除近白（L > ${match[1]}）和近黑（L < ${match[2]}），最多显示 ${match[3]} 种颜色。`;
+}
+
 function trEden(text) {
   const raw = text?.trim();
   if (!raw) return text;
   let value = known(raw) || known(raw.replace(/\s+/gu, ' '))
-    || (Object.hasOwn(DICT_COMMON, raw) ? DICT_COMMON[raw] : null) || resolveDyeColor(raw);
+    || (Object.hasOwn(DICT_COMMON, raw) ? DICT_COMMON[raw] : null) || resolveDyeColor(raw) || translateDyeRole(raw) || translateDyeHistogram(raw);
   const numbers = raw.match(/\d+/gu);
   if (!value && numbers?.length === 1) value = known(raw.replace(/\d+/u, '{count}'))?.replace('{count}', numbers[0]);
   const summary = !value && /^(種族（任意）|性別（任意）|Race \(optional\)|Gender \(optional\)):\s*(.{1,50})$/u.exec(raw);
