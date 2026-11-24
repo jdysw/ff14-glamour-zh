@@ -33,14 +33,25 @@ export function isECAuthoredPath(path) {
   return /^\/(?:glamour|companion-glamour|creator)\/\d+(?:[/?#]|$)/u.test(path || '');
 }
 
-export function isECAuthoredContent(element) {
-  if (!element?.closest) return false;
+function isECContext() {
   const host = globalThis.location?.hostname;
-  if (host && host !== 'ffxiv.eorzeacollection.com' && globalThis.window?.__zhxTestSite !== 'ec') return false;
+  return !host || host === 'ffxiv.eorzeacollection.com' || globalThis.window?.__zhxTestSite === 'ec';
+}
+
+function ecLinkPath(element) {
+  const href = element?.closest?.('a[href]')?.getAttribute?.('href') || '';
+  return href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
+}
+
+// Series details are native catalogue destinations, not single item Wiki links.
+export function isECSeriesLink(element) {
+  return isECContext() && /^\/(?:gearset|accessories)\/[^/?#]+(?:[/?#]|$)/u.test(ecLinkPath(element));
+}
+
+export function isECAuthoredContent(element) {
+  if (!element?.closest || !isECContext()) return false;
   if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
-  const href = element.closest('a[href]')?.getAttribute?.('href') || '';
-  const path = href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
-  return isECAuthoredPath(path)
+  return isECAuthoredPath(ecLinkPath(element))
     || (isECAuthoredPath(globalThis.location?.pathname) && !!element.closest('h1'));
 }
 

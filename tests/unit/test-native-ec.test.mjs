@@ -121,6 +121,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     '<a id="page-two" href="/gearsets?content=tomes&page=2">2</a>',
     '<a id="combined-filter" href="/gearsets?content=tomes&maximumLvl=70">Tomestones Exchange</a>',
     '<a id="seasonal" href="/gearsets?content=seasonal"><img alt="seasonal">季节活动 <b>装备</b></a>',
+    '<a id="legacy-seasonal" href="/gearsets?content=seasonal">商城套装</a>',
     '<a id="job" href="/gearsets?content=job">职业校服 <i>护甲</i></a>',
     '</nav>',
     '<section><h3 id="section">— <span>News and Articles</span> —</h3>',
@@ -154,6 +155,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#page-two').textContent, '2');
     assert.equal(d.querySelector('#combined-filter').textContent, 'Tomestones Exchange');
     assert.equal(d.querySelector('#seasonal').textContent, '季节活动装备');
+    assert.equal(d.querySelector('#legacy-seasonal').textContent, '季节活动装备');
     assert.equal(d.querySelector('#job').textContent, '职业校服');
     assert.equal(d.querySelector('#section').textContent, '— 新闻与文章 —');
     assert.equal(d.querySelector('#lodestone').textContent, '— 最新 Lodestone 新闻 —');
@@ -209,12 +211,12 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
       translateECPage(dye);
       assert.equal(dye.nodeValue, '油墨蓝 新增');
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/accessories') }, () => {
-        d.body.innerHTML = '<select id="patch"><option value="6.0">Endwalker</option>' +
+        d.body.innerHTML = '<select id="patch"><option value="5.0">ShadowBringers</option><option value="6.0">Endwalker</option>' +
           '<option value="7.0">Dawntrail</option></select><button id="piece">Wrists</button>' +
           '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>';
         translateECPage();
         assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
-          [['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
+          [['5.0', '暗影之逆焰'], ['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
         assert.equal(d.querySelector('#piece').textContent, '腕部');
         assert.equal(d.querySelector('#status').textContent, '不可染色');
         assert.equal(d.querySelector('#source').textContent, '讨伐歼灭战掉落');
@@ -223,14 +225,19 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         d.title = 'Ink Blue | Eorzea Collection';
         d.body.innerHTML = '<h1 id="authored">Ink Blue</h1>' +
           '<a href="/companion-glamour/232/example"><p class="title has-text-text is-5">Ink Blue</p></a>' +
-          '<a href="/glamour/233/example"><p class="title has-text-text is-5">Ink Blue</p></a>' +
+          '<a href="/glamour/233/example" title="Ink Blue"><img alt="Ink Blue"><p class="title has-text-text is-5">Ink Blue</p></a>' +
+          '<a href="/gearset/ink-blue"><p class="title has-text-text is-5">Ink Blue</p></a>' +
+          '<a href="https://ffxiv.eorzeacollection.com/accessories/ink-blue"><span class="has-text-rarity-4">Ink Blue</span></a>' +
           '<a href="/glamour/submit" id="submit">Submit Glamour</a>' +
           '<img id="cover" alt="Cover image">';
         translateECPage();
         translateECTitle();
         assert.equal(d.title, 'Ink Blue | Eorzea Collection');
         assert.equal(d.querySelector('#authored').textContent, 'Ink Blue');
-        assert.equal(collectTargets(d.body).filter(row => row.type === 'card').length, 0);
+        assert.equal(collectTargets(d.body).length, 0, '作品及系列卡片均不属于单件物品链');
+        const authoredLink = d.querySelector('a[href="/glamour/233/example"]');
+        assert.equal(authoredLink.title, 'Ink Blue');
+        assert.equal(authoredLink.querySelector('img').alt, 'Ink Blue');
         const work = d.querySelector('a[href="/companion-glamour/232/example"] p');
         assert.equal(work.textContent, 'Ink Blue');
         assert.equal(d.querySelector('#cover').alt, '封面图片');
@@ -238,6 +245,11 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         const ev = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
         work.dispatchEvent(ev);
         assert.equal(ev.defaultPrevented, false, '玩家作品链接不得被 Wiki 跳转拦截');
+        for (const link of d.querySelectorAll('a[href*="/gearset/"], a[href*="/accessories/"]')) {
+          const click = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
+          link.firstElementChild.dispatchEvent(click);
+          assert.equal(click.defaultPrevented, false, '系列详情保留原站跳转');
+        }
       });
     });
   } finally {

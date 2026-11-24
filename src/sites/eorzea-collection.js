@@ -2,7 +2,7 @@ import { DICT_EC, dictGetRevision } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
 import { dataGetIndex, resolveDyeColor } from '../core/data/data-manager.js';
-import { isECAuthoredContent, isECAuthoredPath } from '../core/content-scope.js';
+import { isECAuthoredContent, isECAuthoredPath, isECSeriesLink } from '../core/content-scope.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
@@ -713,9 +713,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // Gearset link href is never touched; only the verified title text is changed.
   function translateECGearsetNames(rootArg) {
     const scope = localScope(rootArg);
-    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/gearset/"]')) ecGearsetTranslateTitleRoot(a);
+    for (const a of ecGearsetTitleRoots(scope, 'a[href*="/gearset/"]')) {
+      if (isECSeriesLink(a)) ecGearsetTranslateTitleRoot(a);
+    }
     for (const a of ecGearsetTitleRoots(scope, 'a[href*="/accessories/"]')) {
-      ecGearsetTranslateTitleRoot(a, 'accessories');
+      if (isECSeriesLink(a)) ecGearsetTranslateTitleRoot(a, 'accessories');
     }
     const path = globalThis.location?.pathname || '';
     if (/^\/gearset\/[^/]+\/?$/.test(path)) {
@@ -729,6 +731,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   const EC_SKIP_SEL = [
     '[data-zhx-chinese-suggest]',
     '.zhx-skip',
+    // Preserve the native name committed by the component; the suggestion
+    // panel already exposes the localized name.
+    '.vs__selected',
     '.c-glamour-grid-item-content-title',
     '.c-glamour-grid-item-content-author',
     '[class*="s-glamour-description"]',
@@ -835,20 +840,20 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     raid: ['Raid Gear', '副本装备'],
     tomes: ['Tomestones Exchange', '神典石兑换'],
     pvp: ['PvP Gear', 'PvP 装备'],
-    seasonal: ['Seasonal Event Gear', '季节活动装备'],
+    seasonal: ['Seasonal Event Gear', '季节活动装备', '商城套装'],
     mogstation: ['Mogstation Set', '商城套装'],
-    job: ['Job Artifact Armor', '职业校服'],
+    job: ['Job Artifact Armor', '职业校服', '职业校服护甲'],
   });
 
   function ecContentNavLabel(content, label) {
     const entry = EC_CONTENT_BY_ROUTE[content];
     if (!Array.isArray(entry)) return null;
-    const [native, zh] = entry;
-    const tight = label.replace(/\s+/gu, '');
-    if (label === native || tight === zh.replace(/\s+/gu, '')) return zh;
-    // The native menu's Job Artifact Armor caption can be translated as two
-    // independent nodes, leaving an extra “护甲” after “职业校服”.
-    return content === 'job' && tight === '职业校服护甲' ? zh : null;
+    const [native, zh, legacy] = entry;
+    const compact = text => text.replace(/\s+/gu, '').toLowerCase();
+    const key = compact(label);
+    // Older builds could display the seasonal icon as 商城套装 or append 护甲
+    // to the job label; only accept these known captions on the matching URL.
+    return [native, zh, legacy].some(value => value && key === compact(value)) ? zh : null;
   }
 
   // Rewrite only visible text nodes: keep images, links and native handlers.
@@ -959,7 +964,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // Site hydration updates tooltips and accessibility labels after the initial scan.
   // Translate each current attribute value: sticky 'done' flags hide later updates.
   function _translateECAttr(el, attr) {
-    if (el.closest?.(EC_SKIP_SEL)) return;
+    if (el.closest?.(EC_SKIP_SEL) || isECAuthoredContent(el)) return;
     if (attr === 'title' && _zhixiaTitleKeep.has(el)) return;
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
@@ -1008,6 +1013,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECServers(rootArg);
       // Resolve full editorial sentences before individual text fragments.
       translateECHomeEditorial(rootArg);
+      // Match complete navigation captions before translating their fragments.
+      translateECNavigation(rootArg);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
@@ -1028,7 +1035,6 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
-      translateECNavigation(rootArg);
     } finally {
       ecBusy = false;
     }
