@@ -928,11 +928,33 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     ['Purple', '紫色'], ['Red', '红色'], ['Silver', '银色'], ['White', '白色'],
   ]);
   const EC_WEARABLE_TOOLTIP_CONTENT = '.b-tooltip .tooltip-content';
+  const EC_LOGIN_TO_LIKE = '登录后可点赞';
   const EC_WEARABLE_TOOLTIP_LABELS = new Map([
-    ['Please login to love accessories', '登录后可点赞'],
+    ['Please login to love accessories', EC_LOGIN_TO_LIKE],
     ['Please login to bookmark accessories', '登录后可收藏'],
     ['Please login to mark accessories as owned', '登录后可标记为已拥有'],
   ]);
+
+  const EC_GLAMOUR_LOGIN_LABELS = new Map([
+    ['Please login to love glamours', EC_LOGIN_TO_LIKE],
+    ['Please login to bookmark glamours', '登录后可收藏幻化'],
+    ['You need to be logged in send love', EC_LOGIN_TO_LIKE],
+    ['You need to be logged in to bookmark', '登录后可收藏幻化'],
+  ]);
+  // These look like item names in EC, but the default saddles are unlock
+  // appearances, not inventory items. Their IDs and names come from BuddyEquip.
+  const EC_STARTER_SADDLES = new Map([
+    ['0', ['leather saddle', '皮革陆行鸟鞍']],
+    ['1', ['lominsan saddle', '碧海陆行鸟鞍']],
+    ['5', ['gridanian saddle', '密林陆行鸟鞍']],
+    ['9', ["ul'dahn saddle", '黄沙陆行鸟鞍']],
+  ]);
+
+  function ecIsGlamourUIPage() {
+    const path = globalThis.location?.pathname || '';
+    return /^\/(?:glamours|companion-glamours)(?:\/|$)/u.test(path)
+      || /^\/(?:glamour|companion-glamour)\/\d+(?:\/|$)/u.test(path);
+  }
 
   function ecIsWearableUIPage() {
     const path = (globalThis.location?.pathname || '').replace(/\/$/u, '');
@@ -953,17 +975,65 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     }
   }
 
-  function translateECWearableTooltips(rootArg) {
-    if (!ecIsWearableUIPage()) return;
+  function ecLoginTooltipLabels() {
+    if (ecIsWearableUIPage()) return EC_WEARABLE_TOOLTIP_LABELS;
+    if (ecIsGlamourUIPage()) return EC_GLAMOUR_LOGIN_LABELS;
+    return null;
+  }
+
+  function translateECLoginTooltips(rootArg) {
+    const labels = ecLoginTooltipLabels();
+    if (!labels) return;
     // Buefy renders the label prop as a text node in .tooltip-content.
     // Translate both the native custom element and its hydrated replacement.
     for (const tooltip of ecHomeCandidates(rootArg, 'b-tooltip[label]')) {
-      const localized = EC_WEARABLE_TOOLTIP_LABELS.get(tooltip.getAttribute('label'));
+      const localized = labels.get(tooltip.getAttribute('label'));
       if (localized && !isECAuthoredContent(tooltip)) tooltip.setAttribute('label', localized);
     }
     for (const content of ecHomeCandidates(rootArg, EC_WEARABLE_TOOLTIP_CONTENT)) {
-      const localized = EC_WEARABLE_TOOLTIP_LABELS.get(content.textContent.trim());
+      const localized = labels.get(content.textContent.trim());
       if (localized && !isECAuthoredContent(content)) ecSetVisibleText(content, localized);
+    }
+  }
+
+  function translateECGlamourDataTooltips(rootArg) {
+    if (!ecIsGlamourUIPage()) return;
+    const companion = globalThis.location?.pathname?.startsWith('/companion-glamour');
+    for (const node of ecHomeCandidates(rootArg, '[data-tooltip]')) {
+      if (isECAuthoredContent(node)) continue;
+      const old = node.getAttribute('data-tooltip');
+      let localized = EC_GLAMOUR_LOGIN_LABELS.get(old);
+      // Only the color chip is built-in UI. The nearby creator tooltip is
+      // authored identity, even when its contents resemble a color name.
+      if (!localized && companion && node.querySelector('span[class*="has-text-dye-"]')) {
+        localized = resolveDyeColor(old);
+      }
+      if (localized && localized !== old) node.setAttribute('data-tooltip', localized);
+    }
+  }
+
+  function translateECStarterSaddle(row, href) {
+    const id = /[?&](?:headPiece|bodyPiece|legsPiece)=(\d+)(?:&|$)/u.exec(href)?.[1];
+    const saddle = EC_STARTER_SADDLES.get(id);
+    if (!saddle) return;
+    const [native, localized] = saddle;
+    const title = row.querySelector('.list-item-content .list-item-title');
+    if (title?.textContent.trim().toLowerCase() === native) ecSetVisibleText(title, localized);
+    const image = row.querySelector('img.gear-icon-image[alt]');
+    if (image?.getAttribute('alt').trim().toLowerCase() === native) image.setAttribute('alt', localized);
+  }
+
+  function translateECCompanionGear(rootArg) {
+    if (!/^\/companion-glamour\/\d+(?:\/|$)/u.test(globalThis.location?.pathname || '')) return;
+    for (const row of ecHomeCandidates(rootArg, '.list-item')) {
+      const link = row.querySelector('.list-item-controls a[href^="/companion-glamours?"]');
+      if (!link) continue;
+      for (const label of link.querySelectorAll('span')) {
+        if (label.textContent.trim() === 'Others using this piece') {
+          ecSetVisibleText(label, '使用这件装甲的其他陆行鸟幻化');
+        }
+      }
+      translateECStarterSaddle(row, link.getAttribute('href'));
     }
   }
 
@@ -1376,7 +1446,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECCensusHeadings(rootArg);
       translateECWearableNames(rootArg);
       translateECFacewearSwatches(rootArg);
-      translateECWearableTooltips(rootArg);
+      translateECLoginTooltips(rootArg);
+      translateECGlamourDataTooltips(rootArg);
+      translateECCompanionGear(rootArg);
       translateECCreatorUI(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
@@ -1495,10 +1567,11 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   }
 
   function ecAcceptTranslationMutation(mutation) {
+    if (mutation.type === 'attributes' && mutation.attributeName === 'data-tooltip') return ecIsGlamourUIPage();
     if (mutation.type !== 'characterData' || ecIsDyePreview()) return true;
     const parent = mutation.target.parentElement;
     if (parent?.closest(EC_SERVER_TEXT_SEL + ', #filter_server option')) return true;
-    return ecIsWearableUIPage() && !!parent?.closest(EC_FACEWEAR_SWATCH + ', ' + EC_WEARABLE_TOOLTIP_CONTENT);
+    return !!ecLoginTooltipLabels() && !!parent?.closest(EC_FACEWEAR_SWATCH + ', ' + EC_WEARABLE_TOOLTIP_CONTENT);
   }
 
   function startEC() {
@@ -1510,7 +1583,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       root: document.documentElement,
       debounce: 300,
       attributes: true,
-      attributeFilter: ['title', 'alt', 'aria-label', 'placeholder', 'label'],
+      attributeFilter: ['title', 'alt', 'aria-label', 'placeholder', 'label', 'data-tooltip'],
       characterData: true,
       filter: ecAcceptTranslationMutation,
       handler: (nodes, textNodes) => {

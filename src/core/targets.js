@@ -67,8 +67,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     const pushItems = () => {
       // item：装备链接（两站均用 eorzeadb_link 标记）
       for (const a of scan(EC_ITEM_LINK_SEL)) {
-        if (isECSearchOption(a) || a.getAttribute('href')?.includes(EC_SHOP_PATH) ||
-            a.classList.contains('zhixia-item-zh')) continue;
+        if (isECSearchOption(a) || a.getAttribute('href')?.includes(EC_SHOP_PATH)
+            || a.classList.contains('zhixia-item-zh') || isECAuthoredContent(a)) continue;
         const el = a.querySelector('span') || a;
         const name = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 2 || name.length > 48) continue;
@@ -79,7 +79,8 @@ export { lookupZh, EC_CARD_SEL, EC_ITEMS_APPLY, EC_ITEM_SKIP_SEL, EARLY_EQUIPMEN
     const pushPlainItems = () => {
       // plain-item：EC「套装」区块里的纯文本装备名（无链接、无 hash）
       for (const sp of scan(EC_PLAIN_ITEM_SEL)) {
-        if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh') || isECSeriesLink(sp)) continue;
+        if (isECSearchOption(sp) || sp.classList.contains('zhixia-item-zh')
+            || isECSeriesLink(sp) || isECAuthoredContent(sp)) continue;
         const name = (sp.textContent || '').replace(/\s+/g, ' ').trim();
         if (!name || name.length < 3 || name.length > 48) continue;
         if (!resolveByName(name)) continue;

@@ -48,6 +48,14 @@ export function isECSeriesLink(element) {
   return isECContext() && /^\/(?:gearset|accessories|facewear|fashion-accessory)\/[^/?#]+(?:[/?#]|$)/u.test(ecLinkPath(element));
 }
 
+function isECWorkDescription(element) {
+  const heading = element.closest('div.box')?.previousElementSibling;
+  if (!heading?.matches('div.divider, h2.minititle')) return false;
+  // EC uses a plain box after the Description heading in both layouts.
+  // The heading itself may already have been localized by an earlier pass.
+  return /^(?:[—–-]\s*)?(?:Description|描述)(?:\s*[—–-])?$/u.test(heading.textContent.trim());
+}
+
 export function isECAuthoredContent(element) {
   if (!element?.closest || !isECContext()) return false;
   if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
@@ -58,7 +66,8 @@ export function isECAuthoredContent(element) {
     // contains the authored profile name, biography and portrait.
     return !!element.closest('aside :is(h1.title.has-negative-letter-spacing, p.content.has-text-light.mt-4.mb-2.pt-2, .image.is-relative img[alt])');
   }
-  return isECAuthoredPath(path) && !!element.closest('h1.title.has-negative-letter-spacing');
+  if (!isECAuthoredPath(path)) return false;
+  return !!element.closest('h1.title.has-negative-letter-spacing') || isECWorkDescription(element);
 }
 
 // Authored text must not become UI or an item merely by matching a dictionary.

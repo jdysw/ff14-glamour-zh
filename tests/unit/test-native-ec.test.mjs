@@ -426,7 +426,16 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
           '<a href="/gearset/ink-blue"><p class="title has-text-text is-5">Ink Blue</p></a>' +
           '<a href="https://ffxiv.eorzeacollection.com/accessories/ink-blue"><span class="has-text-rarity-4">Ink Blue</span></a>' +
           '<a href="/glamour/submit" id="submit">Submit Glamour</a>' +
-          '<img id="cover" alt="Cover image">';
+          '<img id="cover" alt="Cover image">' +
+          '<h2 class="minititle">— Description —</h2><div class="box" id="description">Ink Blue' +
+          '<a class="eorzeadb_link" href="https://na.finalfantasyxiv.com/lodestone/playguide/db/item/123"><span>Ink Blue</span></a></div>' +
+          "<div class=\"list-item\"><img class=\"gear-icon-image\" alt=\"Ul'dahn Saddle\">" +
+          '<div class="list-item-content"><div class="list-item-title">Ul\'dahn Saddle</div></div>' +
+          '<div class="list-item-controls"><a href="/companion-glamours?legsPiece=9"><span>Others using this piece</span></a></div></div>' +
+          '<a href="/login" data-tooltip="You need to be logged in send love" id="love"></a>' +
+          '<b-tooltip label="Please login to bookmark glamours" id="bookmark"></b-tooltip>' +
+          '<div data-tooltip="Ink Blue" id="companion-color"><span class="has-text-dye-ink-blue">⬤</span></div>' +
+          '<div data-tooltip="Ink Blue" id="creator-tooltip"></div>';
         translateECPage();
         translateECTitle();
         assert.equal(d.title, 'Ink Blue | Eorzea Collection');
@@ -439,7 +448,24 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         const work = d.querySelector('a[href="/companion-glamour/232/example"] p');
         assert.equal(work.textContent, 'Ink Blue');
         assert.equal(d.querySelector('#cover').alt, '封面图片');
+        assert.equal(d.querySelector('#description').firstChild.nodeValue, 'Ink Blue');
+        const authorItem = d.querySelector('#description a');
+        assert.equal(authorItem.getAttribute('href'), 'https://na.finalfantasyxiv.com/lodestone/playguide/db/item/123');
+        assert.equal(authorItem.textContent, 'Ink Blue');
+        assert.equal(d.querySelector('.list-item-title').textContent, '黄沙陆行鸟鞍');
+        assert.equal(d.querySelector('.gear-icon-image').alt, '黄沙陆行鸟鞍');
+        const itemFilter = d.querySelector('[href="/companion-glamours?legsPiece=9"]');
+        assert.equal(itemFilter.textContent, '使用这件装甲的其他陆行鸟幻化');
+        assert.equal(d.querySelector('#love').getAttribute('data-tooltip'), '登录后可点赞');
+        assert.equal(d.querySelector('#bookmark').getAttribute('label'), '登录后可收藏幻化');
+        assert.equal(d.querySelector('#companion-color').getAttribute('data-tooltip'), '油墨蓝');
+        assert.equal(d.querySelector('#creator-tooltip').getAttribute('data-tooltip'), 'Ink Blue');
         bindGlobalWikiJump();
+        for (const control of [itemFilter, authorItem]) {
+          const preserved = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
+          control.firstElementChild.dispatchEvent(preserved);
+          assert.equal(preserved.defaultPrevented, false, '保留原站筛选链接及玩家描述链接');
+        }
         const ev = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
         work.dispatchEvent(ev);
         assert.equal(ev.defaultPrevented, false, '玩家作品链接不得被 Wiki 跳转拦截');
