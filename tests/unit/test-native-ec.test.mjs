@@ -118,6 +118,8 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     '<a id="job" href="/gearsets?content=job">职业校服 <i>护甲</i></a>',
     '</nav>',
     '<section><h3 id="section">— <span>News and Articles</span> —</h3>',
+    '<h3 id="lodestone">— <span>Latest Lodestone News</span> —</h3>',
+    '<h3 id="updates">— <span>Latest Updates</span> —</h3>',
     '<h3 id="event">❄️ <em>Verycold</em></h3>',
     '<p id="promo">The Eorzea Collection 周边系列 is finally here!</p>',
     '<img id="model" alt="Female Midlander">',
@@ -143,6 +145,8 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#seasonal').textContent, '季节活动装备');
     assert.equal(d.querySelector('#job').textContent, '职业校服');
     assert.equal(d.querySelector('#section').textContent, '— 新闻与文章 —');
+    assert.equal(d.querySelector('#lodestone').textContent, '— 最新 Lodestone 新闻 —');
+    assert.equal(d.querySelector('#updates').textContent, '— 最新更新 —');
     assert.equal(d.querySelector('#event').textContent, '❄️ 凛冬');
     assert.equal(d.querySelector('#promo').textContent, 'Eorzea Collection 周边商品系列正式推出！');
     assert.equal(d.querySelector('#model').alt, '人族·中原之民女性');

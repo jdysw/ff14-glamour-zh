@@ -882,7 +882,14 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   function ecHomeEditorialZh(source, tagName) {
     if (/^H[2-4]$/u.test(tagName)) {
-      if (EC_HOME_HEADINGS.has(source)) return DICT_EC[source];
+      if (EC_HOME_HEADINGS.has(source)) {
+        const exact = DICT_EC[source];
+        if (exact) return exact;
+        // The two latest-news section headings are generated as split
+        // em-dash fragments and have only their undashed text in DICT_EC.
+        const inner = source.slice(1, -1).trim();
+        return DICT_EC[inner] ? '— ' + DICT_EC[inner] + ' —' : null;
+      }
       return ecHomeChallengeTitle(source);
     }
     if (tagName !== 'P') return null;
