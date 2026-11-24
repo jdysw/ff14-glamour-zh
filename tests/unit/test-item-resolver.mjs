@@ -1,15 +1,15 @@
 // Item Resolver contract tests against the V3 runtime indexes.
 import fs from 'node:fs';
 import path from 'node:path';
-import { repoRoot, itemsTsvPath } from '../helpers/paths.mjs';
+import { repoRoot } from '../helpers/paths.mjs';
+import { createChineseSearchIndex, createSearchCatalog, isChineseSearchPhrase, normalizeSearchText } from '../../src/core/data/chinese-search-index.js';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log('  ✅ ' + name); } else { fail++; console.log('  ❌ ' + name + (extra ? ' — ' + extra : '')); } };
 const eq = (name, actual, expected) => ok(name, actual === expected, '实际=' + JSON.stringify(actual) + ' 期望=' + JSON.stringify(expected));
-// 直接从所有者模块抽取解析器与纯缓存算法，不依赖打包后的跨模块文本区段。
+// 装配解析入口的隔离数据，搜索索引直接使用实际模块。
 const RESOLVER_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/data/data-manager.js'), 'utf8');
-const CACHE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/cache-primitives.js'), 'utf8');
 function sliceAll(s, tag) {
   const a = '/* @zhixia:' + tag + '-start */', b = '/* @zhixia:' + tag + '-end */', out = [];
   let from = 0;
@@ -17,33 +17,26 @@ function sliceAll(s, tag) {
   if (!out.length) throw new Error('missing ' + tag);
   return out;
 }
-const resolverSegs = sliceAll(RESOLVER_TEXT, 'core-item-resolver').map((s) => s.replaceAll('const id = findSite()?.id;', 'const id = __testFindSite()?.id;'));
-function extractFn(src, name) {
-  const i = src.indexOf('function ' + name + '('); if (i < 0) throw new Error('missing helper ' + name);
-  let d = 0, j = i;
-  for (; j < src.length; j++) { if (src[j] === '{') d++; else if (src[j] === '}' && --d === 0) return src.slice(i, j + 1); }
-  throw new Error('unclosed helper ' + name);
-}
-const helpers = ['_shortestStr', '_countIncludes', '_lcs90'].map((n) => extractFn(CACHE_TEXT, n)).join('\n');
+const resolverSegs = sliceAll(RESOLVER_TEXT, 'core-item-resolver');
 function buildResolver(env = {}) {
   const body = [
-    'let _tablesReady = true;',
+    'let chineseSearchIndex = null;',
+    'const itemIdRows = null;',
+    'const window = {};',
     'let itemHash = __env.itemHash || Object.create(null);',
     'let nameMap = __env.nameMap || Object.create(null);',
     'let ecidMap = __env.ecidMap || Object.create(null);',
     'let koByZh = __env.koByZh || Object.create(null);',
-    'const __testFindSite = () => __env.site || { id: "mirapri" };',
-    'const tryEnToZh = (n) => n === "KNOWN_EN" ? "英文名译" : null;',
-    'const _zhxErr = () => {};',
-    helpers,
+    'const findSite = () => __env.site || { id: "mirapri" };',
     ...resolverSegs,
     '_irDupMap = __env.dupMap || null;',
     '_irAliasMap = __env.aliasMap || null;',
     '_irGlamMap = __env.glamMap || null;',
     '_irCandidatePolicy = __env.candidatePolicy ?? 1;',
-    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, _irBuildSearchFromNames, __setSlots: (slots) => { _irSearchSlotByNative = slots; }, __stats: () => ({ ..._irStats }), __indexedCandidates: (q, kind) => { _ensureIrSearch(); return _irSearchContainsCandidates(q, kind); }, __allKeys: (kind) => { _ensureIrSearch(); return _getIrSearchKeysByKind(kind); } };',
+    'return { resolveByHash, resolveByName, resolveByZh, suggestByZh, resolveAllByName, resolveAlias, resolve, resolveEcId, resolveKo, resolvePartialByZh, __setSlots: (slots) => { _irSearchSlotByNative = slots; chineseSearchIndex = null; }, __stats: () => ({ ..._irStats }) };',
   ].join('\n');
-  return new Function('__env', body)(env);
+  return new Function('__env', 'createChineseSearchIndex', 'isChineseSearchPhrase', 'normalizeSearchText', body)
+    (env, createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText);
 }
 const nameMap = { 'ア': '甲', '가': '甲', A: '甲', 'イ': '丙', '나': '丙', B: '丙', 'ウ': '丁', '다': '丁', C: '丁', 'エ': '炎灵长袍', D: '炎灵长袍', 'オ': '炎灵长裤', E: '炎灵长裤', 'カ': '炎灵', F: '炎灵' };
 const glamMap = Object.fromEntries(Object.keys(nameMap).map((k) => [k, '1']));
@@ -162,18 +155,19 @@ console.log('\n── B3：倒排索引保持匹配、排序和局部词提取�
  entries['repeat-gram'] = '星星星星斗篷';
  for (const native of ['rare-head', 'rare-middle', 'rare-tail', 'rare-unrelated', 'repeat-gram']) glam[native] = '1';
  const aliasMap = { '幻华披肩': ['幻华长袍'], '高阶幻华长袍': ['幻华长袍'], '与幻华无关': ['魔法之光'], '星星星别名': ['星星星星斗篷'] };
- const api = buildResolver(mkEnv({ nameMap: entries, glamMap: glam, aliasMap }));
+ const catalog = createSearchCatalog({ names: entries, aliases: aliasMap, glam, candidatePolicy: 1 });
  for (const kind of [0, 1]) {
-   const keys = api.__allKeys(kind);
+   const keys = catalog.keys(kind);
    for (const query of ['幻华', '幻华长袍', '金色幻华', '典藏幻华', '无此关键字', '装备00', '幻华无关', '星星', '星星星']) {
-     const actual = api.__indexedCandidates(query, kind).filter(k => k.includes(query));
+     const actual = catalog.candidates(kind, [query]).filter(k => k.includes(query));
      const baseline = keys.filter(k => k.includes(query));
      eq('双字倒排结果与全量扫描严格等价 ' + kind + ':' + query,
        JSON.stringify(actual), JSON.stringify(baseline));
    }
  }
  eq('稀有中文片段候选扫描范围显著缩小',
-   api.__indexedCandidates('幻华', 0).length < api.__allKeys(0).length / 100, true);
+   catalog.candidates(0, ['幻华']).length < catalog.keys(0).length / 100, true);
+ const api = buildResolver(mkEnv({ nameMap: entries, glamMap: glam, aliasMap }));
  const rows = api.suggestByZh('幻华');
  const expected = ['幻华长袍', ...['金色幻华发带', '典藏幻华'].sort((a,b)=>a.localeCompare(b)),
    '幻华披肩', ...['高阶幻华长袍', '与幻华无关'].sort((a,b)=>a.localeCompare(b))];
@@ -186,11 +180,13 @@ console.log('\n── B3：倒排索引保持匹配、排序和局部词提取�
 
 console.log('\n── C：候选安全策略 ──');
 {
- const api=buildResolver(mkEnv());
- const built=api._irBuildSearchFromNames({A1:'甲乙',B1:'乙丙',C1:'丙丁',D1:'丁戊',E1:'戊己'}, {'禁用别名':['丙丁']}, {A1:'1',B1:'0',C1:'',D1:'1',E1:'2'});
- eq('仅显式1允许', built.map['甲乙'], 'A1'); eq('标0排除', built.map['乙丙'], undefined);
- eq('无标记排除', built.map['丙丁'], undefined); eq('其他1允许', built.map['丁戊'], 'D1');
- eq('非法标记排除', built.map['戊己'], undefined); eq('别名不得绕过allow标记', built.map['禁用别名'], undefined);
+ const built = createSearchCatalog({
+   names: {A1:'甲乙', B1:'乙丙', C1:'丙丁', D1:'丁戊', E1:'戊己'},
+   aliases: {'禁用别名':['丙丁']}, glam: {A1:'1', B1:'0', C1:'', D1:'1', E1:'2'}, candidatePolicy: 1,
+ });
+ eq('仅显式1允许', built.lookup('甲乙'), 'A1'); eq('标0排除', built.lookup('乙丙'), null);
+ eq('无标记排除', built.lookup('丙丁'), null); eq('其他1允许', built.lookup('丁戊'), 'D1');
+ eq('非法标记排除', built.lookup('戊己'), null); eq('别名不得绕过allow标记', built.lookup('禁用别名'), null);
  const restricted=buildResolver(mkEnv({candidatePolicy:0}));
  eq('未知policy禁用倒排候选', restricted.resolveByZh('甲'), null);
  eq('未知policy不影响普通名称解析', restricted.resolveByName('A'), '甲');

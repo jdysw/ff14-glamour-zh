@@ -8,6 +8,7 @@ import { createHash, webcrypto } from 'node:crypto';
 import { repoRoot } from '../helpers/paths.mjs';
 import { validV3Manifest, validV3FileMeta, requiredV3Files } from '../../src/core/data/v3-contract.js';
 import { validRuntimeDictionary } from '../../src/core/data/dict-contract.js';
+import { createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText } from '../../src/core/data/chinese-search-index.js';
 
 const source = fs.readFileSync(path.join(repoRoot, 'src/core/data/data-manager.js'), 'utf8');
 const implementation = source.split('\n')
@@ -48,7 +49,7 @@ function buildHarness(download, requiredTables = ['items'], cryptoProvider = web
     DAY_MS: 86400000,
     validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
     cacheReset: () => {},
-    _lcs90: () => null,
+    createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText,
     applyRuntimeDict: () => {},
     httpGet: download,
     // 英文兜底现由规范 data-manager 源码实现，不再注入会重名的假函数。
@@ -65,7 +66,7 @@ function buildHarness(download, requiredTables = ['items'], cryptoProvider = web
   };
   const bindings = Object.keys(deps).join(', ');
   const factory = new Function('deps', 'const { ' + bindings + ' } = deps;\n' +
-    implementation + '\nreturn { dataInvalidate, dataGetIndex, dataGetStatus, ensureTables, onTablesReady, resolveByName };');
+    implementation + '\nreturn { dataInvalidate, dataGetIndex, dataGetStatus, ensureTables, onTablesReady, resolveByName, resolveByZh, suggestByZh };');
   return { api: factory(deps), store, marks, errors };
 }
 
@@ -230,6 +231,8 @@ async function waitFor(condition) {
   }, '脚本层首轮应能获取明确的未启动状态');
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), '中文甲');
+  assert.equal(api.resolveByZh('别称'), 'English One');
+  assert.deepEqual(api.suggestByZh('中文'), [{ zh: '中文甲', native: 'English One' }]);
   const view = api.dataGetIndex('nameMap');
   assert.equal(view['English One'], '中文甲');
   assert.equal(api.dataGetIndex('nameMap'), view, '只读索引对象应稳定复用');
@@ -251,9 +254,13 @@ async function waitFor(condition) {
   assert.equal(api.dataGetStatus().state, 'idle', '数据失效时同步撤销成功状态');
   assert.equal(api.dataGetStatus().generation, 1, '失效必须切换加载代际');
   assert.equal(api.dataGetIndex('nameMap'), null, 'invalidate immediately hides stale indexes');
+  assert.equal(api.resolveByZh('别称'), null, 'invalidating drops cached aliases immediately');
+  assert.deepEqual(api.suggestByZh('中文'), [], 'invalidating drops warmed name and bigram caches');
   await api.ensureTables();
   assert.equal(api.resolveByName('English One'), null, 'obsolete translations must disappear');
   assert.equal(api.resolveByName('English Two'), '中文乙');
+  assert.equal(api.resolveByZh('别称'), 'English Two');
+  assert.deepEqual(api.suggestByZh('中文'), [{ zh: '中文乙', native: 'English Two' }]);
   assert.equal(readyCount, 2, 'ready subscribers must survive a refresh');
   assert.equal(statuses[1].version, 'unit-v2');
   assert.equal(statuses[1].generation, 1);

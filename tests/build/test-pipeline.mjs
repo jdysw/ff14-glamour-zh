@@ -20,17 +20,33 @@ fs.mkdirSync(cacheDir,{recursive:true});
 const directory=fs.mkdtempSync(path.join(cacheDir,'pipeline-'));
 try{
   const copy=path.join(directory,'dictionary.js');
+  const runtimeDictionary=path.join(directory,'dict.json');
   const original=fs.readFileSync(dictionaryFile,'utf8');
+  const packed=run(findPython(),['build/data/make_dict_json.py','--out',runtimeDictionary]);
+  assert.equal(packed.status,0,packed.stderr+packed.stdout);
+  const verify=(...args)=>node(['build/userscript/verify_dicts.js',copy,...args]);
+  const modes=[[],['--dict-json',runtimeDictionary]];
   const entries=JSON.parse(fs.readFileSync(path.join(repoRoot,'data/dictionaries/dict-fc.json'),'utf8')).entries;
   const [key,value]=Object.entries(entries).find(([key,value])=>!/[\\'\r\n]/.test(key+value));
   const needle=`'${key}': '${value}'`;
-  const changed=original.replace(needle,`'${key}': '${value} incorrect translation'`);
-  assert.notEqual(changed,original,'The generated entry to corrupt must be present');
-  fs.writeFileSync(copy,changed);
-  assert.notEqual(node(['build/userscript/verify_dicts.js',copy]).status,0,'A modified embedded dictionary must fail verification');
+  const corruptions=[
+    ['a changed translation',original.replace(needle,`'${key}': '${value} incorrect translation'`)],
+    ['a missing common layer',original.replace('const DICT_EC = { ...DICT_COMMON,','const DICT_EC = {')],
+    ['an unverified spread',original.replace('const DICT_EC = { ...DICT_COMMON,','const DICT_EC = { ...DICT_COMMON, ...{},')],
+  ];
+  for(const [label,changed] of corruptions){
+    assert.notEqual(changed,original,'The generated entry to corrupt must be present');
+    fs.writeFileSync(copy,changed);
+    for(const mode of modes)assert.equal(verify(...mode).status,1,'Reject '+label);
+  }
   const restored=run(findPython(),['build/userscript/inject_dicts.py',copy]);
   assert.equal(restored.status,0,restored.stderr+restored.stdout);
-  assert.equal(node(['build/userscript/verify_dicts.js',copy]).status,0,'Regenerating from the dictionary source must repair the artifact');
+  // The verifier must parse, not evaluate, the candidate program.
+  fs.appendFileSync(copy,"\nthrow new Error('the verifier must not execute source');\n");
+  for(const mode of modes){
+    const checked=verify(...mode);
+    assert.equal(checked.status,0,checked.stderr+checked.stdout);
+  }
 }finally{
   assert.ok(path.resolve(directory).startsWith(path.resolve(cacheDir)+path.sep));
   fs.rmSync(directory,{recursive:true,force:true});

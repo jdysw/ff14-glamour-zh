@@ -1,5 +1,5 @@
 import { DATA_BASE_V3 } from '../constants.js';
-import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, _lcs90, cacheGuard, cacheReset } from '../cache-primitives.js';
+import { CACHE_CAP_LOOKUP, _en2zhCache, DAY_MS, cacheGuard, cacheReset } from '../cache-primitives.js';
 import { applyRuntimeDict } from './dictionary.js';
 import { validRuntimeDictionary } from './dict-contract.js';
 import { httpGet } from './http.js';
@@ -8,6 +8,7 @@ import { findSitePolicy as findSite, neededTables } from '../site-policy.js';
 import { storeDeleteAsync, storeGetAsync, storeListAsync, storeSetAsync } from './storage.js';
 import { requiredV3Files, validV3FileMeta, validV3Manifest } from './v3-contract.js';
 import { dyeColorName, indexItemIds, parseItemIds } from './item-identity.js';
+import { createChineseSearchIndex, isChineseSearchPhrase, normalizeSearchText } from './chinese-search-index.js';
 export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, _ensurePromise, _ensureTryV3, _fireTablesReady, _irStats, _readyCbs, _tablesReady, _v3FetchFile, _v3Pairs, allFilesReady, dataGetIndex, dataGetStatus, dataInvalidate, tryEnToZh, ensureTables, fetchManifest, fetchStationFiles, loadManifest, onTablesReady, readCachedManifest, resolve, resolveAlias, resolveAllByName, resolveByHash, resolveByName, resolveDyeColor, itemById, findItemsByName, hasItemIdentities, resolveByZh, resolvePartialByZh, suggestByZh, resolveEcId, resolveKo };
 
 
@@ -85,6 +86,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _manifestNetworkAttempted = false;
   // V3 文件由 _applyV3 直接建立索引。无论网络或清单是否失败，Finalize 都会释放站点等待回调。
   const _dlStats = { cache: 0, net: 0, fallback: 0 };
+  // 反向搜索索引按当前数据代际惰性构建，更新时一次性释放派生视图。
+  let chineseSearchIndex = null;
   function _ensureFinalize(generation = _ensureGeneration) {
     if (generation !== _ensureGeneration) return Promise.resolve();
     __zhxMark('finalize');
@@ -171,10 +174,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       itemIdRows = parsedNames.rows || null;
       itemIdIndex = null;
       _replaceMap(itemHash, hash);
-      _irSearchByZh = null;
-      _irSearchKind = null;
-      _irSearchCanonicalKeys = null;
-      _irSearchAliasKeys = null;
+      chineseSearchIndex = null;
       _replaceMap(ecidMap, ecid);
       _replaceMap(koByZh, ko);
       _irAliasMap = ali;
@@ -606,7 +606,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     itemIdRows = null;
     itemIdIndex = null;
     _irDupMap = null; _irAliasMap = null; _irGlamMap = null; _irSearchSlotByNative = null; _irCandidatePolicy = 0;
-    _irSearchByZh = null; _irSearchKind = null; _irSearchCanonicalKeys = null; _irSearchAliasKeys = null;
+    chineseSearchIndex = null;
     SERIES_TEXT = ''; ACL_CFC_TEXT = '';
   }
   /* @zhixia:core-data-manager-end */
@@ -625,119 +625,13 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   let _irCandidatePolicy = 0;    // names 行级候选允许标记；仅明确的 '1' 进入中文搜索倒排 // NOSONAR
   let _irAliasMap = null;   // 别名表: alias → zh[]（按行序；alias 列以全角分号拆分） // NOSONAR
 
-  // 中文装备搜索反向索引：国服中文名/中文别名 → 当前站点原生名称。
-  // 仅构建当前站点所需的原生语言映射，不扩大现有 v3 数据文件。
-  let _irSearchByZh = null; // NOSONAR — 数据就绪后按当前站点数据重建
-  let _irSearchKind = null;  // 0=正式名称，1=中文别名
-  let _irSearchCanonicalKeys = null;
-  let _irSearchAliasKeys = null;
-  // 中文片段倒排：按连续双字符索引，首次查询时按排序后的原始键序建立。
-  // 桶中保留原始键顺序，确保候选优先级和同级排序不变。
-  let _irSearchGramIndex = [null, null];
-
-  function _irNormZhSearch(value) {
-    return String(value ?? '').trim().replace(/[ \t\u00a0]+/g, ' ');
-  }
-
-  function _irSearchPut(map, zh, native, kind, kindMap) {
-    if (!map || !zh || !native) return;
-    const key = _irNormZhSearch(zh);
-    const value = _irNormZhSearch(native);
-    if (!key || !value) return;
-    if (map[key] === undefined) {
-      map[key] = value;
-      if (kindMap) kindMap[key] = kind;
-    }
-  }
-
-  function _irAddEdenJapaneseNames(out, kind, names, glam) {
-    if (typeof window === 'undefined' || findSite()?.id !== 'eden') return;
-    for (const [native, zh] of Object.entries(names || {})) {
-      if (glam?.[native] === '1' && /[\u3040-\u30ff\u3400-\u9fff]/u.test(native) && !/[\uac00-\ud7af]/u.test(native))
-        _irSearchPut(out, zh, native, 0, kind);
-    }
-  }
-
-  function _irBuildSearchFromNames(names, ali, glam) {
-    const out = Object.create(null);
-    const kind = Object.create(null);
-    if (_irCandidatePolicy !== 1) return { map: out, kind };
-    // 多语名称均可翻译；Eden 首页候选先登记日文，避免英文查询无结果。
-    _irAddEdenJapaneseNames(out, kind, names, glam);
-    for (const [native, zh] of Object.entries(names || {})) {
-      if (glam?.[native] !== '1') continue;   // 仅明确允许的装备、时尚配饰、鸟甲进入中文候选
-      _irSearchPut(out, zh, native, 0, kind);
-    }
-    for (const [alias, zhs] of Object.entries(ali || {})) {
-      const key = _irNormZhSearch(alias);
-      if (!key || out[key] !== undefined) continue;
-      const list = Array.isArray(zhs) ? zhs : [zhs];
-      for (const zh of list) {
-        const native = out[_irNormZhSearch(zh)];
-        if (native) {
-          out[key] = native;
-          kind[key] = 1;
-          break;
-        }
-      }
-    }
-    return { map: out, kind };
-  }
-
-  function _ensureIrSearch() {
-    if (_irSearchByZh !== null) return _irSearchByZh;
-    const built = _irBuildSearchFromNames(nameMap, _irAliasMap, _irGlamMap);
-    _irSearchByZh = built.map;
-    _irSearchKind = built.kind;
-    _irSearchCanonicalKeys = null;
-    _irSearchAliasKeys = null;
-    _irSearchGramIndex = [null, null];
-    return _irSearchByZh;
-  }
-
-  function _getIrSearchKeysByKind(kind) {
-    if (kind === 0 && _irSearchCanonicalKeys !== null) return _irSearchCanonicalKeys;
-    if (kind === 1 && _irSearchAliasKeys !== null) return _irSearchAliasKeys;
-    const out = Object.keys(_irSearchByZh || {}).filter((k) => _irSearchKind?.[k] === kind);
-    out.sort((a, b) => a.localeCompare(b));
-    if (kind === 0) _irSearchCanonicalKeys = out;
-    else _irSearchAliasKeys = out;
-    return out;
-  }
-
-  // 只构建当前站点、当前类别的索引。每个键在同一双字符桶中只出现一次。
-  function _irSearchBuildGramIndex(kind) {
-    const index = new Map();
-    for (const name of _getIrSearchKeysByKind(kind)) {
-      for (let pos = 0; pos + 1 < name.length; pos++) {
-        const gram = name.slice(pos, pos + 2);
-        const bucket = index.get(gram);
-        // 同一个名称的双字组连续入桶，末项相同即为重复，无需为每个名称建 Set。
-        if (!bucket) index.set(gram, [name]);
-        else if (bucket[bucket.length - 1] !== name) bucket.push(name);
-      }
-    }
-    _irSearchGramIndex[kind] = index;
-    return index;
-  }
-
-  // 优先选候选最少的双字符桶，再由原始 includes 校验完整输入，
-  // 避免每次输入都遍历所有正式名称和别名。
-  function _irSearchContainsCandidates(query, kind, terms = [query]) {
-    const index = _irSearchGramIndex[kind] || _irSearchBuildGramIndex(kind);
-    let smallest = null;
-    const seen = new Set();
-    for (const term of terms) {
-      for (let pos = 0; pos + 1 < term.length; pos++) {
-        const gram = term.slice(pos, pos + 2);
-        if (seen.has(gram)) continue;
-        seen.add(gram);
-        const bucket = index.get(gram);
-        if (!bucket) return [];
-        if (!smallest || bucket.length < smallest.length) smallest = bucket;
-      }
-    }
-    return smallest || _getIrSearchKeysByKind(kind);
+  function getChineseSearchIndex() {
+    return chineseSearchIndex ??= createChineseSearchIndex({
+      names: nameMap, aliases: _irAliasMap, glam: _irGlamMap, slots: _irSearchSlotByNative,
+      candidatePolicy: _irCandidatePolicy,
+      preferJapanese: _irCandidatePolicy === 1 && typeof window !== 'undefined' && findSite()?.id === 'eden',
+      lookupIdentities: itemIdRows ? findItemsByName : null,
+    });
   }
 
   // 解析统计（v1.4 Phase 10：Probe 读取——整数自增，无行为影响）
@@ -789,146 +683,23 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   function resolveByZh(zh) {
-    const key = _irNormZhSearch(zh);
-    const map = _ensureIrSearch();
-    const z = (key && map?.[key]) ? map[key] : null;
-    _irStats[z ? 'hit' : 'miss']++;
-    return z;
+    const key = normalizeSearchText(zh);
+    const result = getChineseSearchIndex().lookup(key);
+    _irStats[result ? 'hit' : 'miss']++;
+    return result;
   }
 
-  // 部分词解析的外层收集：kind 0/1（主名 + 别名）两类键各收集一轮，
-  // 合计超过 1000 条即停（防病态输入把收集循环拖长）。
-  function _zhPartialCollect(key, map) {
-    const natives = [];
-    for (const kind of [0, 1]) {
-      _zhPartialCollectKind(natives, key, map, kind);
-      if (natives.length > 1000) break;
-    }
-    return natives;
-  }
-
-  // 单类收集：键含部分词且非键本身时，取对应原生名入列。
-  function _zhPartialCollectKind(natives, key, map, kind) {
-    for (const k of _irSearchContainsCandidates(key, kind)) {
-      if (k === key || !k.includes(key)) continue;
-      const native = map[k];
-      if (native) natives.push(native);
-      if (natives.length > 1000) return;
-    }
-  }
-
-  // v1.4.2 后续：部分词解析（完整名失败时兜底）——子串收集 + 公共子串提取（复用系列名推导 _lcs90 经验）。
-  // 场景：「女仆」→ 收集所有含「女仆」的中文名 → 提取原生名（按站裁剪）的公共子串「メイド」→ 交给站内部分匹配搜索。
-  // 提取不到公共子串（各族原生名互异）时返回 null，保持「不转换」原行为。
   function resolvePartialByZh(zh) {
-    const key = _irNormZhSearch(zh);
-    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return null;
-    const map = _ensureIrSearch();
-    if (!map) return null;
-    const natives = _zhPartialCollect(key, map);
-    let z = null;
-    if (natives.length === 1) z = natives[0];
-    else if (natives.length > 1) z = _lcs90(natives);
-    // 英文（非 CJK）片段质量门：如 "ai"、"Loyal Housem" 这类词中片段判为不合格，
-    // 保持不转换——避免把无意义的片段当搜索词（英文站数据混杂时 _lcs90 会产出此类结果）。
-    if (z && /[A-Za-z]/.test(z) && !_zhPartialEdgeOk(z, natives)) z = null;
-    _irStats[z ? 'hit' : 'miss']++;
-    return z;
+    const key = normalizeSearchText(zh);
+    if (!isChineseSearchPhrase(key)) return null;
+    const result = getChineseSearchIndex().partial(key);
+    _irStats[result ? 'hit' : 'miss']++;
+    return result;
   }
 
-  // 部分词提取的英文片段边界校验：含 ASCII 字母的片段必须在某个样本中存在「合格窗口」
-  // ——左端为串首或前邻非字母数字；右端为串尾、后邻非字母数字、或末字符本身即分隔符
-  // （如「Housemaid 」尾随空格）；否则视为词中片段（如 "ai"、"Loyal Housem"）判不合格。
-  function _zhPartialEdgeOk(seg, list) {
-    for (const s of list) {
-      let i = s.indexOf(seg);
-      while (i !== -1) {
-        const left = i === 0 || !/[0-9A-Za-z]/.test(s[i - 1]);
-        const end = i + seg.length;
-        const right = end >= s.length
-          || !/[0-9A-Za-z]/.test(s[end])
-          || !/[0-9A-Za-z]/.test(s[end - 1]);
-        if (left && right) return true;
-        i = s.indexOf(seg, i + 1);
-      }
-    }
-    return false;
-  }
-
-  // 智能输入候选的防御性上限：实测当前数据最大前缀组 2450 条（「改良」）；
-  // 3 千条兜底，防止病态输入把候选列表渲染到卡顿（正常输入远低于此）。
-  const SUGGEST_ABS_MAX = 3000;
-  // 匹配度在每个装备部位内计算：精确 / 正式名前缀 / 正式名包含 /
-  // 别名前缀 / 别名包含 / 正式名多词 / 别名多词；非匹配项返回 -1。
-  function _irSuggestionScore(name, query, kind, terms) {
-    if (name === query) return 0;
-    if (name.startsWith(query)) return kind === 0 ? 1 : 3;
-    if (name.includes(query)) return kind === 0 ? 2 : 4;
-    if (terms.length > 1 && terms.every(term => name.includes(term))) return 5 + kind;
-    return -1;
-  }
-
-  function _irSuggestionVariants(name, native, kind, language) {
-    const translations = kind === 0 ? [name] : _irAliasMap?.[name] || [];
-    const identities = language && itemIdRows
-      ? translations.flatMap(zh => findItemsByName(zh)).filter(row => row.glam === '1') : [];
-    if (!identities.length) return [{ native, group: _irSearchSlotByNative?.[native] ?? 5 }];
-    return identities.filter(row => row.names[language])
-      .map(row => ({ native: row.names[language], itemId: row.id, group: row.slot }));
-  }
-
-  function _irAddSuggestion(buckets, name, score, row, options) {
-    const { scope, limit } = options;
-    if (scope instanceof Set && !scope.has(row.native)) return;
-    if (typeof scope === 'number' && scope !== row.group) return;
-    const bucket = buckets[row.group][score];
-    if (bucket.length >= limit) return;
-    const suggestion = { zh: name, native: row.native };
-    if (row.itemId) suggestion.itemId = row.itemId;
-    bucket.push(suggestion);
-  }
-
-  // 每个部位先保留原有五档，再补正式名和别名的多词匹配，最后限流。
-  // 否则高优先级部位可能被词典顺序和 limit 提前截断。
-  // 必须先按部位过滤、分桶，不能提前截断到 3000 条。
-  // Set 表示官方原生装备名白名单，数字表示 V3 装备部位组。
-  function _irSuggestionCollect(buckets, query, kind, map, options) {
-    const { terms, language } = options;
-    for (const name of _irSearchContainsCandidates(query, kind, terms)) {
-      const score = _irSuggestionScore(name, query, kind, terms);
-      const native = map[name];
-      if (score < 0 || !native) continue;
-      for (const row of _irSuggestionVariants(name, native, kind, language))
-        _irAddSuggestion(buckets, name, score, row, options);
-    }
-  }
-
-  function _irSuggestionFlatten(buckets, limit) {
-    const rows = [];
-    for (const bucket of buckets.flat()) {
-      for (const row of bucket) {
-        rows.push(row);
-        if (rows.length >= limit) return rows;
-      }
-    }
-    return rows;
-  }
-
-  // 先按头、身、手、腿、脚、其余；组内按匹配度排序，保持已存在的
-  // 正式名、别名、limit、旧 V3 缓存及六站原生名行为。
   function suggestByZh(zh, limit = 0, scope = null, language = null) {
-    const key = _irNormZhSearch(zh);
-    if (key.length < 2 || !/[\u3400-\u9fff]/u.test(key)) return [];
-    const map = _ensureIrSearch();
-    if (!map) return [];
-    const raw = Number(limit);
-    const max = Number.isFinite(raw) && raw > 0 ? Math.min(raw, SUGGEST_ABS_MAX) : SUGGEST_ABS_MAX;
-    const terms = key.split(/\s+/u);
-    const buckets = Array.from({ length: 6 }, () => Array.from({ length: 7 }, () => []));
-    const options = { limit: max, scope, terms, language };
-    _irSuggestionCollect(buckets, key, 0, map, options);
-    _irSuggestionCollect(buckets, key, 1, map, options);
-    return _irSuggestionFlatten(buckets, max);
+    const key = normalizeSearchText(zh);
+    return isChineseSearchPhrase(key) ? getChineseSearchIndex().suggest(key, limit, scope, language) : [];
   }
 
   // Formatting-normalized lookups must retain all candidates to detect ambiguity.
