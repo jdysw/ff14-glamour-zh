@@ -56,23 +56,7 @@ function rewriteInputTemporarily(input, native) {
 }
 
 function rewriteInputNatively(input, native, programmatic) {
-  let applied = false;
-  try {
-    const descriptor = typeof HTMLInputElement !== 'undefined' && HTMLInputElement.prototype
-      ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
-      : null;
-    if (descriptor?.set) {
-      descriptor.set.call(input, native);
-      applied = input.value === native;
-    }
-  } catch { /* 回退：直接赋值 */ }
-  if (!applied) {
-    try {
-      input.value = native;
-      applied = input.value === native;
-    } catch { /* 忽略 */ }
-  }
-  if (!applied) return false;
+  if (!setInputValueSilently(input, native)) return false;
   programmatic.add(input);
   try {
     input.dispatchEvent(new Event('input', { bubbles: true }));
