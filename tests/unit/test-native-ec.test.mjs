@@ -2,10 +2,12 @@
 // 通过确定性 DOM 夹具运行原函数；不改测试期望以通过测试，也不调用真实站点。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Window as TestWindow } from 'happy-dom';
 import {
   ecGearsetDisplayName, suggestECGearsetsByZh, resolveECGearsetSearch,
   trimECNode, translateECTitle, translateECAttrs, translateECPage,
   translateECGearsetNames, bindECPieceTiles, bindECResetFilters,
+  translateECHomeNavigation, translateECHomeEditorial,
 } from '../../src/sites/eorzea-collection.js';
 
 function withGlobals(values, fn) {
@@ -100,6 +102,57 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
         '重复翻译不能破坏原站站名或日期');
     });
   });
+});
+
+test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文本与编辑文案', () => {
+  const dom = new TestWindow({ url: 'https://ffxiv.eorzeacollection.com/' });
+  const d = dom.document;
+  d.body.innerHTML = [
+    '<nav>',
+    '<a id="expansion" href="/gearsets?patch=7.0"><span>自晓月之终途起</span></a>',
+    '<a id="old" href="/gearsets?patch=6.0">From Endwalker</a>',
+    '<a id="current" href="/gearsets?patch=7.0">当前资料片</a>',
+    '<a id="foreign" href="https://example.com/gearsets?patch=7.0">From Endwalker</a>',
+    '<a id="tomes" href="/gearsets?content=tomes"><img alt="icon"><span>神典石</span> 兑换</a>',
+    '<a id="seasonal" href="/gearsets?content=seasonal"><img alt="seasonal">季节活动 <b>装备</b></a>',
+    '<a id="job" href="/gearsets?content=job">职业校服 <i>护甲</i></a>',
+    '</nav>',
+    '<section><h3 id="section">— <span>News and Articles</span> —</h3>',
+    '<h3 id="event">❄️ <em>Verycold</em></h3>',
+    '<p id="promo">The Eorzea Collection 周边系列 is finally here!</p>',
+    '<img id="model" alt="Female Midlander">',
+    '<img id="challenge" alt="🎃 Spooky Season">',
+    '</section>',
+    '<h3 class="c-glamour-grid-item-content-title" id="authored">Verycold</h3>',
+  ].join('');
+  const savedHref = d.querySelector('#tomes').getAttribute('href');
+  const savedImage = d.querySelector('#tomes img');
+  withGlobals({
+    document: d, location: dom.location, NodeFilter: dom.NodeFilter,
+  }, () => {
+    translateECHomeNavigation();
+    translateECHomeEditorial();
+    translateECAttrs();
+    assert.equal(d.querySelector('#expansion').textContent, '自金曦之遗辉起');
+    assert.equal(d.querySelector('#old').textContent, '自晓月之终途起');
+    assert.equal(d.querySelector('#current').textContent, '当前资料片');
+    assert.equal(d.querySelector('#foreign').textContent, 'From Endwalker');
+    assert.equal(d.querySelector('#tomes').textContent, '神典石兑换');
+    assert.equal(d.querySelector('#tomes').getAttribute('href'), savedHref);
+    assert.equal(d.querySelector('#tomes img'), savedImage);
+    assert.equal(d.querySelector('#seasonal').textContent, '季节活动装备');
+    assert.equal(d.querySelector('#job').textContent, '职业校服');
+    assert.equal(d.querySelector('#section').textContent, '— 新闻与文章 —');
+    assert.equal(d.querySelector('#event').textContent, '❄️ 凛冬');
+    assert.equal(d.querySelector('#promo').textContent, 'Eorzea Collection 周边商品系列正式推出！');
+    assert.equal(d.querySelector('#model').alt, '人族·中原之民女性');
+    assert.equal(d.querySelector('#challenge').alt, '🎃 惊魂季');
+    assert.equal(d.querySelector('#authored').textContent, 'Verycold');
+    translateECHomeNavigation();
+    translateECHomeEditorial();
+    assert.equal(d.querySelector('#job').textContent, '职业校服');
+  });
+  dom.close();
 });
 
 test('EC 阳伞详情：配饰导航、获取方式、图片说明和页面标题', () => {

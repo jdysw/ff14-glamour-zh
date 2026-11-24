@@ -5,7 +5,7 @@ import { dataGetIndex } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames };
+export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, translateECHomeNavigation, translateECHomeEditorial };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
@@ -802,6 +802,104 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   let ecBusy = false; // NOSONAR — 页面扫描期间的重入保护状态
 
+
+  // The homepage navigation is split across nodes; derive the label from its
+  // *destination*, not a stale English menu caption. In particular, 7.0 is
+  // 金曦之遗辉, not the previous 6.0 expansion 晓月之终途.
+  const EC_EXPANSION_BY_PATCH = Object.freeze({
+    '2.0': '重生之境', '3.0': '苍穹之禁城', '4.0': '红莲之狂潮',
+    '5.0': '暗影之逆焰', '6.0': '晓月之终途', '7.0': '金曦之遗辉',
+  });
+  const EC_CONTENT_BY_ROUTE = Object.freeze({
+    glamour: '制作幻化', raid: '副本装备', tomes: '神典石兑换',
+    pvp: 'PvP 装备', seasonal: '季节活动装备',
+    mogstation: '商城套装', job: '职业校服',
+  });
+
+  // Rewrite only visible text nodes: keep images, links and native handlers.
+  function ecSetVisibleText(element, text) {
+    if ((element.textContent || '').replace(/\s+/gu, ' ').trim() === text) return;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeValue?.trim()) nodes.push(walker.currentNode);
+    }
+    if (!nodes.length) return;
+    nodes[0].nodeValue = nodes[0].nodeValue.replace(/\S[\s\S]*$/u, text);
+    for (const node of nodes.slice(1)) node.nodeValue = '';
+  }
+
+  function ecHomeCandidates(rootArg, selector) {
+    const scope = localScope(rootArg);
+    const nodes = new Set(queryIn(scope, selector));
+    const ancestor = scope?.closest?.(selector);
+    if (ancestor) nodes.add(ancestor);
+    return nodes;
+  }
+
+  function ecHomeGearsetNavLabel(a) {
+    const href = a.getAttribute('href');
+    if (!href) return null;
+    let target;
+    try {
+      target = new URL(href, globalThis.location?.href || 'https://ffxiv.eorzeacollection.com/');
+    } catch { return null; }
+    if (target.hostname !== 'ffxiv.eorzeacollection.com' || target.pathname !== '/gearsets') return null;
+    const content = EC_CONTENT_BY_ROUTE[target.searchParams.get('content')];
+    if (content) return content;
+    const patchName = EC_EXPANSION_BY_PATCH[target.searchParams.get('patch')];
+    if (!patchName) return null;
+    const old = (a.textContent || '').replace(/\s+/gu, ' ').trim();
+    // Preserve the separate "Current Expansion" browse link on the same URL.
+    return /^(?:From [A-Za-z ]{3,45}|自[\u3400-\u9fff·]{2,20}起)$/u.test(old)
+      ? '自' + patchName + '起' : null;
+  }
+
+  function translateECHomeNavigation(rootArg) {
+    if ((globalThis.location?.pathname || '') !== '/') return;
+    for (const anchor of ecHomeCandidates(rootArg, 'a[href*="/gearsets?"]')) {
+      const localized = ecHomeGearsetNavLabel(anchor);
+      if (localized) ecSetVisibleText(anchor, localized);
+    }
+  }
+
+  const EC_HOME_HEADINGS = new Set([
+    'News and Articles', '— News and Articles —',
+    'Latest Lodestone News', '— Latest Lodestone News —',
+    'Latest Updates', '— Latest Updates —',
+  ]);
+  const EC_HOME_CHALLENGES = new Set([
+    'Spooky Season', 'Verycold', 'Living Canvas',
+    'Into the Void', 'Master of Beasts',
+  ]);
+
+  function ecHomeChallengeTitle(text) {
+    const match = /^([^\p{L}\p{N}]{0,12})([A-Za-z][A-Za-z '’-]{2,40})$/u.exec(text);
+    if (!match || !EC_HOME_CHALLENGES.has(match[2])) return null;
+    return match[1] + DICT_EC[match[2]];
+  }
+
+  function ecHomeEditorialZh(source, tagName) {
+    if (/^H[2-4]$/u.test(tagName)) {
+      if (EC_HOME_HEADINGS.has(source)) return DICT_EC[source];
+      return ecHomeChallengeTitle(source);
+    }
+    if (tagName !== 'P') return null;
+    // Only the site's official news/challenge/merchandise copy.
+    if (!/^(?:Every month, our Patrons vote|The Eorzea Collection |Each design is available|products, including|Some are even based)/u.test(source)) return null;
+    return DICT_EC[source] || null;
+  }
+
+  function translateECHomeEditorial(rootArg) {
+    if ((globalThis.location?.pathname || '') !== '/') return;
+    for (const element of ecHomeCandidates(rootArg, 'h2, h3, h4, p')) {
+      if (element.closest?.(EC_SKIP_SEL) || element.querySelector?.('a, button, input, textarea')) continue;
+      const source = (element.textContent || '').replace(/\s+/gu, ' ').trim();
+      const zh = ecHomeEditorialZh(source, element.tagName);
+      if (zh) ecSetVisibleText(element, zh);
+    }
+  }
+
   // Site hydration updates tooltips and accessibility labels after the initial scan.
   // Translate each current attribute value: sticky 'done' flags hide later updates.
   function _translateECAttr(el, attr) {
@@ -810,6 +908,9 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const old = el.getAttribute(attr);
     if (!old || old.length > 90) return;
     let translated = trEC(old);
+    if (attr === 'alt' && (globalThis.location?.pathname || '') === '/') {
+      translated = ecHomeChallengeTitle(old) || translated;
+    }
     if (attr === 'alt') {
       if (old === 'male') translated = '男性';
       else if (old === 'female') translated = '女性';
@@ -866,6 +967,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
         if (n.nodeType === 3) trimECNode(n);
       }
       translateECAttrs(rootArg);
+      translateECHomeNavigation(rootArg);
+      translateECHomeEditorial(rootArg);
     } finally {
       ecBusy = false;
     }
