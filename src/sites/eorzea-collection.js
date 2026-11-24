@@ -151,7 +151,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
     'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
     'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
-    'Graffiti Neotunic', 'Festival Neotunic',
+    'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
     "Fallen's", "En Fortune-teller's", "Realm-roamer's", "Vibran Princess's",
     'Galatea', 'Fuath', 'Hope [F]', 'Hope [M]', "Gaffgarion's", "Ovelia's",
     "Ramza's", 'Star Captain', 'Star Pilot', 'Alternative', 'Maritime',
@@ -168,6 +168,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   const EC_GEARSET_NAME_EXTRAS = Object.freeze({
     'Graffiti Neotunic': '涂鸦新式上衣套装',
     'Festival Neotunic': '欢庆新式文化衫套装',
+    "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
     'Mistwake': '雾迹',
     'Mistic Memory': '雾忆',
     "War Cloud's": '沃·克劳德',
@@ -194,6 +195,18 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     'Star Tech Crafting': '星际科技巧匠套装',
     'Star Tech Gathering': '星际科技大地套装',
   });
+  // EC labels every /gearset page "Set", but these verified pages each
+  // link to just one official item (FFXIV item IDs 50285–50290 and 50849).
+  // Use the item's official name even when EC drops its fit from the title.
+  const EC_SINGLE_ITEM_GEARSETS = new Map([
+    ['Blooming Eyeglasses', '彩花装饰眼镜'],
+    ['Chicken Eyeglasses', '彩蛋小鸡眼镜'],
+    ['Painted Eggy Eyeglasses', '装饰彩蛋眼镜'],
+    ['Party Eggy Eyeglasses', '四颗彩蛋眼镜'],
+    ['Slim Frame Eggy Eyeglasses', '窄框彩蛋眼镜'],
+    ['Spriggan Eyeglasses', '魔石精眼镜'],
+    ['Masha Neotunic', '大码马夏文化衫'],
+  ]);
   // 分类后缀仅用于解析卡片同节点文本；不允许把来源名误识别为套装名。
   const EC_GEARSET_SOURCES = [
     'Battle Content Gear', 'Other Content Gear', 'Grand Company Gear',
@@ -420,6 +433,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // A visible EC title is evidence that the set exists; official package
   // lookups can translate it without adding speculative search suggestions.
   function ecGearsetObservedTitleZh(native) {
+    const singleItem = EC_SINGLE_ITEM_GEARSETS.get(native);
+    if (singleItem) return singleItem;
     const exact = DICT_EC[native];
     if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
     const parts = EC_GEARSET_TITLE_ROLES.exec(native);
@@ -666,8 +681,10 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {
     const splitSuffix = zh.endsWith(suffix) && !hasInlineSuffix;
+    const bareTitle = title.endsWith(' Set') ? title.slice(0, -4) : title;
+    const singleItem = suffix === '套装' && EC_SINGLE_ITEM_GEARSETS.has(bareTitle);
     const next = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
-    node.nodeValue = splitSuffix ? next.trimEnd() : next;
+    node.nodeValue = splitSuffix || singleItem ? next.trimEnd() : next;
     // Split H1 labels must contribute the suffix exactly once, including when
     // the title also contains an acquisition source (e.g. Dungeon Drop).
     // 官方套装名的性别变体可在「套装」后带【男】／【女】；
@@ -675,7 +692,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const hasVariantSuffix = suffix === '套装'
       && /(?:套装|装束)(?:【[^】]{1,16}】|（[^）]{1,16}）)(?:\s|$)/u.test(zh);
     const redundant = hasInlineSuffix || zh.endsWith('装束') || zh.includes(suffix + ' ')
-      || hasVariantSuffix;
+      || hasVariantSuffix || singleItem;
     if (redundant) for (const trailing of suffixNodes) trailing.nodeValue = '';
   }
 
