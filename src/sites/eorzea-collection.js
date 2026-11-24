@@ -918,6 +918,55 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     return name ? name + '图标' : null;
   }
 
+  const EC_FACEWEAR_SWATCH = '.box.is-fake > .tag > span';
+  const EC_FACEWEAR_SWATCH_IMAGE = '.box.is-fake > img.image[alt]';
+  // Standalone EC swatch labels, not the names of FFXIV's color-specific
+  // items (for example, the brass swatch is 铜色, not 铜框现代鼻眼镜).
+  const EC_FACEWEAR_COLORS = new Map([
+    ['Base', '默认色'], ['Black', '黑色'], ['Blue', '蓝色'], ['Brass', '铜色'],
+    ['Brown', '棕色'], ['Gold', '金色'], ['Green', '绿色'], ['Grey', '灰色'],
+    ['Purple', '紫色'], ['Red', '红色'], ['Silver', '银色'], ['White', '白色'],
+  ]);
+  const EC_WEARABLE_TOOLTIP_CONTENT = '.b-tooltip .tooltip-content';
+  const EC_WEARABLE_TOOLTIP_LABELS = new Map([
+    ['Please login to love accessories', '登录后可点赞'],
+    ['Please login to bookmark accessories', '登录后可收藏'],
+    ['Please login to mark accessories as owned', '登录后可标记为已拥有'],
+  ]);
+
+  function ecIsWearableUIPage() {
+    const path = (globalThis.location?.pathname || '').replace(/\/$/u, '');
+    return path === '/facewear' || path === '/fashion-accessories' || !!ecWearableKind(path);
+  }
+
+  function translateECFacewearSwatches(rootArg) {
+    if (ecWearableKind(globalThis.location?.pathname) !== 'facewear') return;
+    for (const swatch of ecHomeCandidates(rootArg, EC_FACEWEAR_SWATCH)) {
+      const localized = EC_FACEWEAR_COLORS.get(swatch.textContent.trim());
+      if (localized) ecSetVisibleText(swatch, localized);
+    }
+    for (const image of ecHomeCandidates(rootArg, EC_FACEWEAR_SWATCH_IMAGE)) {
+      const label = image.getAttribute('alt');
+      if (!label.endsWith(' Color Image')) continue;
+      const localized = EC_FACEWEAR_COLORS.get(label.slice(0, -' Color Image'.length));
+      if (localized) image.setAttribute('alt', localized + '预览');
+    }
+  }
+
+  function translateECWearableTooltips(rootArg) {
+    if (!ecIsWearableUIPage()) return;
+    // Buefy renders the label prop as a text node in .tooltip-content.
+    // Translate both the native custom element and its hydrated replacement.
+    for (const tooltip of ecHomeCandidates(rootArg, 'b-tooltip[label]')) {
+      const localized = EC_WEARABLE_TOOLTIP_LABELS.get(tooltip.getAttribute('label'));
+      if (localized && !isECAuthoredContent(tooltip)) tooltip.setAttribute('label', localized);
+    }
+    for (const content of ecHomeCandidates(rootArg, EC_WEARABLE_TOOLTIP_CONTENT)) {
+      const localized = EC_WEARABLE_TOOLTIP_LABELS.get(content.textContent.trim());
+      if (localized && !isECAuthoredContent(content)) ecSetVisibleText(content, localized);
+    }
+  }
+
   const EC_CREATOR_STATS = new Map([
     ['Albums', '相册'], ['Followers', '关注者'], ['Following', '正在关注'],
   ]);
@@ -1251,6 +1300,16 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     }
   }
 
+  function ecGenericAltLabel(el, old) {
+    if (old === 'male') return '男性';
+    if (old === 'female') return '女性';
+    const translated = ecEditorialImageLabel(el, old) || trEC(old);
+    if (!old.endsWith(' image')) return translated;
+    const name = old.slice(0, -6);
+    const localized = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
+    return localized ? localized + '图片' : translated;
+  }
+
   // Site hydration updates tooltips and accessibility labels after the initial scan.
   // Translate each current attribute value: sticky 'done' flags hide later updates.
   function _translateECAttr(el, attr) {
@@ -1264,17 +1323,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       if (label) el.setAttribute(attr, label);
       return;
     }
-    let translated = trEC(old);
-    if (attr === 'alt') translated = ecEditorialImageLabel(el, old) || translated;
-    if (attr === 'alt') {
-      if (old === 'male') translated = '男性';
-      else if (old === 'female') translated = '女性';
-      else if (old.endsWith(' image')) {
-        const name = old.slice(0, -6);
-        const zh = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
-        if (zh) translated = zh + '图片';
-      }
-    }
+    const translated = attr === 'alt' ? ecGenericAltLabel(el, old) : trEC(old);
     if (translated !== old) el.setAttribute(attr, translated);
   }
 
@@ -1326,6 +1375,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECInterviewHeading(rootArg);
       translateECCensusHeadings(rootArg);
       translateECWearableNames(rootArg);
+      translateECFacewearSwatches(rootArg);
+      translateECWearableTooltips(rootArg);
       translateECCreatorUI(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
@@ -1443,6 +1494,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     }, true);
   }
 
+  function ecAcceptTranslationMutation(mutation) {
+    if (mutation.type !== 'characterData' || ecIsDyePreview()) return true;
+    const parent = mutation.target.parentElement;
+    if (parent?.closest(EC_SERVER_TEXT_SEL + ', #filter_server option')) return true;
+    return ecIsWearableUIPage() && !!parent?.closest(EC_FACEWEAR_SWATCH + ', ' + EC_WEARABLE_TOOLTIP_CONTENT);
+  }
+
   function startEC() {
     safe(bindECResetFilters, 'EC 重置筛选')();
     safe(translateECPage, 'EC 全扫')();
@@ -1454,8 +1512,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       attributes: true,
       attributeFilter: ['title', 'alt', 'aria-label', 'placeholder', 'label'],
       characterData: true,
-      filter: (mutation) => mutation.type !== 'characterData' || ecIsDyePreview()
-        || Boolean(mutation.target.parentElement?.closest(EC_SERVER_TEXT_SEL + ', #filter_server option')),
+      filter: ecAcceptTranslationMutation,
       handler: (nodes, textNodes) => {
         for (const n of [...nodes, ...textNodes]) {
           safe(translateECPage, 'EC 局部')(n);

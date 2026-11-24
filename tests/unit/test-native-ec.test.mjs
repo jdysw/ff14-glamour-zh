@@ -340,7 +340,12 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         d.body.innerHTML = '<a href="/facewear">Facewear</a>' +
           '<h1 class="title has-negative-letter-spacing"><span class="has-text-primary">Simple Spectacles</span></h1>' +
           '<h2>— Next Facewear —</h2><a href="/facewear/monocle"><img alt="Monocle Icon">' +
-          '<p class="title has-text-text">Monocle</p></a><a href="/glamour/21/sample"><p class="title has-text-text">Monocle</p></a>';
+          '<p class="title has-text-text">Monocle</p></a><a href="/glamour/21/sample"><p class="title has-text-text">Monocle</p></a>' +
+          '<div class="box is-fake" id="palette"><img class="image" src="/brass.png" alt="Brass Color Image">' +
+          '<div class="tag"><span>Brass</span></div></div>' +
+          '<b-tooltip id="owned" label="Please login to mark accessories as owned"><a href="/login">1</a></b-tooltip>' +
+          '<div class="b-tooltip"><div class="tooltip-content">Please login to love accessories</div></div>' +
+          '<a href="/glamour/21/sample"><b-tooltip id="player-tooltip" label="Please login to love accessories"></b-tooltip></a>';
         const catalogue = d.querySelector('a[href="/facewear/monocle"]');
         translateECPage(catalogue.querySelector('p').firstChild);
         translateECPage();
@@ -357,6 +362,30 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         const click = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
         catalogue.querySelector('p').dispatchEvent(click);
         assert.equal(click.defaultPrevented, false, '面部配饰详情保留原站链接');
+
+        const palette = d.querySelector('#palette');
+        const swatchText = palette.querySelector('.tag span').firstChild;
+        const swatchImage = palette.querySelector('img');
+        const tooltip = d.querySelector('#owned');
+        const hydrated = d.querySelector('.tooltip-content');
+        assert.equal(swatchText.nodeValue, '铜色');
+        assert.equal(swatchImage.alt, '铜色预览');
+        assert.equal(tooltip.getAttribute('label'), '登录后可标记为已拥有');
+        assert.equal(hydrated.textContent, '登录后可点赞');
+        assert.equal(d.querySelector('#player-tooltip').getAttribute('label'), 'Please login to love accessories');
+
+        // Site updates can replace individual text nodes or attributes.
+        swatchText.nodeValue = 'Base';
+        swatchImage.setAttribute('alt', 'Base Color Image');
+        tooltip.setAttribute('label', 'Please login to love accessories');
+        hydrated.firstChild.nodeValue = 'Please login to bookmark accessories';
+        for (const changed of [swatchText, swatchImage, tooltip, hydrated.firstChild]) translateECPage(changed);
+        assert.equal(swatchText.nodeValue, '默认色');
+        assert.equal(swatchImage.alt, '默认色预览');
+        assert.equal(swatchImage.getAttribute('src'), '/brass.png');
+        assert.equal(tooltip.getAttribute('label'), '登录后可点赞');
+        assert.equal(tooltip.querySelector('a').getAttribute('href'), '/login');
+        assert.equal(hydrated.textContent, '登录后可收藏');
       });
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/fashion-accessory/angel-wings') }, () => {
         d.title = 'Angel Wings | Eorzea Collection';
