@@ -821,6 +821,12 @@ test('FFXIV Collection 实体翻译：词典、套装规则和原生筛选表单
   assert.equal(trACL(''), '');
   assert.equal(trACL('漆黒のヴィランズ'), '暗影之逆焰');
   assert.equal(trACL('キャスター'), '咏咒');
+  const pagerText = { nodeValue: ' of ', parentElement: { closest: selector => selector === '#navigation' } };
+  const articleText = { nodeValue: ' of ', parentElement: { closest: () => null } };
+  trimACLNode(pagerText);
+  trimACLNode(articleText);
+  assert.equal(pagerText.nodeValue, ' / ');
+  assert.equal(articleText.nodeValue, ' of ');
   assert.equal(trACL('ロスト'), 'ロスト');
   const unknown = 'テスト・ディフェンダーアタイアRE';
   assert.equal(_trACLSet(unknown, unknown), null, '未核实系列不能生成半日半中的套装名');

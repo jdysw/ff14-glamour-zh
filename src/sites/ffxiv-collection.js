@@ -208,9 +208,10 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     const setTitle = pe?.closest?.('h1,h2,h3,.related-equipment a')
       && !pe?.closest?.('.item-name,.item-panel')
       ? aclStandaloneSetName(label) : null;
-    const next = setTitle ? raw.replace(label, setTitle)
-      : label === 'of' && pe?.closest?.('#navigation')
-        ? raw.replace('of', '/') : trACL(raw);
+    let next;
+    if (setTitle) next = raw.replace(label, setTitle);
+    else if (label === 'of' && pe?.closest?.('#navigation')) next = raw.replace('of', '/');
+    else next = trACL(raw);
     if (next !== raw) {
       node.nodeValue = next;
       markACLItem(node, next);
