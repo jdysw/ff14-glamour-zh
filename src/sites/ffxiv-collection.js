@@ -1,14 +1,13 @@
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
-export { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { _getItemPfx, _getSeriesMap, _getSeriesPfx } from '../core/cache.js';
 import { DATA_TEXT } from '../core/data/data-manager.js';
 import { DICT_ACL, lookupDutyName } from '../core/data/dictionary.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
+export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACLGearsetAlt, _trACLExact, _trACLSet, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 
   /* ===================================================================== */
@@ -208,9 +207,10 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
     const setTitle = pe?.closest?.('h1,h2,h3,.related-equipment a')
       && !pe?.closest?.('.item-name,.item-panel')
       ? aclStandaloneSetName(label) : null;
-    const next = setTitle ? raw.replace(label, setTitle)
-      : label === 'of' && pe?.closest?.('#navigation')
-        ? raw.replace('of', '/') : trACL(raw);
+    let next;
+    if (setTitle) next = raw.replace(label, setTitle);
+    else if (label === 'of' && pe?.closest?.('#navigation')) next = raw.replace('of', '/');
+    else next = trACL(raw);
     if (next !== raw) {
       node.nodeValue = next;
       markACLItem(node, next);
@@ -271,12 +271,7 @@ export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_S
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: _aclAcceptNode,
-    });
-    const batch = [];
-    while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) _procACLNode(n);
+    for (const n of snapshotTranslationNodes(root, _aclAcceptNode)) _procACLNode(n);
     safe(replaceACLLodestone, 'ACL lodestone 替换')(rootArg);
   }
 

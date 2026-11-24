@@ -38,7 +38,6 @@ import datetime
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -52,29 +51,16 @@ SCHEMA = 3
 LANGS = ('en', 'ja', 'ko')
 DICT_JSON = 'dict.json'
 
-# 站点文件清单（与 src SITE_REGISTRY 的 indexes 对应）
-SITE_FILES = {
-    'mirapri':    ['names', 'hash', 'alias', 'dup'],
-    'ec':         ['names', 'hash', 'alias', 'dup'],
-    'fc':         ['names', 'hash', 'alias', 'dup', 'series'],
-    'ronka':      ['names', 'alias', 'dup'],
-    'collection': ['names', 'alias', 'dup', 'series', 'acl'],
-    'endcloset':  ['names', 'alias', 'dup'],
-    'miramiru':   ['names', 'hash', 'alias', 'dup'],
-    'wiki':       ['ecid', 'ko'],
-}
+# 站点与发布数据集共享同一配置；datasets 顺序参与清单版本指纹。
+site_config = json.loads((ROOT / 'src' / 'core' / 'site-config.json').read_text(encoding='utf-8'))
+DATASETS = site_config['datasets']
+SITE_FILES = {site: dataset['files'] for site, dataset in DATASETS.items()}
+SITE_LANGS = {site: dataset['languages'] for site, dataset in DATASETS.items()}
+V3_FILE_TYPES = site_config['fileTypes']
 
-# Phase 13：每站 names / dup 的语言键（各站翻译链实际查询语言）
-SITE_LANGS = {
-    'mirapri': ['ja'],
-    'ec': ['en'],
-    'fc': ['ja'],
-    'ronka': ['ko'],
-    'collection': ['ja'],
-    'endcloset': ['ko', 'en', 'ja'],
-    'miramiru': ['en', 'ja', 'ko'],
-    'wiki': [],
-}
+
+def _site_filename(name):
+    return f'{name}.{V3_FILE_TYPES[name]}'
 
 
 # EquipSlotCategory: 3 Head, 4 Body, 5 Gloves, 7 Legs, 8 Feet。
@@ -306,27 +292,25 @@ def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_t
     out = {}
     slot_names = slot_names or {lang: {} for lang in LANGS}
 
+    shared = {
+        'hash': _join_pairs(hashes.items()).encode('utf-8'),
+        'alias': _join_multi(ali.items()).encode('utf-8'),
+        'ecid': _join_pairs(ecid.items()).encode('utf-8'),
+        'ko': _join_pairs(ko_by_zh.items()).encode('utf-8'),
+        'series': series_text.encode('utf-8'),
+        'acl': acl_text.encode('utf-8'),
+    }
     for site, want in SITE_FILES.items():
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                pairs = _site_name_pairs(site, langs, names, glams, slot_names)
-                out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
+                data = _join_triples(_site_name_pairs(site, langs, names, glams, slot_names)).encode('utf-8')
             elif name == 'dup':
-                pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]
-                out[(site, 'dup.tsv')] = _join_multi(pairs).encode('utf-8')
-            elif name == 'hash':
-                out[(site, 'hash.tsv')] = _join_pairs(hashes.items()).encode('utf-8')
-            elif name == 'alias':
-                out[(site, 'alias.tsv')] = _join_multi(ali.items()).encode('utf-8')
-            elif name == 'ecid':
-                out[(site, 'ecid.tsv')] = _join_pairs(ecid.items()).encode('utf-8')
-            elif name == 'ko':
-                out[(site, 'ko.tsv')] = _join_pairs(ko_by_zh.items()).encode('utf-8')
-            elif name == 'series':
-                out[(site, 'series.txt')] = series_text.encode('utf-8')
-            else:  # acl
-                out[(site, 'acl.txt')] = acl_text.encode('utf-8')
+                pairs = (kv for lang in langs for kv in dup_by_lang[lang].items())
+                data = _join_multi(pairs).encode('utf-8')
+            else:
+                data = shared[name]
+            out[site, _site_filename(name)] = data
     return out
 
 
@@ -339,23 +323,6 @@ def _parse_args(argv):
     return out_dir
 
 
-def _gen_dict_bytes(out_dir):
-    """词库（shared）：build/data/make_dict_json.py → dict.json 字节；失败返回 None。"""
-    tmp = out_dir / f'.{DICT_JSON}.tmp'
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run([sys.executable, str(Path(__file__).with_name('make_dict_json.py')), '--out', str(tmp)],
-                       capture_output=True, encoding='utf-8',
-                       env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
-    if r.returncode == 0 and tmp.exists():
-        data = tmp.read_bytes()
-        tmp.unlink()
-        return data
-    print('✗ dict.json 生成失败')
-    print(r.stdout)
-    print(r.stderr)
-    return None
-
-
 def _write_sites(out_dir, files):
     """写出站点文件；返回 (sites_manifest, ver_parts, total_bytes)。"""
     sites = {}
@@ -366,7 +333,7 @@ def _write_sites(out_dir, files):
         site_dir.mkdir(parents=True, exist_ok=True)
         sm = {}
         for name in want:
-            fname = f'{name}.txt' if name in ('series', 'acl') else f'{name}.tsv'
+            fname = _site_filename(name)
             data = files[(site, fname)]
             s = sha256_hex(data)
             (site_dir / fname).write_bytes(data)
@@ -401,11 +368,16 @@ def main() -> int:
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    dict_bytes = _gen_dict_bytes(out_dir)
-    if dict_bytes is None:
+    # Only the CLI assembles the dictionary; data-shape tests import this module alone.
+    from make_dict_json import build_dictionary, encode_dictionary
+    try:
+        dictionary = build_dictionary()
+        dict_bytes = encode_dictionary(dictionary).encode('utf-8')
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(f'✗ dict.json 生成失败: {error}')
         return 1
     # Keep the existing Collection V3 file readable by released userscripts.
-    common = json.loads(dict_bytes)['common']
+    common = dictionary['common']
     duties = {key.removeprefix('duty:'): zh for key, zh in common.items() if key.startswith('duty:')}
     aliases = {key.removeprefix('duty-alias:'): duties[target]
                for key, target in common.items() if key.startswith('duty-alias:')}
@@ -427,7 +399,8 @@ def main() -> int:
 
     # shared dict 落盘
     (out_dir / DICT_JSON).write_bytes(dict_bytes)
-    ver_parts.append(f'shared/dict:{sha256_hex(dict_bytes)}')
+    dict_hash = sha256_hex(dict_bytes)
+    ver_parts.append(f'shared/dict:{dict_hash}')
 
     manifest = {
         'schema': SCHEMA,
@@ -435,7 +408,7 @@ def main() -> int:
         'version': hashlib.sha256('|'.join(ver_parts).encode('utf-8')).hexdigest()[:12],
         'generated': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'shared': {
-            'dict': {'url': DICT_JSON, 'sha256': sha256_hex(dict_bytes), 'bytes': len(dict_bytes)},
+            'dict': {'url': DICT_JSON, 'sha256': dict_hash, 'bytes': len(dict_bytes)},
         },
         'sites': sites,
     }

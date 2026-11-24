@@ -5,15 +5,20 @@ import { parse } from 'acorn';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SITE_IMPORTERS = new Set(['src/core/site-registry.js', 'src/core/probe.js']);
-const PURE_MODULES = new Set(['src/core/runtime.js', 'src/core/site-policy.js']);
+const SITE_POLICY = 'src/core/site-policy.js';
+const SITE_CONFIG = 'src/core/site-config.json';
+const PURE_MODULES = new Set(['src/core/runtime.js', SITE_POLICY]);
+
+// A site entry (src/sites/<name>.js) and its private directory share a namespace.
+const siteName = file => /^src\/sites\/([^/]+?)(?:\/|\.js$)/u.exec(file)?.[1];
 
 function validateEdge(owner, dependency, sources, errors) {
   if (!sources.has(dependency)) errors.push(`${owner}: missing module ${dependency}`);
   if (owner.startsWith('src/core/') && dependency.startsWith('src/sites/')
-    && !SITE_IMPORTERS.has(owner)
-    && !(owner === 'src/core/chinese-search.js' && dependency === 'src/sites/eorzea-collection.js'))
+    && !SITE_IMPORTERS.has(owner))
     errors.push(`${owner}: Core imports site ${dependency}`);
-  if (owner.startsWith('src/sites/') && dependency.startsWith('src/sites/'))
+  const ownerSite = siteName(owner);
+  if (ownerSite && dependency.startsWith('src/sites/') && ownerSite !== siteName(dependency))
     errors.push(`${owner}: cross-site dependency ${dependency}`);
 }
 
@@ -22,11 +27,17 @@ export function analyzeDependencies(sources) {
   const graph = new Map();
   const errors = [];
   for (const [file, source] of sources) {
+    if (file === SITE_CONFIG) {
+      JSON.parse(source);
+      graph.set(file, []);
+      continue;
+    }
     const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
     const dependencies = ast.body.filter(node => node.source).map(node =>
       path.posix.normalize(path.posix.join(path.posix.dirname(file), node.source.value)));
     graph.set(file, dependencies);
-    if (PURE_MODULES.has(file) && dependencies.length) errors.push(`${file}: pure module imports dependencies`);
+    if (PURE_MODULES.has(file) && dependencies.some(dep => file !== SITE_POLICY || dep !== SITE_CONFIG))
+      errors.push(`${file}: pure module imports dependencies`);
     for (const dependency of dependencies) validateEdge(file, dependency, sources, errors);
   }
   const done = new Set();
@@ -51,7 +62,7 @@ export function verifyDependencies(directory = root) {
     .flatMap(entry => {
       const file = folder + '/' + entry.name;
       if (entry.isDirectory()) return listModules(file);
-      return entry.isFile() && file.endsWith('.js') ? [file] : [];
+      return entry.isFile() && (file.endsWith('.js') || file === SITE_CONFIG) ? [file] : [];
     });
   const files = listModules('src');
   return analyzeDependencies(new Map(files.map(file => [file, fs.readFileSync(path.join(directory, file), 'utf8')])));

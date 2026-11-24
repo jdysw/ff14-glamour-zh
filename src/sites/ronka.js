@@ -3,11 +3,11 @@ import { ronkaItemLookup } from '../core/cache.js';
 import { WIKI_ITEM, ZHX_WIKI_ICON } from '../core/constants.js';
 import { DICT_RONKA } from '../core/data/dictionary.js';
 import { resolveDyeColor } from '../core/data/data-manager.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { isAuthoredContent } from '../core/content-scope.js';
-export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
+export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, translateRonkaPage, translateRonkaTitle, trimRonkaNode };
 
 
   /* ===================================================================== */
@@ -199,7 +199,6 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   }
 
   function _ronkaImgAlt(n) {
-    if (isAuthoredContent(n, 'ronka')) return;
     const alt = n.getAttribute('alt');
     if (alt && alt.length >= 2 && alt.length <= 90) {
       const nn = trRonka(alt);
@@ -217,7 +216,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   function _procRonkaNode(n) {
     if (isAuthoredContent(n.nodeType === 3 ? n.parentElement : n, 'ronka')) return;
     if (n.nodeType === 3) { trimRonkaNode(n); return; }
-    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') { _ronkaInput(n); return; }
+    if (n.tagName === 'INPUT') { _ronkaInput(n); return; }
     if (n.tagName === 'IMG' || n.hasAttribute('alt')) { _ronkaImgAlt(n); return; }
     if (n.hasAttribute?.('aria-label')) _ronkaAria(n);
   }
@@ -266,12 +265,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     }
     bindRonkaItemLists(rootArg);
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-      acceptNode: _ronkaAcceptNode,
-    });
-    const batch = [];
-    while (w.nextNode()) batch.push(w.currentNode);
-    for (const n of batch) _procRonkaNode(n);
+    for (const n of snapshotTranslationNodes(root, _ronkaAcceptNode)) _procRonkaNode(n);
     safe(replaceRonkaLodestone, 'Ronka lodestone 替换')(rootArg);
   }
 

@@ -1,0 +1,26 @@
+{
+  "sites": [
+    { "id": "mirapri", "hosts": ["mirapri.com"], "matches": ["https://mirapri.com/*"] },
+    { "id": "ec", "hosts": ["eorzeacollection.com"], "matches": ["https://ffxiv.eorzeacollection.com/*"] },
+    { "id": "wiki", "hosts": ["huijiwiki.com"], "matches": ["https://ff14.huijiwiki.com/wiki/*"] },
+    { "id": "fc", "hosts": ["ff14-fc.com"], "matches": ["https://ff14-fc.com/*"] },
+    { "id": "ronka", "hosts": ["ronkacloset.com"], "matches": ["https://lookbook.ronkacloset.com/*"] },
+    { "id": "collection", "hosts": ["ffxivcollection.com"], "matches": ["https://www.ffxivcollection.com/*", "https://weapon.ffxivcollection.com/*"] },
+    { "id": "endcloset", "hosts": ["end-closet.com"], "matches": ["https://end-closet.com/*"] },
+    { "id": "miramiru", "hosts": ["miramiru.co"], "matches": ["https://miramiru.co/*"] },
+    { "id": "eden", "hosts": ["mirapri.ff14eden.work"], "matches": ["https://mirapri.ff14eden.work/*"], "dataSite": "miramiru" }
+  ],
+  "datasets": {
+    "mirapri": { "files": ["names", "hash", "alias", "dup"], "languages": ["ja"] },
+    "ec": { "files": ["names", "hash", "alias", "dup"], "languages": ["en"] },
+    "fc": { "files": ["names", "hash", "alias", "dup", "series"], "languages": ["ja"] },
+    "ronka": { "files": ["names", "alias", "dup"], "languages": ["ko"] },
+    "collection": { "files": ["names", "alias", "dup", "series", "acl"], "languages": ["ja"] },
+    "endcloset": { "files": ["names", "alias", "dup"], "languages": ["ko", "en", "ja"] },
+    "miramiru": { "files": ["names", "hash", "alias", "dup"], "languages": ["en", "ja", "ko"] },
+    "wiki": { "files": ["ecid", "ko"], "languages": [] }
+  },
+  "fileTypes": {
+    "names": "tsv", "alias": "tsv", "dup": "tsv", "hash": "tsv", "ecid": "tsv", "ko": "tsv", "series": "txt", "acl": "txt"
+  }
+}

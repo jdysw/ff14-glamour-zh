@@ -6,9 +6,9 @@
 //       数据层排序与解析契约由 test-item-resolver.mjs 独立验证。
 //       1.4.2 后续修复（b 方案）：E 段——独立搜索框输入停顿不自动转换；点选候选做转换式搜索。
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { repoRoot } from '../helpers/paths.mjs';
+import { createChineseSearchController, findSearchInput } from '../../src/core/chinese-search.js';
+import { EC_FACEWEAR_ROWS } from '../../src/core/search-equipment-categories.js';
+import { createECSearchStrategy } from '../../src/sites/eorzea-collection-search.js';
 
 let pass = 0;
 let fail = 0;
@@ -18,15 +18,6 @@ const ok = (name, cond, extra = '') => {
 };
 const eq = (name, actual, expected) => ok(name, actual === expected,
   '实际=' + JSON.stringify(actual) + ' 期望=' + JSON.stringify(expected));
-
-const SOURCE_TEXT = fs.readFileSync(path.join(repoRoot, 'src/core/chinese-search.js'), 'utf8');
-
-function sliceSource(s) {
-  const start = s.indexOf('const SEARCH_SITES = Object.freeze({');
-  const end = s.indexOf('\nexport {', start);
-  if (start < 0 || end < 0) throw new Error('中文装备搜索源码区段缺失');
-  return s.slice(start, end);
-}
 
 class FakeElement {
   constructor(tagName) {
@@ -181,24 +172,31 @@ function buildSearchHarness(suggestionsOverride) {
     { zh: '炎灵袍', native: 'エ' },
     { zh: '炎灵裤', native: 'オ' },
   ]);
-  const seg = sliceSource(SOURCE_TEXT);
-  const body = [
-    'const hasItemIdentities = () => false;',
-    'const onTablesReady = (cb) => { __ready.push(cb); };',
-    'const resolveByZh = (v) => ({甲: "ア", 乙: "ガ", 炎灵: "カ"})[v] || null;',
-    'const resolvePartialByZh = (v) => ({丙丁: "ウエ"})[v] || null;',
-    'const suggestByZh = (v,_limit,scope) => {const rows = v === "炎灵" || v === "鸟甲" || v === "装备" ? __suggestions.slice() : (v === "炎灵袍" ? __suggestions.slice(3, 4) : __suggestions.filter(r => r.zh.includes(v))); if(scope instanceof Set) return rows.filter(r=>scope.has(r.native)); if(typeof scope==="number") return rows.filter(r=>r.slot===scope); return rows;};',
-    'const resolveECGearsetSearch = (v) => ({幻境: "Phantom Vision", 幻境意象御敌套装: "Phantom Vision Fending", 御敌: "Fending"})[v] || null;',
-    'const suggestECGearsetsByZh = (v) => v === "幻境" ? [{ zh: "幻境意象御敌套装", native: "Phantom Vision Fending" }] : [];',
-    seg,
-    'return { startChineseSearch, handleChineseSearchSubmit, findSearchInput, isStandaloneSearchInput, ecSearchContext, ecScopedSuggestions, ecScopedNative, facewearNatives: new Set(EC_FACEWEAR_ROWS.map(row => row.native)) };',
-  ].join('\n');
-  try {
-    const fn = new Function('__ready', '__suggestions', body);
-    return { api: fn(ready, suggestions), ready, suggestions };
-  } catch (e) {
-    throw new Error('中文装备搜索 UI 区段装配失败：' + e.message);
-  }
+  const strategy = createECSearchStrategy(
+    query => ({ 幻境: 'Phantom Vision', 幻境意象御敌套装: 'Phantom Vision Fending', 御敌: 'Fending' })[query] || null,
+    query => query === '幻境' ? [{ zh: '幻境意象御敌套装', native: 'Phantom Vision Fending' }] : [],
+  );
+  const controller = createChineseSearchController({
+    hasItemIdentities: () => false,
+    onTablesReady: cb => ready.push(cb),
+    resolveByZh: query => ({ 甲: 'ア', 乙: 'ガ', 炎灵: 'カ' })[query] || null,
+    resolvePartialByZh: query => query === '丙丁' ? 'ウエ' : null,
+    suggestByZh(query, _limit, scope) {
+      const rows = ['炎灵', '鸟甲', '装备'].includes(query) ? suggestions.slice()
+        : query === '炎灵袍' ? suggestions.slice(3, 4) : suggestions.filter(row => row.zh.includes(query));
+      if (scope instanceof Set) return rows.filter(row => scope.has(row.native));
+      if (typeof scope === 'number') return rows.filter(row => row.slot === scope);
+      return rows;
+    },
+  });
+  const api = {
+    ...controller,
+    startChineseSearch: site => controller.startChineseSearch(site, site === 'ec' ? strategy : undefined),
+    findSearchInput,
+    ecSearchContext: strategy.context,
+    facewearNatives: new Set(EC_FACEWEAR_ROWS.map(row => row.native)),
+  };
+  return { api, ready, suggestions };
 }
 
 const previousDocument = globalThis.document;
@@ -642,6 +640,14 @@ try {
       options.push(...ambiguous);
       observers.at(-1).callback();
       eq('相同中文名的多个候选不可按第一项猜选', picked.length, 1);
+
+      // Vue may remount the selector while its request is in flight.
+      const detachedObserver = observers.at(-1);
+      input.isConnected = false;
+      options.splice(0, options.length, nativeOption);
+      detachedObserver.callback();
+      eq('控件已换页或重挂载时不提交迟到的原生选项', picked.length, 1);
+      ok('断开的控件会移除自己的选项监视器', detachedObserver.disconnected);
     } finally {
       if (originalObserver === undefined) delete globalThis.MutationObserver;
       else globalThis.MutationObserver = originalObserver;
@@ -797,6 +803,9 @@ try {
     eq(site + ' 未知中文词不改写', input.value, '不存在装备');
     input.value = '炎灵';
     document.dispatch('compositionstart', { target: input });
+    document.dispatch('input', { target: input, isComposing: true });
+    await sleep();
+    eq(site + ' 独立搜索框输入法未确认时不重开候选', findSuggestBox(document)?.hidden ?? true, true);
     document.dispatch('keydown', { target: input, key: 'Enter', isComposing: true });
     document.dispatch('click', { target: button });
     eq(site + ' 输入法确认期间不触发转换', input.value, '炎灵');
@@ -954,6 +963,12 @@ try {
       eq('M7 换关键词回到第一页', selectedUrl.searchParams.has('page'), false);
 
       input.value = '御敌';
+      document.dispatch('compositionstart', { target: input });
+      document.dispatch('submit', { target: form });
+      eq('M7a 输入法未确认时不提前导航套装表单', navigations.length, 1);
+      document.dispatch('compositionend', { target: input });
+
+      input.value = '御敌';
       const submit = {
         target: form, prevented: false, stopped: false,
         preventDefault() { this.prevented = true; },
@@ -1046,9 +1061,9 @@ try {
       globalThis.location.pathname = '/companion-glamours';
       eq('N1 鸟甲页面分类不是通用物品', harness.api.ecSearchContext(input)?.kind, 'barding');
       eq('N2 候选使用官方 ItemAction 鸟甲集合，排除误含鸟甲二字的头盔',
-        harness.api.ecScopedSuggestions('鸟甲',input).map(r=>r.native).join('|'),'Flyer Shaffron');
+        harness.api.suggestionsFor('鸟甲',input).map(r=>r.native).join('|'),'Flyer Shaffron');
       eq('N3 只输入一个完整鸟甲中文名可得到对应英文名称',
-        harness.api.ecScopedNative('鸟甲飞行',input,false),'Flyer Shaffron');
+        harness.api.scopedNative('鸟甲飞行',input,false),'Flyer Shaffron');
       input.value = '鸟甲';
       document.dispatch('focusin',{target:input});
       await sleep();
@@ -1093,12 +1108,12 @@ try {
       globalThis.location.pathname = '/facewear';
       input.value = '椭圆眼镜';
       eq('N6 面饰路由强制对应游戏独立 Glasses 表',harness.api.ecSearchContext(input)?.kind,'facewear');
-      const faces=harness.api.ecScopedSuggestions('眼镜',input);
+      const faces=harness.api.suggestionsFor('眼镜',input);
       ok('N7 中文面饰数据来自 Glasses Sheet',faces.some(row=>row.native==='Oval Spectacles'&&row.zh==='椭圆眼镜'));
       ok('N8 不会误含头部装备/鸟甲',faces.every(row=>row.zh.includes('眼镜')&&row.native!=='Flyer Shaffron'));
       eq('N9 面饰精确中文名解析为正确的 EC 原生英文',
-        harness.api.ecScopedNative('椭圆眼镜',input,false),'Oval Spectacles');
-      eq('N10 不把头盔当成面饰候选',harness.api.ecScopedSuggestions('鸟甲',input).length,0);
+        harness.api.scopedNative('椭圆眼镜',input,false),'Oval Spectacles');
+      eq('N10 不把头盔当成面饰候选',harness.api.suggestionsFor('鸟甲',input).length,0);
       input.value = '椭圆眼镜';
       document.dispatch('focusin',{target:input});
       await sleep();
@@ -1113,7 +1128,7 @@ try {
       ]) {
         input.setAttribute('placeholder','Any '+enSlot);
         eq('N 识别 EC '+enSlot+' 的官方装备部位',harness.api.ecSearchContext(input)?.slot,expectedSlot);
-        eq('N EC '+enSlot+' 只保留同部位候选',harness.api.ecScopedSuggestions('装备',input).map(r=>r.native).join('|'),expectedName);
+        eq('N EC '+enSlot+' 只保留同部位候选',harness.api.suggestionsFor('装备',input).map(r=>r.native).join('|'),expectedName);
       }
       input.setAttribute('placeholder','Search for option');
       const field = new FakeElement('div');
@@ -1130,24 +1145,24 @@ try {
       main.setAttribute('placeholder','搜索');
       eq('N12 Gearsets 普通主搜索不误判为头部槽位',harness.api.ecSearchContext(main),null);
       eq('N13 Gearsets 主搜索继续使用套装专用中文索引',
-        harness.api.ecScopedSuggestions('幻境',main)[0]?.native,'Phantom Vision Fending');
+        harness.api.suggestionsFor('幻境',main)[0]?.native,'Phantom Vision Fending');
       globalThis.location.pathname = '/accessories';
       input.setAttribute('placeholder','Search for option');
       eq('N15 未绑定具体部位的饰品搜索框也只能显示饰品',
         harness.api.ecSearchContext(input)?.kind, 'accessories');
       eq('N16 饰品列表使用官方耳颈腕指部位的并集，排除不属于装备的材料',
-        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        harness.api.suggestionsFor('饰品',input).map(r=>r.native).join('|'),
         'Abyssos Earrings of Fending|Abyssos Ring of Fending');
       input.setAttribute('placeholder','Any earrings');
       eq('N17 饰品页已绑定耳部的 Vue 输入优先限定耳部',
         harness.api.ecSearchContext(input)?.kind, 'accessory-slot');
       eq('N18 饰品耳部候选排除同系列戒指',
-        harness.api.ecScopedSuggestions('饰品',input).map(r=>r.native).join('|'),
+        harness.api.suggestionsFor('饰品',input).map(r=>r.native).join('|'),
         'Abyssos Earrings of Fending');
       globalThis.location.pathname = '/accessories/mistic-memory';
       main.value = '饰品';
       eq('N19 饰品详情页无具体部位的输入也保持饰品范围',
-        harness.api.ecScopedSuggestions('饰品',main).length, 2);
+        harness.api.suggestionsFor('饰品',main).length, 2);
       globalThis.location.hostname = 'ff14-fc.com';
       eq('N14 非 EC 页面不启用分类路由',harness.api.ecSearchContext(input),null);
     } finally {

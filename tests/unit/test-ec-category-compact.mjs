@@ -4,17 +4,69 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createChineseSearchController } from '../../src/core/chinese-search.js';
+import { EC_FACEWEAR_ROWS, getBardingNatives, getAccessoryNatives, getAllAccessoryNatives } from '../../src/core/search-equipment-categories.js';
 import { repoRoot } from '../helpers/paths.mjs';
 
-const source = fs.readFileSync(path.join(repoRoot, 'src/core/chinese-search.js'), 'utf8');
+const source = fs.readFileSync(path.join(repoRoot, 'src/core/search-equipment-categories.js'), 'utf8');
 const beginTag = '// BEGIN GENERATED EC SEARCH CATEGORIES';
 const endTag = '// END GENERATED EC SEARCH CATEGORIES';
 const from = source.indexOf('\n', source.indexOf(beginTag)) + 1;
 const to = source.indexOf(endTag, from);
 assert.ok(from > 0 && to > from, '分类快照的生成标记必须存在');
 const fragment = source.slice(from, to);
-assert.match(fragment, /decodeEcNativeNames/, '必须使用紧凑离线分类快照');
-const data = new Function(fragment + '\nreturn { barding: [...EC_BARDING_NATIVES], facewear: EC_FACEWEAR_ROWS, ears: [...EC_ACCESSORY_SLOT_NATIVES.ears], neck: [...EC_ACCESSORY_SLOT_NATIVES.neck], wrists: [...EC_ACCESSORY_SLOT_NATIVES.wrists], rings: [...EC_ACCESSORY_SLOT_NATIVES.rings] };')();
+const slots = ['ears', 'neck', 'wrists', 'rings'];
+const data = {
+  barding: [...getBardingNatives()],
+  facewear: EC_FACEWEAR_ROWS,
+  ...Object.fromEntries(slots.map(slot => [slot, [...getAccessoryNatives(slot)]])),
+};
+
+// Run the module body in isolation so the test can count lazy Set allocations
+// without modifying the host's Set or relying on wall-clock time.
+const exportsAt = source.lastIndexOf('export {');
+const compile = (snapshot, SetImpl) => new Function('Set',
+  source.slice(0, from) + snapshot + source.slice(to, exportsAt)
+  + '\nreturn { getBardingNatives, getAccessoryNatives, getAllAccessoryNatives, EC_FACEWEAR_ROWS };')(SetImpl);
+let setCount = 0;
+const lazy = compile(fragment, class extends Set {
+  constructor() { super(); setCount++; }
+});
+assert.equal(setCount, 0, '加载模块不创建装备分类集合');
+assert.equal(lazy.EC_FACEWEAR_ROWS.length, 61);
+assert.equal(lazy.getAccessoryNatives(0), undefined, '普通装备部位不触发饰品解码');
+assert.equal(setCount, 0);
+const ears = lazy.getAccessoryNatives('ears');
+assert.equal(setCount, 1, '单一饰品部位只创建自己的分类');
+assert.equal(lazy.getAccessoryNatives('ears'), ears, '重复搜索复用同部位集合');
+assert.equal(setCount, 1);
+const all = lazy.getAllAccessoryNatives();
+assert.equal(setCount, 5, '无部位饰品搜索只创建其余分类和总集合');
+assert.equal(lazy.getAllAccessoryNatives(), all, '重复无部位搜索复用总集合');
+assert.deepEqual([...all], [...new Set(slots.flatMap(slot => data[slot]))], '饰品总集合保持全部旧分类及顺序');
+assert.deepEqual([...getAllAccessoryNatives()], [...all]);
+assert.deepEqual([...lazy.getBardingNatives()], data.barding);
+assert.equal(setCount, 6, '鸟甲只在首次搜索时创建，与饰品互不预热');
+
+// Miramiru shares the EC jewelry scope but must not treat numeric armor
+// slots as jewelry or change the target language.
+const previousLocation = globalThis.location;
+try {
+  globalThis.location = { pathname: '/ko/collection' };
+  const miramiru = createChineseSearchController({
+    hasItemIdentities: () => true,
+    suggestByZh: (_query, _limit, scope, language) => ({ scope, language }),
+  });
+  miramiru.startChineseSearch('miramiru');
+  const search = slot => miramiru.suggestionsFor('耳饰', { dataset: { zhxMiramiruSlot: slot } });
+  assert.deepEqual(search('0'), { scope: 0, language: 'ko' });
+  const accessory = search('ears');
+  assert.equal(accessory.scope, getAccessoryNatives('ears'));
+  assert.equal(accessory.language, 'ko');
+} finally {
+  if (previousLocation === undefined) delete globalThis.location;
+  else globalThis.location = previousLocation;
+}
 
 // 以压缩前全部数据的独立指纹锁定语义，不只是检查数量或少量示例。
 function fingerprint(items) {
@@ -57,9 +109,9 @@ const python = [
 const run = spawnSync(findPython(), ['-c', python], { cwd: repoRoot, encoding: 'utf8' });
 assert.equal(run.status, 0, run.stderr || 'Python 分类生成器必须能够执行');
 const sample = JSON.parse(run.stdout.trim());
-const roundtrip = new Function(sample.code + '\nreturn { barding: [...EC_BARDING_NATIVES], ears: [...EC_ACCESSORY_SLOT_NATIVES.ears] };')();
-assert.deepEqual(roundtrip.barding, sample.names, 'Python 和 JS 的 UTF-16 前缀长度必须一致');
-assert.deepEqual(roundtrip.ears, sample.names);
+const roundtrip = compile(sample.code, Set);
+assert.deepEqual([...roundtrip.getBardingNatives()], sample.names, 'Python 和 JS 的 UTF-16 前缀长度必须一致');
+assert.deepEqual([...roundtrip.getAccessoryNatives('ears')], sample.names);
 
 // 不依赖在线 CSV：将已验证的解码数据交回 Python 生成器，确保输出可复现。
 const verifyPython = [

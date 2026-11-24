@@ -5,14 +5,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isECSeriesLink } from '../../src/core/content-scope.js';
+import { createChineseSearchController, findSearchInput } from '../../src/core/chinese-search.js';
+import { createECSearchStrategy } from '../../src/sites/eorzea-collection-search.js';
 import { DICT_EC } from '../../src/core/data/dictionary.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection.js'), 'utf8');
-const start = source.indexOf('  const EC_GEARSET_ROLES =');
-const end = source.indexOf('  // 用户产出的内容：绝不翻译', start);
-assert.ok(start >= 0 && end > start, 'EC Gearsets 源区段必须存在');
+const source = fs.readFileSync(path.join(root, 'src/sites/eorzea-collection/catalog.js'), 'utf8');
+const start = source.indexOf('const EC_GEARSET_ROLES =');
+assert.ok(start >= 0, 'EC Gearsets 源区段必须存在');
 
 const scope = { anchors: [], accessoryAnchors: [], headings: [] };
 const doc = {
@@ -39,7 +40,7 @@ function mockQuery(_root, selector) {
 }
 let dictRevision = 0;
 let itemIndex = Object.create(null);
-const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', 'isECSeriesLink', source.slice(start, end) +
+const api = new Function('DICT_EC', 'dictGetRevision', 'dataGetIndex', 'document', 'NodeFilter', 'localScope', 'queryIn', 'isECSeriesLink', source.slice(start) +
   '\nreturn { ecGearsetDisplayName, ecAccessoryDisplayName, ecAccessoryDeepStatSeriesZh, inferECAccessorySeriesFromItems, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, inferECGearsetsFromItems, ecGearsetOfficialOutfitRows };')(
   DICT_EC, () => dictRevision, () => Object.keys(itemIndex).length ? itemIndex : null,
   doc, { SHOW_TEXT: 4 }, node => node || scope, mockQuery, isECSeriesLink);
@@ -709,19 +710,15 @@ try {
 
 
 // 验证中文搜索实际调用套装解析器，并保证离开 /gearsets 不污染其他站点。
-const searchSource = fs.readFileSync(path.join(root, 'src/core/chinese-search.js'), 'utf8');
-const searchStart = searchSource.indexOf('const SEARCH_SITES = Object.freeze({');
-const searchEnd = searchSource.indexOf('\nexport {', searchStart);
-assert.ok(searchStart >= 0 && searchEnd > searchStart);
-const searchApi = new Function('resolveECGearsetSearch', 'resolveByZh', 'resolvePartialByZh',
-  'suggestECGearsetsByZh', 'suggestByZh', searchSource.slice(searchStart, searchEnd) +
-    '\nreturn { isECGearsetsPage, resolveSearchNative, findSearchInput, submitECGearsetsSearch };')(
-  search, q => q === '测试物品' ? 'Native Test Item' : null,
-  q => q === '女仆' ? 'Maid' : q === '装束' ? 'Wrong-Item' : null,
-  api.suggestECGearsetsByZh, () => []);
+const ecStrategy = createECSearchStrategy(search, api.suggestECGearsetsByZh);
+const searchController = createChineseSearchController({
+  resolveByZh: query => query === '测试物品' ? 'Native Test Item' : null,
+  resolvePartialByZh: query => ({ 女仆: 'Maid', 装束: 'Wrong-Item' })[query] || null,
+});
+searchController.startChineseSearch('ec', ecStrategy);
 try {
   globalThis.location = { hostname: 'ffxiv.eorzeacollection.com', pathname: '/gearsets' };
-  assert.equal(searchApi.isECGearsetsPage(), true);
+  assert.equal(ecStrategy.isCatalogPage(), true);
   // 取自用户审计：EC 真实表单中搜索框 name/id 为空、placeholder=搜索、
   // type=text、form 存在；不能在表单提交时误选旁边的其它筛选输入框。
   const actualSearch = {
@@ -738,7 +735,7 @@ try {
     },
   };
   const form = { querySelectorAll: () => [adjacentFilter, actualSearch] };
-  assert.equal(searchApi.findSearchInput(form), actualSearch,
+  assert.equal(findSearchInput(form), actualSearch,
     '真实 EC 主搜索框在同一 form 含其它输入框时仍必须被识别');
   const destinations = [];
   globalThis.location.href = 'https://ffxiv.eorzeacollection.com/gearsets?search=%E6%97%A7&page=9&filter%5Bjob%5D=PLD';
@@ -748,7 +745,7 @@ try {
     ['冬季', 'Wintertide'], ['冬季宽松直筒裤', 'Wintertide (Culottes)'],
     ['冬季紧身短裙', 'Wintertide (Sheath Skirt)']]) {
     actualSearch.value = zh;
-    assert.equal(searchApi.submitECGearsetsSearch(actualSearch), true, zh + ' 可以触发专用搜索提交');
+    assert.equal(ecStrategy.submit(actualSearch), true, zh + ' 可以触发专用搜索提交');
     assert.equal(destinations.at(-1).searchParams.get('search'), native,
       zh + ' 应提交网站认识的英文标题/公共关键词');
     assert.equal(destinations.at(-1).searchParams.has('page'), false, '搜索重置旧分页');
@@ -756,20 +753,20 @@ try {
       '搜索保留原有筛选条件');
   }
   actualSearch.value = '尚未收录';
-  assert.equal(searchApi.submitECGearsetsSearch(actualSearch), false, '未知中文不能臆造英文关键词');
+  assert.equal(ecStrategy.submit(actualSearch), false, '未知中文不能臆造英文关键词');
   assert.equal(destinations.length, 6, '未知查询不得额外触发提交');
-  assert.equal(searchApi.resolveSearchNative('御敌', true), 'Fending');
-  assert.equal(searchApi.resolveSearchNative('幻境', true), 'Phantom Vision');
-  assert.equal(searchApi.resolveSearchNative('女仆', true), "Loyal Housemaid's",
+  assert.equal(searchController.resolveSearchNative('御敌', true), 'Fending');
+  assert.equal(searchController.resolveSearchNative('幻境', true), 'Phantom Vision');
+  assert.equal(searchController.resolveSearchNative('女仆', true), "Loyal Housemaid's",
     '套装实际标题优先于单件物品的 Maid 模糊回退');
-  assert.equal(searchApi.resolveSearchNative('装束', true), null,
+  assert.equal(searchController.resolveSearchNative('装束', true), null,
     '已命中多个套装却无共同搜索词时，不回退到无关物品');
-  assert.equal(searchApi.resolveSearchNative('装束', false), 'Wrong-Item',
+  assert.equal(searchController.resolveSearchNative('装束', false), 'Wrong-Item',
     '其它页面继续使用原物品搜索回退');
   globalThis.location.pathname = '/glamours';
-  assert.equal(searchApi.isECGearsetsPage(), false);
-  assert.equal(searchApi.resolveSearchNative('测试物品', false), 'Native Test Item');
-  assert.equal(searchApi.resolveSearchNative('御敌', false), null, '非套装页不套用职能搜索映射');
+  assert.equal(ecStrategy.isCatalogPage(), false);
+  assert.equal(searchController.resolveSearchNative('测试物品', false), 'Native Test Item');
+  assert.equal(searchController.resolveSearchNative('御敌', false), null, '非套装页不套用职能搜索映射');
 } finally {
   globalThis.location = originalLocation;
 }

@@ -3,11 +3,11 @@ import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { cacheRegister } from '../core/cache-primitives.js';
 import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_BANNER_RULES, FC_DECOR_HEAD, FC_DECOR_TAIL, FC_ROLE_ZH, FC_SKIP_SEL, FC_WEAPON_CARDS, _fcAcceptNode, _fcJumpClick, _fcJumpName, _fcJumpResolve, _fcCanReplaceAt, _procFCImg, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, bindFCWikiJump, fcBannerMatch, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
+export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_ROLE_ZH, _fcAcceptNode, _fcCanReplaceAt, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
 
 
   // v1.12.3：「・」复合名逐段翻译（ダークマホガニー・スレイヤー → 深红木·制敌）
@@ -576,14 +576,18 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
   ]);
 
-  // 唯一可信的短名称上下文：同站点同详情路径的链接。
-  function fcMatchingSetLink(element, targetPath) {
+  // 无链接时可按页面判断；站外或无法解析的链接不得借用页面上下文。
+  function fcLinkedPath(element) {
     const link = element?.closest?.('a[href]');
-    if (!link) return false;
+    if (!link) return undefined;
     try {
       const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
-      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) && url.pathname === targetPath;
-    } catch { return false; }
+      return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) ? url.pathname : null;
+    } catch { return null; }
+  }
+
+  function fcMatchingSetLink(element, targetPath) {
+    return fcLinkedPath(element) === targetPath;
   }
 
   function fcScopedSetName(name, node = null) {
@@ -708,14 +712,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   function fcSetTitleContext(element, source, path) {
     if (!element?.closest) return false;
     // 首页轮播和相关推荐仅认本站的整套装备详情链接，不推断站外同路径。
-    const link = element.closest('a[href]');
-    if (link) {
-      try {
-        const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
-        if (!/^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname)) return false;
-        if (/^\/equipment\/[^/]+\/?$/u.test(url.pathname)) return true;
-      } catch { return false; }
-    }
+    const linkedPath = fcLinkedPath(element);
+    if (linkedPath === null) return false;
+    if (linkedPath && /^\/equipment\/[^/]+\/?$/u.test(linkedPath)) return true;
     // 系列检索结果的 H4 是卡片套装名，不能扩大到部位检索页。
     if (/^\/equipment_series_search\/?$/u.test(path)) return !!element.closest('h4');
     if (!/^\/equipment\/[^/]+\/?$/u.test(path)) return false;
@@ -839,12 +838,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (!root) return;
       if (root.nodeType === 1 && _fcAcceptNode(root) !== NodeFilter.FILTER_REJECT) _procFCNode(root);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-        acceptNode: _fcAcceptNode,
-      });
-      const batch = [];
-      while (w.nextNode()) batch.push(w.currentNode);
-      for (const n of batch) _procFCNode(n);
+      for (const n of snapshotTranslationNodes(root, _fcAcceptNode)) _procFCNode(n);
       collapseFCHomeHeadings();
     } finally {
       if (isFull) window.__zhixiaFcBusy = false;

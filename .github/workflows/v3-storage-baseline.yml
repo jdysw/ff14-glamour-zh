@@ -9,6 +9,7 @@ on:
       - 'tests/unit/test-shared-candidates.mjs'
       - 'tests/unit/test-pages-assets.mjs'
       - 'build/data/**'
+      - 'src/core/site-config.json'
       - 'data/source/**'
       - 'data/dictionaries/**'
       - '.github/deploy/**'

@@ -59,7 +59,7 @@ data/dictionaries/     人工维护的界面词典
 src/main.js            userscript 入口
 src/core/              共享运行时、翻译与搜索
 src/core/data/         词库、缓存读写和 V3 协议
-src/sites/             站点适配器（八个启用的幻化站与灰机 wiki；保留停用适配源码）
+src/sites/             站点适配器（八个启用的幻化站与灰机 wiki）
 build/userscript/      脚本打包、版本同步与构建校验
 build/data/            源数据维护、V3 生成与 Pages 组装
 .github/workflows/     测试、发布与数据站部署

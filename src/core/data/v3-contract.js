@@ -1,29 +1,25 @@
 // V3 文件路径、元数据与站点需求的纯契约：不读取网络、存储或 DOM。
-import { DATA_POLICIES } from '../site-policy.js';
-export { requiredV3Files, validV3FileMeta, validV3Manifest };
+import { DATA_POLICIES, V3_FILE_TYPES } from '../site-policy.js';
+export { requiredV3Files, validV3FileMeta, validV3Manifest, v3FileUrl };
 
-// 允许的文件类型必须与 Python 生成器 build/data/make-runtime-data.py 一致。
-const V3_FILE_TYPES = Object.freeze({
-  names: 'tsv', hash: 'tsv', alias: 'tsv', dup: 'tsv',
-  ecid: 'tsv', ko: 'tsv', series: 'txt', acl: 'txt',
-});
 const MAX_V3_FILE_BYTES = 64 * 1024 * 1024;
 
 function requiredV3Files(site) {
-  const required = [];
-  if (site?.indexes?.includes('nameMap')) required.push('names', 'alias', 'dup');
-  if (site?.indexes?.includes('itemHash')) required.push('hash');
-  if (site?.indexes?.includes('ecidMap')) required.push('ecid');
-  if (site?.indexes?.includes('koByZh')) required.push('ko');
-  if (site?.tables?.includes('series')) required.push('series');
-  if (site?.tables?.includes('acl')) required.push('acl');
-  return required;
+  return site?.files?.slice() || [];
+}
+
+// 清单校验与文件加载必须使用相同的已发布路径。
+function v3FileUrl(name, siteId) {
+  if (name === 'dict') return 'dict.json';
+  if (name === 'itemIds') return siteId + '/item-ids.tsv';
+  const extension = Object.hasOwn(V3_FILE_TYPES, name) && V3_FILE_TYPES[name];
+  return extension ? siteId + '/' + name + '.' + extension : null;
 }
 
 // URL 必须是生成器输出的精确站点相对路径，禁止目录回退、查询参数和额外文件。
 function validV3FileMeta(meta, expectedUrl) {
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
-  if (meta.url !== expectedUrl || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return false;
+  if (!expectedUrl || meta.url !== expectedUrl || !/^[a-f0-9]{64}$/i.test(meta.sha256 || '')) return false;
   return Number.isSafeInteger(meta.bytes)
     && meta.bytes >= 0 && meta.bytes <= MAX_V3_FILE_BYTES;
 }
@@ -34,11 +30,8 @@ function validV3SiteFiles(siteId, entry, policy) {
   const required = new Set(requiredV3Files(policy));
   const files = Object.entries(entry.files);
   if (files.length !== required.size) return false;
-  return files.every(([name, meta]) => {
-    const extension = V3_FILE_TYPES[name];
-    return required.has(name) && !!extension
-      && validV3FileMeta(meta, siteId + '/' + name + '.' + extension);
-  });
+  return files.every(([name, meta]) =>
+    required.has(name) && validV3FileMeta(meta, v3FileUrl(name, siteId)));
 }
 
 // 当前清单必须声明唯一共享词典及完整文件元数据。
@@ -46,7 +39,7 @@ function validV3Shared(shared) {
   if (!shared || typeof shared !== 'object' || Array.isArray(shared)) return false;
   const keys = Object.keys(shared);
   return keys.length === 1 && keys[0] === 'dict'
-    && validV3FileMeta(shared.dict, 'dict.json');
+    && validV3FileMeta(shared.dict, v3FileUrl('dict'));
 }
 
 function validV3Manifest(man) {
@@ -59,6 +52,6 @@ function validV3Manifest(man) {
     const policy = policies.get(siteId);
     return !!policy && validV3SiteFiles(siteId, entry, policy)
       && (entry.itemIds === undefined || (requiredV3Files(policy).includes('names')
-        && validV3FileMeta(entry.itemIds, siteId + '/item-ids.tsv')));
+        && validV3FileMeta(entry.itemIds, v3FileUrl('itemIds', siteId))));
   }) && validV3Shared(man.shared);
 }

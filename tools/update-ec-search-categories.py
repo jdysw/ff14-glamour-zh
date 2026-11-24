@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src/core/chinese-search.js"
+SOURCE = ROOT / "src/core/search-equipment-categories.js"
 BEGIN = "// BEGIN GENERATED EC SEARCH CATEGORIES — tools/update-ec-search-categories.py"
 END = "// END GENERATED EC SEARCH CATEGORIES"
 
@@ -91,31 +91,19 @@ def compact_names(names):
 
 
 def render(bardings, faces, accessory_slots):
-    """输出与原 Set 接口兼容的紧凑离线快照，不依赖远程 V3 数据。"""
+    """输出按需解码的紧凑离线快照，不依赖远程 V3 数据。"""
     js = lambda obj: json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
-    slot_js = ",".join(js(kind) + ":new Set(decodeEcNativeNames(" + js(compact_names(names)) + "))"
+    slot_js = ",".join(js(kind) + ":" + js(compact_names(names))
                        for kind, names in accessory_slots.items())
     return ("// EC 分类严格取自游戏数据表，不从名称模糊推断。\n"
             "// 鸟甲：Item.csv 的 ItemAction 对应 Action=1013，包含 Shaffron、Harness。\n"
             "// 面饰：Glasses.csv 按 Style 去重，再依据记录 ID 对应国服名称。\n"
             "// 饰品：Item.csv 的 EquipSlotCategory 为 9/10/11/12。\n"
             "// 面饰来自独立数据表，不能当作头部防具。\n"
-            "// 相邻名称按共同前缀长度（36 进制）与剩余后缀储存，仅在加载时解码。\n"
-            "function decodeEcNativeNames(packed) {\n"
-            "  const out = [];\n"
-            "  let previous = '';\n"
-            "  for (const row of packed.split('\\n')) {\n"
-            "    const separator = row.indexOf(':');\n"
-            "    const prefix = Number.parseInt(row.slice(0, separator), 36);\n"
-            "    const name = previous.slice(0, prefix) + row.slice(separator + 1);\n"
-            "    out.push(name);\n"
-            "    previous = name;\n"
-            "  }\n"
-            "  return out;\n"
-            "}\n"
-            + "const EC_BARDING_NATIVES = new Set(decodeEcNativeNames(" + js(compact_names(bardings)) + "));\n"
+            "// 相邻名称按共同前缀长度（36 进制）与剩余后缀储存，使用时再解码。\n"
+            + "const EC_BARDING_PACKED = " + js(compact_names(bardings)) + ";\n"
             + "const EC_FACEWEAR_ROWS = Object.freeze(" + js(faces) + ");\n"
-            + "const EC_ACCESSORY_SLOT_NATIVES = Object.freeze({" + slot_js + "});\n")
+            + "const EC_ACCESSORY_PACKED = Object.freeze({" + slot_js + "});\n")
 
 
 

@@ -26,6 +26,7 @@ const result = spawnSync(process.execPath, [
   'tests/unit/test-native-probe.test.mjs',
   'tests/unit/test-native-search-ui.test.mjs',
   'tests/unit/test-native-ec.test.mjs',
+  'tests/unit/test-data-refresh.mjs',
 ], { cwd: root, stdio: 'inherit' });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status || 1);
@@ -43,6 +44,8 @@ const required = [
   'src/core/data/v3-contract.js',
   'src/core/data/dict-contract.js',
   'src/core/data/data-manager.js',
+  'src/core/data/v3-loader.js',
+  'src/core/data/v3-payload.js',
 ];
 for (const source of required) {
   const section = records.find(part => part.split('\n').some(line => line.replaceAll('\\', '/').trim() === 'SF:' + source));
