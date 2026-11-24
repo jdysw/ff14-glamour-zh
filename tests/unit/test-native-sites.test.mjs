@@ -318,7 +318,7 @@ import {
   tr, trNode, trEl, translateMirapriTitle,
 } from '../../src/sites/mirapri.js';
 import {
-  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem,
+  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage,
 } from '../../src/sites/ronka.js';
 import {
   _trEndClosetDye, _trEndClosetItem, trEndCloset,
@@ -626,6 +626,51 @@ test('Ronka 实体翻译：韩文补丁前缀和装备标记', () => {
   assert.equal(p.getAttribute('title'), '点击查看灰机 wiki 物品页');
   markRonkaItem(node, '测试中文装备');
   trimRonkaNode({ nodeValue: source, parentElement: element('SPAN') });
+
+  const globals = ['document', 'location', 'NodeFilter', 'MutationObserver'];
+  const previous = Object.fromEntries(globals.map(key => [key, globalThis[key]]));
+  const dom = new TestWindow({url:'https://lookbook.ronkacloset.com/about'});
+  const guide = 'https://guide.ff14.co.kr/lodestone/search?keyword=경비원 권총집 조끼';
+  try {
+    for (const key of globals) globalThis[key] = dom[key];
+    assert.equal(_applyV3({ candidatePolicy: 1, names: '경비원 권총집 조끼\t保镖枪带背心\t1\t1' }), true);
+    const doc = dom.document;
+    doc.body.innerHTML = '<div class="rule-list-wrap"><ul>'
+      + '<li>반드시 <strong>파이널판타지14 게임 내 배경</strong>을 사용해야 합니다.</li>'
+      + '<li>게시물 중<!-- --> <a href="https://www.ff14.co.kr/support/policy">파이널판타지14 운영정책</a> <!-- -->제7.4항 에 해당하는 ‘홈페이지 제재 항목’ 대상의 경우 작성자에게 사전통지 없이 해당 게시물을 삭제할 수 있으며, 이를 작성한 계정은 경고 1회 후 게시글 삭제</li>'
+      + '</ul></div><p class="post-title">코디아이템</p><img class="post-image" alt="코디아이템">'
+      + '<div class="item-searcher"><div class="post-item-information"><p>경비원 권총집 조끼</p></div>'
+      + '<div class="post-search-modal"><a href="' + guide + '">공식 가이드</a></div></div>';
+    const policy = doc.querySelector('.rule-list-wrap a');
+    const reinserted = policy.parentElement.cloneNode(true);
+    const emphasis = doc.querySelector('.rule-list-wrap strong');
+    translateRonkaPage();
+    translateRonkaPage();
+    assert.equal(doc.querySelector('.rule-list-wrap a'), policy);
+    assert.equal(policy.getAttribute('href'), 'https://www.ff14.co.kr/support/policy');
+    assert.match(policy.parentElement.textContent, /^如帖子属于《最终幻想14运营政策》第 7\.4 条/u);
+    assert.equal(doc.querySelector('.rule-list-wrap strong'), emphasis);
+    assert.equal(emphasis.parentElement.textContent, '必须使用最终幻想14游戏内背景。');
+    const itemWiki = doc.querySelector('.post-search-modal a');
+    assert.ok(itemWiki.href.endsWith(encodeURIComponent('保镖枪带背心')));
+    assert.equal(itemWiki.textContent, '灰机 wiki');
+    assert.equal(doc.querySelector('.post-item-information p').dataset.zhxItem, '保镖枪带背心');
+    assert.equal(doc.querySelector('.post-title').textContent, '코디아이템');
+    assert.equal(doc.querySelector('.post-image').alt, '코디아이템');
+    policy.parentElement.replaceWith(reinserted);
+    const restoredPolicy = reinserted.querySelector('a');
+    translateRonkaPage(restoredPolicy.firstChild);
+    assert.equal(reinserted.querySelector('a'), restoredPolicy);
+    assert.equal(restoredPolicy.href, policy.href);
+    assert.equal(restoredPolicy.textContent, '最终幻想14运营政策');
+  } finally {
+    _applyV3({ candidatePolicy: 1 });
+    cacheReset('lookup');
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    dom.close();
+  }
 });
 
 test('End Closet 实体翻译：英文统计、属性和装备标记', () => {

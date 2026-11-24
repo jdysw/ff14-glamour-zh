@@ -75,7 +75,7 @@ export function isAuthoredContent(element, site) {
   if (!element) return false;
   if (element.closest('.post-item-information,.item-color-information,.item-image,a.eorzeadb_link')) return false;
   if (element.closest(AUTHORED)) return true;
-  if (site === 'ronka') return !!element.closest('.post-subtitle-box a');
+  if (site === 'ronka') return !!element.closest('.post-subtitle-box a, .post-image, a.post-sns');
   if (site === 'endcloset') return isEndClosetAuthored(element);
   if (site === 'ec') return isECAuthoredContent(element);
   return site === 'miramiru' && isMiramiruAuthored(element);
