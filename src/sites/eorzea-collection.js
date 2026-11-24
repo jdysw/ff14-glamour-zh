@@ -825,7 +825,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       if (walker.currentNode.nodeValue?.trim()) nodes.push(walker.currentNode);
     }
     if (!nodes.length) return;
-    nodes[0].nodeValue = nodes[0].nodeValue.replace(/\S[\s\S]*$/u, text);
+    const leading = nodes[0].nodeValue;
+    nodes[0].nodeValue = leading.slice(0, leading.length - leading.trimStart().length) + text;
     for (const node of nodes.slice(1)) node.nodeValue = '';
   }
 
