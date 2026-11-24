@@ -159,12 +159,13 @@ console.log('\n── B3：倒排索引保持匹配、排序和局部词提取�
  entries['rare-middle'] = '金色幻华发带';
  entries['rare-tail'] = '典藏幻华';
  entries['rare-unrelated'] = '魔法之光';
- for (const native of ['rare-head', 'rare-middle', 'rare-tail', 'rare-unrelated']) glam[native] = '1';
- const aliasMap = { '幻华披肩': ['幻华长袍'], '高阶幻华长袍': ['幻华长袍'], '与幻华无关': ['魔法之光'] };
+ entries['repeat-gram'] = '星星星星斗篷';
+ for (const native of ['rare-head', 'rare-middle', 'rare-tail', 'rare-unrelated', 'repeat-gram']) glam[native] = '1';
+ const aliasMap = { '幻华披肩': ['幻华长袍'], '高阶幻华长袍': ['幻华长袍'], '与幻华无关': ['魔法之光'], '星星星别名': ['星星星星斗篷'] };
  const api = buildResolver(mkEnv({ nameMap: entries, glamMap: glam, aliasMap }));
  for (const kind of [0, 1]) {
    const keys = api.__allKeys(kind);
-   for (const query of ['幻华', '幻华长袍', '金色幻华', '典藏幻华', '无此关键字', '装备00', '幻华无关']) {
+   for (const query of ['幻华', '幻华长袍', '金色幻华', '典藏幻华', '无此关键字', '装备00', '幻华无关', '星星', '星星星']) {
      const actual = api.__indexedCandidates(query, kind).filter(k => k.includes(query));
      const baseline = keys.filter(k => k.includes(query));
      eq('双字倒排结果与全量扫描严格等价 ' + kind + ':' + query,

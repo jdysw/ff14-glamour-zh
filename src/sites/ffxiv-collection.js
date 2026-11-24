@@ -8,7 +8,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { lookupJp2Zh, lookupSeries } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
-export { aclStandaloneSetName, ACL_DECOR_HEAD, ACL_DECOR_TAIL, ACL_SET_RE, ACL_SKIP_SEL, _aclAcceptNode, _aclItemNameEl, _aclSwapIcon, _aclZhName, _procACLNode, _trACLLabel, _trACLGearsetAlt, _trACLCfc, _trACLExact, _trACLItem, _trACLSet, lookupAclCfc, markACLItem, replaceACLLodestone, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
+export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACLGearsetAlt, _trACLExact, _trACLSet, startACL, trACL, translateACLPage, translateACLTitle, trimACLNode };
 
 
   /* ===================================================================== */

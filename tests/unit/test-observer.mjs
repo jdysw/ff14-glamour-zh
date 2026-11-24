@@ -257,7 +257,7 @@ console.log('\n── E3：独立 characterData 队列同样受上限约束 ─�
   const env = makeEnv();
   const api = buildObs(env);
   const seen = [];
-  api.createObserver({ characterData: true, floodLimit: 2,
+  api.createObserver({ characterData: true, attributes: true, floodLimit: 2,
     handler: (nodes, cds) => seen.push({ nodes, cds }) });
   const mo = FakeMO.last;
   const muts = Array.from({ length: 6 }, () => ({
@@ -267,6 +267,12 @@ console.log('\n── E3：独立 characterData 队列同样受上限约束 ─�
   runTimer();
   eq('仅 characterData 也折叠为根补扫',
     seen[0].nodes.length === 1 && seen[0].nodes[0] === mo.root && seen[0].cds.length === 0, true);
+  mo.trigger(muts.slice(0, 3));
+  mo.trigger([{ type: 'attributes', target: mkNode() },
+    { type: 'childList', addedNodes: [mkNode()] }]);
+  runTimer();
+  eq('属性、增量节点和文本共用容量而不合并处理通道',
+    seen[1].nodes.length === 1 && seen[1].nodes[0] === mo.root && seen[1].cds.length === 0, true);
 }
 
 console.log('\n── E4：disconnect 后取消已经排队的回调 ──');

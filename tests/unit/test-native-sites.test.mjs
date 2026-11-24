@@ -254,6 +254,33 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(document.querySelector('.text-shimmer'), visibleBrand);
     assert.equal(document.querySelector('.sr-only'), subtitle);
 
+    document.body.innerHTML = '<div role="dialog"><button id="dialog-job" title="Paladin"><span> PLD </span></button>'
+      + '<button id="custom-tag" title="PLD"><span data-slot="badge">#PLD</span></button></div>'
+      + '<button id="ordinary-job"><span> PLD </span></button>';
+    const job = document.getElementById('dialog-job');
+    const jobText = job.querySelector('span').firstChild;
+    translateMiramiruPage(jobText);
+    assert.equal(job.getAttribute('title'), '骑士');
+    assert.equal(jobText.nodeValue, ' 骑士 ');
+    jobText.nodeValue = ' 戦 ';
+    translateMiramiruPage();
+    assert.equal(job.getAttribute('title'), '战士');
+    assert.equal(jobText.nodeValue, ' 战士 ');
+    assert.equal(document.getElementById('ordinary-job').textContent, ' PLD ');
+    assert.equal(document.getElementById('custom-tag').textContent, '#PLD');
+
+    const filter = document.querySelector('[role="dialog"]');
+    const input = document.createElement('input');
+    input.setAttribute('role', 'combobox');
+    input.placeholder = '頭の装備を検索';
+    filter.append(input);
+    translateMiramiruPage(input);
+    assert.equal(input.dataset.zhxMiramiruSlot, '0');
+    filter.removeChild(input);
+    document.body.append(input);
+    translateMiramiruPage(input);
+    assert.equal(input.dataset.zhxMiramiruSlot, undefined);
+
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();

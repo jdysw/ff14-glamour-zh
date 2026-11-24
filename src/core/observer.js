@@ -65,43 +65,33 @@ function observeBeforePaint(selector, translate, attributes = []) {
       pendingCD = [];
       collapsed = true;
     };
-    const queueNode = (n) => {
-      if (!n || collapsed) return;
-      pending.push(n);
+    const enqueue = (queue, node) => {
+      if (!node) return;
+      queue.push(node);
       if (pending.length + pendingCD.length > maxPending) collapse();
     };
-    const queueCD = (n) => {
-      if (!n || collapsed) return;
-      pendingCD.push(n);
-      if (pending.length + pendingCD.length > maxPending) collapse();
-    };
-    const queueCharacterData = (mutation) => {
-      if (!o.characterData || (o.filter && !o.filter(mutation))) return false;
-      queueCD(mutation.target);
-      return true;
-    };
-    const queueAttribute = (mutation) => {
-      if (!o.filter || o.filter(mutation)) queueNode(mutation.target);
+    const queueFiltered = (queue, mutation) => {
+      if (!o.filter || o.filter(mutation)) enqueue(queue, mutation.target);
     };
     const queueAdded = (mutation) => {
-      for (const n of mutation.addedNodes) {
-        if (n.nodeType === 1 || n.nodeType === 3) queueNode(n);
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === 1 || node.nodeType === 3) enqueue(pending, node);
         if (collapsed) break;
       }
     };
     const collectMuts = (muts) => {
-      let hitCD = false;
       for (const m of muts) {
         if (collapsed) break;
-        if (m.type === 'characterData') hitCD = queueCharacterData(m) || hitCD;
-        else if (m.type === 'attributes') queueAttribute(m);
-        else queueAdded(m);
+        switch (m.type) {
+          case 'characterData': if (o.characterData) queueFiltered(pendingCD, m); break;
+          case 'attributes': queueFiltered(pending, m); break;
+          default: queueAdded(m);
+        }
       }
-      return hitCD;
     };
     const mo = new MutationObserver((muts) => {
       if (stopped) return;
-      const hitCD = collectMuts(muts);
+      collectMuts(muts);
       const flood = collapsed || pending.length + pendingCD.length > floodLimit;
       // 洪峰期间最多重新计时一次；若持续重置计时器，
       // 即使队列有大小限制，也会导致处理器长期无法执行。
@@ -110,7 +100,7 @@ function observeBeforePaint(selector, translate, attributes = []) {
         timer = null;
         floodRescheduled = true;
       }
-      if (timer !== null || (!pending.length && !pendingCD.length && !hitCD)) return;
+      if (timer !== null || (!pending.length && !pendingCD.length)) return;
       fastUntil ??= _perfNow() + 600;
       const delay = !flood && _perfNow() < fastUntil ? Math.min(16, debounce) : debounce;
       timer = setTimeout(() => {

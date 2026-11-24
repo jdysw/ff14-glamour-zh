@@ -281,7 +281,7 @@ const NAMES = [
   'SERIES_TEXT', 'ACL_CFC_TEXT',
   'itemHash', 'nameMap', 'ecidMap', 'koByZh',
   'DATA_VER', 'DATA_BASE_V3', '_manifestRefreshRequested', '_manifestNeedsCommit',
-  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files', 'validRuntimeDictionary',
+  'validV3Manifest', 'validV3FileMeta', 'requiredV3Files', 'validRuntimeDictionary', 'parseItemIds',
   'neededTables', '_fireTablesReady',
   'findSitePolicy', 'applyRuntimeDict', '_irAliasMap', '_irDupMap', '_irGlamMap', '_irSearchSlotByNative', '_irCandidatePolicy', '_zhxErr',
   '_replaceMap',
@@ -304,7 +304,7 @@ function makeWorld(over = {}) {
     _manifestRefreshRequested: false, _manifestNeedsCommit: false,
 
     DATA_BASE_V3: 'https://example.test/ff14/v3/',
-    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary,
+    validV3Manifest, validV3FileMeta, requiredV3Files, validRuntimeDictionary, parseItemIds,
     neededTables: () => over.need || ['items', 'dict'],
     _fireTablesReady: () => { rec.fires.push(1); },
     // 数据层只消费纯站点策略，测试桩模拟相同的 id/数据表/索引契约。
@@ -399,15 +399,25 @@ const manText = JSON.stringify(man);
 
 // B2: 零网络快路径（缓存齐全 + manifest 新鲜 → 不发任何请求）
 {
-  const store = { 'zhx.v3.manifest': String(Date.now()) + '\n' + manText };
-  for (const [name, f] of Object.entries(siteFiles)) store['zhx.v3.f.mirapri.' + name + '.' + f.sha256] = f.sha256 + '\n' + f.text;
+  const snapshot = String(Date.now()) + '\n' + manText;
+  const store = { 'zhx.v3.manifest': snapshot, 'zhx.v3.manifest.mirapri': snapshot };
+  const itemIds = man.sites.mirapri.itemIds;
+  for (const [name, f] of Object.entries(siteFiles)) {
+    if (itemIds && name === 'names') continue;
+    store['zhx.v3.f.mirapri.' + name + '.' + f.sha256] = f.sha256 + '\n' + f.text;
+  }
+  if (itemIds) {
+    store['zhx.v3.f.mirapri.itemIds.' + itemIds.sha256] =
+      itemIds.sha256 + '\n' + readFileSync(new URL(itemIds.url, V3_DIR), 'utf8');
+  }
   store['zhx.v3.f.mirapri.dict.' + dictFile.sha256] = dictFile.sha256 + '\n' + dictFile.text;
   const w = makeWorld({ store });
   const dm = buildDM(w);
   const r = await dm._ensureTryV3();
   eq('B9 缓存快路径返回 true', r, true);
+  await new Promise(resolve => setImmediate(resolve));
   eq('B10 快路径零网络请求', w.rec.xhr.length, 0);
-  ok('B11 快路径完成应用', !!dm._peek().nm);
+  eq('B11 快路径完成应用', dm._peek().nm['メイドホワイトブリム'], '女仆发带');
 }
 
 // B3: manifest 获取失败 → false（回退）

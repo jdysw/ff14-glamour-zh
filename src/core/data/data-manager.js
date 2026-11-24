@@ -192,6 +192,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
+  const v3FileCachePrefix = (siteId) => 'zhx.v3.f.' + siteId + '.';
+  const v3FileCacheKey = (siteId, name, fingerprint) => v3FileCachePrefix(siteId) + name + '.' + fingerprint;
+
   async function _v3ReadCachedFile(key, fingerprint) {
     try {
       const raw = await storeGetAsync(key);
@@ -223,8 +226,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     }
   }
 
-  async function _v3FindCachedFile(baseKey, fingerprint, expectedBytes) {
-    const current = await _v3ReadCachedFile(baseKey + '.' + fingerprint, fingerprint);
+  async function _v3FindCachedFile(key, fingerprint, expectedBytes) {
+    const current = await _v3ReadCachedFile(key, fingerprint);
     if (current !== null && await _v3VerifyFile(current, fingerprint, expectedBytes)) return current;
     return null;
   }
@@ -235,9 +238,8 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const filename = name === 'itemIds' ? 'item-ids.tsv' : name + extension;
     const expectedUrl = name === 'dict' ? 'dict.json' : siteId + '/' + filename;
     if (!validV3FileMeta(meta, expectedUrl)) return null;
-    const baseKey = 'zhx.v3.f.' + siteId + '.' + name;
-    const key = baseKey + '.' + meta.sha256;
-    const cached = force ? null : await _v3FindCachedFile(baseKey, meta.sha256, meta.bytes);
+    const key = v3FileCacheKey(siteId, name, meta.sha256);
+    const cached = force ? null : await _v3FindCachedFile(key, meta.sha256, meta.bytes);
     if (cached !== null) {
       _dlStats.cache++;
       if (staged) staged.set(key, meta.sha256 + '\n' + cached);
@@ -276,10 +278,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   // 网络刷新 manifest（每日至多一次探测路径；失败返回 null）
-  function _validV3Manifest(man) {
-    return validV3Manifest(man);
-  }
-
   async function _requestV3Manifest() {
     let txt = null;
     try { txt = await httpGet(DATA_BASE_V3 + 'manifest.json', 10000, { fresh: true }); }
@@ -287,7 +285,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (typeof txt !== 'string' || !txt) return null;
     try {
       const manifest = JSON.parse(txt);
-      if (_validV3Manifest(manifest)) return manifest;
+      if (validV3Manifest(manifest)) return manifest;
     } catch (e) { /* manifest 解析或 schema/policy 校验失败 */ }
     return false;
   }
@@ -303,7 +301,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   }
 
   function _freshV3Manifest(snapshot) {
-    return snapshot.manT > 0 && Date.now() - snapshot.manT < DAY_MS && _validV3Manifest(snapshot.man);
+    return snapshot.manT > 0 && Date.now() - snapshot.manT < DAY_MS && validV3Manifest(snapshot.man);
   }
 
   // 缓存优先 → 必要时网络（站点是否在列由 _ensureTryV3 统一判断）
@@ -316,18 +314,16 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const latest = await fetchManifest();
     if (latest === false) return null;
     if (latest) return latest;
-    return _validV3Manifest(c.man) ? c.man : null;
+    return validV3Manifest(c.man) ? c.man : null;
   }
 
   // 站点文件并行获取（含共享词库）
   async function fetchStationFiles(siteId, names, sm, sharedDict, force = false, staged = null, networkAllowed = true) {
     const files = {};
-    const jobs = names.map((n) => _v3FetchFile(siteId, n, sm[n], force, staged, networkAllowed)
-      .then((t) => { files[n] = t; }, () => { files[n] = null; }));
-    if (sharedDict) {
-      jobs.push(_v3FetchFile(siteId, 'dict', sharedDict, force, staged, networkAllowed)
-        .then((t) => { files.dict = t; }, () => { files.dict = null; }));
-    }
+    const fetchOne = (name, meta) => _v3FetchFile(siteId, name, meta, force, staged, networkAllowed)
+      .then((text) => { files[name] = text; }, () => { files[name] = null; });
+    const jobs = names.map((name) => fetchOne(name, sm[name]));
+    if (sharedDict) jobs.push(fetchOne('dict', sharedDict));
     await Promise.all(jobs);
     return files;
   }
@@ -335,10 +331,6 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function allFilesReady(names, files, sharedDict) {
     for (const n of names) { if (files[n] == null) return false; }
     return !(sharedDict && files.dict == null);
-  }
-
-  function _requiredV3Files(site) {
-    return requiredV3Files(site);
   }
 
   // v3 主流程：manifest（24h 缓存）→ 站点文件（缓存优先）→ 应用。
@@ -358,59 +350,34 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     return true;
   }
 
-  function _v3SiteCacheKeepKeys(siteId, manifest) {
-    const keys = new Set();
-    const files = manifest?.sites?.[siteId]?.files || {};
-    for (const [name, meta] of Object.entries(files)) {
-      if (meta?.sha256) keys.add('zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256);
-    }
-    const itemIds = manifest?.sites?.[siteId]?.itemIds;
-    if (itemIds?.sha256) keys.add('zhx.v3.f.' + siteId + '.itemIds.' + itemIds.sha256);
-    const dict = manifest?.shared?.dict;
-    if (dict?.sha256) keys.add('zhx.v3.f.' + siteId + '.dict.' + dict.sha256);
-    return keys;
+  function _v3SiteCacheKeys(siteId, manifest) {
+    const site = manifest?.sites?.[siteId];
+    const entries = Object.entries(site?.files || {});
+    entries.push(['itemIds', site?.itemIds], ['dict', manifest?.shared?.dict]);
+    return new Set(entries.filter(([, meta]) => meta?.sha256)
+      .map(([name, meta]) => v3FileCacheKey(siteId, name, meta.sha256)));
   }
 
-  function _v3SiteCacheStaleFromList(siteId, keep, listed) {
-    const prefix = 'zhx.v3.f.' + siteId + '.';
-    return new Set(listed.filter((key) => key.startsWith(prefix) && !keep.has(key)));
-  }
-
-  function _v3SiteCacheStaleFromManifest(siteId, previousManifest, currentManifest) {
-    const stale = new Set();
-    const oldFiles = previousManifest?.sites?.[siteId]?.files || {};
-    const currentFiles = currentManifest?.sites?.[siteId]?.files || {};
-    for (const [name, meta] of Object.entries(oldFiles)) {
-      const current = currentFiles[name];
-      if (current && current.sha256 === meta?.sha256) continue;
-      if (meta?.sha256) stale.add('zhx.v3.f.' + siteId + '.' + name + '.' + meta.sha256);
-    }
-    const oldDict = previousManifest?.shared?.dict;
-    const oldItemIds = previousManifest?.sites?.[siteId]?.itemIds;
-    if (oldItemIds?.sha256 && oldItemIds.sha256 !== currentManifest?.sites?.[siteId]?.itemIds?.sha256)
-      stale.add('zhx.v3.f.' + siteId + '.itemIds.' + oldItemIds.sha256);
-    const currentDict = currentManifest?.shared?.dict;
-    if (oldDict?.sha256 && oldDict.sha256 !== currentDict?.sha256) {
-      stale.add('zhx.v3.f.' + siteId + '.dict.' + oldDict.sha256);
-    }
-    return stale;
+  function _deleteStaleV3Files(siteId, previousManifest, currentManifest, listed = null) {
+    const keep = _v3SiteCacheKeys(siteId, currentManifest);
+    const prefix = v3FileCachePrefix(siteId);
+    const candidates = Array.isArray(listed)
+      ? new Set(listed.filter(key => key.startsWith(prefix)))
+      : _v3SiteCacheKeys(siteId, previousManifest);
+    return Promise.all([...candidates].filter(key => !keep.has(key)).map(key => storeDeleteAsync(key)));
   }
 
   async function _pruneV3SiteCache(siteId, previousManifest, currentManifest) {
-    const keep = _v3SiteCacheKeepKeys(siteId, currentManifest);
     let listed = null;
     try { listed = await storeListAsync(); } catch (e) { listed = null; }
-    const stale = Array.isArray(listed)
-      ? _v3SiteCacheStaleFromList(siteId, keep, listed)
-      : _v3SiteCacheStaleFromManifest(siteId, previousManifest, currentManifest);
-    await Promise.all([...stale].map((key) => storeDeleteAsync(key)));
+    await _deleteStaleV3Files(siteId, previousManifest, currentManifest, listed);
   }
 
   function _manifestSiteFiles(manifest, site, need) {
     const sm = manifest?.sites?.[site.id]?.files;
     if (!sm || typeof sm !== 'object') return null;
     const names = Object.keys(sm);
-    const required = _requiredV3Files(site);
+    const required = requiredV3Files(site);
     if (!names.length || required.some((name) => !sm[name])) return null;
     const sharedDict = (need.includes('dict') && manifest.shared?.dict) || null;
     if (need.includes('dict') && !sharedDict) return null;
@@ -422,9 +389,9 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
       readCachedManifest(siteId),
       readCachedManifest(),
     ]);
-    const siteSnapshotValid = _validV3Manifest(siteSnapshot.man);
+    const siteSnapshotValid = validV3Manifest(siteSnapshot.man);
     const previous = siteSnapshotValid ? siteSnapshot : globalSnapshot;
-    return { siteSnapshot, siteSnapshotValid, globalSnapshot, previous, previousValid: _validV3Manifest(previous.man) };
+    return { siteSnapshot, siteSnapshotValid, globalSnapshot, previous, previousValid: validV3Manifest(previous.man) };
   }
 
   async function _selectV3Manifest(force, refreshManifest, snapshots) {
@@ -433,7 +400,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     const pinnedNewer = siteSnapshotValid && siteSnapshot.manT > globalSnapshot.manT;
     const canUseSiteCache = !force && !_manifestRejected && siteSnapshotValid;
     if (canUseSiteCache && (!manifest || (pinnedNewer && !_manifestNeedsCommit))) manifest = siteSnapshot.man;
-    return _validV3Manifest(manifest) ? manifest : null;
+    return validV3Manifest(manifest) ? manifest : null;
   }
 
   async function _readV3Bundle(site, manifest, need, force, staged, networkAllowed) {
@@ -455,7 +422,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   async function _tryV3Bundle(site, manifest, need, force, staged, networkAllowed, generation = _ensureGeneration) {
     const files = await _readV3Bundle(site, manifest, need, force, staged, networkAllowed);
     if (!files || generation !== _ensureGeneration) return null;
-    return _applyV3(files) ? { files } : null;
+    return _applyV3(files);
   }
 
   async function _tryV3WithCachedFallback(site, manifest, need, force, snapshots, staged, generation = _ensureGeneration) {
@@ -511,8 +478,7 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
     if (!await _commitV3Bundle(staged, manifest, site.id, true, !globalFresh, canPublish)) return;
     if (!await canPublish()) return;
     // 仅淘汰已知旧清单的文件，避免误删其他页面刚写入的文件。
-    const stale = _v3SiteCacheStaleFromManifest(site.id, snapshots.previous.man, manifest);
-    await Promise.all([...stale].map(key => storeDeleteAsync(key)));
+    await _deleteStaleV3Files(site.id, snapshots.previous.man, manifest);
   }
 
   function _recordV3Ready(manifest, origin) {
@@ -743,14 +709,12 @@ export { DATA_TEXT, DATA_VER, _applyV3, _dlStats, _ensureFinalize, _ensureMain, 
   function _irSearchBuildGramIndex(kind) {
     const index = new Map();
     for (const name of _getIrSearchKeysByKind(kind)) {
-      const seen = new Set();
       for (let pos = 0; pos + 1 < name.length; pos++) {
         const gram = name.slice(pos, pos + 2);
-        if (seen.has(gram)) continue;
-        seen.add(gram);
-        let bucket = index.get(gram);
-        if (!bucket) { bucket = []; index.set(gram, bucket); }
-        bucket.push(name);
+        const bucket = index.get(gram);
+        // 同一个名称的双字组连续入桶，末项相同即为重复，无需为每个名称建 Set。
+        if (!bucket) index.set(gram, [name]);
+        else if (bucket[bucket.length - 1] !== name) bucket.push(name);
       }
     }
     _irSearchGramIndex[kind] = index;

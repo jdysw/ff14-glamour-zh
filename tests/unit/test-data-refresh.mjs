@@ -139,7 +139,11 @@ async function waitFor(condition) {
     }
     return network(() => 2)(url);
   });
-  seedExpired(store, makeBundle(1));
+  const older = makeBundle(1);
+  const staleKey = 'zhx.v3.f.mirapri.names.' + older.manifest.sites.mirapri.files.names.sha256;
+  const unrelatedKey = 'zhx.v3.f.ec.names.' + older.manifest.sites.mirapri.files.names.sha256;
+  seedExpired(store, older);
+  store.set(unrelatedKey, '其他站点的缓存');
   const statuses = [];
   api.onTablesReady(status => statuses.push(status));
   await api.ensureTables();
@@ -151,7 +155,8 @@ async function waitFor(condition) {
   await waitFor(() => waitingForNames);
   assert.equal(cachedVersion(store), 'unit-v1', '未收齐新版文件时必须保留旧清单');
   namesGate.resolve(newer.files.names);
-  await waitFor(() => cachedVersion(store) === 'unit-v2');
+  await waitFor(() => cachedVersion(store) === 'unit-v2' && !store.has(staleKey));
+  assert.equal(store.get(unrelatedKey), '其他站点的缓存');
   assert.equal(statuses.length, 1, '后台更新不应触发当前页重翻');
   assert.equal(api.resolveByName('English One'), '中文甲');
 

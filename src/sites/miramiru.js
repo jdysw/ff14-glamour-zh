@@ -71,27 +71,29 @@ function translateMiramiruLink(element) {
     delete element.dataset.zhxMiramiruZh;
     element.dataset.zhxMiramiruHref = href;
   }
-  const name = element.querySelector('img[alt]')?.getAttribute('alt');
+  const name = hash ? element.querySelector('img[alt]')?.getAttribute('alt') : null;
   const zh = (hash && (resolveByHash(hash) || resolveByName(name))) || element.dataset.zhxMiramiruZh;
   if (!zh) return;
   if (hash && name) element.dataset.zhxMiramiruName = name;
-  element.dataset.zhxMiramiruZh = zh;
+  if (element.dataset.zhxMiramiruZh !== zh) element.dataset.zhxMiramiruZh = zh;
   const wiki = WIKI_ITEM + encodeURIComponent(zh);
   if (href !== wiki) element.setAttribute('href', wiki);
   const title = '查看灰机 Wiki：' + zh;
   if (element.getAttribute('title') !== title) element.setAttribute('title', title);
 }
 
+const MIRAMIRU_SLOT_GROUPS = {
+  '头部': 0, '身体': 1, '手部': 2, '腿部': 3, '脚部': 4, '主手': 5, '副手': 5,
+  '耳饰': 'ears', '项链': 'neck', '手镯': 'wrists', '戒指': 'rings', '右戒指': 'rings', '左戒指': 'rings',
+  '时尚配饰': 5, '面部配饰': 5,
+};
+
 function markMiramiruSearchInput(element) {
-    const hint = element.getAttribute('placeholder') || '';
-    const slot = /^搜索(.+)装备$/.exec(trMiramiru(hint));
-    const groups = { '头部': 0, '身体': 1, '手部': 2, '腿部': 3, '脚部': 4, '主手': 5, '副手': 5,
-      '耳饰': 'ears', '项链': 'neck', '手镯': 'wrists', '戒指': 'rings', '右戒指': 'rings', '左戒指': 'rings',
-      '时尚配饰': 5, '面部配饰': 5 };
-    if (element.getAttribute('role') === 'combobox' && slot && Object.hasOwn(groups, slot[1]) && element.closest('[role="dialog"]')) {
-      const group = groups[slot[1]];
-      element.dataset.zhxMiramiruSlot = String(group);
-    } else delete element.dataset.zhxMiramiruSlot;
+  const hint = element.getAttribute('placeholder') || '';
+  const slot = /^搜索(.+)装备$/.exec(trMiramiru(hint));
+  if (element.getAttribute('role') === 'combobox' && slot && Object.hasOwn(MIRAMIRU_SLOT_GROUPS, slot[1]) && element.closest('[role="dialog"]')) {
+    element.dataset.zhxMiramiruSlot = String(MIRAMIRU_SLOT_GROUPS[slot[1]]);
+  } else delete element.dataset.zhxMiramiruSlot;
 }
 
 function translateMiramiruAttributes(element) {
@@ -125,6 +127,17 @@ function translateMiramiruTagline(source) {
   return source.replace(/FFXIV (?:Glamour Showcase|Mirapuri Showcase|ミラプリ紹介サイト|투영 소개 사이트)/gu, 'FF14 幻化展示');
 }
 
+function translateMiramiruDialogJob(raw, element) {
+  const button = element.closest('[role="dialog"] button');
+  if (!button) return null;
+  const key = raw.trim();
+  const job = knownMiramiruText('job:' + key);
+  if (!job) return null;
+  const title = knownMiramiruText('job-title:' + key);
+  if (title && button.getAttribute('title') !== title) button.setAttribute('title', title);
+  return raw.replace(key, job);
+}
+
 function translateMiramiruText(raw, element) {
   // The visible brand spans are separate from the screen-reader subtitle.
   if (element.classList?.contains('sr-only') && element.parentElement?.tagName === 'H1'
@@ -136,15 +149,8 @@ function translateMiramiruText(raw, element) {
   const officialTag = isMiramiruOfficialTag(element);
   const badge = element.closest('[data-slot="badge"],[role="option"] .truncate');
   if (badge?.textContent.trim().startsWith('#') && !officialTag) return raw;
-  const jobButton = element.closest('[role="dialog"] button');
-  if (jobButton) {
-    const job = knownMiramiruText('job:' + raw.trim());
-    if (job) {
-      const title = knownMiramiruText('job-title:' + raw.trim());
-      if (title && jobButton.getAttribute('title') !== title) jobButton.setAttribute('title', title);
-      return raw.replace(raw.trim(), job);
-    }
-  }
+  const job = translateMiramiruDialogJob(raw, element);
+  if (job !== null) return job;
   // An equipment hash is authoritative even when international names differ.
   const link = element.closest(ITEM_LINK);
   const trimmed = raw?.trim();

@@ -7,7 +7,7 @@ import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { isAuthoredContent } from '../core/content-scope.js';
-export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAcceptNode, _ronkaAria, _ronkaImgAlt, _ronkaInput, _trRonkaDye, _trRonkaIcon, _trRonkaPatch, markRonkaItem, replaceRonkaLodestone, startRonka, trRonka, translateRonkaPage, translateRonkaRules, translateRonkaTitle, trimRonkaNode };
+export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, translateRonkaPage, translateRonkaTitle, trimRonkaNode };
 
 
   /* ===================================================================== */
@@ -199,7 +199,6 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   }
 
   function _ronkaImgAlt(n) {
-    if (isAuthoredContent(n, 'ronka')) return;
     const alt = n.getAttribute('alt');
     if (alt && alt.length >= 2 && alt.length <= 90) {
       const nn = trRonka(alt);
@@ -217,7 +216,7 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
   function _procRonkaNode(n) {
     if (isAuthoredContent(n.nodeType === 3 ? n.parentElement : n, 'ronka')) return;
     if (n.nodeType === 3) { trimRonkaNode(n); return; }
-    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') { _ronkaInput(n); return; }
+    if (n.tagName === 'INPUT') { _ronkaInput(n); return; }
     if (n.tagName === 'IMG' || n.hasAttribute('alt')) { _ronkaImgAlt(n); return; }
     if (n.hasAttribute?.('aria-label')) _ronkaAria(n);
   }

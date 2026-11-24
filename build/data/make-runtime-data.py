@@ -38,7 +38,6 @@ import datetime
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -306,27 +305,27 @@ def build_files(names, glams, hashes, ali, dup_by_lang, ecid, ko_by_zh, series_t
     out = {}
     slot_names = slot_names or {lang: {} for lang in LANGS}
 
+    shared = {
+        'hash': ('hash.tsv', _join_pairs(hashes.items()).encode('utf-8')),
+        'alias': ('alias.tsv', _join_multi(ali.items()).encode('utf-8')),
+        'ecid': ('ecid.tsv', _join_pairs(ecid.items()).encode('utf-8')),
+        'ko': ('ko.tsv', _join_pairs(ko_by_zh.items()).encode('utf-8')),
+        'series': ('series.txt', series_text.encode('utf-8')),
+        'acl': ('acl.txt', acl_text.encode('utf-8')),
+    }
     for site, want in SITE_FILES.items():
         langs = SITE_LANGS[site]
         for name in want:
             if name == 'names':
-                pairs = _site_name_pairs(site, langs, names, glams, slot_names)
-                out[(site, 'names.tsv')] = _join_triples(pairs).encode('utf-8')
+                filename = 'names.tsv'
+                data = _join_triples(_site_name_pairs(site, langs, names, glams, slot_names)).encode('utf-8')
             elif name == 'dup':
-                pairs = [kv for lang in langs for kv in dup_by_lang[lang].items()]
-                out[(site, 'dup.tsv')] = _join_multi(pairs).encode('utf-8')
-            elif name == 'hash':
-                out[(site, 'hash.tsv')] = _join_pairs(hashes.items()).encode('utf-8')
-            elif name == 'alias':
-                out[(site, 'alias.tsv')] = _join_multi(ali.items()).encode('utf-8')
-            elif name == 'ecid':
-                out[(site, 'ecid.tsv')] = _join_pairs(ecid.items()).encode('utf-8')
-            elif name == 'ko':
-                out[(site, 'ko.tsv')] = _join_pairs(ko_by_zh.items()).encode('utf-8')
-            elif name == 'series':
-                out[(site, 'series.txt')] = series_text.encode('utf-8')
-            else:  # acl
-                out[(site, 'acl.txt')] = acl_text.encode('utf-8')
+                filename = 'dup.tsv'
+                pairs = (kv for lang in langs for kv in dup_by_lang[lang].items())
+                data = _join_multi(pairs).encode('utf-8')
+            else:
+                filename, data = shared[name]
+            out[site, filename] = data
     return out
 
 
@@ -337,23 +336,6 @@ def _parse_args(argv):
         if not out_dir.is_absolute():
             out_dir = ROOT / out_dir
     return out_dir
-
-
-def _gen_dict_bytes(out_dir):
-    """词库（shared）：build/data/make_dict_json.py → dict.json 字节；失败返回 None。"""
-    tmp = out_dir / f'.{DICT_JSON}.tmp'
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run([sys.executable, str(Path(__file__).with_name('make_dict_json.py')), '--out', str(tmp)],
-                       capture_output=True, encoding='utf-8',
-                       env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})
-    if r.returncode == 0 and tmp.exists():
-        data = tmp.read_bytes()
-        tmp.unlink()
-        return data
-    print('✗ dict.json 生成失败')
-    print(r.stdout)
-    print(r.stderr)
-    return None
 
 
 def _write_sites(out_dir, files):
@@ -401,11 +383,16 @@ def main() -> int:
     print(f'  names(en/ja/ko)={len(names["en"])}/{len(names["ja"])}/{len(names["ko"])}  '
           f'hash={len(hashes)}  alias={len(ali)}  dup={dup_total}  ecid={len(ecid)}  ko={len(ko_by_zh)}')
 
-    dict_bytes = _gen_dict_bytes(out_dir)
-    if dict_bytes is None:
+    # Only the CLI assembles the dictionary; data-shape tests import this module alone.
+    from make_dict_json import build_dictionary, encode_dictionary
+    try:
+        dictionary = build_dictionary()
+        dict_bytes = encode_dictionary(dictionary).encode('utf-8')
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(f'✗ dict.json 生成失败: {error}')
         return 1
     # Keep the existing Collection V3 file readable by released userscripts.
-    common = json.loads(dict_bytes)['common']
+    common = dictionary['common']
     duties = {key.removeprefix('duty:'): zh for key, zh in common.items() if key.startswith('duty:')}
     aliases = {key.removeprefix('duty-alias:'): duties[target]
                for key, target in common.items() if key.startswith('duty-alias:')}
@@ -427,7 +414,8 @@ def main() -> int:
 
     # shared dict 落盘
     (out_dir / DICT_JSON).write_bytes(dict_bytes)
-    ver_parts.append(f'shared/dict:{sha256_hex(dict_bytes)}')
+    dict_hash = sha256_hex(dict_bytes)
+    ver_parts.append(f'shared/dict:{dict_hash}')
 
     manifest = {
         'schema': SCHEMA,
@@ -435,7 +423,7 @@ def main() -> int:
         'version': hashlib.sha256('|'.join(ver_parts).encode('utf-8')).hexdigest()[:12],
         'generated': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'shared': {
-            'dict': {'url': DICT_JSON, 'sha256': sha256_hex(dict_bytes), 'bytes': len(dict_bytes)},
+            'dict': {'url': DICT_JSON, 'sha256': dict_hash, 'bytes': len(dict_bytes)},
         },
         'sites': sites,
     }

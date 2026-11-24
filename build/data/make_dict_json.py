@@ -31,11 +31,16 @@ FILES = [
 ]
 
 
+def build_dictionary():
+    return {key: load_entries(DICT_DIR / fn) for key, fn in FILES}
+
+
+def encode_dictionary(layers):
+    return json.dumps(layers, ensure_ascii=False, separators=(',', ':'))
+
+
 def build_dict_json():
-    merged = {}
-    for key, fn in FILES:
-        merged[key] = load_entries(DICT_DIR / fn)
-    text = json.dumps(merged, ensure_ascii=False, separators=(',', ':'))
+    text = encode_dictionary(build_dictionary())
     fp = hashlib.sha256(text.encode('utf-8')).hexdigest()[:12]
     return text, fp
 

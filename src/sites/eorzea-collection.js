@@ -6,7 +6,7 @@ import { isECAuthoredContent, isECAuthoredPath, isECSeriesLink } from '../core/c
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
-export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, ecBusy, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, translateECNavigation, translateECHomeEditorial };
+export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC, translateECAttrs, translateECPage, translateECTitle, trimECNode, ecGearsetDisplayName, resolveECGearsetSearch, suggestECGearsetsByZh, translateECGearsetNames, translateECNavigation, translateECHomeEditorial };
 
 
   // EC 上会变动的文本（数量、时间、页数…）
