@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { snapshotTranslationNodes } from '../../src/core/dom.js';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { _applyV3, resolveDyeColor } from '../../src/core/data/data-manager.js';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
@@ -28,7 +29,7 @@ const ctx = vm.createContext({
   ensureZhxItemStyle: () => {}, bindZhxItemClick: () => {}, startChineseSearch: () => {},
   console: { log: () => {} },
 });
-vm.runInContext(source, ctx);
+vm.runInContext(snapshotTranslationNodes.toString() + '\n' + source, ctx);
 function text(value, skip = false) {
   const parentElement = { dataset: {}, closest: () => skip ? {} : null, setAttribute: () => {} };
   return { nodeType: 3, nodeValue: value, parentElement };

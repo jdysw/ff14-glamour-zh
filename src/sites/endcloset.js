@@ -1,7 +1,7 @@
 import { DICT_ENDCLOSET } from '../core/data/dictionary.js';
 import { resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
-import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, snapshotTranslationNodes } from '../core/dom.js';
 import { safe } from '../core/runtime.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
 import { startChineseSearch } from '../core/chinese-search.js';
@@ -180,12 +180,7 @@ function translateEndClosetPage(rootArg) {
     _ecProcNode(root);
   }
   _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-    acceptNode: _ecAcceptNode,
-  });
-  const batch = [];
-  while (w.nextNode()) batch.push(w.currentNode);
-  for (const n of batch) _ecProcNode(n);
+  for (const n of snapshotTranslationNodes(root, _ecAcceptNode)) _ecProcNode(n);
   // 文本域内容属于用户输入，仍跳过；单独处理被跳过元素上的界面属性。
   for (const n of root.querySelectorAll?.('textarea') || []) _ecProcNode(n);
 }

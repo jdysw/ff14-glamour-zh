@@ -3,7 +3,7 @@ import { WIKI_ITEM } from '../core/constants.js';
 import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { cacheRegister } from '../core/cache-primitives.js';
 import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
-import { SKIP_TAGS, _markScan, localScope, queryIn } from '../core/dom.js';
+import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
 import { lookupJp2Zh } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -838,12 +838,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (!root) return;
       if (root.nodeType === 1 && _fcAcceptNode(root) !== NodeFilter.FILTER_REJECT) _procFCNode(root);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
-      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-        acceptNode: _fcAcceptNode,
-      });
-      const batch = [];
-      while (w.nextNode()) batch.push(w.currentNode);
-      for (const n of batch) _procFCNode(n);
+      for (const n of snapshotTranslationNodes(root, _fcAcceptNode)) _procFCNode(n);
       collapseFCHomeHeadings();
     } finally {
       if (isFull) window.__zhixiaFcBusy = false;

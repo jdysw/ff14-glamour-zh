@@ -1,4 +1,4 @@
-export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn, ensureChineseFont };
+export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, localScope, queryIn, ensureChineseFont, snapshotTranslationNodes };
 
 
   // 属性翻译：EC 部分导航/图标的文字在 alt / aria-label / title 属性里，
@@ -60,6 +60,14 @@ export { SKIP_TAGS, _markScan, _scanStats, _zhixiaTitleKeep, dedupeByAncestor, l
     }
     _markScan(scopeEl);
     return out;
+  }
+
+  // 先固定遍历结果：翻译回调可能改动 DOM，不能边遍历边改写。
+  function snapshotTranslationNodes(root, acceptNode) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, { acceptNode });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    return nodes;
   }
 
   /* @zhixia:core-dom-end */
