@@ -143,13 +143,40 @@ export { RONKA_KR, RONKA_RULE_FULL, RONKA_SKIP_SEL, _procRonkaNode, _ronkaAccept
     for (const li of current ? [current] : queryIn(scope, selector)) translateRonkaRule(li);
   }
 
+  function translateRonkaPalette(raw) {
+    // React can render the channel, label and color as separate text nodes.
+    const match = /^([12]?)염색 (?:(색상추가)|- *(.*))$/u.exec(raw);
+    if (!match) return trRonka(raw);
+    const [, channel, empty, color] = match;
+    return channel + '号染色：' + (empty ? '添加颜色' : trRonka(color));
+  }
+
+  function isRonkaFilterKeyword(element) {
+    if (!element?.matches?.('.filter-item-active')) return false;
+    const title = element.parentElement?.previousElementSibling;
+    return title?.matches('.filter-title') && /^(?:검색어|关键词)$/u.test(title.textContent.trim());
+  }
+
+  function translateRonkaText(node, element, raw) {
+    if (element?.matches?.('.palette-name-info')) return translateRonkaPalette(raw);
+    if (element?.matches?.('.item-search-keyword')) {
+      return raw.replace(/^'(.+)'이 포함된 룩북 전체보기$/su, '查看包含“$1”的全部作品');
+    }
+    // Only the leading label is UI; the other text is the native search query.
+    if (element?.matches?.('.filter-keyword')) {
+      return node === element.firstChild ? raw.replace(/^검색:(?=\s|$)/u, '搜索：') : raw;
+    }
+    if (isRonkaFilterKeyword(element)) return raw;
+    return trRonka(raw);
+  }
+
   function trimRonkaNode(node) {
     const raw = node.nodeValue;
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.(RONKA_SKIP_SEL)) return;
     if (isAuthoredContent(p, 'ronka')) return;
-    const next = trRonka(raw);
+    const next = translateRonkaText(node, p, raw);
     if (next !== raw) {
       node.nodeValue = next;
       markRonkaItem(node, next);

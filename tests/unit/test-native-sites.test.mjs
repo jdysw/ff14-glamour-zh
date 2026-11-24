@@ -663,6 +663,27 @@ test('Ronka 实体翻译：韩文补丁前缀和装备标记', () => {
     assert.equal(reinserted.querySelector('a'), restoredPolicy);
     assert.equal(restoredPolicy.href, policy.href);
     assert.equal(restoredPolicy.textContent, '最终幻想14运营政策');
+
+    doc.body.innerHTML = `<div class="item-search-keyword">'유저'이 포함된 룩북 전체보기</div>`
+      + '<button class="primary-filter filter-keyword">검색: 유저<img alt="modal open button"></button>'
+      + '<div class="filter-layout-block"><p class="filter-title">검색어</p><div class="filter-item-align">'
+      + '<p class="filter-item filter-item-active">유저 X</p></div></div>'
+      + '<div class="search-result-user"><span>유저</span></div><div class="search-result-title">유저</div>'
+      + '<div class="palette-name-info"><img alt="add_color_icon">1염색 색상추가</div>'
+      + '<div class="palette-name-info"><div class="palette-name-color"></div>2<!-- -->염색 - <!-- -->기본색</div>';
+    const shortcut = doc.querySelector('.item-search-keyword');
+    const chip = doc.querySelector('button.filter-keyword');
+    const icon = chip.firstElementChild;
+    translateRonkaPage(doc.body);
+    assert.equal(shortcut.textContent, '查看包含“유저”的全部作品');
+    assert.equal(chip.textContent, '搜索： 유저');
+    assert.equal(chip.firstElementChild, icon);
+    assert.equal(doc.querySelector('.filter-title').textContent, '关键词');
+    assert.equal(doc.querySelector('.filter-item').textContent, '유저 X');
+    assert.equal(doc.querySelector('.search-result-user').textContent, '유저');
+    assert.equal(doc.querySelector('.search-result-title').textContent, '用户');
+    assert.deepEqual([...doc.querySelectorAll('.palette-name-info')].map(el => el.textContent),
+      ['1号染色：添加颜色', '2号染色：基础色']);
   } finally {
     _applyV3({ candidatePolicy: 1 });
     cacheReset('lookup');
