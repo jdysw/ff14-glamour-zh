@@ -3,6 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as TestWindow } from 'happy-dom';
+import { _applyV3, dataInvalidate } from '../../src/core/data/data-manager.js';
+import { cacheReset } from '../../src/core/cache-primitives.js';
+import { collectTargets, bindGlobalWikiJump } from '../../src/core/targets.js';
 import {
   ecGearsetDisplayName, suggestECGearsetsByZh, resolveECGearsetSearch,
   trimECNode, translateECTitle, translateECAttrs, translateECPage,
@@ -170,6 +173,72 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     });
   });
   dom.close();
+});
+
+test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题边界', () => {
+  const dom = new TestWindow({ url: 'https://ffxiv.eorzeacollection.com/dyes' });
+  const d = dom.document;
+  const raw = 'Rolanberry Red Dye';
+  assert.equal(_applyV3({ candidatePolicy: 1, names:
+    raw + '\t罗兰莓染剂\t1\t0\nInk Blue Dye\t油墨蓝染剂\t1\t0\n' +
+    'Ink Blue\t油墨蓝染剂\t1\t0\n' }), true);
+  try {
+    withGlobals({ document: d, window: dom, location: dom.location, NodeFilter: dom.NodeFilter }, () => {
+      d.title = 'Dyes Preview | Eorzea Collection';
+      d.body.innerHTML = '<h1 id="title">Dyes Preview</h1>' +
+        '<p id="dye">Rolanberry red NEW</p><p id="other">Ink Blue</p>' +
+        '<span id="badge">NEW</span><p id="unknown">Unknown Color NEW</p>';
+      translateECPage();
+      translateECTitle();
+      assert.equal(d.title, '染色预览 | Eorzea Collection');
+      assert.equal(d.querySelector('#title').textContent, '染色预览');
+      assert.equal(d.querySelector('#dye').textContent, '罗兰莓 新增');
+      assert.equal(d.querySelector('#other').textContent, '油墨蓝');
+      assert.equal(d.querySelector('#badge').textContent, '新增');
+      assert.equal(d.querySelector('#unknown').textContent, 'Unknown Color NEW');
+      // Mutation callbacks may receive only the updated text node.
+      const dye = d.querySelector('#dye').firstChild;
+      dye.nodeValue = 'Ink Blue NEW';
+      translateECPage(dye);
+      assert.equal(dye.nodeValue, '油墨蓝 新增');
+      withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/accessories') }, () => {
+        d.body.innerHTML = '<select id="patch"><option value="6.0">Endwalker</option>' +
+          '<option value="7.0">Dawntrail</option></select><button id="piece">Wrists</button>' +
+          '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>';
+        translateECPage();
+        assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
+          [['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
+        assert.equal(d.querySelector('#piece').textContent, '腕部');
+        assert.equal(d.querySelector('#status').textContent, '不可染色');
+        assert.equal(d.querySelector('#source').textContent, '讨伐歼灭战掉落');
+      });
+      withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/companion-glamour/231/adventurers-basics') }, () => {
+        d.title = 'Ink Blue | Eorzea Collection';
+        d.body.innerHTML = '<h1 id="authored">Ink Blue</h1>' +
+          '<a href="/companion-glamour/232/example"><p class="title has-text-text is-5">Ink Blue</p></a>' +
+          '<a href="/glamour/233/example"><p class="title has-text-text is-5">Ink Blue</p></a>' +
+          '<a href="/glamour/submit" id="submit">Submit Glamour</a>' +
+          '<img id="cover" alt="Cover image">';
+        translateECPage();
+        translateECTitle();
+        assert.equal(d.title, 'Ink Blue | Eorzea Collection');
+        assert.equal(d.querySelector('#authored').textContent, 'Ink Blue');
+        assert.equal(collectTargets(d.body).filter(row => row.type === 'card').length, 0);
+        const work = d.querySelector('a[href="/companion-glamour/232/example"] p');
+        assert.equal(work.textContent, 'Ink Blue');
+        assert.equal(d.querySelector('#cover').alt, '封面图片');
+        bindGlobalWikiJump();
+        const ev = new dom.MouseEvent('click', { bubbles: true, cancelable: true });
+        work.dispatchEvent(ev);
+        assert.equal(ev.defaultPrevented, false, '玩家作品链接不得被 Wiki 跳转拦截');
+      });
+    });
+  } finally {
+    dataInvalidate();
+    cacheReset('lookup');
+    cacheReset('derived');
+    dom.close();
+  }
 });
 
 test('EC 阳伞详情：配饰导航、获取方式、图片说明和页面标题', () => {

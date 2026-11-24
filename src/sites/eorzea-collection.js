@@ -1,7 +1,8 @@
 import { DICT_EC, dictGetRevision } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, _zhixiaTitleKeep, localScope, queryIn } from '../core/dom.js';
 import { tryEnToZh } from '../core/item-resolver.js';
-import { dataGetIndex } from '../core/data/data-manager.js';
+import { dataGetIndex, resolveDyeColor } from '../core/data/data-manager.js';
+import { isECAuthoredContent, isECAuthoredPath } from '../core/content-scope.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 import { EC_ITEM_SKIP_SEL } from '../core/targets.js';
@@ -10,6 +11,21 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   // EC 上会变动的文本（数量、时间、页数…）
   // EC 专用界面翻译只在 EC 站点模块声明，不再由通用物品解析层反向导入站点。
+  // A preview palette shows colors rather than inventory dye items. Since
+  // patch 7.5 the original individual dyes may be retired, but their
+  // official color names remain useful. Handle the site's attached NEW
+  // badge and inconsistent capitalization without guessing unknown colors.
+  function ecDyePreviewText(label) {
+    const path = globalThis.location?.pathname;
+    if (path !== '/dyes' && path !== '/dyes/') return null;
+    const isNew = label.endsWith(' NEW');
+    const name = isNew ? label.slice(0, -4).trimEnd() : label;
+    if (!/^[A-Za-z][A-Za-z -]{1,45}$/u.test(name)) return null;
+    const normalized = name.toLowerCase().replace(/(?:^| )[a-z]/g, first => first.toUpperCase());
+    const color = resolveDyeColor(name) || resolveDyeColor(normalized);
+    return color ? color + (isNew ? ' 新增' : '') : null;
+  }
+
   function trEC(text) {
     if (!text) return text;
     const t = text.trim();
@@ -17,7 +33,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!/[a-zA-Z]/.test(t)) return text;    // 快速跳过：DICT_EC/PATTERNS_EC 全部含拉丁字母（v1.11.1）
     // Editorial paragraphs contain source indentation/newlines between words.
     // Match their normalized text while retaining the surrounding inline markup.
-    const hit = DICT_EC[t] || DICT_EC[t.replace(/\s+/g, ' ')];
+    const hit = DICT_EC[t] || DICT_EC[t.replace(/\s+/g, ' ')] || ecDyePreviewText(t);
     if (hit) {
       const i = text.indexOf(t);
       return text.slice(0, i) + hit + text.slice(i + t.length);
@@ -783,7 +799,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!raw?.trim()) return;
     const p = node.parentElement;
     if (p?.closest?.('#filter_server option')) return;
-    if (p?.closest?.(EC_SKIP_SEL)) return;
+    if (p?.closest?.(EC_SKIP_SEL) || isECAuthoredContent(p)) return;
     // 装备名 / 卡片文本归物品链（zhApply*）处理：文本链避让，否则文本被抢先翻成
     // 中文后物品链会因「原文不再匹配」跳过，导致链接改写 / 包装 / 标记不生效
     if (p?.closest?.(EC_ITEM_SKIP_SEL)) return;
@@ -902,7 +918,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   function translateECHomeEditorial(rootArg) {
     if ((globalThis.location?.pathname || '') !== '/') return;
     for (const element of ecHomeCandidates(rootArg, 'h2, h3, h4, p')) {
-      if (element.closest?.(EC_SKIP_SEL) || element.querySelector?.('a, button, input, textarea')) continue;
+      if (element.closest?.(EC_SKIP_SEL) || isECAuthoredContent(element)) continue;
+      if (element.querySelector?.('a, button, input, textarea')) continue;
       const source = (element.textContent || '').replace(/\s+/gu, ' ').trim();
       const zh = ecHomeEditorialZh(source, element.tagName);
       if (zh) ecSetVisibleText(element, zh);
@@ -941,6 +958,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   // Translate only recognized UI title segments. Preserve creator names and site branding.
   function translateECTitle() {
+    if (isECAuthoredPath(globalThis.location?.pathname)) return;
     const old = document.title;
     if (!old?.includes(' | Eorzea Collection')) return;
     const parts = old.split(' | ');
@@ -953,9 +971,13 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (ecBusy) return;
     ecBusy = true;
     try {
-      const root = rootArg || document.body || document.documentElement;
+      // A character-data / child-list mutation can supply a text node.
+      // TreeWalker.nextNode() skips its root, so start at its parent instead.
+      const root = localScope(rootArg) || document.body || document.documentElement;
       if (!root) return;
       translateECServers(rootArg);
+      // Resolve full editorial sentences before individual text fragments.
+      translateECHomeEditorial(rootArg);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
@@ -977,7 +999,6 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       }
       translateECAttrs(rootArg);
       translateECNavigation(rootArg);
-      translateECHomeEditorial(rootArg);
     } finally {
       ecBusy = false;
     }

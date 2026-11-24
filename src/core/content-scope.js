@@ -27,6 +27,21 @@ function isMiramiruAuthored(element) {
   return false;
 }
 
+// EC detail and related-work links carry creator-owned names, even when
+// those names happen to match a UI label or an actual equipment item.
+export function isECAuthoredPath(path) {
+  return /^\/(?:glamour|companion-glamour|creator)\/\d+(?:[/?#]|$)/u.test(path || '');
+}
+
+export function isECAuthoredContent(element) {
+  if (!element?.closest) return false;
+  if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
+  const href = element.closest('a[href]')?.getAttribute?.('href') || '';
+  const path = href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
+  return isECAuthoredPath(path)
+    || (isECAuthoredPath(globalThis.location?.pathname) && !!element.closest('h1'));
+}
+
 // Authored text must not become UI or an item merely by matching a dictionary.
 export function isAuthoredContent(element, site) {
   if (!element) return false;
@@ -34,5 +49,6 @@ export function isAuthoredContent(element, site) {
   if (element.closest(AUTHORED)) return true;
   if (site === 'ronka') return !!element.closest('.post-subtitle-box a');
   if (site === 'endcloset') return isEndClosetAuthored(element);
+  if (site === 'ec') return isECAuthoredContent(element);
   return site === 'miramiru' && isMiramiruAuthored(element);
 }
