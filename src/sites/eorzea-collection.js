@@ -1001,14 +1001,14 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const companion = globalThis.location?.pathname?.startsWith('/companion-glamour');
     for (const node of ecHomeCandidates(rootArg, '[data-tooltip]')) {
       if (isECAuthoredContent(node)) continue;
-      const old = node.getAttribute('data-tooltip');
+      const old = node.dataset.tooltip;
       let localized = EC_GLAMOUR_LOGIN_LABELS.get(old);
       // Only the color chip is built-in UI. The nearby creator tooltip is
       // authored identity, even when its contents resemble a color name.
       if (!localized && companion && node.querySelector('span[class*="has-text-dye-"]')) {
         localized = resolveDyeColor(old);
       }
-      if (localized && localized !== old) node.setAttribute('data-tooltip', localized);
+      if (localized && localized !== old) node.dataset.tooltip = localized;
     }
   }
 
