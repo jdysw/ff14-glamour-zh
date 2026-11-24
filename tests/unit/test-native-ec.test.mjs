@@ -162,7 +162,7 @@ test('EC 首页结构化汉化：按 7.0 链接修正资料片、栏目合并文
     assert.equal(d.querySelector('#updates').textContent, '— 最新更新 —');
     assert.equal(d.querySelector('#event').textContent, '❄️ 凛冬');
     assert.equal(d.querySelector('#promo').textContent, 'Eorzea Collection 周边商品系列正式推出！');
-    assert.equal(d.querySelector('#challenge-intro').textContent, '每个月，赞助人都会投票选出幻化挑战主题，并围绕主题创作。8 月的挑战是为永冻之地做好准备，设计充满冰雪与寒风气息的幻化。');
+    assert.equal(d.querySelector('#challenge-intro').textContent, '每个月，赞助人都会投票选出幻化挑战主题，并围绕主题创作。8 月的挑战是为踏入《银海之天舟》的冰雪之地做准备，设计充满冰雪与寒风气息的幻化。');
     assert.equal(d.querySelector('#model').alt, '人族·中原之民女性');
     assert.equal(d.querySelector('#challenge').alt, '🎃 惊魂季');
     assert.equal(d.querySelector('#authored').textContent, 'Verycold');
@@ -192,15 +192,16 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
     raw + '\t罗兰莓染剂\t1\t0\nInk Blue Dye\t油墨蓝染剂\t1\t0\n' +
     'Ink Blue\t油墨蓝染剂\t1\t0\n' }), true);
   try {
-    withGlobals({ document: d, window: dom, location: dom.location, NodeFilter: dom.NodeFilter }, () => {
+    withGlobals({ document: d, window: dom, location: dom.location, Node: dom.Node, NodeFilter: dom.NodeFilter }, () => {
       d.title = 'Dyes Preview | Eorzea Collection';
-      d.body.innerHTML = '<h1 id="title">Dyes Preview</h1>' +
+      d.body.innerHTML = '<h1 id="title" class="b-title-text"><b class="b-title-text-bold">Dyes</b> Preview</h1>' +
         '<p id="dye">Rolanberry red NEW</p><p id="other">Ink Blue</p>' +
         '<span id="badge">NEW</span><p id="unknown">Unknown Color NEW</p>';
       translateECPage();
       translateECTitle();
       assert.equal(d.title, '染色预览 | Eorzea Collection');
       assert.equal(d.querySelector('#title').textContent, '染色预览');
+      assert.equal(d.querySelector('#title b').textContent, '染色');
       assert.equal(d.querySelector('#dye').textContent, '罗兰莓 新增');
       assert.equal(d.querySelector('#other').textContent, '油墨蓝');
       assert.equal(d.querySelector('#badge').textContent, '新增');
@@ -213,17 +214,25 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/accessories') }, () => {
         d.body.innerHTML = '<select id="patch"><option value="5.0">ShadowBringers</option><option value="6.0">Endwalker</option>' +
           '<option value="7.0">Dawntrail</option></select><button id="piece">Wrists</button>' +
-          '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>';
+          '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>' +
+          '<a href="/accessories/avalanche-leaders">Avalanche Leader\'s <span>Token Exchange</span></a>' +
+          '<a href="/accessories/avalanche-brawlers">Avalanche Brawler\'s Accessories <span>Token Exchange</span></a>' +
+          '<a href="/gearset/festival-neotunic">Festival Neotunic <span>Mogstation Set</span></a>';
         translateECPage();
         assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
           [['5.0', '暗影之逆焰'], ['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
         assert.equal(d.querySelector('#piece').textContent, '腕部');
         assert.equal(d.querySelector('#status').textContent, '不可染色');
         assert.equal(d.querySelector('#source').textContent, '讨伐歼灭战掉落');
+        translateECPage();
+        assert.equal(d.querySelector('[href="/accessories/avalanche-leaders"]').textContent, '雪崩领导者饰品 代币兑换');
+        assert.equal(d.querySelector('[href="/accessories/avalanche-brawlers"]').textContent, '雪崩斗手饰品 代币兑换');
+        assert.equal(d.querySelector('[href="/gearset/festival-neotunic"]').textContent, '欢庆新式文化衫套装 商城');
       });
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/companion-glamour/231/adventurers-basics') }, () => {
         d.title = 'Ink Blue | Eorzea Collection';
-        d.body.innerHTML = '<h1 id="authored">Ink Blue</h1>' +
+        d.body.innerHTML = '<h1 class="minititle is-mega-menu-title">Browse all</h1>' +
+          '<h1 id="authored" class="title has-negative-letter-spacing"><span>Ink Blue</span></h1>' +
           '<a href="/companion-glamour/232/example"><p class="title has-text-text is-5">Ink Blue</p></a>' +
           '<a href="/glamour/233/example" title="Ink Blue"><img alt="Ink Blue"><p class="title has-text-text is-5">Ink Blue</p></a>' +
           '<a href="/gearset/ink-blue"><p class="title has-text-text is-5">Ink Blue</p></a>' +
@@ -234,6 +243,7 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         translateECTitle();
         assert.equal(d.title, 'Ink Blue | Eorzea Collection');
         assert.equal(d.querySelector('#authored').textContent, 'Ink Blue');
+        assert.equal(d.querySelector('.is-mega-menu-title').textContent, '浏览全部');
         assert.equal(collectTargets(d.body).length, 0, '作品及系列卡片均不属于单件物品链');
         const authoredLink = d.querySelector('a[href="/glamour/233/example"]');
         assert.equal(authoredLink.title, 'Ink Blue');

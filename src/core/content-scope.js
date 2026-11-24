@@ -51,8 +51,9 @@ export function isECSeriesLink(element) {
 export function isECAuthoredContent(element) {
   if (!element?.closest || !isECContext()) return false;
   if (element.closest('.c-glamour-grid-item-content-title,.c-glamour-grid-item-content-author,[class*="s-glamour-description"],[class*="s-glamour-title"],[class*="s-companion-glamour-description"],[class*="s-companion-glamour-title"]')) return true;
+  // The site's mega menu also uses h1 elements; these are UI, not work titles.
   return isECAuthoredPath(ecLinkPath(element))
-    || (isECAuthoredPath(globalThis.location?.pathname) && !!element.closest('h1'));
+    || (isECAuthoredPath(globalThis.location?.pathname) && !!element.closest('h1.title.has-negative-letter-spacing'));
 }
 
 // Authored text must not become UI or an item merely by matching a dictionary.

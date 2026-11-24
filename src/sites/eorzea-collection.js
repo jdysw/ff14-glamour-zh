@@ -27,7 +27,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     if (!/^[A-Za-z][A-Za-z -]{1,45}$/u.test(name)) return null;
     const normalized = name.toLowerCase().replace(/(?:^| )[a-z]/g, first => first.toUpperCase());
     const color = resolveDyeColor(name) || resolveDyeColor(normalized);
-    return color ? color + (isNew ? ' 新增' : '') : null;
+    if (!color) return null;
+    return color + (isNew ? ' 新增' : '');
   }
 
   function trEC(text) {
@@ -150,7 +151,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
     'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
     'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
-    'Graffiti Neotunic',
+    'Graffiti Neotunic', 'Festival Neotunic',
     "Fallen's", "En Fortune-teller's", "Realm-roamer's", "Vibran Princess's",
     'Galatea', 'Fuath', 'Hope [F]', 'Hope [M]', "Gaffgarion's", "Ovelia's",
     "Ramza's", 'Star Captain', 'Star Pilot', 'Alternative', 'Maritime',
@@ -166,6 +167,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
   const EC_GEARSET_NAME_EXTRAS = Object.freeze({
     'Graffiti Neotunic': '涂鸦新式上衣套装',
+    'Festival Neotunic': '欢庆新式文化衫套装',
     'Mistwake': '雾迹',
     'Mistic Memory': '雾忆',
     "War Cloud's": '沃·克劳德',
@@ -470,6 +472,12 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   ]);
   // Only strip prefixes confirmed by the game's localized stat-specific names.
   const EC_ACCESSORY_STAT_PREFIX = Object.freeze({ Blood: '力之', Magic: '魔之' });
+  // These series have only one earring each; the inference threshold correctly
+  // rejects them. Use the confirmed localized item stems, not the attire names.
+  const EC_ACCESSORY_NAME_EXTRAS = new Map([
+    ["Avalanche Leader's", '雪崩领导者'],
+    ["Avalanche Brawler's", '雪崩斗手'],
+  ]);
 
   // Multiple earring forms count as ONE real slot, not separate accessories.
   function ecAccessoryItemSlot(part) {
@@ -550,6 +558,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
   let _ecAccessoryRevision = -1;
   let _ecAccessoryHasData = false;
   function ecAccessorySeriesZh(native) {
+    const confirmed = EC_ACCESSORY_NAME_EXTRAS.get(native);
+    if (confirmed) return confirmed;
     // DICT_EC also contains UI labels like "Other" and "Browse All"; they
     // must never be mistaken for verified accessory series names.
     const verified = EC_GEARSET_SINGLE_SERIES.has(native) || EC_GEARSET_ROLE_SERIES.has(native);
@@ -656,7 +666,8 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
 
   function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {
     const splitSuffix = zh.endsWith(suffix) && !hasInlineSuffix;
-    node.nodeValue = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
+    const next = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
+    node.nodeValue = splitSuffix ? next.trimEnd() : next;
     // Split H1 labels must contribute the suffix exactly once, including when
     // the title also contains an acquisition source (e.g. Dungeon Drop).
     // 官方套装名的性别变体可在「套装」后带【男】／【女】；
@@ -816,7 +827,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     // known series BEFORE the dedicated structure-aware pass can inspect it.
     // Only the Gearsets title translator is allowed to touch this H1.
     if (/^\/(?:gearset|accessories)\/[^/]+\/?$/.test(globalThis.location?.pathname || '')
-        && p?.closest?.('h1')) return;
+        && p?.closest?.('h1:not(.is-mega-menu-title)')) return;
     const next = trEC(raw);
     if (next !== raw) {
       // Keep the original for diagnostics, not as an untranslated English hover tooltip.
@@ -876,6 +887,19 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
     const ancestor = scope?.closest?.(selector);
     if (ancestor) nodes.add(ancestor);
     return nodes;
+  }
+
+  function translateECDyePreviewHeading(rootArg) {
+    if (!ecIsDyePreview()) return;
+    for (const bold of ecHomeCandidates(rootArg, 'h1.b-title-text > b.b-title-text-bold')) {
+      const tail = bold.nextSibling;
+      if (bold.textContent.trim() !== 'Dyes'
+          || tail?.nodeType !== Node.TEXT_NODE || tail.nodeValue.trim() !== 'Preview') continue;
+      // The live heading styles only the first word. Keep that node and
+      // translate the phrase without adding a space between the Chinese parts.
+      bold.textContent = '染色';
+      tail.nodeValue = '预览';
+    }
   }
 
   function ecHomeGearsetNavLabel(a) {
@@ -1015,6 +1039,7 @@ export { EC_PIECE_TILES, EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECReset
       translateECHomeEditorial(rootArg);
       // Match complete navigation captions before translating their fragments.
       translateECNavigation(rootArg);
+      translateECDyePreviewHeading(rootArg);
       _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
       const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
         acceptNode: (n) => {
