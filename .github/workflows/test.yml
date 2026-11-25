@@ -23,10 +23,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -61,7 +61,7 @@ jobs:
         run: npm run test:build
 
       - name: 共享已验证的 userscript
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: userscript-build
           path: |
@@ -77,10 +77,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -92,7 +92,7 @@ jobs:
         run: npm run test:coverage
 
       - name: 上传覆盖率报告
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-source-lcov
           path: tests/.cache/coverage/lcov.info
@@ -106,10 +106,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -127,10 +127,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -139,7 +139,7 @@ jobs:
         run: npm ci
 
       - name: 下载已验证构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: userscript-build
           path: dist
@@ -150,7 +150,7 @@ jobs:
         run: node tests/run.mjs --suite=wiki
 
       - name: 上传 Wiki 浏览器实际执行覆盖率
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: e2e-source-wiki
           path: tests/.cache/e2e-coverage
@@ -164,10 +164,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -176,7 +176,7 @@ jobs:
         run: npm ci
 
       - name: 下载已验证构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: userscript-build
           path: dist
@@ -191,7 +191,7 @@ jobs:
         run: node tests/run.mjs --suite=sites
 
       - name: 上传站点浏览器实际执行覆盖率
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: e2e-source-sites
           path: tests/.cache/e2e-coverage
@@ -204,7 +204,7 @@ jobs:
 
       - name: 上传汉化、审计与字体测试脚本
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: site-test-userscripts
           path: |
@@ -223,29 +223,29 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0 # 完整历史：新代码判定与逐行归属需要
 
       - name: 下载同一提交的 V8 / LCOV 报告
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: native-source-lcov
           path: tests/.cache/coverage
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
 
       - name: 下载同一提交的浏览器产物和 source map
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: userscript-build
           path: dist
 
       - name: 下载已有端到端流程的实际 V8 覆盖率
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: e2e-source-*
           merge-multiple: true
@@ -257,7 +257,7 @@ jobs:
       # 官方扫描 action（v6：使用当前受支持版本）
       - name: SonarQube Cloud scan
         id: sonar_scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -295,7 +295,7 @@ jobs:
           jq -e '(.total // 0) <= 500' sonar-unresolved.json >/dev/null
       - name: 上传 Sonar 未解决告警清单
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: sonar-unresolved-main
           path: sonar-unresolved.json
@@ -325,7 +325,7 @@ jobs:
           jq -r '.issues[] | [.rule, .component, (.line // "-"), .message] | @tsv' sonar-unresolved-pr.json
       - name: 上传当前 PR 未解决 Sonar 告警清单
         if: ${{ !cancelled() && steps.pr_sonar_issues.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: sonar-unresolved-pr
           path: sonar-unresolved-pr.json
@@ -389,7 +389,7 @@ jobs:
 
       - name: 上传 Sonar 实际覆盖率与文件级缺口
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: sonar-coverage-metrics
           path: sonar-metrics/*.json
