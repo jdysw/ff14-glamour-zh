@@ -271,16 +271,17 @@ def _site_name_pairs(site, langs, names, glams, slot_names):
 def build_item_ids(site, items_text, item_slots):
     """Group the same V3 names by game row ID, with explicit native languages."""
     langs = SITE_LANGS[site]
-    if site == 'mirapri':
+    include_english_dyes = site == 'mirapri'
+    if include_english_dyes:
         langs = [*langs, 'en']
-    columns = dict(zip(LANGS, (2, 3, 4)))
+    columns = tuple(2 + LANGS.index(lang) for lang in langs)
     lines = ['\t'.join(langs)]
     for line in items_text.splitlines():
         p = _row_parts(line)
         if not p or len(p) < 9:
             continue
-        names = [p[columns[lang]] for lang in langs]
-        if site == 'mirapri' and not names[-1].endswith(' Dye'):
+        names = [p[column] for column in columns]
+        if include_english_dyes and not names[-1].endswith(' Dye'):
             names[-1] = ''
         if any(names):
             lines.append('\t'.join([p[0], p[1], *names, p[8], item_slots.get(p[0], OTHER_SLOT)]))
@@ -360,7 +361,7 @@ def main() -> int:
     except (OSError, ValueError) as error:
         print(f'✗ 装备部位数据不可用: {error}')
         return 1
-    slot_names = equipment_slots_by_name(items_text, item_slots)
+    slot_names = equipment_slots_by_name(items_text, item_slots) if item_slots else None
     print(f'  装备部位源 CSV: {len(item_slots):,} 条；未提供时默认为「其余」')
     series_text = CANON_SERIES.read_text(encoding='utf-8')
     acl_text = CANON_ACL.read_text(encoding='utf-8')
