@@ -20,10 +20,10 @@ jobs:
       matrix:
         site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: npm
       - name: Build production script and test audit helpers
         run: |
@@ -48,7 +48,7 @@ jobs:
         run: node tools/coverage-audit/sanitize-evidence.mjs tests/.cache/coverage-audit tests/.cache/coverage-public
       - name: Always upload sanitized evidence and error logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: coverage-raw-${{ matrix.site }}
           path: tests/.cache/coverage-public/
@@ -60,12 +60,12 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
       - name: Download all site outputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: coverage-raw-*
           path: tests/.cache/coverage-audit/
@@ -76,7 +76,7 @@ jobs:
           node tools/coverage-audit/live-report.mjs --input tests/.cache/coverage-audit --out tests/.cache/coverage-report
       - name: Always upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: coverage-full-report
           path: tests/.cache/coverage-report/

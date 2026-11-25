@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: 数据文件校验（结构完整性）
         run: python3 build/data/validate-data.py
@@ -75,10 +75,10 @@ jobs:
           FF14_EQUIP_SLOTS_CSV: build/.cache/datamining/en-Item.csv
         run: python3 build/data/prepare-pages.py
 
-      - name: Node 22（数据与脚本端统一契约）
-        uses: actions/setup-node@v4
+      - name: Node 24（数据与脚本端统一契约）
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
 
       - name: 发布前校验 V3 数据、共享资源及 Pages 平台约束
         run: |

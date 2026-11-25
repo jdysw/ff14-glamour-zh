@@ -1,4 +1,4 @@
-// 极简 CDP 客户端（Node ≥22 内置 WebSocket / fetch）
+// 极简 CDP 客户端（Node 24 内置 WebSocket / fetch）
 // 用法见同目录测试脚本；连接 127.0.0.1:9223 的 headless Chrome
 import { setTimeout as sleep } from 'node:timers/promises';
 import {beginBrowserCoverage,endBrowserCoverage,tagBrowserSource} from './browser-coverage.mjs';

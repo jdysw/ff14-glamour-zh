@@ -1,8 +1,8 @@
 name: Test
 
 # v1.4 Phase 17：CI 测试工作流（与本地同一入口，命令全部可本地复跑）。
-# 覆盖：数据文件结构校验 → 构建（含版本同步与词典三方核验）→
-#       产物语法检查 → 生成物一致性（构建后工作区应无差异）→ 单元 + 集成（离线夹具）测试。
+# 覆盖：数据文件结构校验 → 构建（含版本、词典及产物语法校验）→
+#       生成物一致性（构建后工作区应无差异）→ 单元 + 集成（离线夹具）测试。
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: 安装依赖（锁文件）
@@ -42,12 +42,6 @@ jobs:
 
       - name: 构建与校验
         run: npm run build
-
-      - name: 产物语法检查
-        run: npm run check:dist
-
-      - name: 覆盖审计 Python 云端执行器语法检查
-        run: python3 -c "import ast, pathlib; ast.parse(pathlib.Path('tools/coverage-audit/cloud-audit.py').read_text(encoding='utf-8'))"
 
       - name: 云端审计 URL / 注入失败防线回归（纯标准库）
         run: python3 -m unittest discover -s tools/coverage-audit -p 'test_cloud_audit.py'
@@ -79,10 +73,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Node 22
+      - name: Node 24
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: 安装依赖
@@ -111,7 +105,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: 安装依赖（锁文件）
@@ -132,7 +126,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: 安装依赖（锁文件）
@@ -169,7 +163,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: 安装依赖（锁文件）
@@ -236,7 +230,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
 
       - name: 下载同一提交的浏览器产物和 source map
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7

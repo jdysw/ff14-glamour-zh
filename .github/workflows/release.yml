@@ -21,10 +21,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout verified commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+
+      - name: Setup Node 24
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
 
       - name: Confirm the commit is still main HEAD
         id: current
@@ -126,8 +131,6 @@ jobs:
         run: |
           npm run validate:data
           npm run build
-          npm run check:dist
-          npm run version:check
           git diff --exit-code
 
       - name: Recheck main HEAD before publishing

@@ -5,7 +5,7 @@
   "description": "FF14 幻化站中文化 · 与灰机 wiki 双向互查（userscript）",
   "license": "GPL-3.0",
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   },
   "scripts": {
     "build": "node build/userscript/build.mjs",
@@ -28,7 +28,7 @@
     "check:deps": "node build/userscript/verify-dependencies.mjs",
     "build:miramiru-test": "node build/userscript/build.mjs && node build/userscript/make-site-test.mjs miramiru",
     "build:eden-test": "node build/userscript/build.mjs && node build/userscript/make-site-test.mjs eden",
-    "build:font-test": "node build/userscript/build.mjs && node build/userscript/make-font-test.mjs",
+    "build:font-test": "node build/userscript/make-font-test.mjs",
     "test:build": "node tests/run.mjs --suite=build",
     "test:experimental": "node tests/run.mjs --suite=experimental"
   },

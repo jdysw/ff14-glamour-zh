@@ -4,6 +4,7 @@ name: V3 Storage Baseline
 on:
   pull_request:
     paths:
+      - '.nvmrc'
       - 'tools/data/**'
       - 'tests/experimental/test-storage-audit.mjs'
       - 'tests/unit/test-shared-candidates.mjs'
@@ -23,11 +24,11 @@ jobs:
   baseline:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Node 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Node 24
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: 获取固定版本的装备部位 CSV 并校验 Git blob
         env:
           DATAMINING_COMMIT: 52a72b38aa2f967cab36867f34cd9bee9debb88b
@@ -93,7 +94,7 @@ jobs:
       # 因此线上基线须使用目标分支的完整契约，不能要求提前部署 PR。
       - name: 获取 PR 目标分支的线上基线契约
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .production-baseline
@@ -102,7 +103,7 @@ jobs:
         working-directory: ${{ github.event_name == 'pull_request' && '.production-baseline' || '.' }}
         run: node tools/data/verify-pages-production.mjs --origin https://zhixia-data.pages.dev/
       - name: 上传 V3 旧 URL 去重计划与规则
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: v3-pages-dedupe
           path: |
@@ -110,7 +111,7 @@ jobs:
             pages-dedupe-summary.log
           if-no-files-found: error
       - name: 上传原始报告（不上传数据源）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: v3-storage-baseline
           path: storage-baseline.json
