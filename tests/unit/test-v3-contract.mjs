@@ -36,6 +36,7 @@ assert.deepEqual(matches, [
   'https://end-closet.com/*',
   'https://miramiru.co/*',
   'https://mirapri.ff14eden.work/*',
+  'https://attire.jp/*',
 ]);
 for (const match of matches) {
   const { hostname } = new URL(match);

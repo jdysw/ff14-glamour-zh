@@ -6,6 +6,7 @@ import {Window as TestWindow} from 'happy-dom';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
+import { translateAttirePage } from '../../src/sites/attire.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
@@ -1231,5 +1232,58 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     else globalThis.document = doc;
     if (filter === undefined) delete globalThis.NodeFilter;
     else globalThis.NodeFilter = filter;
+  }
+});
+
+test('装備手帳：保留站内分类入口与正文，仅以确切物品身份改 Wiki 跳转', async () => {
+  const names = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(names.map(name => [name,globalThis[name]]));
+  const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
+  try {
+    const d = dom.document;
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/';
+    const jp = 'フィールドコマンダーコート';
+    const zh = '野战指挥官外套';
+    const wiki = 'https://ff14.huijiwiki.com/wiki/物品:';
+    const hash = '4551a07ab65';
+    d.body.innerHTML = `<nav><a href="/vanity-2/"><span>おしゃれ装備</span><svg></svg></a></nav>
+      <input value="検索"><h1 id="jinrPostTitle">${jp}</h1><section id="postContent">
+      <h2 class="a--h2rich-maincopy">アイテム情報</h2><p id="author">アイテム情報</p>
+      <a id="item" href="${official}${hash}/"><strong>${jp}</strong></a>
+      <a id="foreign" href="https://example.test/lodestone/playguide/db/item/${hash}/">${jp}</a>
+      <a id="custom" href="${official}${hash}/">作者的文字</a>
+      <a id="unknown" href="${official}00000000001/">未収録の装備</a>
+      <a id="new" href="${official}511859ea2ce/">アバランチブロウラー・トップス</a></section>`;
+    Object.assign(globalThis,{document:d,location:dom.location,window:dom,NodeFilter:dom.NodeFilter});
+    dom.__zhxTestSite = 'attire';
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'});
+    translateAttirePage();
+    assert.equal(d.querySelector('nav a').textContent,'外观装备');
+    assert.equal(d.querySelector('nav a').pathname,'/vanity-2/');
+    assert.equal(d.querySelectorAll('nav svg').length,1);
+    assert.equal(d.querySelector('input').value,'検索');
+    assert.equal(d.querySelector('#author').textContent,'アイテム情報');
+    assert.equal(d.querySelector('h2').textContent,'物品信息');
+    assert.equal(d.querySelector('h1').textContent,zh);
+    assert.equal(d.querySelector('#item strong').textContent,zh);
+    assert.equal(d.querySelector('#item').href,official+hash+'/','仅名字命中时保留原站物品链接');
+    assert.equal(decodeURI(d.querySelector('#new').href),wiki+'雪崩斗手上衣');
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh});
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(decodeURI(d.querySelector('#item').href),wiki+zh,'数据补齐后能够更新已翻译链接');
+    assert.equal(d.querySelector('#foreign').textContent,jp);
+    assert.equal(d.querySelector('#custom').textContent,'作者的文字');
+    assert.equal(d.querySelector('#unknown').textContent,'未収録の装備');
+    assert.equal(d.querySelector('#unknown').href,official+'00000000001/');
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
+  } finally {
+    for (const [name,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+    await dom.happyDOM.close();
   }
 });

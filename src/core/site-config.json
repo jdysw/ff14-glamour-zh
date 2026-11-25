@@ -8,7 +8,8 @@
     { "id": "collection", "hosts": ["ffxivcollection.com"], "matches": ["https://www.ffxivcollection.com/*", "https://weapon.ffxivcollection.com/*"] },
     { "id": "endcloset", "hosts": ["end-closet.com"], "matches": ["https://end-closet.com/*"] },
     { "id": "miramiru", "hosts": ["miramiru.co"], "matches": ["https://miramiru.co/*"] },
-    { "id": "eden", "hosts": ["mirapri.ff14eden.work"], "matches": ["https://mirapri.ff14eden.work/*"], "dataSite": "miramiru" }
+    { "id": "eden", "hosts": ["mirapri.ff14eden.work"], "matches": ["https://mirapri.ff14eden.work/*"], "dataSite": "miramiru" },
+    { "id": "attire", "hosts": ["attire.jp"], "matches": ["https://attire.jp/*"], "dataSite": "mirapri" }
   ],
   "datasets": {
     "mirapri": { "files": ["names", "hash", "alias", "dup"], "languages": ["ja"] },

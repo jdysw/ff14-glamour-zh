@@ -29,6 +29,7 @@
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
 | [Miramiru](https://miramiru.co/en) | 幻化展示站（英／日／韩界面、装备和染剂汉化，装备名称跳转灰机 Wiki，筛选弹窗支持中文装备搜索） |
 | [Mirapri Eden](https://mirapri.ff14eden.work/) | 幻化搭配、装备排行与制作器（日／英界面汉化、装备 Wiki 跳转、中文装备搜索） |
+| [FF14 装備手帳](https://attire.jp/) | 日服装备外观图鉴；导航、分类与已收录装备名称汉化，已确认的物品链接可跳转灰机 Wiki |
 | [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 
@@ -59,7 +60,7 @@ data/dictionaries/     人工维护的界面词典
 src/main.js            userscript 入口
 src/core/              共享运行时、翻译与搜索
 src/core/data/         词库、缓存读写和 V3 协议
-src/sites/             站点适配器（八个启用的幻化站与灰机 wiki）
+src/sites/             站点适配器（九个启用的幻化站与灰机 wiki）
 build/userscript/      脚本打包、版本同步与构建校验
 build/data/            源数据维护、V3 生成与 Pages 组装
 .github/workflows/     测试、发布与数据站部署
@@ -74,7 +75,7 @@ tools/coverage-audit/  汉化覆盖审计工具
 
 只维护当前脚本与当前 V3 数据格式，不再分发旧版数据、不迁移旧缓存。清单必须使用 candidatePolicy=1、声明 SHA-256 与 bytes，名称数据必须有四列，共享词典必须包含完整八层。旧格式会被拒绝并重新获取当前数据；已经缓存的当前格式仍可离线使用。
 
-Eden 复用 Miramiru 的多语数据集与缓存，界面词条使用 `eden:` 前缀保存在 main 层。九个应用站点对应八个发布数据集，不额外分发相同的物品数据，也不增加词典层。
+Eden 复用 Miramiru 的多语数据集与缓存，界面词条使用 `eden:` 前缀保存在 main 层。装備手帳复用 MIRAPRI SNAP 的日语数据集；十个应用站点对应八个发布数据集，不额外分发相同的物品数据，也不增加词典层。
 
 数据站由 deploy-data 工作流构建为纯静态站点，只部署 `/ff14/v3/`。旧 V2 入口及专用 Functions 已删除，未提供的数据路径使用站点的 404 页面。无需维护双版本分发或旧版脚本兼容方案。
 
