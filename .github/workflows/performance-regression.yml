@@ -55,3 +55,56 @@ jobs:
           path: tests/.cache/bench/
           retention-days: 14
           if-no-files-found: error
+
+  before-after-once:
+    name: Compare pre-refactor and current main on one runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: a371e0aa514d302a95943e9b9bfa2018914ea652
+          path: before
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 836f08ae17f763de686660e2ae8a233f9c39125e
+          path: after
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 22
+      - name: Run exact revisions serially
+        env:
+          CI: 'true'
+          ZHX_BENCH_ROUNDS: '5'
+          ZHX_BENCH_CPU_RATE: '4'
+          ZHX_TEST_TIMEOUT_MS: '900000'
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/{before,after}
+          for revision in before after; do
+            (
+              cd "$revision"
+              git rev-parse HEAD
+              npm ci
+              npm run build
+              npm run test:bench
+              cp tests/.cache/bench/report-*.json "../evidence/$revision/"
+            )
+          done
+          for bench in lifecycle-ec read-path-ec; do
+            node after/tests/benchmark/compare.mjs evidence/before/report-"$bench"-*.json evidence/after/report-"$bench"-*.json
+          done
+      - name: Test FF14-FC pages with the exact candidate
+        if: always()
+        working-directory: after
+        run: |
+          set -o pipefail
+          node tests/run.mjs test-fc-pages 2>&1 | tee ../evidence/fc-live.log
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: one-time-ec-comparison
+          path: evidence/
+          if-no-files-found: error
