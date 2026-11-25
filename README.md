@@ -29,7 +29,7 @@
 | [FFXIV ARMOURY COLLECTION](https://www.ffxivcollection.com) | 国际服装备收藏站 |
 | [Miramiru](https://miramiru.co/en) | 幻化展示站（英／日／韩界面、装备和染剂汉化，装备名称跳转灰机 Wiki，筛选弹窗支持中文装备搜索） |
 | [Mirapri Eden](https://mirapri.ff14eden.work/) | 幻化搭配、装备排行与制作器（日／英界面汉化、装备 Wiki 跳转、中文装备搜索） |
-| [FF14 装備手帳](https://attire.jp/) | 日服装备外观图鉴；导航、分类与已收录装备名称汉化，已确认的物品链接可跳转灰机 Wiki |
+| [FF14 装備手帳](https://attire.jp/) | 日服装备外观图鉴；导航、分类与已收录装备名称汉化，已确认的物品链接可跳转灰机 Wiki，原站搜索框支持中文装备名 |
 | [End Closet](https://end-closet.com) | 韩服幻化网站 |
 | [灰机 wiki](https://ff14.huijiwiki.com) | 最终幻想 14 中文维基（物品页新增「幻化反查」区块） |
 

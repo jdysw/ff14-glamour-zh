@@ -12,6 +12,8 @@ const SEARCH_SITES = Object.freeze({
   fc: {},
   ronka: {},
   collection: {},
+  attire: { formInput: attireSearchInput, standalone: () => false,
+    isNativeQuery: query => /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(query) },
   ec: { standaloneVue: true },
   endcloset: { identitySearch: true },
   eden: { standalone: input => input.dataset?.zhxEdenSearch === '1',
@@ -86,6 +88,17 @@ function findSearchInput(form) {
   return result;
 }
 
+// 装備手帳 uses WordPress GET /?s=… in its theme overlay and sidebar.
+function attireSearchInput(form) {
+  if (form?.getAttribute?.('role') !== 'search' || form.method !== 'get') return null;
+  try {
+    const action = new URL(form.action, globalThis.location.href);
+    if (action.origin !== 'https://attire.jp' || action.pathname !== '/') return null;
+  } catch { return null; }
+  const input = form.querySelector('input[type="search"][name="s"]');
+  return searchInputScore(input) > -Infinity ? input : null;
+}
+
 function searchLanguage(value) {
   const lang = String(value || '').replaceAll('"', '').toLowerCase().split(/[-_]/)[0];
   return ['en', 'ja', 'ko'].includes(lang) ? lang : null;
@@ -114,7 +127,7 @@ export function createChineseSearchController(data = searchData) {
     return [...rows.values()];
   }
 
-  const SEARCH_LANGUAGES = { fc: 'ja', mirapri: 'ja', collection: 'ja', ec: 'en', ronka: 'ko', eden: 'ja' };
+  const SEARCH_LANGUAGES = { fc: 'ja', mirapri: 'ja', collection: 'ja', ec: 'en', ronka: 'ko', eden: 'ja', attire: 'ja' };
   function controlSearchLanguage(input, site = _activeSearchSiteId) {
     const explicit = searchLanguage(input?.dataset?.searchLanguage || input?.getAttribute?.('lang'));
     if (explicit) return explicit;
@@ -171,7 +184,7 @@ export function createChineseSearchController(data = searchData) {
 
   function requireMultiwordSelection(event, input) {
     const query = normalizeSearchQuery(input.value);
-    if (_composingInputs.has(input) || _selectedSearchRows.get(input)?.zh === query) return false;
+    if (!acceptsChinese(query) || _composingInputs.has(input) || _selectedSearchRows.get(input)?.zh === query) return false;
     const rows = multiwordSearchRows(query, input);
     const variants = hasItemIdentities() ? suggestionsFor(query, input)
       .filter(row => row.itemId && (rows || row.zh === query)) : [];
@@ -201,13 +214,18 @@ export function createChineseSearchController(data = searchData) {
   const inputTransport = createSearchInputTransport();
   let suggestDataReady = false;
 
+  const formSearchInput = (form, options) =>
+    options.formInput ? options.formInput(form) : findSearchInput(form);
+  const acceptsChinese = (query, options = policy) =>
+    isChineseSearchQuery(query) && !options.isNativeQuery?.(query);
+
   function isSearchInput(input) {
     if (policy.standaloneOnly) return false;
     const form = input?.form;
     if (!form) return false;
     const cached = _searchInputCache.get(form);
     if (cached && cached !== input) _searchInputCache.delete(form);
-    return findSearchInput(form) === input;
+    return formSearchInput(form, policy) === input;
   }
 
   // 1.4.2 后续修复（b 方案）：可挂候选面板的输入框 = 表单搜索框 + 独立搜索框
@@ -483,7 +501,8 @@ export function createChineseSearchController(data = searchData) {
   }
   const panel = createSearchPanel({
     accepts: isSuggestibleInput,
-    canShow: input => _activeSearchSiteId !== 'miramiru' || document.activeElement === input,
+    canShow: input => !policy.isNativeQuery?.(input.value)
+      && (_activeSearchSiteId !== 'miramiru' || document.activeElement === input),
     // The local catalogue and bundled facewear data don't depend on the V3 item index.
     canSuggest: input => suggestDataReady || catalogPage() || searchStrategy?.context(input)?.kind === 'facewear',
     suggest: suggestionsFor,
@@ -537,20 +556,22 @@ export function createChineseSearchController(data = searchData) {
     if (rows) return rows.size === 1 ? rows.values().next().value : null;
     if (fcArmorSlot(input) !== null || (siteId === 'ec' && searchStrategy?.context(input)))
       return scopedNative(query, input, true);
+    if (siteId === 'attire') return resolveByName(query) ? null : scopedNative(query, input, true);
     const identity = identityFormNative(query, siteId, input);
     if (identity !== undefined) return identity;
     return resolveSearchNative(query, siteId === 'ec' && catalogPage());
   }
 
   function handleChineseSearchSubmit(event, siteId) {
-    if (!SEARCH_SITES[siteId]) return;
+    const options = SEARCH_SITES[siteId];
+    if (!options) return;
     const form = event.target;
     _searchInputCache.delete(form);
-    const input = findSearchInput(form);
+    const input = formSearchInput(form, options);
     if (!input || _composingInputs.has(input)) return;
 
     const query = normalizeSearchQuery(input.value);
-    if (!isChineseSearchQuery(query)) return;
+    if (!acceptsChinese(query, options)) return;
 
     const selected = _selectedSearchRows.get(input);
     if (requireMultiwordSelection(event, input)) return;

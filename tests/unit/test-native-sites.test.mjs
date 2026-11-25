@@ -6,6 +6,7 @@ import {Window as TestWindow} from 'happy-dom';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
+import { createChineseSearchController } from '../../src/core/chinese-search.js';
 import { translateAttirePage } from '../../src/sites/attire.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
@@ -384,7 +385,7 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, _fireTablesReady, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
 import { parseItemIds } from '../../src/core/data/item-identity.js';
 import { itemNames } from '../../src/core/item-languages.js';
 
@@ -1283,6 +1284,67 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
   } finally {
     for (const [name,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
+test('装備手帳中文搜索：原站 GET、候选选择及未匹配的原样提交', async () => {
+  const keys = ['document','location','window','FormData','innerWidth','innerHeight','__zhxChineseSearchBound'];
+  const prior = Object.fromEntries(keys.map(key=>[key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
+  const urls = [];
+  try {
+    const d = dom.document;
+    d.body.innerHTML = `<form role="search" method="get" id="JinrSearchBox" action="https://attire.jp/">
+      <input type="search" class="a--searchform-input" name="s" placeholder="キーワードを入力して検索">
+      <input type="hidden" name="post_type" value="post"><input type="submit"></form>
+      <form role="search" method="get" action="/" class="wp-block-search"><input type="search" name="s"></form>
+      <form role="search" method="get" action="https://foreign.invalid/"><input type="search" name="s"></form>
+      <form method="post" action="/"><input name="s" type="search"><textarea>野战指挥官外套</textarea></form>`;
+    Object.assign(globalThis,{document:d,window:dom,FormData:dom.FormData,innerWidth:1024,innerHeight:768,
+      location:{href:dom.location.href,hostname:'attire.jp',assign:url=>urls.push(new URL(url))},__zhxChineseSearchBound:false});
+    const {siteFiles} = readRuntimeV3('mirapri');
+    assert.ok(_applyV3({candidatePolicy:1,identity:parseItemIds(siteFiles.itemIds.text)}));
+    const search = createChineseSearchController();
+    search.startChineseSearch('attire');
+    _fireTablesReady();
+    const [overlay,sidebar,foreign,comment] = d.querySelectorAll('form');
+    const overlayInput = overlay.querySelector('[name="s"]');
+    overlayInput.value = '野战指挥官外套';
+    const submit = form => {
+      const e = new dom.Event('submit',{bubbles:true,cancelable:true});
+      form.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    assert.equal(submit(overlay),true);
+    assert.equal(urls[0].origin,'https://attire.jp');
+    assert.equal(urls[0].pathname,'/');
+    assert.deepEqual([...urls[0].searchParams],[['post_type','post'],['s','フィールドコマンダーコート']]);
+    assert.equal(overlayInput.value,'野战指挥官外套');
+    const input = sidebar.querySelector('input');
+    input.getBoundingClientRect = () => ({left:12,right:220,top:12,bottom:44,width:208,height:32});
+    input.value = '雪崩斗手';
+    input.dispatchEvent(new dom.Event('input',{bubbles:true}));
+    await new Promise(resolve=>setTimeout(resolve,100));
+    const choice = [...d.querySelectorAll('#zhx-chinese-suggest-list button')].find(b=>b.textContent.includes('雪崩斗手上衣'));
+    assert.ok(choice,'原站侧栏输入框显示真实词库中的中文候选');
+    const clicked = new dom.Event('pointerdown',{bubbles:true,cancelable:true});
+    choice.dispatchEvent(clicked);
+    assert.equal(urls.at(-1).searchParams.get('s'),'アバランチブロウラー・トップス');
+    const count = urls.length;
+    for (const text of ['没收录的任意中文','夜の幻装コート','フィールドコマンダーコート']) {
+      input.value=text;
+      assert.equal(submit(sidebar),false);
+    }
+    foreign.querySelector('input').value = overlayInput.value;
+    comment.querySelector('input').value = overlayInput.value;
+    assert.equal(submit(foreign),false);
+    assert.equal(submit(comment),false);
+    assert.equal(urls.length,count);
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key]=value;
     }
     await dom.happyDOM.close();
   }
