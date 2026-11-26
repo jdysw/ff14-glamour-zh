@@ -6,7 +6,7 @@ import { DICT, DICT_COMMON, lookupDutyName } from '../core/data/dictionary.js';
 export { startAttire, translateAttirePage };
 
 const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--spmenu-item-label,'
-  + '#breadCrumb a,#jinrPostMeta .a--post-cat a,a[rel~="tag"],.a--post-category,'
+  + '#breadCrumb a,#jinrPostMeta .a--post-cat a,a[rel~="tag"],a[href^="/tag/"],a[href^="https://attire.jp/tag/"],.a--post-category,'
   + '#postContent :is(.a--richmenu-text,.a--h2rich-maincopy,.a--h2rich-subcopy,.c--tab-title,.rtoc-item a),'
   + '#postContent .c--tab-contents :is(h2,h3),#postContent .c--accordion-contents strong,#postContent .c--accordion-title,'
   + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag,.archive.category) #jinrPostTitle,'
@@ -19,6 +19,33 @@ const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
 const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
+// Explicit catalogue routes from the site's weapon navigation. The title must
+// also match the native job and weapon type; never infer an article's identity.
+const WEAPON_PAGES = new Map([
+  ['gladiator_s_arm', ['ナイト', '片手剣']],
+  ['shield', ['ナイト', '盾']],
+  ['marauder_s_arm', ['戦士', '両手斧']],
+  ['dark_knight_s_arm', ['暗黒騎士', '両手剣']],
+  ['gunbreaker_s_arm', ['ガンブレイカー', 'ガンブレード']],
+  ['lancer_s_arm', ['竜騎士', '両手槍']],
+  ['reaper_s_arm', ['リーパー', '両手鎌']],
+  ['pugilist_s_arm', ['モンク', '格闘武器']],
+  ['samurai_s_arm', ['侍', '刀']],
+  ['rogue_s_arm', ['忍者', '双剣']],
+  ['vpr', ['ヴァイパー', '二刀流武器']],
+  ['archer_s_arm', ['吟遊詩人', '弓']],
+  ['machinist_s_arm', ['機工士', '銃']],
+  ['dancer_s_arm', ['踊り子', '投擲武器']],
+  ['thaumaturge_s_arm', ['黒魔道士', '呪具']],
+  ['arcanist_s_grimoire', ['召喚士', '魔道書']],
+  ['rdm', ['赤魔道士', '細剣']],
+  ['blue_mage_s_arm', ['青魔道士', '青魔器']],
+  ['pictomancers-arm', ['ピクトマンサー', '筆']],
+  ['conjurer_s_arm', ['白魔道士', '幻具']],
+  ['scholar_s_arm', ['学者', '戦術魔道書']],
+  ['astrologian_s_arm', ['占星術師', '天球儀']],
+  ['sage_s_arm', ['賢者', '賢具']],
+]);
 const SITE_TITLE = '〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
 const breadcrumbTitles = new WeakMap();
 const itemLinks = new WeakMap();
@@ -170,10 +197,36 @@ function localizeCompositeLink(link, prefixName) {
   }
 }
 
-function translateStructuredItems() {
+function currentWeaponPage() {
+  return WEAPON_PAGES.get(location.pathname.replace(/^\/|\/$/gu, ''));
+}
+
+function translateWeaponCatalogue(title, page) {
+  if (!page) return;
+  const [job, type] = page;
+  const source = title?.textContent.trim();
+  const normalized = source?.replace(/\s+/gu, ' ');
+  const native = '〖' + job + '〗' + type;
+  if ([native + ' 一覧', native, type + ' 一覧', type].includes(normalized)) {
+    replaceLabel(title, source, '【' + jobName(job) + '】' + DICT['attire:weapon-type:' + type] + '一览');
+  }
+  for (const heading of document.querySelectorAll('#postContent :is(h1,h2,h3,h4,h5,h6)')) {
+    const text = heading.textContent.trim();
+    const range = /^Lv(\d{1,3})\s*[～〜~]\s*Lv(\d{1,3})$/u.exec(text);
+    if (range) replaceLabel(heading, text, Math.min(+range[1], +range[2]) + '～' + Math.max(+range[1], +range[2]) + '级');
+  }
+  // A few weapon entries have an image and caption but no item text link.
+  for (const caption of document.querySelectorAll('#postContent figcaption')) {
+    if (caption.closest(ITEM_LINK)) continue;
+    const text = caption.textContent.trim();
+    replaceLabel(caption, text, uniqueItemName(text));
+  }
+}
+
+function translateStructuredItems(weaponPage) {
   const glamour = hasCategory('glamour');
   const weapons = hasCategory('seriesb') || /weapon-coffer/i.test(location.pathname);
-  const catalogue = document.body.matches('.page') || weapons;
+  const catalogue = document.body.matches('.page') || weapons || !!weaponPage;
   const title = document.querySelector('#jinrPostTitle');
   const detail = !glamour && !!(title?.dataset.zhxAttireNative || articleName(title?.textContent.trim()));
   for (const link of document.querySelectorAll('#postContent a[href]')) {
@@ -429,6 +482,7 @@ function translateSplitSeriesLink() {
 
 function translateAttirePage() {
   const title = document.querySelector('#jinrPostTitle');
+  const weaponPage = currentWeaponPage();
   const nativeTitle = title?.textContent.trim();
   localizeRichMenu();
   for (const element of document.querySelectorAll(UI)) {
@@ -438,7 +492,9 @@ function translateAttirePage() {
     while ((node = walk.nextNode())) {
       if (node.parentElement?.closest(EXCLUDED + ',script,style,' + ITEM_LINK)) continue;
       const source = node.data.trim();
-      const localized = uiName(source);
+      const tag = node.parentElement?.closest('a[rel~="tag"],a[href^="/tag/"],a[href^="https://attire.jp/tag/"]');
+      const tagName = tag && source.startsWith('#') && exactUiName(source.slice(1).trim());
+      const localized = tagName ? '#' + tagName : uiName(source);
       if (localized && source !== localized) node.data = node.data.replace(source, () => localized);
     }
   }
@@ -449,7 +505,8 @@ function translateAttirePage() {
   translateArchiveControls();
   translateSearchControls();
   translateSplitSeriesLink();
-  translateStructuredItems();
+  translateStructuredItems(weaponPage);
+  translateWeaponCatalogue(title, weaponPage);
 
   const searchTitle = document.querySelector('body.search #postHeader #jinrPostTitle');
   if (searchTitle) {

@@ -1481,6 +1481,41 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
   }
 });
 
+test('装備手帳武器汇总：职业标题、等级分段、图注及标签', async () => {
+  const keys = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(keys.map(key => [key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/vpr/'});
+  try {
+    const d = dom.document;
+    Object.assign(globalThis,{document:d,location:dom.location,window:dom,NodeFilter:dom.NodeFilter});
+    const jp = 'テスト用の双剣', zh = '测试用对剑';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'}));
+    d.body.className = 'single';
+    d.title = '〖ヴァイパー〗二刀流武器 一覧〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    d.body.innerHTML = '<h1 id="jinrPostTitle">〖ヴァイパー〗二刀流武器 一覧</h1>'
+      + '<section id="postContent"><h2>Lv100～Lv91</h2><h3>Lv80～Lv1</h3>'
+      + '<a href="/test-weapon/">'+jp+'</a><figure><figcaption>'+jp+'</figcaption></figure>'
+      + '<p>'+jp+'</p><h3>作者の文章</h3></section>'
+      + '<a rel="tag" href="/tag/vpr/">#ヴァイパー</a><a href="/tag/eyes/">#眼鏡</a>'
+      + '<a rel="tag" href="/tag/unknown/">#未知のタグ</a>';
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'【蝰蛇剑士】蝰蛇对剑一览');
+    assert.ok(d.title.startsWith('【蝰蛇剑士】蝰蛇对剑一览'));
+    assert.deepEqual([...d.querySelectorAll('#postContent :is(h2,h3)')].map(el=>el.textContent),['91～100级','1～80级','作者の文章']);
+    assert.equal(d.querySelector('#postContent a').textContent,zh);
+    assert.equal(d.querySelector('#postContent a').pathname,'/test-weapon/');
+    assert.equal(d.querySelector('figcaption').textContent,zh);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
+    assert.deepEqual([...d.querySelectorAll('a[href^="/tag/"]')].map(el=>el.textContent),['#蝰蛇剑士','#眼镜','#未知のタグ']);
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
 test('装備手帳中文搜索：原站 GET、候选选择及未匹配的原样提交', async () => {
   const keys = ['document','location','window','FormData','innerWidth','innerHeight','__zhxChineseSearchBound'];
   const prior = Object.fromEntries(keys.map(key=>[key,globalThis[key]]));
