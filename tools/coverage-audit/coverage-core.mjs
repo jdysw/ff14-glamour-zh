@@ -12,6 +12,8 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
     if (u.protocol !== 'https:') return null;
     if (!allowedHosts.includes(u.hostname)) return null;
     if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname)) return null;
+    if (u.hostname === 'attire.jp' && (/^\/(?:wp-admin|wp-login\.php|wp-json|xmlrpc\.php)(?:\/|$)/i.test(u.pathname)
+        || u.searchParams.has('replytocom') || u.searchParams.has('preview'))) return null;
     if (u.hostname === 'mirapri.ff14eden.work') return manual.allowedRoute(u.href) ? manual.urlKey(u.href) : null;
     u.hash = '';
     u.username = '';
@@ -31,6 +33,16 @@ export function templateKey(url) {
   const parts = [];
   const route = u.hostname === 'mirapri.ff14eden.work' ? u.hash.slice(1).split('?')[0] : u.pathname;
   const originalParts = route.split('/').filter(Boolean);
+  if (u.hostname === 'attire.jp') {
+    if (u.searchParams.has('s')) return 'attire.jp/:search';
+    if (u.searchParams.has('p') || originalParts[0] === 'arms') return 'attire.jp/' + (originalParts[0] === 'arms' ? 'arms/:weapon' : ':article');
+    if (originalParts.length === 1) {
+      const slug = originalParts[0];
+      if (/^(?:\w+_s_arm|\w+_s_grimoire|shield|vpr|rdm|pictomancers-arm)$/u.test(slug)) return 'attire.jp/:weapon-catalogue';
+      if (/^(?:af-|al\d+$)/u.test(slug)) return 'attire.jp/:guide';
+      if (!['vanity-2','market','pvp','gc','hand-land','s-g','dawntrail','crafter-macro-generat'].includes(slug)) return 'attire.jp/:article';
+    }
+  }
   if (u.hostname === 'mirapri.ff14eden.work' && originalParts[1] === 'gallery') originalParts[2] = ':user';
   // FFXIV Collection has root-level equipment detail slugs; do not count each gear as a new template.
   if (['www.ffxivcollection.com', 'weapon.ffxivcollection.com'].includes(u.hostname)

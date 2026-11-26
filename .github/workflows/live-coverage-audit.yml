@@ -1,4 +1,4 @@
-name: Live localization coverage audit (8 sites)
+name: Live localization coverage audit (10 sites)
 # 外站审计按需执行；WAF/网络故障不充当代码 PR 的测试结果。
 # 手动运行仍严格要求完整证据，受阻站点不能计为“零漏翻”。
 on:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden]
+        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden, attire]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
@@ -40,6 +40,11 @@ jobs:
           max_pages=24
           max_depth=2
           per_template=2
+          if [ "${{ matrix.site }}" = attire ]; then
+            max_pages=60
+            max_depth=3
+            per_template=15
+          fi
           node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages "$max_pages" --max-depth "$max_depth" --per-template "$per_template" --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
           exit ${PIPESTATUS[0]}
         continue-on-error: true

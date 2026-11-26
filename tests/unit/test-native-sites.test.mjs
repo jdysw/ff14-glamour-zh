@@ -1696,6 +1696,19 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#mw-material').innerHTML,'上一阶段的武器<br>1<br>雏晶<br>3');
     assert.equal(d.querySelector('#mw-vendor').innerHTML,'玖布伦娜<br>拉札罕');
     assert.equal(d.querySelector('#shield-note').innerHTML,'（单手剑与盾牌套装）<br>（单手剑与盾牌套装）');
+    // Material-name lookup is restricted to a complete exchange block.
+    const material = 'テスト用の交換素材';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n'+material+'\t测试兑换素材\t1\t1',hash:hash+'\t'+zh}));
+    globalThis.location = new URL('https://attire.jp/torna-tunic/');
+    d.body.innerHTML = exchangeMarkup('<p>取引に必要なアイテム</p><p id="batch-cost">十二都市白金貨<br>一部位1,600<br>'+material+'</p>'
+      + '<p>販売ショップNPC</p><p id="batch-vendor">探査隊の古銭鑑定士<br>三日月島北部</p>'
+      + '<p id="batch-note">'+material+'</p><p id="slot">脚装備不可</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#batch-cost').innerHTML,'十二城邦白金币<br>每个部位 1,600<br>测试兑换素材');
+    assert.equal(d.querySelector('#batch-vendor').innerHTML,'调查队的古钱鉴定师<br>新月岛北部');
+    assert.equal(d.querySelector('#batch-note').textContent,material);
+    assert.equal(d.querySelector('#slot').textContent,'不可装备腿部防具');
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();

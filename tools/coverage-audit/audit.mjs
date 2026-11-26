@@ -31,6 +31,37 @@ export const DIST_FILE = path.join(REPO_ROOT, 'dist', 'ff14-glamour-zh.greasyfor
 
 // ---------- 站点配置 ----------
 export const SITES = {
+  attire: { name: 'attire', label: '装備手帳', host: 'attire.jp', channel: 'local', pages: [
+    { id: 'home', url: 'https://attire.jp/', type: 'home' },
+    { id: 'vanity', url: 'https://attire.jp/vanity-2/', type: 'catalogue' },
+    { id: 'pvp', url: 'https://attire.jp/pvp/', type: 'catalogue' },
+    { id: 'gc', url: 'https://attire.jp/gc/', type: 'catalogue' },
+    { id: 'gather-craft', url: 'https://attire.jp/hand-land/', type: 'catalogue' },
+    { id: 'seasonal', url: 'https://attire.jp/s-g/', type: 'catalogue' },
+    { id: 'dawntrail', url: 'https://attire.jp/dawntrail/', type: 'catalogue' },
+    { id: 'market', url: 'https://attire.jp/market/', type: 'catalogue' },
+    { id: 'store-category', url: 'https://attire.jp/category/online-shop/', type: 'list' },
+    { id: 'face-category', url: 'https://attire.jp/category/faceaccessory/', type: 'list' },
+    { id: 'series-category', url: 'https://attire.jp/category/seriesb/', type: 'list' },
+    { id: 'af-category', url: 'https://attire.jp/category/nyuusyuhouhou/af-nyuusyu/', type: 'list' },
+    { id: 'mgp-category', url: 'https://attire.jp/category/mgp/', type: 'list' },
+    { id: 'glasses-tag', url: 'https://attire.jp/tag/glasses/', type: 'list' },
+    { id: 'search', url: 'https://attire.jp/?s=フィールドコマンダーコート', type: 'search' },
+    { id: 'weapon-pld', url: 'https://attire.jp/gladiator_s_arm/', type: 'weapon-catalogue' },
+    { id: 'weapon-vpr', url: 'https://attire.jp/vpr/', type: 'weapon-catalogue' },
+    { id: 'dungeon-series', url: 'https://attire.jp/the-dusk-vigil-buki/', type: 'series-guide' },
+    { id: 'achievement', url: 'https://attire.jp/field-commanders-coat/', type: 'equipment' },
+    { id: 'crescent', url: 'https://attire.jp/torna-tunic/', type: 'equipment' },
+    { id: 'weapon-vendor', url: 'https://attire.jp/arms/book-of-electrum/', type: 'weapon-detail' },
+    { id: 'face-pvp', url: 'https://attire.jp/?p=125327', type: 'equipment' },
+    { id: 'face-mgp', url: 'https://attire.jp/the-faces-we-wear-rimless-glasses/', type: 'equipment' },
+    { id: 'face-variant', url: 'https://attire.jp/?p=125649', type: 'equipment' },
+    { id: 'restoration', url: 'https://attire.jp/fieldfiends-costume-shirt/', type: 'equipment' },
+    { id: 'starter', url: 'https://attire.jp/hempen-kurta/', type: 'equipment' },
+    { id: 'glamour', url: 'https://attire.jp/rose-du-desert/', type: 'glamour' },
+    { id: 'series-reward', url: 'https://attire.jp/rule-breakers-vest/', type: 'equipment' },
+    { id: 'cosmic', url: 'https://attire.jp/cosmic-operators-coverall-top/', type: 'equipment' },
+  ] },
   eden: {name:'eden',label:'Mirapri Eden',host:'mirapri.ff14eden.work',channel:'local',pages:[
     {id:'home',url:'https://mirapri.ff14eden.work/#/',type:'home'},
     {id:'ranking',url:'https://mirapri.ff14eden.work/#/components/popular-equipment',type:'list'},
@@ -126,6 +157,12 @@ export const SITES = {
   },
 };
 
+// Reuse the configured site IDs across collectors, sanitizers and reports.
+export function isAuditResultFile(name) {
+  const match = /^([a-z]+)-.+\.json$/u.exec(name);
+  return !!match && Object.hasOwn(SITES, match[1]);
+}
+
 // ---------- 残留分类 ----------
 export const CATEGORY = {
   REAL: 'real',           // 真漏译，需修
@@ -206,9 +243,10 @@ for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-end
     }
   } catch (e) { throw new Error('无法读取汉化权威词典 ' + name + ': ' + e.message); }
 }
-const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru',eden:'main'})
+const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru',eden:'main',attire:'main'})
   .map(([site,name])=>[site,new Set(Object.entries({...KANJI_DICTIONARIES.get('dict-common'),...KANJI_DICTIONARIES.get('dict-'+name)})
-    .map(([source,zh])=>[site==='eden'&&source.startsWith('eden:')?source.slice(5):source,zh])
+    .map(([source,zh])=>[site==='eden'&&source.startsWith('eden:')?source.slice(5)
+      :site==='attire'&&source.startsWith('attire:')?source.split(':').at(-1):source,zh])
     .filter(([source,zh])=>/^[\u3400-\u9fff]{2,30}$/.test(source)&&source!==zh&&/^[\u3400-\u9fff]/.test(zh)).map(([source])=>source))]));
 
 // ---------- 残留检测 ----------
@@ -261,6 +299,7 @@ function isUserContent(t, ctx) {
   // Keep text blocks / authored post titles as user content.
   if (ctx.control) return false;
   if (ctx.user) return true;
+  if (ctx.site === 'attire' && ctx.scope === 'ui') return false;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
   if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;
   // Creation / publication timestamps belong to post metadata, not authored UI.

@@ -1,6 +1,6 @@
 # coverage-audit — 汉化覆盖审计（v2）
 
-工具面向八个站点适配器，包含 Miramiru 三语页面，审计英、日、韩文的 UI 文案，并记录 userscript 翻译前后的差异。审计不会自动修改生产词库，也不会翻译用户生成内容。
+工具面向当前全部十个站点适配器，包含 Miramiru 三语页面，审计英、日、韩文的 UI 文案，并记录 userscript 翻译前后的差异。审计不会自动修改生产词库，也不会翻译用户生成内容。
 
 本地通道使用当前检出版本生成的 V3 数据，在页面内存中模拟 GM 存储。因此未部署的新站点也能审计，不依赖线上数据提前发布，也不受 localStorage 容量限制。这类扫描验证当前候选代码与数据，不能视为线上部署验收。
 
@@ -11,6 +11,9 @@
 
     # local CDP：扫描种子页 + 公开站内链接
     node tools/coverage-audit/run-scan.mjs --site fc --channel local --discover --max-pages 60 --max-depth 2 --per-template 3
+
+    # 装備手帳：目录、详情、兑换、搜索、AF、武器、幻化等 29 个种子入口 + 动态发现
+    node tools/coverage-audit/run-scan.mjs --site attire --channel local --discover --max-pages 60 --max-depth 3 --per-template 15
 
     # collection（包括 weapon 子域）
     node tools/coverage-audit/run-scan.mjs --site collection --channel local
@@ -68,11 +71,11 @@ FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足
 
 ## 实测扫描可信度与当前审计协议
 
-执行按需 GitHub Actions 工作流 `Live localization coverage audit (7 sites)`，或在自己的浏览器使用 `tools/manual-coverage-audit/`。工作流默认不随每次 PR 推送运行，避免网站 WAF/网络故障污染正常代码测试。
+执行按需 GitHub Actions 工作流 `Live localization coverage audit (10 sites)`，或在自己的浏览器使用 `tools/manual-coverage-audit/`。工作流默认不随每次 PR 推送运行，避免网站 WAF/网络故障污染正常代码测试。
 
-- **scan-complete**：本次配置的九站均取得至少一个有效业务页面，且没有记录失败页面；仅表示有限 URL 的扫描执行完整，**不等于整站 100% 汉化**。
+- **scan-complete**：本次配置的十站均取得至少一个有效业务页面，且没有记录失败页面；仅表示有限 URL 的扫描执行完整，**不等于整站 100% 汉化**。
 - **partial**：至少一个站点采到有效页面，但其他站点或同站页面存在阻断、404、超时、未产生证据等情况。
-- **failed**：九站均未获得有效业务页面。
+- **failed**：十站均未获得有效业务页面。
 - 工作流扫描步骤允许失败以便收集诊断，但最终报告任务对 incomplete 状态报错；因此不能以单个矩阵任务的绿色状态宣称扫描成功。
 - 合并产物包括 `coverage-audit-live.md`、`coverage-audit-live.json`、`coverage-audit-live-manual.json`。最后一个是兼容浏览器审计工具 `zhx-manual-audit-v2` 的脱敏导出，`baselineQuality` 最多为 `partial-inferred`，自动路径配对不冒充人工确认的基线。
 - CI 上传之前调用 `sanitize-evidence.mjs`：原始 JSON 留在临时扫描环境，玩家、物品及未知归属文本按作用域脱敏；诊断日志中的 URL 路径同样隐藏。
@@ -88,7 +91,11 @@ FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足
 
     node tools/coverage-audit/live-report.mjs --input tests/.cache/coverage-audit --out tests/.cache/coverage-report
 
-追加 `--strict` 可让未完成九站扫描的运行以非零状态退出；失败证据仍会写入报告。
+追加 `--strict` 可让未完成十站扫描的运行以非零状态退出；失败证据仍会写入报告。
 ### Miramiru 三种语言
 
-使用 `node tools/coverage-audit/audit.mjs scan --site miramiru --pages home-ja,home-en,home-ko --channel local` 可分别检查三种语言首页；日文根路径、英文 `/en`、韩文 `/ko` 及三语排行榜均已登记为入口。浏览器手动采集请安装 `tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js`，实际版本为 1.3.4。
+使用 `node tools/coverage-audit/audit.mjs scan --site miramiru --pages home-ja,home-en,home-ko --channel local` 可分别检查三种语言首页；日文根路径、英文 `/en`、韩文 `/ko` 及三语排行榜均已登记为入口。浏览器手动采集请安装 `tools/manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js`，实际版本为 1.3.6。
+
+### 装備手帳批量审计
+
+装備手帳已登记 29 个原站入口（包括搜索、分类、标签、资料片、武器目录、装备详情、特殊兑换及玩家幻化）。按需 CI 为该站提高到最多 60 页、深度 3、同模板最多 15 页，数据从生产配置指定的 mirapri V3 数据集预置。自动报告仍只是有限样本，部分入口可能被 WAF 或缓存阻断；隐藏折叠区、动态交互和全文官译准确性须另外验证。原站链接发现受预算限制，不宣称全站无漏译。

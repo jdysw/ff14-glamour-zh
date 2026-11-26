@@ -2,10 +2,11 @@
 // No telemetry, storage, network calls, or mutation.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { miramiruScope, edenScope } = require('../manual-coverage-audit/audit-core.js');
+const { miramiruScope, edenScope, attireScope } = require('../manual-coverage-audit/audit-core.js');
 export const COLLECTOR_JS = String.raw`(() => {
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
+  const attireScope = ${attireScope.toString()};
   const out = [];
   const seen = new Set();
   const BAD = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'IFRAME', 'SVG']);
@@ -61,9 +62,10 @@ export const COLLECTOR_JS = String.raw`(() => {
     const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
       || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
     const siteScope = globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
-      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el) : null;
-    const user = (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
-    const ui = siteScope !== 'item' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
+      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el)
+      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href) : null;
+    const user = siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
+    const ui = siteScope === 'ui' || siteScope !== 'item' && siteScope !== 'user' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
       || kind.startsWith('attr:') || kind === 'option');
     return {

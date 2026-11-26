@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { isAuditResultFile } from './audit.mjs';
 const require=createRequire(import.meta.url);
 const C=require('../manual-coverage-audit/audit-core.js');
 export function redactItems(items,site){
@@ -32,7 +33,7 @@ export function sanitizeEvidence(source,target){
       });
       fs.writeFileSync(to,log,'utf8');continue;
     }
-    if(!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki|miramiru|eden)-.+\.json$/.test(entry.name))continue;
+    if(!isAuditResultFile(entry.name))continue;
     const row=JSON.parse(fs.readFileSync(from,'utf8'));
     if(!row.site||(!Array.isArray(row.items)&&!Array.isArray(row.pages)))continue;
     const cleaned={...row};

@@ -5,11 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import {summarizeLive,toManualAudit,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
+import {SITE_POLICIES} from '../../src/core/site-policy.js';
 import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 // The report requires every configured site; CI must schedule the same set.
 const workflow=fs.readFileSync(new URL('../../.github/workflows/live-coverage-audit.yml',import.meta.url),'utf8');
 const matrix=workflow.match(/site: \[([^\]]+)\]/)?.[1].split(',').map(s=>s.trim());
 assert.deepEqual(matrix?.sort(),Object.keys(SITES).sort(),'CI matrix must include every audit site');
+assert.deepEqual(Object.keys(SITES).sort(), SITE_POLICIES.map(site=>site.id).sort(), 'Every production adapter must have a live-audit entry');
 const at='2026-10-09T13:00:00Z';
 const good=site=>({site,pageId:'home',
   url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/物品:加特勒':SITES[site].pages[0].url,status:'ok',
@@ -54,5 +56,16 @@ try{
   fs.writeFileSync(path.join(rawDir,'miramiru-home-ja.json'),JSON.stringify(good('miramiru')));
   assert.equal(sanitizeEvidence(rawDir,pubDir),2);
   assert.ok(loadLiveResults(pubDir).some(row=>row.site==='miramiru'));
+  const attire=good('attire');
+  attire.items=[
+    {kind:'text',text:'入手方法',path:'h2',ctx:{ui:true,user:false,scope:'ui',cls:'a--post-title'}},
+    {kind:'text',text:'玩家作品标题',path:'h1',ctx:{ui:false,user:true,scope:'user'}},
+  ];
+  fs.writeFileSync(path.join(rawDir,'attire-home.json'),JSON.stringify(attire));
+  assert.equal(sanitizeEvidence(rawDir,pubDir),3);
+  assert.ok(loadLiveResults(pubDir).some(row=>row.site==='attire'));
+  const safe=fs.readFileSync(path.join(pubDir,'attire-home.json'),'utf8');
+  assert.match(safe,/入手方法/);
+  assert.doesNotMatch(safe,/玩家作品标题/);
 }finally{fs.rmSync(rawDir,{recursive:true,force:true});fs.rmSync(pubDir,{recursive:true,force:true});}
 console.log('✅ live-report: strict completeness, current manual audit export, privacy redaction');

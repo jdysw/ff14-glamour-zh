@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { renderUserscriptHeader } from '../../build/userscript/metadata.mjs';
-import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, DIST_FILE } from './audit.mjs';
+import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, DIST_FILE, isAuditResultFile } from './audit.mjs';
+import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
 import { discoverSitemapUrls } from './sitemap.mjs';
 import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
@@ -98,7 +99,8 @@ export async function scanUrlLocal({ site, pageId, url, port = 9223, waitMs = 15
     // 现在清 localStorage + 预置数据 + 注入脚本（页面已就绪）
     // Audit the checkout's generated data, including unpublished new adapters.
     // Page-local GM storage also avoids multilingual bundles exceeding quota.
-    await seedV3Memory(c, site);
+    const dataSite = SITE_POLICIES.find(policy => policy.id === site)?.dataSite || site;
+    await seedV3Memory(c, dataSite);
     await c.eval(GM_STUB);
     // Enable the existing lightweight diagnostic lifecycle marker before the
     // userscript loads; this does not display the probe panel.
@@ -148,7 +150,7 @@ export function cloudScanPlan(site, opts = {}) {
 // ---------- 报告合并 ----------
 export function loadResults(dir = CACHE_DIR) {
   if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir).filter((f) => /^(mirapri|ec|fc|ronka|collection|wiki|endcloset|miramiru|eden)-.*\.json$/.test(f) && !f.startsWith('cloud-plan-'));
+  const files = fs.readdirSync(dir).filter((f) => isAuditResultFile(f));
   const results = [];
   for (const f of files) {
     try { const d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (d.site && (d.items || d.pages)) results.push(d); } catch (e) { console.error('[audit] 跳过损坏缓存:', f, e.message); }

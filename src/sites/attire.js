@@ -337,7 +337,7 @@ function translateMogLabels() {
   while ((node = walk.nextNode())) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style,' + ITEM_LINK)) continue;
     const source = node.data.trim();
-    const zh = mogLabel(source);
+    const zh = mogLabel(source) || DICT['attire:seasonal-note:' + source];
     if (zh && source !== zh) node.data = node.data.replace(source, () => zh);
   }
 }
@@ -615,6 +615,11 @@ function translateGrandCompanyMetadata() {
 }
 
 function equipmentMetadata(source) {
+  const blocked = /^(頭|胴|手|脚|足)装備不可$/u.exec(source);
+  if (blocked) {
+    const slots = { 頭: '头部', 胴: '身体', 手: '手部', 脚: '腿部', 足: '脚部' };
+    return '不可装备' + slots[blocked[1]] + '防具';
+  }
   const market = /^マーケット取引\s*[:：]\s*([◯○×✕])$/u.exec(source);
   if (market) return /[◯○]/u.test(market[1]) ? '可在市场交易' : '不可在市场交易';
   if (/^染色[◯○]\s*[（(]条件あり[）)]$/u.test(source)) return uiName('染色◯（条件あり）');
@@ -794,7 +799,13 @@ function translateOtherAcquisitionMetadata() {
     if (!parent.closest('.c--accordion-contents,p,span,strong,td,dd')) continue;
     const translated = node.data.split(/(\r?\n)/u).map(line => {
       const source = line.trim();
-      const zh = treasureSourceName(source);
+      let zh = treasureSourceName(source);
+      if (!zh && parent.closest('.c--accordion-contents')) {
+        zh = DICT['attire:acquisition-note:' + source];
+        const coffer = /^(.+?チェスト)を開けることで装備一式入手できます。?$/u.exec(source);
+        const name = coffer && uniqueItemName(coffer[1]);
+        if (name) zh = '打开' + name + '即可获得整套装备。';
+      }
       return zh && zh !== source ? line.replace(source, () => zh) : line;
     }).join('');
     if (translated !== node.data) node.data = translated;
@@ -813,6 +824,9 @@ function exchangeDetailName(source) {
   }
   const exact = DICT['attire:exchange:' + source];
   if (exact) return exact;
+  if (['トロフィークリスタル', 'ゴールドソーサー'].includes(source)) return uiName(source);
+  const perPart = /^一部位\s*([\d,]+)$/u.exec(source);
+  if (perPart) return '每个部位 ' + perPart[1];
   // Match the complete native label, never an arbitrary substring of prose.
   const swordShield = /^(※|[（(])?片手剣[&＆]盾セット([）)])?$/u.exec(source);
   if (swordShield && (/^[（(]$/u.test(swordShield[1] || '') === !!swordShield[2])) {
@@ -878,12 +892,28 @@ function translateExchangeMetadata(weaponDetail) {
       for (const line of lines) if (line.trim()) labels.add(line.trim());
       nodes.push([node, lines]);
     }
+    const isHeading = (source, label) => source === label || source === exchangeDetailName(label);
+    const isVendor = source => EXCHANGE_VENDOR_LABELS.some(label => isHeading(source, label));
+    const isCost = source => isHeading(source, EXCHANGE_HEADINGS[0]);
     const hasLabel = label => labels.has(label) || labels.has(exchangeDetailName(label));
     if (!hasLabel(EXCHANGE_HEADINGS[0]) || !EXCHANGE_VENDOR_LABELS.some(hasLabel)) continue;
+    // Translate exact canonical material names inside a bounded cost block.
+    // Do not infer item identity or alter links, and do not apply a general
+    // item-name lookup to vendor labels or surrounding author prose.
+    const isToc = text => !!text.parentElement?.closest('.rtoc-item');
+    let vendorsRemaining = nodes.reduce((n, [text, lines]) => n + (isToc(text) ? 0
+      : lines.filter(line => isVendor(line.trim())).length), 0);
+    let inCost = false;
     for (const [text, lines] of nodes) {
+      const toc = isToc(text);
       const translated = lines.map(line => {
         const source = line.trim();
-        const zh = exchangeDetailName(source);
+        if (!toc && isCost(source)) inCost = vendorsRemaining > 0;
+        if (!toc && isVendor(source)) {
+          inCost = false;
+          vendorsRemaining--;
+        }
+        const zh = exchangeDetailName(source) || (!toc && inCost && source && uniqueItemName(source));
         return zh && source !== zh ? line.replace(source, () => zh) : line;
       }).join('');
       if (translated !== text.data) text.data = translated;
@@ -901,8 +931,8 @@ function translateEquipmentMetadata() {
   }
   // The level/job summary and dyeability labels occur on item detail pages,
   // not on player-authored glamour posts.
-  for (const element of document.querySelectorAll('#postContent :is(p,span,strong)')) {
-    if (element.closest(EXCLUDED + ',a[href]')) continue;
+  for (const element of document.querySelectorAll('#postContent :is(p,span,strong,li,td,dd)')) {
+    if (element.closest(EXCLUDED + ',a[href],' + CARD)) continue;
     const source = element.textContent.trim();
     const zh = equipmentMetadata(source);
     if (zh) replaceLabel(element, source, zh);

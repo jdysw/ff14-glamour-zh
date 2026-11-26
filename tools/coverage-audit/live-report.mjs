@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { SITES, CACHE_DIR, buildReport, classifyResiduals } from './audit.mjs';
+import { SITES, CACHE_DIR, buildReport, classifyResiduals, isAuditResultFile } from './audit.mjs';
 import { coverageStats, latestResults, templateKey } from './coverage-core.mjs';
 const require = createRequire(import.meta.url);
 const manual = require('../manual-coverage-audit/audit-core.js');
@@ -16,7 +16,7 @@ export function loadLiveResults(dir) {
     for(const entry of fs.readdirSync(folder,{withFileTypes:true})){
       const full=path.join(folder,entry.name);
       if(entry.isDirectory()){visit(full);continue;}
-      if(!entry.isFile()||!/^(mirapri|ec|fc|ronka|collection|endcloset|wiki|miramiru|eden)-.+\.json$/.test(entry.name))continue;
+      if(!entry.isFile()||!isAuditResultFile(entry.name))continue;
       try {
         const d=JSON.parse(fs.readFileSync(full,'utf8'));
         if(d.site&&(Array.isArray(d.items)||Array.isArray(d.pages)))rows.push(d);

@@ -22,6 +22,12 @@ assert.equal(classify('染色',{site:'collection',ui:true}),'ok','Miramiru termi
 assert.equal(classify('染色',{site:'miramiru',ui:true}),'real');
 
 assert.ok(SITES.eden, 'Eden 的 hash 路由业务页必须可审计');
+assert.ok(SITES.attire.pages.length >= 25, '装備手帳应覆盖目录、装备、武器、兑换、AF、搜索和幻化等种子页');
+assert.equal(templateKey('https://attire.jp/?p=125327'),templateKey('https://attire.jp/torna-tunic/'));
+assert.equal(templateKey('https://attire.jp/arms/book-of-electrum/'),templateKey('https://attire.jp/arms/quick-silver/'));
+assert.notEqual(templateKey('https://attire.jp/?s=フィールドコマンダーコート'),templateKey('https://attire.jp/'));
+assert.equal(normalizeSiteUrl('https://attire.jp/wp-login.php','https://attire.jp/', ['attire.jp']),null);
+assert.equal(classify('入手方法',{site:'attire',ui:true,scope:'ui',cls:'a--post-title'}),'real');
 assert.equal(classify('検索',{site:'eden',ui:true}),'real');
 assert.equal(normalizeSiteUrl('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private', 'https://mirapri.ff14eden.work/', ['mirapri.ff14eden.work']), 'https://mirapri.ff14eden.work/#/components/popular-equipment');
 assert.notEqual(templateKey('https://mirapri.ff14eden.work/#/'),templateKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));

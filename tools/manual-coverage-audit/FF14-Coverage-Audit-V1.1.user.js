@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FF14 七站汉化覆盖审计 V1.1
 // @namespace    https://github.com/jdysw/ff14-glamour-zh
-// @version      1.3.5
+// @version      1.3.6
 // @description  汉化覆盖审计 + 自愿开启中文搜索事件、候选与请求诊断；仅本地导出，不上传。
 // @match        https://mirapri.com/*
 // @match        https://ffxiv.eorzeacollection.com/*
@@ -13,6 +13,7 @@
 // @match        https://ff14.huijiwiki.com/*
 // @match        https://miramiru.co/*
 // @match        https://mirapri.ff14eden.work/*
+// @match        https://attire.jp/*
 // @noframes
 // @run-at       document-start
 // @grant        GM_getValue
@@ -23,12 +24,12 @@
 /* FF14 manual coverage audit - shared pure logic (Node and userscript). */
 (function (global) {
   'use strict';
-  const TOOL_VERSION = '1.3.5';
+  const TOOL_VERSION = '1.3.6';
   const SITES = Object.freeze({
     'mirapri.com':'mirapri','ffxiv.eorzeacollection.com':'ec','ff14-fc.com':'fc',
     'lookbook.ronkacloset.com':'ronka','www.ffxivcollection.com':'collection',
     'weapon.ffxivcollection.com':'collection','end-closet.com':'endcloset',
-    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden'
+    'ff14.huijiwiki.com':'wiki','miramiru.co':'miramiru','mirapri.ff14eden.work':'eden','attire.jp':'attire'
   });
   const FORMAT = 'zhx-manual-audit-v2';
   const AUTHORED = {
@@ -62,6 +63,8 @@
     for(const k of [...u.searchParams.keys()]){
       if(/^(utm_|fbclid$|gclid$|ref$|source$|share$|session|token|nonce|access|secret|auth|pass|email|sid$|code$|q$|query$|search$)/i.test(k))u.searchParams.delete(k);
     }
+    // WordPress search may contain user-entered words. Keep only the route state in exported evidence.
+    if(u.hostname==='attire.jp'&&u.searchParams.has('s'))u.searchParams.set('s','[query omitted]');
     u.searchParams.sort();
     if(u.pathname !== '/')u.pathname = u.pathname.replace(/\/+$/,'') + '/';
     return u.toString();
@@ -96,6 +99,33 @@
     if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
     return null;
   }
+  function attireScope(el,kind,url){
+    if(el.closest?.('a[href*="/lodestone/playguide/db/item/"],[data-zhx-attire-item]'))return 'item';
+    const card=el.closest?.('a.c--post-link[rel~="bookmark"]');
+    if(card){
+      if(el.closest?.('.a--post-category'))return 'ui';
+      if(card.querySelector?.('.a--post-category.category-glamour'))return 'user';
+      if(kind==='attr:alt'||el.closest?.('.a--post-title'))return 'item';
+    }
+    if(el.closest?.('#comments,.comment-list,.a--post-author,.widget_recent_entries'))return 'user';
+    const doc=el.ownerDocument;
+    const categories=[...(doc?.querySelectorAll?.('#jinrPostMeta .a--post-cat a[href]')||[])];
+    const glamour=categories.some(a=>a.pathname?.split('/').includes('glamour'));
+    if(el.closest?.('nav,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,#jinrPostMeta .a--post-cat,a[rel~="tag"],.a--post-category'))return 'ui';
+    if(glamour&&el.closest?.('#jinrPostTitle,#postContent'))return 'user';
+    if(el.closest?.('#jinrPostTitle')){
+      const guide=categories.some(a=>a.pathname?.split('/').some(p=>['tomestone','af-nyuusyu','seriesb'].includes(p)));
+      return !doc?.body?.matches?.('.single')||guide?'ui':'item';
+    }
+    if(el.closest?.('#postContent')){
+      if(kind==='attr:alt')return 'item';
+      if(el.closest?.('.a--h2rich-maincopy,.a--h2rich-subcopy,.a--richmenu-text,.c--tab-title,.c--accordion-title,.rtoc-item,.wp-block-heading'))return 'ui';
+      if(el.closest?.('h2,h3,h4,h5,h6,th,dt'))return 'ui';
+      if(el.closest?.('.c--accordion-contents td,.c--accordion-contents dd,.c--accordion-contents strong'))return 'ui';
+      return 'unknown';
+    }
+    return null;
+  }
   function allowedRoute(url){try{const u=new URL(url);const site=siteFor(url);return !!site&&!ROUTE_BLOCK.test(u.pathname)&&(site!=='eden'||!!edenRoute(u))}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
@@ -111,7 +141,7 @@
     const link=el.closest?.('a[href]');
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):null;
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
@@ -215,6 +245,7 @@
         const itemName=ctx.scope==='item'||ITEM_RE.test(signature);
         let scope='unknown';
         if(ctx.ad)scope='ad';
+        else if(site==='attire'&&ctx.scope==='ui'&&!ctx.user)scope='ui';
         else if(authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';
         else if(it.kind==='document:title')scope='metadata';
@@ -247,7 +278,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
