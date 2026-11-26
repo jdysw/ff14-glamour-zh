@@ -1563,14 +1563,17 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
       translateAttirePage();
       translateAttirePage();
     };
+    assert.ok(_applyV3({candidatePolicy:1,names:'テスト装備・アタイア\t测试套装\t1\t1\n曖昧・アタイア\t测试甲套装\t1\t1\n曖昧アタイア\t测试乙套装\t1\t1'}));
     render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
       + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
       + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'
+      + '<a href="/augmented-minekings-work-shirt/">マインキング</a><a href="/augmented-fieldkeeps-shirt/">フィールドキープ</a>'
+      + '<a href="/test/">テスト装備</a><a href="/ambiguous/">曖昧</a>'
       + '<p id="author">マインライズ</p><a href="/unknown/">未知のセット</a></section>');
     assert.equal(d.querySelector('h1').textContent,'采集与制作职业');
     assert.equal(d.querySelector('.c--tab-title').textContent,'按职业汇总');
     assert.deepEqual([...d.querySelectorAll('h2,h3')].map(e=>e.textContent),['采集职业专属装备','采矿工']);
-    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','未知のセット']);
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','测试套装','曖昧','未知のセット']);
     assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
     assert.equal(d.querySelector('#author').textContent,'マインライズ');
     render('/af-pld/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/af-nyuusyu/">入手方法：歴代ジョブAF</a></div></div>'
@@ -1585,11 +1588,16 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     render('/s-g/', '<h1 id="jinrPostTitle">シーズナル</h1><section id="postContent"><h2>定期開催</h2>'
       + '<a href="/heavensturn/"><span>Heavensturn</span><span>降神祭</span></a>'
       + '<a href="/little-ladies-day/">Little Ladies Day プリンセスデー</a>'
-      + '<p>作者の文章</p></section>');
+      + '<p id="mog">哲学（Philosophy）</p><p id="reward">鯰尾耳飾</p><p id="mog-note">作者の文章</p>'
+      + '<a id="mog-pair" href="/mameshiba-earring/">神話（Mythology） 豆柴耳飾</a></section>');
     assert.equal(d.querySelector('h1').textContent,'季节活动');
     assert.equal(d.querySelector('h2').textContent,'定期活动');
-    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['降神节','女儿节']);
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['降神节','女儿节','稀少神话神典石 豆柴耳饰']);
     assert.equal(d.querySelector('#postContent a').pathname,'/heavensturn/');
+    assert.equal(d.querySelector('#mog').textContent,'稀少哲学神典石');
+    assert.equal(d.querySelector('#reward').textContent,'鲶鱼耳饰');
+    assert.equal(d.querySelector('#mog-note').textContent,'作者の文章');
+    assert.equal(d.querySelector('#mog-pair').pathname,'/mameshiba-earring/');
     render('/all-saints-wake/', '<h1 id="jinrPostTitle">守護天節 / All Saints’ Wake</h1>');
     assert.equal(d.querySelector('h1').textContent,'守护天节');
   } finally {

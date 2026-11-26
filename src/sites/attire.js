@@ -80,6 +80,8 @@ function uiName(source) {
   if (exact) return exact;
   const artifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)アーティファクト$/u.exec(source);
   if (artifact) return exactUiName(artifact[1] + '編') + ' 职业专属装备';
+  const craftArtifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)(ギャザラー|クラフター)AF$/u.exec(source);
+  if (craftArtifact) return exactUiName(craftArtifact[1] + '編') + ' ' + exactUiName(craftArtifact[2] + 'AF');
   const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
   if (count) {
     const name = exactUiName(count[1]);
@@ -264,10 +266,60 @@ function afSetName(source) {
   return set ? exactUiName(match[1] + '編') + ' ' + set : null;
 }
 
+function catalogueSetName(source) {
+  const known = DICT['attire:set:' + source];
+  if (known) return known;
+  // Outfit-glamour items provide exact, official set names. Never infer a
+  // series from arbitrary item-name prefixes or use the set for a Wiki redirect.
+  const names = new Set([
+    ...resolveAllByName(source + '・アタイア'),
+    ...resolveAllByName(source + 'アタイア'),
+  ]);
+  if (names.size !== 1) return null;
+  const name = [...names][0];
+  return name.endsWith('套装') ? name : null;
+}
+
+const MOG_REWARDS = new Set([
+  '鯰尾耳飾','豆柴耳飾','鯰尾前掛','豆柴首巻','サーペントリング','イフリートジャンパー',
+  'デモンズブロックイヤリング','ポークシーイヤリング','ファットキャットパラソル',
+  'カーバンクル・エメラルドイヤリング','ドーナツピアス','パイッサイヤリング',
+  'コーヒーカップピアス','ボーズピアス',
+]);
+
+function mogRewardName(source) {
+  return MOG_REWARDS.has(source) ? uniqueItemName(source) || DICT['attire:mog:' + source] : null;
+}
+
+function mogLabel(source) {
+  const exact = DICT['attire:mog:' + source];
+  if (exact) return exact;
+  const reward = mogRewardName(source);
+  if (reward) return reward;
+  const pair = /^(\S+)\s+(.+)$/u.exec(source);
+  if (!pair) return null;
+  const currency = DICT['attire:mog:' + pair[1]];
+  const item = mogRewardName(pair[2]);
+  return currency && item ? currency + ' ' + item : null;
+}
+
+function translateMogLabels() {
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    if (node.parentElement?.closest(EXCLUDED + ',script,style,' + ITEM_LINK)) continue;
+    const source = node.data.trim();
+    const zh = mogLabel(source);
+    if (zh && source !== zh) node.data = node.data.replace(source, () => zh);
+  }
+}
+
 function sourceCatalogueName(source, kind) {
   if (kind === 'af') return afSetName(source) || uiName(source);
   if (kind === 'seasonal') return eventName(source) || uiName(source);
-  return DICT['attire:set:' + source] || uiName(source);
+  return (kind === 'hand-land' ? catalogueSetName(source) : DICT['attire:set:' + source]) || uiName(source);
 }
 
 function translateSourceCatalogue(title, nativeTitle) {
@@ -279,6 +331,7 @@ function translateSourceCatalogue(title, nativeTitle) {
   const titleZh = afSummaryName(nativeTitle) || eventName(nativeTitle);
   if (!hasCategory('glamour')) replaceLabel(title, nativeTitle, titleZh);
   if (!kind) return;
+  if (kind === 'seasonal') translateMogLabels();
   const current = title?.textContent.trim();
   replaceLabel(title, current, uiName(current));
   const selector = '#postContent :is(h2,h3,h4,h5,h6,.c--tab-title,.a--richmenu-text,.a--h2rich-maincopy,.a--h2rich-subcopy,.rtoc-item a,a[href])';
@@ -354,7 +407,8 @@ function translateStructuredItems(weaponPage, weaponDetail) {
 }
 
 function equipmentMetadata(source) {
-  if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能') return uiName(source);
+  if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能'
+      || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)) return uiName(source);
   const match = /^Lv\s*(\d{1,3})\s+(.+)$/iu.exec(source);
   if (!match) return null;
   const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
@@ -364,6 +418,10 @@ function equipmentMetadata(source) {
 }
 
 function translateEquipmentMetadata() {
+  for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/shop/"]')) {
+    if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
+    replaceLabel(link, 'スクリップ取引窓口', uiName('スクリップ取引窓口'));
+  }
   // The level/job summary and dyeability labels occur on item detail pages,
   // not on player-authored glamour posts.
   for (const element of document.querySelectorAll('#postContent :is(p,span,strong)')) {
