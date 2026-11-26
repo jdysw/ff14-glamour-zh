@@ -1268,6 +1268,12 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(fcVerifiedSetName('バトルフィールドローズ・コスチュームセット'),'战场玫瑰套装');
     assert.equal(fcVerifiedSetName('ハンブル・コスチュームセット'),'平民套装');
     assert.equal(fcVerifiedSetName('セイニャー・コスチュームセット'),'领主装备套装');
+    assert.equal(fcVerifiedSetName('ブルーサマーセット（女性用）'),'蔚蓝女式夏装组合');
+    const summer = source.createElement('a');
+    summer.href = '/equipment/summer/';
+    summer.textContent = 'ブルーサマーセット（女性用）';
+    assert.equal(fcSetDisplayText(summer.firstChild, summer.textContent, '蔚蓝女式夏装组合'),'蔚蓝女式夏装组合');
+    assert.equal(fcVerifiedSetName(null),null);
     _applyV3({candidatePolicy:1,names:'テスト・アタイア\t测试套装\t1\t0'});
     assert.equal(fcVerifiedSetName('テスト・コスチュームセット'),'测试套装');
     assert.equal(fcVerifiedSetName('未確認・コスチュームセット'),null);

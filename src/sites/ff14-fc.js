@@ -95,10 +95,22 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['バトルフィールドローズ・コスチュームセット', '战场玫瑰套装'],
     ['ハンブル・コスチュームセット', '平民套装'],
     ['セイニャー・コスチュームセット', '领主装备套装'],
+    // The official outfit combination name (Item 45109) already expresses a set.
+    ['ブルーサマーセット（女性用）', '蔚蓝女式夏装组合'],
   ]);
   function fcVerifiedSetName(name) {
+    if (typeof name !== 'string') return null;
     const verified = FC_VERIFIED_SET_ALIASES.get(name);
     if (verified) return verified;
+    // Seasonal shop bundles use gendered titles, while the actual item
+    // record names the corresponding top + bottom combination.
+    const summer = /^(レッド|グリーン|ブルー|ソーラー|ルナ|パールブラック|パールホワイト|ストライプ)サマーセット[（(]([男女])性用[）)]$/u.exec(name);
+    if (summer) {
+      const prefix = summer[1].startsWith('パール') ? summer[1] + '・' : summer[1];
+      const part = summer[2] === '女' ? 'ホルター' : 'トップ';
+      const values = resolveAllByName(prefix + 'サマー' + part + '・セット');
+      return values.length === 1 && /夏装组合$/u.test(values[0]) ? values[0] : null;
+    }
     if (!name.endsWith('・コスチュームセット')) return null;
     // The shop commonly uses コスチュームセット where the canonical
     // game item uses アタイア. Require the entire item name and one
@@ -281,7 +293,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const outfitArticle = match[4] === '👗' || !match[4];
     const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
     let suffix = '';
-    if (!/(?:套装|装束)(?:·[阴阳])?$/u.test(name)) {
+    if (!/(?:套装|装束|夏装组合)(?:·[阴阳])?$/u.test(name)) {
       if (isKnownOutfit) suffix = '套装';
       else if (match[3]) suffix = '装备';
     }
@@ -765,7 +777,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束)(?:·[阴阳])?$/u.test(officialName)) {
+    if (/(?:套装|装束|夏装组合)(?:·[阴阳])?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
