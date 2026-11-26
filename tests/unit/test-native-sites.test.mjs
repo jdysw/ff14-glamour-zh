@@ -1528,6 +1528,12 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     globalThis.location = new URL('https://attire.jp/arms/white-gold-foil/');
     d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent">
       <p id="level">Lv96 IL669</p><dl><dt>抜刀ギミック</dt><dd>発光</dd><dt>種類</dt><dd>未確認の分類</dd></dl>
+      <p id="effects">発光<br>変形</p><p id="none">無し</p>
+      <p id="vendor">カ・インタナ<br>モードゥナ</p><p id="token">未知蛮神のトーテム像〖剛〗<br>10</p>
+      <p id="mixed">発光<br>作者の説明</p><p id="type">ナックル</p>
+      <p id="coffer">ダイヤ・ウェポンチェスト〖ILv525〗</p>
+      <a id="duty-name" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/duty/00000000001/">極ダイヤウェポン捕獲作戦</a>
+      <a id="foreign-vendor" href="https://example.test/">カ・インタナ</a>
       <div><span class="a--h2rich-subcopy">Weapons of the same design</span><h2 class="a--h2rich-maincopy">同デザイン武器</h2></div>
       <h2 class="wp-block-heading">セット防具</h2>
       <a id="catalogue" href="/arcanist_s_grimoire/">〖召喚士〗魔道書一覧</a>
@@ -1538,6 +1544,16 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     translateAttirePage();
     translateAttirePage();
     assert.equal(d.querySelector('#level').textContent,'等级 96／品级 669');
+    assert.equal(d.querySelector('dd').textContent,'发光');
+    assert.equal(d.querySelector('#effects').innerHTML,'发光<br>变形');
+    assert.equal(d.querySelector('#none').textContent,'无');
+    assert.equal(d.querySelector('#vendor').innerHTML,'卡·因塔娜<br>摩杜纳');
+    assert.equal(d.querySelector('#token').innerHTML,'白色未知蛮神图腾<br>10');
+    assert.equal(d.querySelector('#mixed').innerHTML,'発光<br>作者の説明');
+    assert.equal(d.querySelector('#type').textContent,'指虎');
+    assert.equal(d.querySelector('#coffer').textContent,'钻石神兵武器箱（品级525）');
+    assert.equal(d.querySelector('#duty-name').textContent,'钻石神兵狂想作战');
+    assert.equal(d.querySelector('#foreign-vendor').textContent,'カ・インタナ');
     assert.deepEqual([...d.querySelectorAll('dt')].map(el=>el.textContent),['拔刀效果','种类']);
     assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'同外观武器');
     assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
