@@ -141,7 +141,7 @@ function translateMiramiruDialogJob(raw, element) {
 function translateMiramiruText(raw, element) {
   const path = miramiruPathname();
   const section = path === '/terms' ? 'terms' : path === '/about' ? 'about'
-    : path === '/about/contributors' ? 'contributors' : null;
+    : path === '/about/contributors' ? 'contributors' : path === '/sponsors' ? 'sponsors' : null;
   if (section && element.closest('main')) {
     const label = raw.trim();
     const zh = knownMiramiruText(section + ':' + label);

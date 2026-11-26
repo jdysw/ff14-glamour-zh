@@ -89,6 +89,9 @@ export const SITES = {
       { id: 'ranking-ja', url: 'https://miramiru.co/ranking', type: 'list' },
       { id: 'ranking-en', url: 'https://miramiru.co/en/ranking', type: 'list' },
       { id: 'ranking-ko', url: 'https://miramiru.co/ko/ranking', type: 'list' },
+      { id: 'sponsors-ja', url: 'https://miramiru.co/sponsors/', type: 'misc' },
+      { id: 'sponsors-en', url: 'https://miramiru.co/en/sponsors/', type: 'misc' },
+      { id: 'sponsors-ko', url: 'https://miramiru.co/ko/sponsors/', type: 'misc' },
     ],
   },
   mirapri: {
@@ -267,7 +270,8 @@ const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:
 
 // ---------- 残留检测 ----------
 // 日文假名（平/片）
-const JA_RE = /[\u3040-\u30ff]/;
+// Common punctuation such as ・ and an isolated ー is not untranslated Japanese.
+const JA_RE = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 // 韩文音节/谚文字母
 const KO_RE = /[\uac00-\ud7af\u1100-\u11ff]/;
 // 全角片假名/平假名以外的日文符号（长音符等）
@@ -290,8 +294,15 @@ export function isResidual(text, ctx = {}) {
   const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
   // Retained names in otherwise translated Chinese do not imply partial UI.
   // Remove only verified names; "关于 Miramiru Settings" remains a candidate.
-  const latinCount = (t.replace(/\b(?:Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
-    .replace(/@[A-Za-z0-9_]{1,15}\b/g, '').match(/[A-Za-z]/g) || []).length;
+  let remainder = t.replace(/\b(?:Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
+    .replace(/@[A-Za-z0-9_]{1,15}\b/g, '');
+  if (ctx.site === 'miramiru' && hanCount) {
+    // These exact names and relative routes are deliberately retained in the
+    // site's translated FAQ. Do not ignore arbitrary Latin phrases.
+    remainder = remainder.replace(/\b(?:Google AdSense|Amazon Associates|Moshimo Affiliate|Supabase Auth|Niique Noela|Anima|Mana|PR)\b/g, '')
+      .replace(/\/(?:support|affiliate|commerce)\b/g, '');
+  }
+  const latinCount = (remainder.match(/[A-Za-z]/g) || []).length;
   return !hanCount || latinCount >= 6;
 }
 

@@ -6185,6 +6185,15 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
 
   // ⚠️ 自动生成（data/dictionaries/dict-miramiru.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT_MIRAMIRU = { ...DICT_COMMON,
+    'contributors:Miramiru runs on your support': 'Miramiru 依靠大家的支持运营',
+    'sponsors:Host Your Own Contest': '举办自己的比赛',
+    'sponsors:Host your own contest on Miramiru': '在 Miramiru 举办自己的比赛',
+    'sponsors:Great for...': '适合以下用途',
+    'sponsors:Contest Naming Rights': '比赛冠名权',
+    'sponsors:You Decide the Theme': '自定比赛主题',
+    'sponsors:How it works': '举办流程',
+    'sponsors:Prize scale (rough guide)': '奖金规模（参考）',
+    'sponsors:Judging Neutrality': '评审公正性',
     'terms:1. 서비스 개요': '1. 服务概述',
     'terms:2. 계정과 인증': '2. 账号与身份验证',
     'terms:3. 게스트 게시에 대하여': '3. 关于游客投稿',

@@ -287,6 +287,13 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     translateMiramiruPage(input);
     assert.equal(input.dataset.zhxMiramiruSlot, undefined);
 
+    globalThis.location = new URL('https://miramiru.co/en/sponsors/');
+    document.body.innerHTML = '<main><h1>Host your own contest on Miramiru</h1><h2>Judging Neutrality</h2></main><aside id="other">Judging Neutrality</aside>';
+    translateMiramiruPage();
+    translateMiramiruPage();
+    assert.equal(document.querySelector('h1').textContent,'在 Miramiru 举办自己的比赛');
+    assert.equal(document.querySelector('h2').textContent,'评审公正性');
+    assert.equal(document.querySelector('#other').textContent,'Judging Neutrality');
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();
