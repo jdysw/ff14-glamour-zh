@@ -1489,12 +1489,15 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     const d = dom.document;
     Object.assign(globalThis,{document:d,location:dom.location,window:dom,NodeFilter:dom.NodeFilter});
     const jp = 'テスト用の双剣', zh = '测试用对剑';
-    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'}));
+    const hash = '00000000003';
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/'+hash+'/';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh}));
     d.body.className = 'single';
     d.title = '〖ヴァイパー〗二刀流武器 一覧〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
     d.body.innerHTML = '<h1 id="jinrPostTitle">〖ヴァイパー〗二刀流武器 一覧</h1>'
       + '<section id="postContent"><h2>Lv100～Lv91</h2><h3>Lv80～Lv1</h3>'
       + '<a href="/test-weapon/">'+jp+'</a><figure><figcaption>'+jp+'</figcaption></figure>'
+      + '<figure><figcaption><a id="official-caption" href="'+official+'">'+jp+'</a></figcaption></figure>'
       + '<p>'+jp+'</p><h3>作者の文章</h3></section>'
       + '<a rel="tag" href="/tag/vpr/">#ヴァイパー</a><a href="/tag/eyes/">#眼鏡</a>'
       + '<a rel="tag" href="/tag/unknown/">#未知のタグ</a>';
@@ -1506,6 +1509,8 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#postContent a').textContent,zh);
     assert.equal(d.querySelector('#postContent a').pathname,'/test-weapon/');
     assert.equal(d.querySelector('figcaption').textContent,zh);
+    assert.equal(d.querySelector('#official-caption').textContent,zh);
+    assert.equal(decodeURI(d.querySelector('#official-caption').href),'https://ff14.huijiwiki.com/wiki/物品:'+zh);
     assert.equal(d.querySelector('#postContent p').textContent,jp);
     assert.deepEqual([...d.querySelectorAll('a[href^="/tag/"]')].map(el=>el.textContent),['#蝰蛇剑士','#眼镜','#未知のタグ']);
   } finally {
