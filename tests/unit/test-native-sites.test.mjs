@@ -1686,13 +1686,32 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('#reward-copy').textContent,cardigan);
     const store = 'https://store.finalfantasyxiv.com/ffxivstore/ja-jp/product/901';
     const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/00000000003/';
-    render('/gaias-attire/', '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent">'
+    const storeMarkup = '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent">'
       + '<a href="'+official+'">'+gaia+'</a><p>女性専用装備</p><p>課金装備『<a id="store" href="'+store+'">'+gaia+'</a>』</p>'
       + '<a id="foreign-store" href="https://example.test/ffxivstore/ja-jp/product/901">'+gaia+'</a>'
       + '<div><span class="a--h2rich-subcopy">Moogle Treasure Trove</span><h2 class="a--h2rich-maincopy">モグモグ★コレクション</h2></div>'
-      + '<a id="event" href="https://jp.finalfantasyxiv.com/lodestone/special/2026/Valentiones_Day/example">ヴァレンティオンデー</a></section>');
+      + '<a id="event" href="https://jp.finalfantasyxiv.com/lodestone/special/2026/Valentiones_Day/example">ヴァレンティオンデー</a></section>';
+    render('/gaias-attire/',storeMarkup);
     assert.equal(d.querySelector('h1').textContent,'盖娅服装套装');
     assert.equal(d.querySelector('#postContent p').textContent,'女性专用装备');
+    // Exact repeated AF instructions, not arbitrary prose or player posts.
+    const eAf = 'Lv89のメインクエストをクリアするとオールドシャーレアンにいるヴァルサルードから受け取ることができるようになります。';
+    const dAf = 'Lv99のメインクエストをクリアするとトライヨラにいるメワズンテから受け取ることができるようになります。';
+    const afMarkup = (category, text) => '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/'+category+'/">AF</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent"><a href="'+official+'">'+gaia+'</a>'
+      + '<p id="conditional">染色◯（条件あり）</p><div class="c--accordion-title">染色可能にする方法</div>'
+      + '<p id="instructions">'+text+'</p><p id="other">作者：'+eAf+'</p></section>';
+    render('/academics-coat/',afMarkup('af/artefact5','暁月のフィナーレのアーティファクト(AF)です<br>'+eAf+'<br>染色するためにはLv90のロールクエストのクリアが必要です。'));
+    assert.equal(d.querySelector('#conditional').textContent,'满足条件后可染色');
+    assert.equal(d.querySelector('.c--accordion-title').textContent,'染色解锁方式');
+    assert.equal(d.querySelector('#instructions').innerHTML,'晓月之终途的职业专属装备（AF）。<br>完成89级主线任务后，可在旧萨雷安的瓦尔萨如德处领取。<br>完成90级职能任务后方可染色。');
+    assert.equal(d.querySelector('#other').textContent,'作者：'+eAf);
+    render('/heavensbound-mail/',afMarkup('af/artefact6','黄金のレガシーのアーティファクト(AF)です\n'+dAf+'<br>〖近接物理DPSロールクエスト 黄金編〗をすべてクリアする<br>※別ジョブでコンプリート済みであれば染色機能は自動的に有効化されます'));
+    assert.equal(d.querySelector('#instructions').innerHTML,'金曦之遗辉的职业专属装备（AF）。\n完成99级主线任务后，可在图莱尤拉的梅瓦祖恩特处领取。<br>完成全部近战物理进攻职业的职能任务（金曦之章）<br>※若已使用其他职业完成对应的职能任务，则自动解锁染色功能。');
+    render('/glamour-post/',afMarkup('glamour',eAf));
+    assert.equal(d.querySelector('#conditional').textContent,'染色◯（条件あり）');
+    assert.equal(d.querySelector('#instructions').textContent,eAf);
+    render('/gaias-attire/',storeMarkup);
     assert.equal(d.querySelector('#store').textContent,'盖娅服装套装');
     assert.equal(d.querySelector('#store').href,store);
     assert.equal(d.querySelector('#foreign-store').textContent,gaia);
