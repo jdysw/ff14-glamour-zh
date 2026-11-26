@@ -1711,6 +1711,28 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     render('/glamour-post/',afMarkup('glamour',eAf));
     assert.equal(d.querySelector('#conditional').textContent,'染色◯（条件あり）');
     assert.equal(d.querySelector('#instructions').textContent,eAf);
+    const basicAf = '各ジョブのジョブクエストをコンプリートする';
+    const repurchase = '各エリア遺失物管理人から再購入（1,000ギル）';
+    render('/scholars-gown/', afMarkup('af/artefact',basicAf+'<br>Lv45：頭 手 脚 足<br>Lv50：胴<br>'+repurchase)
+      .replace('</section>','<div><h2 class="a--h2rich-maincopy">学者AF</h2><span class="a--h2rich-subcopy">Scholar artefact</span></div><p id="unknown-af">不明AF</p></section>'));
+    assert.equal(d.querySelector('#instructions').innerHTML,'完成对应职业的职业任务<br>45级：头部、手部、腿部、脚部<br>50级：身体<br>可在各地的失物管理人处重新购买（1,000 金币）');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'学者职业专属装备');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#unknown-af').textContent,'不明AF');
+    const kakalanShop = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/shop/124bcb85185/';
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1\nスカラーアタイアの補材\t学士装备的改良材料\t1\t1\nカララント:スートブラック\t煤黑染剂\t1\t1'}));
+    render('/augmented-scholars-gown/',afMarkup('af/afre','モードゥナ<br>工房「ダイヤモンドフォージ」<br>( 22.2 , 5.5 ) Z:0.5<br>欲しい部位のAF<br>(遺失物管理人より再購入可能)<br>部位別必要個数<br>頭：手：足…1<br>胴：脚…2')
+      .replace('>AF</a>','>新生アーティファクトRE</a>')
+      .replace('</section>','<a id="kakalan" href="'+kakalanShop+'">カカラン</a><a id="unknown-shop" href="https://example.test/lodestone/playguide/db/shop/124bcb85185/">カカラン</a><a id="augmentation" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/1b3f836d461/">スカラーアタイアの補材</a><p id="dye-caption">スートブラック染色</p></section>'));
+    assert.equal(d.querySelector('.a--post-cat a').textContent,'重生之境 改良型职业专属装备');
+    assert.equal(d.querySelector('#instructions').innerHTML,'摩杜纳<br>钻石工房<br>( 22.2 , 5.5 ) Z:0.5<br>所需部位的职业专属装备<br>（可在失物管理人处重新购买）<br>各部位所需数量<br>头部、手部、脚部：1<br>身体、腿部：2');
+    assert.equal(d.querySelector('#kakalan').textContent,'卡卡拉恩');
+    assert.equal(d.querySelector('#kakalan').href,kakalanShop);
+    assert.equal(d.querySelector('#unknown-shop').textContent,'カカラン');
+    assert.equal(d.querySelector('#augmentation').textContent,'学士装备的改良材料');
+    assert.equal(d.querySelector('#dye-caption').textContent,'煤黑染色');
+    render('/glamour-post/',afMarkup('glamour',basicAf));
+    assert.equal(d.querySelector('#instructions').textContent,basicAf);
     render('/gaias-attire/',storeMarkup);
     assert.equal(d.querySelector('#store').textContent,'盖娅服装套装');
     assert.equal(d.querySelector('#store').href,store);
