@@ -19,6 +19,7 @@ const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lod
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
 const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
 const SITE_TITLE = '〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+const breadcrumbTitles = new WeakMap();
 
 function uniqueItemName(source) {
   const names = resolveAllByName(source);
@@ -247,6 +248,44 @@ function dedupeRichHeadings() {
   }
 }
 
+function translateArchiveControls() {
+  // The site's WordPress weekly archive starts with this exact prompt.
+  // Change only the display label, never the destination or selected index.
+  for (const select of document.querySelectorAll('select')) {
+    if (select.closest(EXCLUDED)) continue;
+    const option = select.options[0];
+    if (!option || option.textContent.trim() !== '週を選択') continue;
+    for (const label of document.querySelectorAll('label')) {
+      if (label.contains(select) || (select.id && label.htmlFor === select.id)) {
+        replaceLabel(label, 'アーカイブ', uiName('アーカイブ'));
+      }
+    }
+    if (!option.hasAttribute('value')) option.setAttribute('value', option.value);
+    replaceLabel(option, '週を選択', uiName('週を選択'));
+  }
+}
+
+function translateBreadcrumb(title, previous, current) {
+  for (const link of document.querySelectorAll('#breadCrumb a')) {
+    if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
+    replaceLabel(link, 'HOME', DICT.HOME);
+  }
+  if (!title || !previous || !current) return;
+  if (previous !== current) breadcrumbTitles.set(title, { source: previous, localized: current });
+  const state = breadcrumbTitles.get(title);
+  if (!state || state.localized !== current) return;
+  const crumb = document.querySelector('#breadCrumb [aria-current="page"]')
+    || Array.from(document.querySelectorAll('#breadCrumb li')).at(-1);
+  if (!crumb || crumb.closest(EXCLUDED)) return;
+  const walk = document.createTreeWalker(crumb, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
+    if (node.data.trim().replace(/^[＞>]\s*/u, '') !== state.source) continue;
+    node.data = node.data.replace(state.source, () => current);
+  }
+}
+
 function translateAttirePage() {
   const title = document.querySelector('#jinrPostTitle');
   const nativeTitle = title?.textContent.trim();
@@ -266,6 +305,7 @@ function translateAttirePage() {
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   translateRecentPosts();
+  translateArchiveControls();
   for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
     if (input.form?.action !== location.origin + '/') continue;
     const zh = uiName(input.placeholder);
@@ -336,6 +376,7 @@ function translateAttirePage() {
     if (replaceLabel(title, source, zh)) title.dataset.zhxAttireNative = source;
   }
   const localizedTitle = title?.textContent.trim();
+  translateBreadcrumb(title, nativeTitle, localizedTitle);
   if (nativeTitle && localizedTitle && nativeTitle !== localizedTitle && document.title.startsWith(nativeTitle)) {
     document.title = localizedTitle + document.title.slice(nativeTitle.length);
   }
@@ -352,8 +393,8 @@ function startAttire() {
     handler(nodes) {
       if (nodes.some(node => {
         const el = node.nodeType === 1 ? node : node.parentElement;
-        return el?.closest('#postContent,#jinrPostList,#globalMenuList,#hamburgerMenuList,#footerMenuList,aside')
-          || el?.querySelector('#postContent,#jinrPostList,aside');
+        return el?.closest('#postContent,#jinrPostList,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,aside')
+          || el?.querySelector('#postContent,#jinrPostList,#breadCrumb,aside');
       })) translateAttirePage();
     },
   });
