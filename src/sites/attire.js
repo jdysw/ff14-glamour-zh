@@ -569,6 +569,51 @@ function translateStructuredItems(weaponPage, weaponDetail) {
   }
 }
 
+// The same native exchange block is used on weapon and armor pages.
+const GC_SOURCES = ['黒渦団', '双蛇党', '不滅隊'];
+
+function translateGrandCompanyMetadata() {
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  const lookup = key => DICT['attire:gc:' + key];
+  const heading = '交換に必要な軍票・階級';
+  const nodes = [];
+  const sources = new Set();
+  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK + ',' + CARD)) continue;
+    const link = parent.closest('a[href]');
+    if (link && link.origin !== location.origin
+        && !(/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+          && /^\/lodestone\/playguide\/db\/shop\/[0-9a-f]{11}\/?$/i.test(link.pathname))) continue;
+    const lines = node.data.split(/(\r?\n)/u);
+    for (const line of lines) if (line.trim()) sources.add(line.trim());
+    nodes.push([node, lines]);
+  }
+  // Require both the exchange heading and a single identified faction.
+  // A currency amount or a rank in an unrelated article is not sufficient.
+  if (!sources.has(heading) && !sources.has(lookup(heading))) return;
+  const matches = GC_SOURCES.filter(faction =>
+    sources.has(faction + '軍票') || sources.has(lookup(faction + ':currency')));
+  if (matches.length !== 1) return;
+  const faction = matches[0];
+  for (const [text, lines] of nodes) {
+    const translated = lines.map(line => {
+      const source = line.trim();
+      if (!source) return line;
+      let zh;
+      if (source === heading) zh = lookup(heading);
+      else if (source === faction + '軍票') zh = lookup(faction + ':currency');
+      else if (source === '補給担当官') zh = lookup(faction + ':vendor');
+      else zh = lookup(faction + ':' + source);
+      return zh && source !== zh ? line.replace(source, () => zh) : line;
+    }).join('');
+    if (translated !== text.data) text.data = translated;
+  }
+}
+
 function equipmentMetadata(source) {
   const market = /^マーケット取引\s*[:：]\s*([◯○×✕])$/u.exec(source);
   if (market) return /[◯○]/u.test(market[1]) ? '可在市场交易' : '不可在市场交易';
@@ -577,12 +622,13 @@ function equipmentMetadata(source) {
       || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
       || ['女性専用装備','男性専用装備','Fall Guys コラボレーションイベント',
         '現在は終了しているイベントのため入手できません'].includes(source)) return uiName(source);
-  const match = /^Lv\s*(\d{1,3})\s*(.+)$/iu.exec(source);
-  if (!match) return null;
-  const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
-    ? ['全职业'] : match[2].split(/\s+/u).map(jobName);
+  const match = /^Lv\s*(\d{1,3})(?:\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3}))?\s*(.+)$/iu.exec(source);
+  if (!match || (match[2] && Number(match[1]) > Number(match[2]))) return null;
+  const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[3])
+    ? ['全职业'] : match[3].split(/\s+/u).map(jobName);
   if (!jobs.length || !jobs.every(Boolean)) return null;
-  return match[1] + '级 ' + jobs.join('／');
+  const levels = match[2] ? match[1] + '～' + match[2] : match[1];
+  return levels + '级 ' + jobs.join('／');
 }
 
 function translateAcquisitionLinks() {
@@ -1079,6 +1125,7 @@ function translateAttirePage() {
   const isGlamour = hasCategory('glamour');
   const itemDetail = translateOfficialItems(isGlamour ? null : title) && !isGlamour;
   if (itemDetail) translateEquipmentMetadata();
+  if (!isGlamour && (weaponDetail || itemDetail)) translateGrandCompanyMetadata();
   if (title && !isGlamour && (itemDetail || hasCategory('seriesb'))) {
     const source = title.textContent.trim();
     const zh = groupArticleName(source);
