@@ -390,16 +390,59 @@ function translateSeasonalRewardLinks() {
   }
 }
 
+function weaponDetailName(source) {
+  const level = /^Lv\s*(\d{1,3})\s+ILv?\s*(\d{1,4})$/iu.exec(source);
+  if (level) return '等级 ' + level[1] + '／品级 ' + level[2];
+  // Exact acquisition labels and known official terminology only.
+  const known = DICT['attire:weapon-meta:' + source];
+  if (known) return known;
+  if (['入手方法', '取引に必要なアイテム', '販売ショップNPC', '染色', 'Eorzea Database'].includes(source)) {
+    return uiName(source);
+  }
+  // Reuse canonical item names for other coffer and token variants. Never
+  // infer a translated name from a weapon prefix or change link identity.
+  if (/(?:ウェポンチェスト〖ILv\d{1,4}〗|のトーテム像(?:〖[^〗]+〗)?)$/u.test(source)) {
+    return uniqueItemName(source);
+  }
+  return null;
+}
+
 function translateWeaponDetailMetadata() {
   // Only the native weapon-detail route uses these short, otherwise ambiguous
   // labels. Never translate arbitrary prose or change an official item anchor.
-  const selector = '#postContent :is(h2,h3,h4,p,span,strong,dt,dd,th,td,.rtoc-item a,.a--h2rich-maincopy,.a--h2rich-subcopy)';
+  const selector = '#postContent :is(h2,h3,h4,p,span,strong,dt,dd,th,td,a[href],.rtoc-item a,.a--h2rich-maincopy,.a--h2rich-subcopy)';
   for (const element of document.querySelectorAll(selector)) {
     if (element.closest(EXCLUDED + ',' + ITEM_LINK) || element.querySelector(ITEM_LINK)) continue;
+    const link = element.closest('a[href]');
+    if (link && link.origin !== location.origin
+        && !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     const source = element.textContent.trim();
-    const level = /^Lv\s*(\d{1,3})\s+ILv?\s*(\d{1,4})$/iu.exec(source);
-    const zh = DICT['attire:weapon-meta:' + source] || (level && '等级 ' + level[1] + '／品级 ' + level[2]);
-    if (zh) replaceLabel(element, source, zh);
+    if (replaceLabel(element, source, weaponDetailName(source))) continue;
+    // Effects and NPC/location pairs are often separated by a line break.
+    // Only translate a block when every nonblank line is independently known
+    // (or a numeric quantity); preserve the existing markup and line breaks.
+    if (!element.querySelector('br')) continue;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const replacements = [];
+    let node;
+    let valid = true;
+    while ((node = walker.nextNode())) {
+      const part = node.data.trim();
+      if (!part) continue;
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) {
+        valid = false;
+        break;
+      }
+      const zh = weaponDetailName(part);
+      if (!zh && !/^\d+$/u.test(part)) {
+        valid = false;
+        break;
+      }
+      if (zh && zh !== part) replacements.push([node, part, zh]);
+    }
+    if (valid) for (const [text, part, zh] of replacements) {
+      text.data = text.data.replace(part, () => zh);
+    }
   }
 }
 
