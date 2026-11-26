@@ -1281,6 +1281,28 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
       <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
+    d.body.className = 'page';
+    d.body.innerHTML = `<nav><a href="/viper/">ヴァイパー</a></nav>
+      <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索"></form>
+      <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
+      <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
+      <a class="c--post-link" rel="bookmark" href="/glamour-post/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
+      <p>${jp}</p></section><a class="tag-cloud-link" href="/tag/boots/">眼鏡 (12)</a>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('nav a').textContent,'蝰蛇剑士');
+    assert.equal(d.querySelector('input').placeholder,'输入关键词搜索');
+    assert.equal(d.querySelector('.wp-block-columns a').textContent,zh);
+    assert.equal(d.querySelector('.wp-block-columns a').pathname,'/field-commanders-coat/');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(h=>h.textContent),[zh,jp]);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
+    assert.equal(d.querySelector('.tag-cloud-link').textContent,'眼镜 (12)');
+    d.body.className = 'single';
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <section id="postContent"><figure class="wp-block-table"><table><tbody><tr><td>${jp}</td><td>染色不可</td></tr></tbody></table></figure><p>${jp}</p></section>`;
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('td')].map(td=>td.textContent),[zh,'不可染色']);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
     d.body.className = 'archive tag tag-mf';
     d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
     translateAttirePage();
