@@ -155,8 +155,20 @@ function eventName(source) {
   return null;
 }
 
+// Facewear articles append a display category to the actual item name.
+// Keep it separate from canonical item identity (including Wiki redirects).
+function facewearItemSource(source) {
+  return /^(.*?)\s*[（(]フェイスアクセサリー[）)]$/u.exec(source || '')?.[1] || null;
+}
+
+function facewearArticleName(source) {
+  const native = facewearItemSource(source);
+  const zh = native && uniqueItemName(native);
+  return zh ? zh + '（' + uiName('フェイスアクセサリー') + '）' : null;
+}
+
 function articleName(source) {
-  return afSummaryName(source) || eventName(source) || uniqueItemName(source) || groupArticleName(source);
+  return afSummaryName(source) || eventName(source) || uniqueItemName(source) || facewearArticleName(source) || groupArticleName(source);
 }
 
 function localizeCard(card) {
@@ -402,12 +414,32 @@ function translateSeasonalRewardLinks() {
   }
 }
 
+// Only translate verified treasure-map/area combinations. The site sometimes
+// uses quotes, a full-width colon or no separator in front of the area name.
+function treasureSourceName(source) {
+  const coffer = 'ドリーム・オブ・ウェポンチェスト';
+  if (source === coffer) {
+    const zh = DICT['attire:source:' + coffer];
+    const names = resolveAllByName(source);
+    return !names.length || names.includes(zh) ? zh : null;
+  }
+  const mapOnly = /^宝の地図\s*G(17|18)$/u.exec(source);
+  if (mapOnly) return 'G' + mapOnly[1] + '藏宝图';
+  const match = /^(?:宝の地図\s*G(17|18)\s*)?「?宝物庫\s*[:：]?\s*(セノーテ・ジャジャグラル|ボルト・オネイロン)」?$/u.exec(source);
+  if (!match) return null;
+  const grade = match[2] === 'セノーテ・ジャジャグラル' ? '17' : '18';
+  if (match[1] && match[1] !== grade) return null;
+  const zh = DICT['attire:source:' + match[2]];
+  return zh && (match[1] ? 'G' + grade + '藏宝图：' : '') + zh;
+}
+
 function weaponDetailName(source) {
   const level = /^Lv\s*(\d{1,3})\s+ILv?\s*(\d{1,4})$/iu.exec(source);
   if (level) return '等级 ' + level[1] + '／品级 ' + level[2];
   // Exact acquisition labels and known official terminology only.
-  const known = DICT['attire:weapon-meta:' + source];
+  const known = DICT['attire:weapon-meta:' + source] || treasureSourceName(source);
   if (known) return known;
+  if (source === 'マーケット取引可能' || source === 'その他') return uiName(source);
   if (['入手方法', '取引に必要なアイテム', '販売ショップNPC', '染色', 'Eorzea Database'].includes(source)) {
     return uiName(source);
   }
@@ -498,6 +530,8 @@ function translateStructuredItems(weaponPage, weaponDetail) {
 }
 
 function equipmentMetadata(source) {
+  const market = /^マーケット取引\s*[:：]\s*([◯○×✕])$/u.exec(source);
+  if (market) return /[◯○]/u.test(market[1]) ? '可在市场交易' : '不可在市场交易';
   if (/^染色[◯○]\s*[（(]条件あり[）)]$/u.test(source)) return uiName('染色◯（条件あり）');
   if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能'
       || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
@@ -648,9 +682,43 @@ function translateAfDetailMetadata() {
   }
 }
 
+function translateOtherAcquisitionMetadata() {
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/quest/"]')) {
+    if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
+    const source = link.textContent.trim();
+    if (/^\/lodestone\/playguide\/db\/quest\/b10022ed563\/?$/u.test(link.pathname)
+        && source === '集うは我ら、信頼の絆') {
+      replaceLabel(link, source, DICT['attire:source:' + source]);
+    } else if (link.pathname === '/lodestone/playguide/db/quest/' && source === '友好部族エクストラストーリー') {
+      const params = new URLSearchParams(link.search);
+      if (params.get('category2') === '4' && params.get('category3') === '45' && params.get('category4') === '62') {
+        replaceLabel(link, source, DICT['attire:source:' + source]);
+      }
+    }
+  }
+  // Acquisition details may be a plain text node inside a WordPress accordion
+  // or a separate line in a paragraph. Never translate substrings of prose.
+  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest(EXCLUDED + ',script,style,svg,a[href]')) continue;
+    if (!parent.closest('.c--accordion-contents,p,span,strong,td,dd')) continue;
+    const translated = node.data.split(/(\r?\n)/u).map(line => {
+      const source = line.trim();
+      const zh = treasureSourceName(source);
+      return zh && zh !== source ? line.replace(source, () => zh) : line;
+    }).join('');
+    if (translated !== node.data) node.data = translated;
+  }
+}
+
 function translateEquipmentMetadata() {
   translateAcquisitionLinks();
   translateAfDetailMetadata();
+  translateOtherAcquisitionMetadata();
   for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/shop/"]')) {
     if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     replaceLabel(link, 'スクリップ取引窓口', uiName('スクリップ取引窓口'));
@@ -817,6 +885,9 @@ function translateOfficialItems(title) {
     if (!item) continue;
     hasItems = true;
     if (title && item.native === native) labels.add(item.label);
+    else if (title && item.native === facewearItemSource(native)) {
+      labels.add(item.label === item.native ? native : item.label + '（' + uiName('フェイスアクセサリー') + '）');
+    }
   }
   if (title && (tracked || labels.size)) {
     // Do not pick the first of two contradictory exact native names.
