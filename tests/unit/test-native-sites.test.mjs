@@ -1771,6 +1771,21 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('#instructions').textContent,'60级 忍者');
     assert.equal(d.querySelector('#guide').textContent,'【晓月版】60级职业专属装备获取方式（旧神典石装备）');
     assert.equal(d.querySelector('#other-guide').textContent,guide);
+    // The historical guide is an article, not an item-detail page.
+    const tomeTitle = '〖暁月版〗法典：ドマ様式装備の入手方法〖過去トークン装備〗';
+    const tomeMarkup = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/tomestone/">入手方法：過去トークン装備</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+tomeTitle+'</h1><section id="postContent">'
+      + '<h2>アラガントームストーン:法典<br>ドマ様式装備</h2><table><tr><th>セントリオ記章</th><td>頭手足</td><td>35</td></tr></table>'
+      + '<p id="guide-copy">セントリオ記章</p><p id="guide-prose">セントリオ記章についての説明</p></section>';
+    render('/al05/', tomeMarkup);
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'【晓月版】法典神典石：多玛风格装备获取方式（旧神典石装备）');
+    assert.equal(d.querySelector('#postContent h2').innerHTML,'亚拉戈法典神典石<br>多玛风格装备');
+    assert.equal(d.querySelector('th').textContent,'兵团徽章');
+    assert.deepEqual([...d.querySelectorAll('td')].map(e=>e.textContent),['头部、手部、脚部','35']);
+    assert.equal(d.querySelector('#guide-copy').textContent,'セントリオ記章');
+    assert.equal(d.querySelector('#guide-prose').textContent,'セントリオ記章についての説明');
+    render('/other/',tomeMarkup.replace('/category/nyuusyuhouhou/tomestone/','/category/glamour/'));
+    assert.equal(d.querySelector('th').textContent,'セントリオ記章');
     const questBase = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/';
     const bardQuest = questBase+'4c5e96e09d0/';
     render('/antiquated-storytellers-coat/',afMarkup('af/artefact3','吟遊詩人クエスト<br>『<a href="'+bardQuest+'">想い込められし歌</a>』<br>クエスト終了後にチェストを開けることで入手できます<br>再取得は遺失物管理人から再購入可能です<br>染色可能にするためには『禁断の地 エウレカ アネモス編』でアイテムを揃える必要があります'));
