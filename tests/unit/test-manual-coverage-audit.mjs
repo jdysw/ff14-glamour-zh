@@ -53,6 +53,15 @@ const keywordUrl='https://lookbook.ronkacloset.com/?keyword='+encodeURIComponent
 assert.equal(C.classifyContext(keywordButton,'text','ronka',keywordUrl,'계승자의 반장갑').scope,'user');
 assert.equal(C.classifyContext(keywordButton,'text','ronka',keywordUrl,'검색:').scope,'ui');
 assert.equal(C.normalizeItems([{kind:'text',text:'계승자의 반장갑',ctx:{queryEcho:true,control:true,ui:true}}],'ronka')[0].ctx.scope,'user');
+const ronkaUrl='https://lookbook.ronkacloset.com/';
+const itemName=node('P','','.item-searcher .post-item-information > p');
+itemName.parentElement={className:'post-item-information',parentElement:{className:'post-content',parentElement:null}};
+assert.equal(C.classifyContext(itemName,'text','ronka',ronkaUrl,'경비원 권총집 조끼').scope,'item');
+assert.equal(C.classifyContext(node('P','post-title','.post-title'),'text','ronka',ronkaUrl,'경비원 권총집 조끼').scope,'user');
+const active=node('P','filter-item-active','');
+active.closest=selector=>selector==='.filter-item-active'?active:null;
+active.parentElement={previousElementSibling:{matches:s=>s==='.filter-title',textContent:'关键词'}};
+assert.equal(C.classifyContext(active,'text','ronka',ronkaUrl,'유저 X').scope,'user');
 const editorial='白のロングコートに黒赤金の豪華ながらもシャープさが際立つ非常に人気の装束';
 const requirement='100回勝利で胴装備';
 const paragraph={tagName:'P',textContent:requirement+editorial,previousElementSibling:null};

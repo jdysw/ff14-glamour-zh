@@ -105,9 +105,20 @@
     if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
     return null;
   }
+  function ronkaScope(el,kind){
+    // Match the native equipment-name nodes used by the Ronka translator.
+    // A post-content ancestor does not make these official item labels authored prose.
+    if(kind==='text'&&el.closest?.('.item-searcher .post-item-information > p'))return 'item';
+    return null;
+  }
   function queryEcho(el,kind,url,text){
     if(kind!=='text'||typeof text!=='string')return false;
     const u=new URL(url);
+    if(u.hostname==='lookbook.ronkacloset.com'){
+      const active=el.closest?.('.filter-item-active');
+      const heading=active?.parentElement?.previousElementSibling;
+      if(heading?.matches?.('.filter-title')&&/^(?:검색어|关键词)$/u.test(heading.textContent.trim()))return true;
+    }
     const key=u.hostname==='lookbook.ronkacloset.com'?'keyword':u.hostname==='attire.jp'?'s':null;
     const value=key&&u.searchParams.get(key);
     if(!value)return false;
@@ -188,12 +199,13 @@
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
     const echo=queryEcho(el,kind,url,text);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url,text):null;
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url,text):site==='ronka'?ronkaScope(el,kind):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
     if(ad)scope='ad';
     else if(echo)scope='user';
+    else if(site==='ronka'&&siteScope==='item'&&!control)scope='item';
     else if((authored||likelyGallery||artImage||siteScope==='user') && siteScope!=='ui' && (!control||kind==='attr:alt'))scope='user';
     else if(item && !control)scope='item';
     else if(kind==='document:title')scope='metadata';
@@ -294,6 +306,7 @@
         let scope='unknown';
         if(ctx.ad)scope='ad';
         else if(ctx.queryEcho===true)scope='user';
+        else if(site==='ronka'&&ctx.scope==='item'&&!ctx.control)scope='item';
         else if(site==='attire'&&ctx.scope==='ui'&&!ctx.user)scope='ui';
         else if(ctx.scope==='user'&&it.kind==='attr:alt'||authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';
@@ -327,7 +340,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,queryEcho,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,ronkaScope,queryEcho,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;

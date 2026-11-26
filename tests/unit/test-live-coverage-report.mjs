@@ -71,6 +71,14 @@ assert.ok(itemEvidence.every(it=>it.text==='[内容已隐藏]'));
 const labelReport=summarizeLive([{...good('attire'),items:itemEvidence}],at);
 assert.deepEqual(labelReport.bySite.attire.itemLabels,{observed:3,assessed:2,foreign:1});
 assert.equal(labelReport.candidates.length,0);
+const ronkaLabels=redactItems([
+  {kind:'text',text:'경비원 권총집 조끼',path:'p',ctx:{scope:'item',ancestors:'post-content post-item-information'}},
+  {kind:'text',text:'保镖枪带背心',path:'p',ctx:{scope:'item',ancestors:'post-content post-item-information'}},
+  {kind:'text',text:'유저 X',path:'p.filter-item-active',ctx:{scope:'user',queryEcho:true}},
+],'ronka');
+assert.deepEqual(ronkaLabels.map(it=>it.ctx.scope),['item','item','user']);
+assert.ok(ronkaLabels.every(it=>it.redacted&&it.text==='[内容已隐藏]'));
+assert.deepEqual(summarizeLive([{...good('ronka'),items:ronkaLabels}],at).bySite.ronka.itemLabels,{observed:2,assessed:2,foreign:1});
 const rawDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-raw-'));
 const pubDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-pub-'));
 try{

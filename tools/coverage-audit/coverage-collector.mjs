@@ -2,11 +2,12 @@
 // No telemetry, storage, network calls, or mutation.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { miramiruScope, edenScope, attireScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
+const { miramiruScope, edenScope, attireScope, ronkaScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
 export const COLLECTOR_JS = String.raw`(() => {
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
   const attireScope = ${attireScope.toString()};
+  const ronkaScope = ${ronkaScope.toString()};
   const queryEcho = ${queryEcho.toString()};
   const out = [];
   const seen = new Set();
@@ -75,7 +76,8 @@ export const COLLECTOR_JS = String.raw`(() => {
     const echo = queryEcho(el,kind,location.href,text);
     const siteScope = echo ? 'user' : globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
       : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el)
-      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text) : null;
+      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text)
+      : globalThis.location?.hostname === 'lookbook.ronkacloset.com' ? ronkaScope(el,kind) : null;
     const user = echo || siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
     const ui = siteScope === 'ui' || siteScope !== 'item' && siteScope !== 'user' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
