@@ -377,7 +377,7 @@ test('真实数据层及脚本事件桥：网络加载、内容校验、刷新�
   try {
     globalThis.window = {};
     globalThis.location = { hostname: 'mirapri.com' };
-    assert.ok(globalThis.crypto?.subtle, 'Node 22 应提供真实 WebCrypto 校验');
+    assert.ok(globalThis.crypto?.subtle, 'Node 24 应提供真实 WebCrypto 校验');
     globalThis.GM_getValue = (k, fallback) => gm.get(k) ?? fallback;
     globalThis.GM_setValue = (k, val) => { gm.set(k, val); };
     globalThis.GM_listValues = () => [...gm.keys()];

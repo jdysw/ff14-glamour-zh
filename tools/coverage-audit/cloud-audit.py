@@ -29,7 +29,7 @@ CACHE = REPO_ROOT / "tests" / ".cache" / "coverage-audit"
 DEFAULT_COUNTRIES = ["jp", "us", "sg"]
 
 # The identical JS collector is used in local CDP and cloud Playwright.
-# Node is already a project requirement (>=22). Avoid maintaining two
+# Node is already a project requirement (24.x). Avoid maintaining two
 # inconsistent language detectors/DOM walkers.
 import subprocess
 import re

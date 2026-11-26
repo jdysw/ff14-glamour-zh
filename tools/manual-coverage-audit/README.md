@@ -54,7 +54,7 @@ Mirapri Eden 已支持：在首页、装备排行榜或制作器中采集。导�
 
 ## 离线审计和版本对比
 
-安装 Node.js 22+，在工具包目录运行：
+安装 Node.js 24.x，在工具包目录运行：
 
 ```powershell
 node .\generate-report.mjs "C:\Users\你\Downloads\ff14-audit-v1.3-xxx.json"

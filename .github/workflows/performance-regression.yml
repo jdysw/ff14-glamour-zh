@@ -1,10 +1,19 @@
 name: Reproducible EC performance benchmarks
 
-# 仅在基准夹具或基准工作流变化时运行；真实站点访问由独立在线审计负责。
+# 构建产物、V3 数据或基准输入变化时运行；真实站点访问由独立在线审计负责。
 on:
   pull_request:
     paths:
+      - '.nvmrc'
+      - 'src/**'
+      - 'build/**'
+      - 'data/**'
+      - 'package.json'
+      - 'package-lock.json'
       - 'tests/benchmark/**'
+      - 'tests/fixtures/ec-page.html'
+      - 'tests/helpers/**'
+      - 'tests/run.mjs'
       - '.github/workflows/performance-regression.yml'
   workflow_dispatch:
 
@@ -22,11 +31,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Node 24
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - name: 安装依赖
         run: npm ci
@@ -41,7 +50,7 @@ jobs:
         run: npm run test:bench
       - name: 上传原始性能样本和统计报告
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ec-chrome-performance-reports
           path: tests/.cache/bench/
