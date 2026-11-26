@@ -47,7 +47,10 @@ export function summarizeLive(rows,now=new Date().toISOString()){
     const attempted=new Set(list.map(p=>p.pageId));
     const required=SITES[site].pages.map(p=>site==='wiki'&&p.url.startsWith('fixture:')?'item-live':p.id);
     const missingSeeds=required.filter(id=>!attempted.has(id));
-    bySite[site]={status:!ok?'failed':failed||missingSeeds.length?'partial':'scan-complete',scanned:list.length,ok,failed,missingSeeds};
+    const labels=list.filter(p=>p.status==='ok').flatMap(p=>p.items.filter(it=>it.ctx?.scope==='item'));
+    const assessed=labels.filter(it=>typeof it.itemLabelForeign==='boolean');
+    bySite[site]={status:!ok?'failed':failed||missingSeeds.length?'partial':'scan-complete',scanned:list.length,ok,failed,missingSeeds,
+      itemLabels:{observed:labels.length,assessed:assessed.length,foreign:assessed.filter(it=>it.itemLabelForeign).length}};
   }
   const states=Object.values(bySite);
   const status=states.every(s=>s.status==='scan-complete')?'scan-complete':
@@ -108,7 +111,15 @@ export function writeLiveReports(report,out){
     '|站点|状态|有效页面|失败页面|未采集种子|','|---|---|---:|---:|---:|'];
   for(const [k,v] of Object.entries(report.bySite))
     header.push('|'+k+'|'+v.status+'|'+v.ok+'|'+v.failed+'|'+v.missingSeeds.length+'|');
-  header.push('','WAF、404、跨站跳转、超时均记为失败，不得当作零漏译。','');
+  header.push('','WAF、404、跨站跳转、超时均记为失败，不得当作零漏译。','',
+    '## 物品标签独立复核','',
+    '以下为已采集标签的出现次数（不是不同物品数）。仅检测日文假名和韩文，不能证明名称官译正确；历史证据没有标记的标签列为未评估。','',
+    '|站点|标签出现次数|已评估|含日/韩文|未评估|','|---|---:|---:|---:|---:|');
+  for(const [k,v] of Object.entries(report.bySite)){
+    const x=v.itemLabels;
+    header.push('|'+k+'|'+x.observed+'|'+x.assessed+'|'+(x.assessed?x.foreign:'—')+'|'+(x.observed-x.assessed)+'|');
+  }
+  header.push('');
   fs.writeFileSync(path.join(out,'coverage-audit-live.md'),header.join('\n')+'\n'+buildReport(pages),'utf8');
   fs.writeFileSync(path.join(out,'coverage-audit-live.json'),JSON.stringify(summary,null,2)+'\n','utf8');
   fs.writeFileSync(path.join(out,'coverage-audit-live-manual.json'),JSON.stringify(toManualAudit(report),null,2)+'\n','utf8');

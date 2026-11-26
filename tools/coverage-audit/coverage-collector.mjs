@@ -2,11 +2,12 @@
 // No telemetry, storage, network calls, or mutation.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { miramiruScope, edenScope, attireScope } = require('../manual-coverage-audit/audit-core.js');
+const { miramiruScope, edenScope, attireScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
 export const COLLECTOR_JS = String.raw`(() => {
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
   const attireScope = ${attireScope.toString()};
+  const queryEcho = ${queryEcho.toString()};
   const out = [];
   const seen = new Set();
   const BAD = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'IFRAME', 'SVG']);
@@ -49,7 +50,7 @@ export const COLLECTOR_JS = String.raw`(() => {
       if (p.id?.startsWith('zhx-') || /(^|\s)zhx-/.test(String(p.className || '')) || p.hasAttribute('data-zhx-done')) return true;
     return false;
   }
-  function context(el, kind) {
+  function context(el, kind, text) {
     const cls = String(el.className || '') + ' ' + String(el.parentElement?.className || '');
     const id = String(el.id || '');
     let ancestors = '';
@@ -71,15 +72,16 @@ export const COLLECTOR_JS = String.raw`(() => {
     );
     const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
       || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
-    const siteScope = globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
+    const echo = queryEcho(el,kind,location.href,text);
+    const siteScope = echo ? 'user' : globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
       : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el)
-      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href) : null;
-    const user = siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
+      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text) : null;
+    const user = echo || siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
     const ui = siteScope === 'ui' || siteScope !== 'item' && siteScope !== 'user' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
       || kind.startsWith('attr:') || kind === 'option');
     return {
-      scope: siteScope || undefined,
+      scope: siteScope || undefined, queryEcho: echo,
       tag: el.tagName.toLowerCase(), cls, id, ancestors, ad, user, ui, control,
       role: el.getAttribute('role') || '',
       name: el.getAttribute('name') || '',
@@ -96,7 +98,7 @@ export const COLLECTOR_JS = String.raw`(() => {
     const key = path + '\u0000' + kind + '\u0000' + t;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ kind, text: t, path, ctx: { ...context(el, kind), collapsed: state === 'collapsed' } });
+    out.push({ kind, text: t, path, ctx: { ...context(el, kind, t), collapsed: state === 'collapsed' } });
   }
   if (!document.body) return [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {

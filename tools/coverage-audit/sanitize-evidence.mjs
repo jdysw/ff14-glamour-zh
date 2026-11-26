@@ -10,7 +10,12 @@ const require=createRequire(import.meta.url);
 const C=require('../manual-coverage-audit/audit-core.js');
 export function redactItems(items,site){
   return C.normalizeItems(items||[],site).map(it=>{
+    // Preserve only a boolean signal before item labels are redacted.
+    // This is a script check, not a verified item translation or a count
+    // of distinct items. Old evidence without the flag remains unassessed.
     const item=C.sanitizeItem(it,false);
+    if(it.ctx?.scope==='item'&&!it.redacted)
+      item.itemLabelForeign=/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(it.text||'');
     if(['unknown','metadata','ad'].includes(item.ctx?.scope)){
       item.text='[未确认内容已隐藏]';
       if(item.before!=null)item.before='[未确认内容已隐藏]';

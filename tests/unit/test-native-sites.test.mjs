@@ -1367,6 +1367,7 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\nカララント:スノウホワイト\t雪白染剂\t1\t1\nカララント:ジェットブラック\t煤黑染剂\t1\t1',hash:hash+'\t'+zh});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
       <h1 id="jinrPostTitle">ミラプリ：Rose du Désert</h1>
+      <nav id="breadCrumb"><ul><li><a href="/">HOME</a></li><li>ミラプリ：Rose du Désert</li></ul></nav>
       <section id="postContent">
         <div><h2 class="a--h2rich-maincopy">ミラプリ</h2><span class="a--h2rich-subcopy">Glamour</span></div>
         <a id="recipe" href="/field-commanders-coat/"><span>スノウホワイト・ジェットブラック</span><strong>${jp}</strong></a>
@@ -1384,6 +1385,7 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#unverified').textContent,'未収録色'+jp);
     assert.equal(d.querySelector('#author-link').textContent,jp);
     assert.equal(d.querySelector('#jinrPostTitle').textContent,'ミラプリ：Rose du Désert');
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'幻化：Rose du Désert');
     assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'幻化');
     assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
     assert.equal(decodeURI(d.querySelector('#recipe-official').href),wiki+zh);

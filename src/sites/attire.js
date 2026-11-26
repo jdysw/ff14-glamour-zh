@@ -1108,7 +1108,8 @@ function translateBreadcrumb(title, previous, current) {
   const state = title && breadcrumbTitles.get(title);
   const crumb = document.querySelector('#breadCrumb [aria-current="page"]')
     || Array.from(document.querySelectorAll('#breadCrumb li')).at(-1);
-  if (!crumb || crumb.closest(EXCLUDED) || hasCategory('glamour')) return;
+  if (!crumb || crumb.closest(EXCLUDED)) return;
+  const glamour = hasCategory('glamour');
   const staticPage = document.body.matches('.page,.archive.tag,.archive.category');
   const search = document.body.matches('.search');
   const walk = document.createTreeWalker(crumb, NodeFilter.SHOW_TEXT);
@@ -1117,7 +1118,11 @@ function translateBreadcrumb(title, previous, current) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
     const source = node.data.trim().replace(/^[＞>]\s*/u, '');
     let zh;
-    if (state && state.localized === current && (source === state.source || source === state.previous)) zh = current;
+    if (glamour) {
+      // The prefix belongs to the site; the title after it belongs to the author.
+      const prefix = /^(ミラプリ[：:])(?=\S|\s)/u.exec(source);
+      if (prefix) zh = source.replace(prefix[1], '幻化：');
+    } else if (state && state.localized === current && (source === state.source || source === state.previous)) zh = current;
     else if (search) {
       const query = /^検索結果「(.+)」$/u.exec(source) || /^「(.+)」的搜索结果$/u.exec(source);
       if (query) zh = '「' + (uniqueItemName(query[1]) || query[1]) + '」的搜索结果';

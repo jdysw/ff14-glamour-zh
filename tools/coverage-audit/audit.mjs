@@ -325,7 +325,7 @@ function classifystatechange(t, before) {
 function isUserContent(t, ctx) {
   // Action controls inside a post are UI even if an ancestor is user-authored.
   // Keep text blocks / authored post titles as user content.
-  if (ctx.scope === 'user' && ctx.kind === 'attr:alt') return true;
+  if (ctx.queryEcho === true || ctx.scope === 'user' && ctx.kind === 'attr:alt') return true;
   if (ctx.control) return false;
   if (ctx.user) return true;
   if (ctx.site === 'attire' && ctx.scope === 'ui') return false;

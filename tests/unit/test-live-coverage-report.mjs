@@ -59,6 +59,18 @@ const redactedItems=redactItems([{kind:'text',text:'玩家标题',
   path:'div#gallery > article > h2.title',ctx:{user:false,ui:true,tag:'h2',cls:'title',ancestors:'gallery article-info'}}],'mirapri');
 assert.equal(redactedItems[0].ctx.scope,'user');
 assert.equal(redactedItems[0].text,'[内容已隐藏]');
+const itemEvidence=redactItems([
+  {kind:'text',text:'未翻訳の装備名',path:'a',ctx:{scope:'item'}},
+  {kind:'text',text:'已翻译的装备',path:'b',ctx:{scope:'item'}},
+  {kind:'text',text:'[内容已隐藏]',redacted:true,path:'c',ctx:{scope:'item'}},
+],'attire');
+assert.equal(itemEvidence[0].itemLabelForeign,true);
+assert.equal(itemEvidence[1].itemLabelForeign,false);
+assert.equal(itemEvidence[2].itemLabelForeign,undefined);
+assert.ok(itemEvidence.every(it=>it.text==='[内容已隐藏]'));
+const labelReport=summarizeLive([{...good('attire'),items:itemEvidence}],at);
+assert.deepEqual(labelReport.bySite.attire.itemLabels,{observed:3,assessed:2,foreign:1});
+assert.equal(labelReport.candidates.length,0);
 const rawDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-raw-'));
 const pubDir=fs.mkdtempSync(path.join(os.tmpdir(),'audit-pub-'));
 try{

@@ -730,6 +730,8 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
 
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
+    'attire:acquisition-note:現在は制圧戦・争奪戦・砕氷戦・終節戦の4戦場での日替わりルールのため4日に1回やれるコンテンツです': '原文撰写时，纷争前线由制压战、争夺战、碎冰战、终节战四种战场每日轮换，因此每四天可参加一次争夺战。',
+    'attire:acquisition-note:三つ巴の戦場で1位の回数のみのカウントのため、入手難易度は高くなっています': '三方交战中仅获得第一名的场次计入累计胜利次数，因此获取难度较高。',
     'attire:gear-family:ダークスチール': '玄钢',
     'attire:gear-family:ヒッポグリフ': '骏鹰革',
     'attire:gear-family:ヴァンヤ': '绢布',

@@ -82,7 +82,23 @@
     if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
     return null;
   }
-  function attireScope(el,kind,url){
+  function queryEcho(el,kind,url,text){
+    if(kind!=='text'||typeof text!=='string')return false;
+    const u=new URL(url);
+    const key=u.hostname==='lookbook.ronkacloset.com'?'keyword':u.hostname==='attire.jp'?'s':null;
+    const value=key&&u.searchParams.get(key);
+    if(!value)return false;
+    const clean=s=>s.replace(/\s+/gu,' ').trim();
+    const raw=clean(text),query=clean(value);
+    if(u.hostname==='lookbook.ronkacloset.com'&&el.closest?.('.filter-keyword'))
+      return raw===query||raw==='搜索：'+query||raw==='搜索： '+query;
+    if(u.hostname==='attire.jp'&&el.closest?.('#breadCrumb,#jinrPostTitle')){
+      const match=/^「(.+)」的搜索结果(?:：[\d,]+ 条)?$/u.exec(raw);
+      return !!match&&clean(match[1])===query;
+    }
+    return false;
+  }
+  function attireScope(el,kind,url,text){
     if(el.closest?.('a[href*="/lodestone/playguide/db/item/"],[data-zhx-attire-item]'))return 'item';
     const card=el.closest?.('a.c--post-link[rel~="bookmark"]');
     if(card){
@@ -94,6 +110,23 @@
     const doc=el.ownerDocument;
     const categories=[...(doc?.querySelectorAll?.('#jinrPostMeta .a--post-cat a[href]')||[])];
     const glamour=categories.some(a=>a.pathname?.split('/').includes('glamour'));
+    if(glamour&&kind==='text'&&el.closest?.('#breadCrumb')&&/^幻化：/u.test(text||''))return 'user';
+    // This article mixes acquisition requirements and the editor's own
+    // experiences in one paragraph. Only the text after the verified
+    // editorial boundary (and its following paragraphs) is authored prose.
+    if(kind==='text'&&new URL(url).pathname.replace(/\/$/u,'')==='/field-commanders-coat'){
+      const paragraph=el.closest?.('.c--accordion-contents p');
+      if(paragraph){
+        const marker='白のロングコートに';
+        const whole=paragraph.textContent||'';
+        const boundary=whole.indexOf(marker);
+        const offset=typeof text==='string'?whole.indexOf(text.trim()):-1;
+        if(boundary>=0&&offset>=boundary)return 'user';
+        for(let sibling=paragraph.previousElementSibling;sibling;sibling=sibling.previousElementSibling){
+          if(sibling.tagName==='P'&&sibling.textContent.includes(marker))return 'user';
+        }
+      }
+    }
     if(el.closest?.('nav,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,#jinrPostMeta .a--post-cat,a[rel~="tag"],.a--post-category'))return 'ui';
     if(glamour&&el.closest?.('#jinrPostTitle,#postContent'))return 'user';
     if(el.closest?.('#jinrPostTitle')){
@@ -119,7 +152,7 @@
   function allowedRoute(url){try{const u=new URL(url);const site=siteFor(url);return !!site&&!ROUTE_BLOCK.test(u.pathname)&&(site!=='eden'||!!edenRoute(u))}catch{return false}}
   function trimHref(raw,origin){try{const u=new URL(raw,origin);if(u.protocol!=='https:')return '';u.username='';u.password='';u.search='';u.hash='';return u.toString().slice(0,260)}catch{return ''}}
   function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
-  function classifyContext(el,kind,site,url){
+  function classifyContext(el,kind,site,url,text){
     const cls=String(el.className?.baseVal || el.className || '')+' '+String(el.parentElement?.className?.baseVal || el.parentElement?.className || '');
     let ancestors='';for(let p=el.parentElement,n=0;p&&n<5;p=p.parentElement,n++)ancestors+=' '+String(p.className?.baseVal||p.className||'')+' '+String(p.id||'');
     const full=cls+' '+String(el.id||'')+' '+ancestors;
@@ -131,17 +164,19 @@
     const link=el.closest?.('a[href]');
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url):null;
+    const echo=queryEcho(el,kind,url,text);
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url,text):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
     if(ad)scope='ad';
+    else if(echo)scope='user';
     else if((authored||likelyGallery||artImage||siteScope==='user') && siteScope!=='ui' && (!control||kind==='attr:alt'))scope='user';
     else if(item && !control)scope='item';
     else if(kind==='document:title')scope='metadata';
     else if(siteScope==='ui'||control||!!el.closest?.('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"],.pagination,.pager')||UI_RE.test(el.tagName||''))scope='ui';
     // Attribute labels are NOT UI by default. They may be creator-supplied titles.
-    return {scope,ui:scope==='ui',user:scope==='user',ad,control,confidence:scope==='unknown'?0.35:scope==='user'?0.92:0.86,
+    return {scope,ui:scope==='ui',user:scope==='user',ad,control,queryEcho:echo,confidence:scope==='unknown'?0.35:scope==='user'?0.92:0.86,
       tag:String(el.tagName||'').toLowerCase(),cls:cls.slice(0,150),id:String(el.id||'').slice(0,75),
       ancestors:ancestors.slice(0,220),role:el.getAttribute?.('role')||'',name:el.getAttribute?.('name')||'',
       href:trimHref(el.getAttribute?.('href')||'',url)};
@@ -235,6 +270,7 @@
         const itemName=ctx.scope==='item'||ITEM_RE.test(signature);
         let scope='unknown';
         if(ctx.ad)scope='ad';
+        else if(ctx.queryEcho===true)scope='user';
         else if(site==='attire'&&ctx.scope==='ui'&&!ctx.user)scope='ui';
         else if(ctx.scope==='user'&&it.kind==='attr:alt'||authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';
@@ -268,7 +304,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,queryEcho,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;
