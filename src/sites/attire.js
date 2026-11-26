@@ -38,10 +38,32 @@ function replaceLabel(element, source, translation) {
 }
 
 function uiName(source) {
-  const exact = DICT['attire:' + source];
+  const exact = DICT['attire:' + source] || lookupDutyName(source);
   if (exact) return exact;
   const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
-  return count && DICT['attire:' + count[1]] ? DICT['attire:' + count[1]] + count[2] : null;
+  if (count) {
+    const name = DICT['attire:' + count[1]] || lookupDutyName(count[1]);
+    return name ? name + count[2] : null;
+  }
+  const duty = /^Lv\s*(\d{1,3})\s*ID\s+(.+)$/iu.exec(source);
+  const name = duty && lookupDutyName(duty[2]);
+  return name ? duty[1] + '级副本 ' + name : null;
+}
+
+// These display titles are not individual item identities. Never use them for
+// Wiki redirects or search conversion.
+function articleName(source) {
+  if (!source) return null;
+  const exact = uniqueItemName(source);
+  if (exact) return exact;
+  if (source === 'トリテレイアイヤリング' || source.endsWith('武器一覧')) return DICT['attire:' + source] || null;
+  const matches = new Set();
+  for (let i = source.indexOf('・'); i !== -1; i = source.indexOf('・', i + 1)) {
+    const left = uniqueItemName(source.slice(0, i));
+    const right = uniqueItemName(source.slice(i + 1));
+    if (left && right) matches.add(left + '、' + right);
+  }
+  return matches.size === 1 ? [...matches][0] : null;
 }
 
 function localizeCard(card) {
@@ -51,7 +73,7 @@ function localizeCard(card) {
   const heading = card.querySelector('.a--post-title');
   const source = heading?.textContent.trim();
   if (!source) return;
-  const exact = uniqueItemName(source);
+  const exact = articleName(source);
   if (exact) replaceLabel(heading, source, exact);
 }
 
@@ -66,7 +88,7 @@ function jobName(source) {
 }
 
 function dyeName(source) {
-  const label = ['染色不可', '無染色', '染色◯', '染色○', '染色×'].includes(source) && uiName(source);
+  const label = ['染色不可', '無染色', '染色◯', '染色○', '染色×', '染色✕'].includes(source) && uiName(source);
   if (label) return label;
   const single = resolveDyeColor(source);
   if (single) return single;
@@ -115,7 +137,7 @@ function translateStructuredItems() {
   const weapons = hasCategory('seriesb') || /weapon-coffer/i.test(location.pathname);
   const catalogue = document.body.matches('.page') || weapons;
   const title = document.querySelector('#jinrPostTitle');
-  const detail = !glamour && !!(title?.dataset.zhxAttireNative || uniqueItemName(title?.textContent.trim()));
+  const detail = !glamour && !!(title?.dataset.zhxAttireNative || articleName(title?.textContent.trim()));
   for (const link of document.querySelectorAll('#postContent a[href]')) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
     if (glamour) {
@@ -124,7 +146,7 @@ function translateStructuredItems() {
     }
     if (!catalogue && !detail) continue;
     const source = link.textContent.trim();
-    const zh = uniqueItemName(source);
+    const zh = articleName(source);
     if (zh) replaceLabel(link, source, zh);
     else if (weapons) localizeCompositeLink(link, jobName);
   }
@@ -146,6 +168,27 @@ function translateStructuredItems() {
       const zh = uiName(source) || uniqueItemName(source) || dyeName(source);
       if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
     }
+  }
+}
+
+function equipmentMetadata(source) {
+  if (/^染色(?:不可|[◯○×✕])?$/u.test(source)) return uiName(source);
+  const match = /^Lv\s*(\d{1,3})\s+(.+)$/iu.exec(source);
+  if (!match) return null;
+  const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
+    ? ['全职业'] : match[2].split(/\s+/u).map(jobName);
+  if (!jobs.length || !jobs.every(Boolean)) return null;
+  return match[1] + '级 ' + jobs.join('／');
+}
+
+function translateEquipmentMetadata() {
+  // The level/job summary and dyeability labels occur on item detail pages,
+  // not on player-authored glamour posts.
+  for (const element of document.querySelectorAll('#postContent :is(p,span,strong)')) {
+    if (element.closest(EXCLUDED + ',a[href]')) continue;
+    const source = element.textContent.trim();
+    const zh = equipmentMetadata(source);
+    if (zh) replaceLabel(element, source, zh);
   }
 }
 
@@ -198,6 +241,8 @@ function translateAttirePage() {
   }
 
   const isGlamour = hasCategory('glamour');
+  const itemDetail = !isGlamour && !!document.querySelector(ITEM + ',#postContent a[data-zhx-attire-native]');
+  if (itemDetail) translateEquipmentMetadata();
   for (const link of document.querySelectorAll(ITEM)) {
     if (link.closest(EXCLUDED)) continue;
     const hash = LODESTONE_ITEM.exec(link.getAttribute('href'))?.[1].toLowerCase();
@@ -222,6 +267,11 @@ function translateAttirePage() {
     if (!isGlamour && native === nativeTitle && replaceLabel(title, nativeTitle, zh)) {
       title.dataset.zhxAttireNative = nativeTitle;
     }
+  }
+  if (title && !isGlamour && (itemDetail || hasCategory('seriesb'))) {
+    const source = title.textContent.trim();
+    const zh = articleName(source);
+    if (replaceLabel(title, source, zh)) title.dataset.zhxAttireNative = source;
   }
   const localizedTitle = title?.textContent.trim();
   if (nativeTitle && localizedTitle && nativeTitle !== localizedTitle && document.title.startsWith(nativeTitle)) {
