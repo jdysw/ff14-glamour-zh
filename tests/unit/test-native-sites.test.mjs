@@ -1671,6 +1671,31 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#assayer').textContent,'调查队的古钱鉴定师新月岛南部');
     assert.equal(d.querySelector('#foreign-assayer').textContent,'探査隊の古銭鑑定士');
     assert.equal(d.querySelector('#author-note').textContent,'十二都市銀貨');
+    // Resistance weapons use a different vendor heading and include replicas.
+    globalThis.location = new URL('https://attire.jp/arms/augmented-laws-order-revolver/');
+    d.body.innerHTML = exchangeMarkup('<p>武器強化コンテンツ<br>レジスタンスウェポン</p><p>取引に必要なアイテム</p>'
+      + '<p id="rw-count">15</p><p>取引NPC</p><p id="rw-vendor">ズラタン<br>ガンゴッシュ</p>'
+      + '<div><span class="a--h2rich-subcopy">Replica</span><h2 class="a--h2rich-maincopy">レプリカ</h2></div>'
+      + '<p>販売ショップNPC</p><p id="rw-replica">レガナ<br>ガンゴッシュ</p>'
+      + '<p id="rw-author">レジスタンスウェポンについての説明</p>');
+    // Remove the original vendor heading to ensure the alternative is sufficient.
+    d.querySelectorAll('#postContent p').forEach(e => { if (e.textContent==='販売ショップNPC') e.remove(); });
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#rw-vendor').innerHTML,'兹拉坦<br>甘戈斯');
+    assert.equal(d.querySelector('#rw-replica').innerHTML,'雷佳娜<br>甘戈斯');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'复制品');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#rw-count').textContent,'15');
+    assert.equal(d.querySelector('#rw-author').textContent,'レジスタンスウェポンについての説明');
+    globalThis.location = new URL('https://attire.jp/arms/mandervillous-knives/');
+    d.body.innerHTML = exchangeMarkup('<p>武器強化コンテンツ<br>マンダヴィルウェポン</p><p>取引に必要なアイテム</p>'
+      + '<p id="mw-material">前段階の武器<br>1<br>クリスタライト<br>3</p><p>販売ショップNPC</p>'
+      + '<p id="mw-vendor">ジュブルンナ<br>ラザハン</p><p id="shield-note">(片手剣&盾セット)<br>（片手剣＆盾セット）</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#mw-material').innerHTML,'上一阶段的武器<br>1<br>雏晶<br>3');
+    assert.equal(d.querySelector('#mw-vendor').innerHTML,'玖布伦娜<br>拉札罕');
+    assert.equal(d.querySelector('#shield-note').innerHTML,'（单手剑与盾牌套装）<br>（单手剑与盾牌套装）');
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();
