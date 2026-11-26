@@ -40,7 +40,7 @@ export function templateKey(url) {
       const slug = originalParts[0];
       if (/^(?:\w+_s_arm|\w+_s_grimoire|shield|vpr|rdm|pictomancers-arm)$/u.test(slug)) return 'attire.jp/:weapon-catalogue';
       if (/^(?:af-|al\d+$)/u.test(slug)) return 'attire.jp/:guide';
-      if (!['vanity-2','market','pvp','gc','hand-land','s-g','dawntrail','crafter-macro-generat'].includes(slug)) return 'attire.jp/:article';
+      if (!['vanity-2','market','pvp','gc','hand-land','s-g','a-realm-reborn','heavensward','stormblood','shadowbringers','endwalker','dawntrail','crafter-macro-generat'].includes(slug)) return 'attire.jp/:article';
     }
   }
   if (u.hostname === 'mirapri.ff14eden.work' && originalParts[1] === 'gallery') originalParts[2] = ':user';

@@ -13,8 +13,8 @@ const matrix=workflow.match(/site: \[([^\]]+)\]/)?.[1].split(',').map(s=>s.trim(
 assert.deepEqual(matrix?.sort(),Object.keys(SITES).sort(),'CI matrix must include every audit site');
 assert.deepEqual(Object.keys(SITES).sort(), SITE_POLICIES.map(site=>site.id).sort(), 'Every production adapter must have a live-audit entry');
 const at='2026-10-09T13:00:00Z';
-const good=site=>({site,pageId:'home',
-  url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/物品:加特勒':SITES[site].pages[0].url,status:'ok',
+const good=(site,p=SITES[site].pages[0])=>({site,pageId:site==='wiki'?'item-live':p.id,
+  url:site==='wiki'?'https://ff14.huijiwiki.com/wiki/物品:加特勒':p.url,status:'ok',
   scannedAt:at,beforeCount:1,items:[{kind:'text',text:'搜索',before:'Search',
     path:'nav > button',ctx:{ui:true,user:false,ad:false}}]});
 const bad=site=>({site,pageId:'home',url:SITES[site].pages[0].url,status:'failed',
@@ -24,8 +24,12 @@ assert.equal(part.status,'partial');
 assert.equal(part.bySite.mirapri.status,'failed');
 assert.equal(part.bySite.ec.status,'failed');
 assert.equal(part.pages.length,Object.keys(SITES).length);
-const complete=summarizeLive(Object.keys(SITES).map(good),at);
+const partialSeeds=summarizeLive(Object.keys(SITES).map(site=>good(site)),at);
+assert.equal(partialSeeds.status,'partial');
+assert.ok(partialSeeds.bySite.attire.missingSeeds.includes('dawntrail'));
+const complete=summarizeLive(Object.entries(SITES).flatMap(([site,cfg])=>cfg.pages.map(p=>good(site,p))),at);
 assert.equal(complete.status,'scan-complete');
+assert.ok(Object.values(complete.bySite).every(s=>s.missingSeeds.length===0));
 const example=good('attire');
 example.items=[{kind:'text',text:'入手方法',before:'入手方法',path:'h2',ctx:{scope:'ui',ui:true,collapsed:true}},
   {kind:'text',text:'入手方法',before:'入手方法',path:'h3',ctx:{scope:'ui',ui:true}},
@@ -37,7 +41,7 @@ assert.equal(groups[0].pages,1);
 assert.equal(groups[0].collapsed,1);
 const v=toManualAudit(complete);
 assert.equal(v.format,'zhx-manual-audit-v2');
-assert.equal(Object.keys(v.pages).length,Object.keys(SITES).length);
+assert.equal(Object.keys(v.pages).length,complete.pages.length);
 assert.ok(Object.values(v.pages).every(p=>!p.hasBaseline&&p.baselineQuality==='partial-inferred'));
 const author=good('fc');
 author.items=[{kind:'text',text:'玩家标题',before:'Author writing',path:'article > h2',

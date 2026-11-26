@@ -42,7 +42,12 @@ export function summarizeLive(rows,now=new Date().toISOString()){
   for(const site of expected){
     const list=pages.filter(p=>p.site===site);
     const ok=list.filter(p=>p.status==='ok').length,failed=list.length-ok;
-    bySite[site]={status:!ok?'failed':failed?'partial':'scan-complete',scanned:list.length,ok,failed};
+    // A runner can stop before saving its planned seed pages. One valid page
+    // is not proof that the configured audit was completed.
+    const attempted=new Set(list.map(p=>p.pageId));
+    const required=SITES[site].pages.map(p=>site==='wiki'&&p.url.startsWith('fixture:')?'item-live':p.id);
+    const missingSeeds=required.filter(id=>!attempted.has(id));
+    bySite[site]={status:!ok?'failed':failed||missingSeeds.length?'partial':'scan-complete',scanned:list.length,ok,failed,missingSeeds};
   }
   const states=Object.values(bySite);
   const status=states.every(s=>s.status==='scan-complete')?'scan-complete':
@@ -100,9 +105,9 @@ export function writeLiveReports(report,out){
   fs.writeFileSync(path.join(out,'coverage-audit-live-candidates.json'),JSON.stringify(candidates,null,2)+'\n','utf8');
   const header=['# FF14 汉化审计（'+Object.keys(report.bySite).length+' 站）','',
     '本轮扫描状态：**'+summary.status+'**（仅限采集到的页面，不能代表整站汉化率）','',
-    '|站点|状态|有效页面|失败页面|','|---|---|---:|---:|'];
+    '|站点|状态|有效页面|失败页面|未采集种子|','|---|---|---:|---:|---:|'];
   for(const [k,v] of Object.entries(report.bySite))
-    header.push('|'+k+'|'+v.status+'|'+v.ok+'|'+v.failed+'|');
+    header.push('|'+k+'|'+v.status+'|'+v.ok+'|'+v.failed+'|'+v.missingSeeds.length+'|');
   header.push('','WAF、404、跨站跳转、超时均记为失败，不得当作零漏译。','');
   fs.writeFileSync(path.join(out,'coverage-audit-live.md'),header.join('\n')+'\n'+buildReport(pages),'utf8');
   fs.writeFileSync(path.join(out,'coverage-audit-live.json'),JSON.stringify(summary,null,2)+'\n','utf8');

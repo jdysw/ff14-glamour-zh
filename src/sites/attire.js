@@ -69,16 +69,27 @@ function replaceLabel(element, source, translation) {
   return false;
 }
 
+// Use the same exact currency aliases in cards, navigation and exchange
+// sections. The historical guide dictionary also covers retired currencies.
+function tomestoneName(source) {
+  if (!/^アラガントームストーン[:：]\S+$/u.test(source)) return null;
+  const native = source.replace('：', ':');
+  return DICT['attire:' + native] || DICT_COMMON[native] || DICT['attire:tomestone-guide:' + native] || null;
+}
+
 function exactUiName(source) {
   return DICT['attire:' + source]
     || DICT['attire:event:' + source]
     || (Object.hasOwn(DICT_COMMON, source) ? DICT_COMMON[source] : null)
+    || tomestoneName(source)
     || lookupDutyName(source);
 }
 
 function uiName(source) {
   const exact = exactUiName(source);
   if (exact) return exact;
+  const questReward = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)クエスト[＆&]FATE等報酬品$/u.exec(source);
+  if (questReward) return exactUiName(questReward[1] + '編') + '任务及危命任务等奖励';
   const artifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)アーティファクト$/u.exec(source);
   if (artifact) return exactUiName(artifact[1] + '編') + ' 职业专属装备';
   const craftArtifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)(ギャザラー|クラフター)AF$/u.exec(source);
@@ -398,6 +409,30 @@ function translateTomestoneGuide(title, nativeTitle) {
     if (link && link.origin !== location.origin) continue;
     const zh = tomestoneGuideLabel(source);
     if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
+  }
+}
+
+// The six expansion catalogues share the same rich headings, with English
+// secondary labels. Keep these route-specific to avoid touching author prose.
+const EXPANSION_CATALOGUES = new Set(['/a-realm-reborn','/heavensward','/stormblood','/shadowbringers','/endwalker','/dawntrail']);
+
+function expansionSectionName(source, path) {
+  const exact = DICT['attire:expansion:' + source];
+  if (exact) return exact;
+  const level = /^(?:レベル(50|60|70|80|90|100)ID装備|Lv\s*(50|60|70|80|90|100)\s+Dungeons)$/iu.exec(source);
+  if (level) return (level[1] || level[2]) + '级副本装备';
+  if (/^F\.A\.T\.E\.?\s*[&＆]\s*(?:Quest|クエスト報酬(?:など|等))$/iu.test(source)) return '危命任务及任务等奖励';
+  if (source === 'Trials') return DICT['attire:expansion:討伐・討滅戦武器' + (path === '/a-realm-reborn' ? '＆装備' : '')];
+  return uiName(source);
+}
+
+function translateExpansionCatalogue() {
+  const path = location.pathname.replace(/\/$/u, '');
+  if (!EXPANSION_CATALOGUES.has(path) || hasCategory('glamour')) return;
+  for (const heading of document.querySelectorAll('#postContent :is(h2,h3,h4,h5,h6,.a--h2rich-maincopy,.a--h2rich-subcopy,.c--tab-title,.rtoc-item a)')) {
+    if (heading.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK) || heading.querySelector(ITEM_LINK)) continue;
+    const source = heading.textContent.trim();
+    replaceLabel(heading, source, expansionSectionName(source, path));
   }
 }
 
@@ -896,10 +931,7 @@ function exchangeDetailName(source) {
   if (Object.hasOwn(gcLocation, source)) return DICT['attire:gc:' + gcLocation[source] + ':' + source];
   // Current and historical currencies share the authoritative dictionary;
   // only a known complete currency name may be substituted.
-  const currency = value => {
-    const name = value.replace('：', ':');
-    return DICT_COMMON[name] || DICT['attire:tomestone-guide:' + name];
-  };
+  const currency = tomestoneName;
   if (/^アラガントームストーン[:：][^\s]+$/u.test(source)) return currency(source);
   const former = /^(?:[（(]旧\s*[:：]?\s*(アラガントームストーン[:：][^\s）)]+)[）)]|旧\s*[:：]?\s*(アラガントームストーン[:：][^\s]+))$/u.exec(source);
   if (former) {
@@ -1176,6 +1208,16 @@ function translateSearchControls() {
 
 // The macro generator is a separate tool. Translate only its landing-page
 // heading and exact launch link, not the generated commands or form values.
+// Native load-more buttons can sit outside navigation and rich headings.
+function translateLoadMore() {
+  for (const element of document.querySelectorAll('#postContent :is(a[href],button)')) {
+    if (element.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK)) continue;
+    if (element.matches('a[href]') && element.origin !== location.origin) continue;
+    const source = element.textContent.trim();
+    if (source === 'もっと見る' || source === 'Read More') replaceLabel(element, source, uiName(source));
+  }
+}
+
 function translateMacroLanding() {
   if (!/^\/crafter-macro-generat\/?$/u.test(location.pathname)) return;
   const heading = 'Crafter Macro Generat';
@@ -1244,6 +1286,7 @@ function translateAttirePage() {
   const weaponDetail = /^\/arms\/[^/]+\/?$/u.test(location.pathname) && !hasCategory('glamour');
   const nativeTitle = title?.textContent.trim();
   localizeRichMenu();
+  translateExpansionCatalogue();
   for (const element of document.querySelectorAll(UI)) {
     if (element.closest(EXCLUDED)) continue;
     const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -1268,6 +1311,7 @@ function translateAttirePage() {
   translateRecentPosts();
   translateArchiveControls();
   translateSearchControls();
+  translateLoadMore();
   translateMacroLanding();
   translateFrontlineCalendar();
   translateSplitSeriesLink();

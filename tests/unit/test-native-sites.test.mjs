@@ -1783,6 +1783,22 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','富矿套装','测试套装','曖昧','未知のセット']);
     assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
     assert.equal(d.querySelector('#author').textContent,'マインライズ');
+    // All expansion catalogues share level-aware Japanese/English headings.
+    for (const [path,level] of [['a-realm-reborn',50],['heavensward',60],['stormblood',70],['shadowbringers',80],['endwalker',90],['dawntrail',100]]) {
+      const markup = '<section id="postContent"><div><span class="a--h2rich-subcopy">Lv'+level+' Dungeons</span><h2 class="a--h2rich-maincopy">レベル'+level+'ID装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Dungeons</span><h2 class="a--h2rich-maincopy">レベリングID装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Trials</span><h2 class="a--h2rich-maincopy">討伐・討滅戦武器'+(level===50?'＆装備':'')+'</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Allagan Tomestone</span><h2 class="a--h2rich-maincopy">トークン装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">F.A.T.E &amp; Quest</span><h2 class="a--h2rich-maincopy">F.A.T.E.＆クエスト報酬など</h2></div>'
+        + '<a class="c--post-link" rel="bookmark" href="/test/"><span class="a--post-category">アラガントームストーン：数理</span><h2 class="a--post-title">未確認のタイトル</h2></a>'
+        + '<a id="more" href="/page/2/">もっと見る</a><p id="author">レベル'+level+'ID装備</p></section>';
+      render('/'+path+'/',markup);
+      assert.deepEqual([...d.querySelectorAll('.a--h2rich-maincopy')].map(e=>e.textContent),[level+'级副本装备','练级副本装备','讨伐歼灭战武器'+(level===50?'及防具':''),'神典石装备','危命任务及任务等奖励']);
+      assert.ok([...d.querySelectorAll('.a--h2rich-subcopy')].every(e=>e.hidden));
+      assert.equal(d.querySelector('.a--post-category').textContent,'亚拉戈数理神典石');
+      assert.equal(d.querySelector('#more').textContent,'查看更多');
+      assert.equal(d.querySelector('#author').textContent,'レベル'+level+'ID装備');
+    }
     render('/af-pld/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/af-nyuusyu/">入手方法：歴代ジョブAF</a></div></div>'
       + '<h1 id="jinrPostTitle">ナイト 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
       + '<a href="/gallant-surcoat/">新生AFガラント/Gallant</a><a href="/caballarius-cuirass/">黄金AFカバラリアス/Caballarius</a></section>');
