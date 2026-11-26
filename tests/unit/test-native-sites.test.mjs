@@ -1632,6 +1632,45 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     translateAttirePage();
     assert.equal(d.querySelector('#rank').textContent,'4,200准闘士');
     assert.equal(d.querySelector('#gc-vendor').innerHTML,'補給担当官<br>ウルダハ：ナル回廊');
+    // Equipment exchange sections: historical tomestones, deep dungeons
+    // and Occult Crescent. Keep quantities, unknown content and shop links.
+    const exchangeMarkup = body => `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}">${jp}</a>
+      <div class="c--accordion-contents"><p>入手方法</p>${body}</div></section>`;
+    globalThis.location = new URL('https://attire.jp/arms/quick-silver/');
+    d.body.innerHTML = exchangeMarkup('<p id="tome">アラガントームストーン：詩学<br>（旧 アラガントームストーン：戦記）</p>'
+      + '<p>取引に必要なアイテム</p><p id="cost">アラガントームストーン:詩学<br>600</p><p>販売ショップNPC</p>'
+      + '<p id="npc">エリナ<br>モードゥナ</p><p id="rowena">ロウェナ商会の商人<br>リムサ・ロミンサ：下甲板層</p>'
+      + '<p id="unknown-tome">アラガントームストーン:未確認</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#tome').innerHTML,'亚拉戈诗学神典石<br>（旧：亚拉戈战记神典石）');
+    assert.equal(d.querySelector('#cost').innerHTML,'亚拉戈诗学神典石<br>600');
+    assert.equal(d.querySelector('#npc').innerHTML,'艾里娜<br>摩杜纳');
+    assert.equal(d.querySelector('#rowena').innerHTML,'罗薇娜商会的商人<br>利姆萨·罗敏萨下层甲板');
+    assert.equal(d.querySelector('#unknown-tome').textContent,'アラガントームストーン:未確認');
+    globalThis.location = new URL('https://attire.jp/arms/the-book-of-first-light/');
+    d.body.innerHTML = exchangeMarkup('<p id="dungeon">ピルグリム・トラバース</p><p>取引に必要なアイテム</p><p id="grip">光耀魔器柄<br>3</p>'
+      + '<p>販売ショップNPC</p><p id="deep-npc">オセ＝ウィド<br>イル・メグ</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#dungeon').textContent,'朝圣交错路');
+    assert.equal(d.querySelector('#grip').innerHTML,'光耀聚魔柄<br>3');
+    assert.equal(d.querySelector('#deep-npc').innerHTML,'奥瑟·卫德<br>伊尔美格');
+    globalThis.location = new URL('https://attire.jp/arcanauts-vest-of-fending/');
+    const shop = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/shop/94679ec7652/';
+    d.body.innerHTML = exchangeMarkup('<p id="crescent">クレセントアイル：南征編</p><p>取引に必要なアイテム</p>'
+      + '<p id="silver">十二都市銀貨<br>4,000</p><p>販売ショップNPC</p>'
+      + '<p id="assayer"><a href="'+shop+'">探査隊の古銭鑑定士</a><br>三日月島南部</p>'
+      + '<a id="foreign-assayer" href="https://example.test/">探査隊の古銭鑑定士</a>')
+      .replace('</section>','<p id="author-note">十二都市銀貨</p></section>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#crescent').textContent,'新月岛：南征之章');
+    assert.equal(d.querySelector('#silver').innerHTML,'十二城邦银币<br>4,000');
+    assert.equal(d.querySelector('#assayer a').textContent,'调查队的古钱鉴定师');
+    assert.equal(d.querySelector('#assayer a').href,shop);
+    assert.equal(d.querySelector('#assayer').textContent,'调查队的古钱鉴定师新月岛南部');
+    assert.equal(d.querySelector('#foreign-assayer').textContent,'探査隊の古銭鑑定士');
+    assert.equal(d.querySelector('#author-note').textContent,'十二都市銀貨');
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();
