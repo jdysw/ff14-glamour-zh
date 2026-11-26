@@ -1495,7 +1495,7 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     d.body.className = 'single';
     d.title = '〖ヴァイパー〗二刀流武器 一覧〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
     d.body.innerHTML = '<h1 id="jinrPostTitle">〖ヴァイパー〗二刀流武器 一覧</h1>'
-      + '<section id="postContent"><h2>Lv100～Lv91</h2><h3>Lv80～Lv1</h3>'
+      + '<section id="postContent"><h2>Lv100～Lv91</h2><h3>Lv80～Lv1</h3><h3>Lv70</h3><h3>Lv60</h3><h3>Lv1</h3>'
       + '<a href="/test-weapon/">'+jp+'</a><figure><figcaption>'+jp+'</figcaption></figure>'
       + '<figure><figcaption><a id="official-caption" href="'+official+'">'+jp+'</a></figcaption></figure>'
       + '<p>'+jp+'</p><h3>作者の文章</h3></section>'
@@ -1505,7 +1505,7 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     translateAttirePage();
     assert.equal(d.querySelector('#jinrPostTitle').textContent,'【蝰蛇剑士】蝰蛇对剑一览');
     assert.ok(d.title.startsWith('【蝰蛇剑士】蝰蛇对剑一览'));
-    assert.deepEqual([...d.querySelectorAll('#postContent :is(h2,h3)')].map(el=>el.textContent),['91～100级','1～80级','作者の文章']);
+    assert.deepEqual([...d.querySelectorAll('#postContent :is(h2,h3)')].map(el=>el.textContent),['91～100级','1～80级','70级','60级','1级','作者の文章']);
     assert.equal(d.querySelector('#postContent a').textContent,zh);
     assert.equal(d.querySelector('#postContent a').pathname,'/test-weapon/');
     assert.equal(d.querySelector('figcaption').textContent,zh);

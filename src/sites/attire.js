@@ -218,8 +218,12 @@ function translateWeaponCatalogue(title, page) {
   replaceLabel(title, source, weaponCatalogueName(source, page));
   for (const heading of document.querySelectorAll('#postContent :is(h1,h2,h3,h4,h5,h6)')) {
     const text = heading.textContent.trim();
-    const range = /^Lv(\d{1,3})\s*[～〜~]\s*Lv(\d{1,3})$/u.exec(text);
-    if (range) replaceLabel(heading, text, Math.min(+range[1], +range[2]) + '～' + Math.max(+range[1], +range[2]) + '级');
+    const levels = /^Lv\s*(\d{1,3})(?:\s*[～〜~]\s*Lv\s*(\d{1,3}))?$/u.exec(text);
+    if (!levels) continue;
+    const first = Number(levels[1]);
+    const last = Number(levels[2] ?? levels[1]);
+    const label = first === last ? String(first) : Math.min(first, last) + '～' + Math.max(first, last);
+    replaceLabel(heading, text, label + '级');
   }
   // A few weapon entries have an image and caption but no item text link.
   for (const caption of document.querySelectorAll('#postContent figcaption')) {
