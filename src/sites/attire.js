@@ -804,6 +804,7 @@ function translateOtherAcquisitionMetadata() {
 // Native weapon details and armor acquisition accordions share these labels.
 // Restrict replacements to an exchange region with both native section markers.
 const EXCHANGE_HEADINGS = ['取引に必要なアイテム', '販売ショップNPC'];
+const EXCHANGE_VENDOR_LABELS = ['販売ショップNPC', '取引NPC'];
 
 function exchangeDetailName(source) {
   if (source === '入手方法' || EXCHANGE_HEADINGS.includes(source)
@@ -812,7 +813,24 @@ function exchangeDetailName(source) {
   }
   const exact = DICT['attire:exchange:' + source];
   if (exact) return exact;
-  if (['同盟記章', 'セントリオ記章', 'モブハントの戦利品', 'ラザハン', 'オールド・シャーレアン'].includes(source)) {
+  // Match the complete native label, never an arbitrary substring of prose.
+  const swordShield = /^(※|[（(])?片手剣[&＆]盾セット([）)])?$/u.exec(source);
+  if (swordShield && (/^[（(]$/u.test(swordShield[1] || '') === !!swordShield[2])) {
+    return swordShield[1] === '※' ? '※单手剑与盾牌套装'
+      : swordShield[1] ? '（单手剑与盾牌套装）' : '单手剑与盾牌套装';
+  }
+  // Counts belong to the acquisition description, not the item names.
+  const parts = /^(頭手足|胴脚)…(\d+)$/u.exec(source);
+  if (parts) return DICT['attire:tomestone-guide:' + parts[1]] + '：' + parts[2];
+  const duty = lookupDutyName(source);
+  if (duty) return duty;
+  // Resolve complete native token/coffer/material names through the official
+  // item data rather than guessing a localized name from their suffix.
+  if (/(?:のトーテム像|データログ[1-4]\.0|(?:武器櫃|騎士装具|ナイトギア|ウェポンチェスト)〖ILv\d{1,4}〗)$/u.test(source)
+      || ['打ち捨てられた遺物', 'トーテム・オブ・ライト', '天之魔器柄'].includes(source)) {
+    return uniqueItemName(source);
+  }
+  if (['同盟記章', 'セントリオ記章', 'モブハントの戦利品', 'ラザハン', 'オールド・シャーレアン', 'ラールガーズリーチ', 'クガネ'].includes(source)) {
     return DICT['attire:tomestone-guide:' + source];
   }
   if (['ロウェナ商会の商人', 'モードゥナ', 'イディルシャイア', 'イシュガルド：下層', 'クリスタリウム'].includes(source)) {
@@ -860,7 +878,8 @@ function translateExchangeMetadata(weaponDetail) {
       for (const line of lines) if (line.trim()) labels.add(line.trim());
       nodes.push([node, lines]);
     }
-    if (!EXCHANGE_HEADINGS.every(label => labels.has(label) || labels.has(uiName(label)))) continue;
+    const hasLabel = label => labels.has(label) || labels.has(exchangeDetailName(label));
+    if (!hasLabel(EXCHANGE_HEADINGS[0]) || !EXCHANGE_VENDOR_LABELS.some(hasLabel)) continue;
     for (const [text, lines] of nodes) {
       const translated = lines.map(line => {
         const source = line.trim();
