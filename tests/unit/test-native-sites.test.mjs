@@ -1277,6 +1277,25 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#custom').textContent,'作者的文字');
     assert.equal(d.querySelector('#unknown').textContent,'未収録の装備');
     assert.equal(d.querySelector('#unknown').href,official+'00000000001/');
+    // Already redirected links must also be rechecked after a data refresh.
+    const updatedZh = '野战指挥官外套（更正）';
+    d.title = zh+'〖FF14 装备手帐〗｜幻化装备外观汇总';
+    d.body.insertAdjacentHTML('beforeend', `<ol id="breadCrumb"><li><a href="/">HOME</a></li><li>＞${zh}</li></ol>`);
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+updatedZh+'\t1\t1',hash:hash+'\t'+updatedZh}));
+    translateAttirePage();
+    assert.equal(d.querySelector('#item strong').textContent,updatedZh);
+    assert.equal(decodeURI(d.querySelector('#item').href),wiki+updatedZh);
+    assert.equal(d.querySelector('h1').textContent,updatedZh);
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'＞'+updatedZh);
+    assert.ok(d.title.startsWith(updatedZh));
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+updatedZh+'\t1\t1\n別の装備\t另一件装备\t1\t1',hash:hash+'\t另一件装备'}));
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#item strong').textContent,jp);
+    assert.equal(d.querySelector('#item').href,official+hash+'/');
+    assert.equal(d.querySelector('h1').textContent,jp);
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'＞'+jp);
+    assert.ok(d.title.startsWith(jp));
     // A name-only label must revert if the canonical identity contradicts it.
     d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a id="conflict" href="${official}${hash}/">${jp}</a></section>`;
     d.title = jp+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
@@ -1297,7 +1316,8 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
     d.body.className = 'page';
     d.body.innerHTML = `<nav><a href="/viper/">ヴァイパー</a></nav>
-      <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索"></form>
+      <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索">
+      <button type="submit">検索</button><input type="submit" value="検索"><input type="submit" name="action" value="検索"></form>
       <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
       <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
       <a class="c--post-link" rel="bookmark" href="/glamour-post/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
@@ -1306,6 +1326,9 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     assert.equal(d.querySelector('nav a').textContent,'蝰蛇剑士');
     assert.equal(d.querySelector('input').placeholder,'输入关键词搜索');
+    assert.equal(d.querySelector('button').textContent,'搜索');
+    assert.equal(d.querySelector('input[type="submit"]:not([name])').value,'搜索');
+    assert.equal(d.querySelector('input[name="action"]').value,'検索');
     assert.equal(d.querySelector('.wp-block-columns a').textContent,zh);
     assert.equal(d.querySelector('.wp-block-columns a').pathname,'/field-commanders-coat/');
     assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(h=>h.textContent),[zh,jp]);
@@ -1413,12 +1436,17 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     d.body.className = 'home';
     d.body.innerHTML = `<section id="postContent"><div class="a--richmenu-text"><span>Market</span><span>マーケット</span></div>
       <div class="a--richmenu-text"><span>Wolf Marks</span><span>PvP装備</span></div>
+      <p id="split-series">シ<a href="/category/seriesb/">リーズ武器一覧</a></p>
+      <p id="other-split">シ<a href="/other/">リーズ武器一覧</a></p>
       <div><span class="a--h2rich-maincopy">メニュー</span><h2 class="a--h2rich-subcopy">MENU</h2></div>
       <a class="c--post-link" rel="bookmark" href="/neo-kingdom/"><h2 class="a--post-title">ネオキングダム武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>
       <aside class="widget_recent_entries"><ul><li><a href="/lost-allagan/">アラガントームストーン:万物 ロストアラガン武器一覧</a></li><li><a href="/rose-du-desert/">ミラプリ：Rose du Désert</a></li></ul></aside>`;
     translateAttirePage();
     translateAttirePage();
     assert.deepEqual([...d.querySelectorAll('.a--richmenu-text')].map(el=>el.textContent),['市场','PvP 装备']);
+    assert.equal(d.querySelector('#split-series').textContent,'系列武器一览');
+    assert.equal(d.querySelector('#split-series a').pathname,'/category/seriesb/');
+    assert.equal(d.querySelector('#other-split').textContent,'シリーズ武器一覧');
     assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
     assert.equal(d.querySelector('.a--post-title').textContent,'新生王国武器一览');
     assert.deepEqual([...d.querySelectorAll('aside a')].map(el=>el.textContent),['亚拉戈万物神典石 亚拉戈失传武器一览','ミラプリ：Rose du Désert']);

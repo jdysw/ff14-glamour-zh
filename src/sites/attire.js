@@ -12,7 +12,8 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag,.archive.category) #jinrPostTitle,'
   + '#postContent .wp-block-heading,#postContent .wp-block-button__link,#postContent .a--post-category,'
   + '.widget-title,.widgettitle,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a';
-const ITEM = '#postContent a[href*="/lodestone/playguide/db/item/"]';
+const ITEM_LINK = 'a[href*="/lodestone/playguide/db/item/"],a[data-zhx-attire-item]';
+const ITEM = '#postContent :is(' + ITEM_LINK + ')';
 const CARD = 'a.c--post-link[rel~="bookmark"]';
 const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
@@ -20,6 +21,8 @@ const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list'
 const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
 const SITE_TITLE = '〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
 const breadcrumbTitles = new WeakMap();
+const itemLinks = new WeakMap();
+const itemTitles = new WeakMap();
 
 function uniqueItemName(source) {
   const names = resolveAllByName(source);
@@ -288,7 +291,11 @@ function translateBreadcrumb(title, previous, current) {
     replaceLabel(link, 'HOME', DICT.HOME);
   }
   if (!title || !previous || !current) return;
-  if (previous !== current) breadcrumbTitles.set(title, { source: previous, localized: current });
+  if (previous !== current) {
+    const prior = breadcrumbTitles.get(title);
+    const source = prior?.localized === previous ? prior.source : previous;
+    breadcrumbTitles.set(title, { source, previous, localized: current });
+  }
   const state = breadcrumbTitles.get(title);
   if (!state || state.localized !== current) return;
   const crumb = document.querySelector('#breadCrumb [aria-current="page"]')
@@ -298,8 +305,125 @@ function translateBreadcrumb(title, previous, current) {
   let node;
   while ((node = walk.nextNode())) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
-    if (node.data.trim().replace(/^[＞>]\s*/u, '') !== state.source) continue;
-    node.data = node.data.replace(state.source, () => current);
+    const source = node.data.trim().replace(/^[＞>]\s*/u, '');
+    if (source !== state.source && source !== state.previous) continue;
+    node.data = node.data.replace(source, () => current);
+  }
+}
+
+function clearItemLink(link) {
+  itemLinks.delete(link);
+  delete link.dataset.zhxAttireItem;
+}
+
+function originalItem(link) {
+  let href = link.getAttribute('href');
+  const displayed = link.textContent.trim();
+  const prior = itemLinks.get(link);
+  if (prior && href === prior.appliedHref && displayed === prior.label) {
+    return { ...prior, displayed };
+  }
+  if (prior) {
+    // The site changed the label: undo only our redirect, if still present.
+    if (href === prior.appliedHref && href !== prior.href) {
+      href = prior.href;
+      link.setAttribute('href', href);
+    }
+    clearItemLink(link);
+  }
+  const hash = LODESTONE_ITEM.exec(href)?.[1].toLowerCase();
+  return hash ? { href, hash, native: displayed, displayed } : null;
+}
+
+function itemTranslation(hash, native) {
+  const names = resolveAllByName(native);
+  const byHash = resolveByHash(hash);
+  const fallback = DICT['attire:item:' + hash + ':' + native];
+  // Even the local fallback must agree with the canonical hash, when known.
+  const confirmed = byHash
+    ? (names.includes(byHash) || fallback === byHash ? byHash : null)
+    : fallback;
+  return { confirmed, zh: confirmed || (!byHash && names.length === 1 ? names[0] : null) };
+}
+
+function translateOfficialItem(link) {
+  const original = originalItem(link);
+  if (!original) return null;
+  const { href, hash, native, displayed } = original;
+  const { confirmed, zh } = itemTranslation(hash, native);
+  replaceLabel(link, displayed, zh || native);
+  const label = link.textContent.trim();
+  const appliedHref = confirmed && label === confirmed
+    ? WIKI_ITEM + encodeURIComponent(confirmed) : href;
+  if (link.getAttribute('href') !== appliedHref) link.setAttribute('href', appliedHref);
+  if (label !== native || appliedHref !== href) {
+    itemLinks.set(link, { href, hash, native, label, appliedHref });
+    link.dataset.zhxAttireItem = '1';
+  } else {
+    clearItemLink(link);
+  }
+  return { native, label: zh && label === zh ? zh : native };
+}
+
+function translateOfficialItems(title) {
+  const displayed = title?.textContent.trim();
+  const prior = title && itemTitles.get(title);
+  const tracked = prior && displayed === prior.label;
+  const native = tracked ? prior.native : displayed;
+  if (prior && !tracked) {
+    itemTitles.delete(title);
+    delete title.dataset.zhxAttireNative;
+  }
+  let hasItems = false;
+  const labels = new Set();
+  for (const link of document.querySelectorAll(ITEM)) {
+    if (link.closest(EXCLUDED)) continue;
+    const item = translateOfficialItem(link);
+    if (!item) continue;
+    hasItems = true;
+    if (title && item.native === native) labels.add(item.label);
+  }
+  if (title && (tracked || labels.size)) {
+    // Do not pick the first of two contradictory exact native names.
+    const desired = labels.size === 1 ? [...labels][0] : native;
+    if (replaceLabel(title, displayed, desired)) {
+      if (desired === native) {
+        itemTitles.delete(title);
+        delete title.dataset.zhxAttireNative;
+      } else {
+        itemTitles.set(title, { native, label: desired });
+        title.dataset.zhxAttireNative = native;
+      }
+    }
+  }
+  return hasItems;
+}
+
+function translateSearchControls() {
+  for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
+    const form = input.form;
+    if (form?.action !== location.origin + '/') continue;
+    const zh = uiName(input.placeholder);
+    if (zh && zh !== input.placeholder) input.placeholder = zh;
+    for (const button of form.querySelectorAll('button[type="submit"],button:not([type])')) {
+      replaceLabel(button, '検索', uiName('検索'));
+    }
+    // A named submit input contributes its value to the GET request.
+    for (const button of form.querySelectorAll('input[type="submit"]:not([name])')) {
+      if (button.value === '検索') button.value = uiName('検索');
+    }
+  }
+}
+
+function translateSplitSeriesLink() {
+  for (const link of document.querySelectorAll('body.home #postContent a[href]')) {
+    if (link.closest(EXCLUDED) || link.origin !== location.origin
+        || link.pathname !== '/category/seriesb/' || link.textContent.trim() !== 'リーズ武器一覧') continue;
+    const prefix = link.previousSibling;
+    if (prefix?.nodeType !== 3 || !/シ\s*$/u.test(prefix.data)) continue;
+    if (replaceLabel(link, 'リーズ武器一覧', uiName('シリーズ武器一覧'))) {
+      prefix.data = prefix.data.replace(/シ(?=\s*$)/u, '');
+    }
   }
 }
 
@@ -312,7 +436,7 @@ function translateAttirePage() {
     const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walk.nextNode())) {
-      if (node.parentElement?.closest(EXCLUDED + ',script,style,a[href*="/lodestone/playguide/db/item/"]')) continue;
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,' + ITEM_LINK)) continue;
       const source = node.data.trim();
       const localized = uiName(source);
       if (localized && source !== localized) node.data = node.data.replace(source, () => localized);
@@ -323,11 +447,8 @@ function translateAttirePage() {
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   translateRecentPosts();
   translateArchiveControls();
-  for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
-    if (input.form?.action !== location.origin + '/') continue;
-    const zh = uiName(input.placeholder);
-    if (zh && zh !== input.placeholder) input.placeholder = zh;
-  }
+  translateSearchControls();
+  translateSplitSeriesLink();
   translateStructuredItems();
 
   const searchTitle = document.querySelector('body.search #postHeader #jinrPostTitle');
@@ -346,47 +467,8 @@ function translateAttirePage() {
   }
 
   const isGlamour = hasCategory('glamour');
-  const itemDetail = !isGlamour && !!document.querySelector(ITEM + ',#postContent a[data-zhx-attire-native]');
+  const itemDetail = translateOfficialItems(isGlamour ? null : title) && !isGlamour;
   if (itemDetail) translateEquipmentMetadata();
-  for (const link of document.querySelectorAll(ITEM)) {
-    if (link.closest(EXCLUDED)) continue;
-    const hash = LODESTONE_ITEM.exec(link.getAttribute('href'))?.[1].toLowerCase();
-    if (!hash) continue;
-    const displayed = link.textContent.trim();
-    const native = displayed === link.dataset.zhxAttireLocalizedLabel
-      ? link.dataset.zhxAttireNative : displayed;
-    const names = resolveAllByName(native);
-    const byHash = resolveByHash(hash);
-    // A few Lodestone items have a known official name but no canonical
-    // hash yet. The local fallback identifies the hash AND original label.
-    const fallback = DICT['attire:item:' + hash + ':' + native];
-    const confirmed = byHash
-      ? (names.includes(byHash) || fallback === byHash ? byHash : null)
-      : fallback;
-    const zh = confirmed || (!byHash && names.length === 1 ? names[0] : null);
-    if (!zh) {
-      // A provisional name-only match can become ambiguous or contradicted
-      // when the canonical hash/name table arrives. Revert only our own label.
-      if (displayed !== native && replaceLabel(link, displayed, native)) {
-        delete link.dataset.zhxAttireNative;
-        delete link.dataset.zhxAttireLocalizedLabel;
-        if (!isGlamour && title?.dataset.zhxAttireNative === native
-            && title.textContent.trim() === displayed) {
-          replaceLabel(title, displayed, native);
-          delete title.dataset.zhxAttireNative;
-        }
-      }
-      continue;
-    }
-    if (replaceLabel(link, displayed, zh)) {
-      link.dataset.zhxAttireNative = native;
-      link.dataset.zhxAttireLocalizedLabel = zh;
-    }
-    if (confirmed && link.textContent.trim() === zh) link.href = WIKI_ITEM + encodeURIComponent(zh);
-    if (!isGlamour && native === nativeTitle && replaceLabel(title, nativeTitle, zh)) {
-      title.dataset.zhxAttireNative = nativeTitle;
-    }
-  }
   if (title && !isGlamour && (itemDetail || hasCategory('seriesb'))) {
     const source = title.textContent.trim();
     const zh = groupArticleName(source);
