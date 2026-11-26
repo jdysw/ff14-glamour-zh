@@ -18,7 +18,7 @@ const CARD = 'a.c--post-link[rel~="bookmark"]';
 const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
-const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者 採掘師 園芸師 漁師 木工師 鍛冶師 甲冑師 彫金師 革細工師 裁縫師 錬金術師 調理師'.split(' '));
+const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 魔獣使い 白魔道士 学者 占星術師 賢者 採掘師 園芸師 漁師 木工師 鍛冶師 甲冑師 彫金師 革細工師 裁縫師 錬金術師 調理師'.split(' '));
 // Explicit catalogue routes from the site's weapon navigation. The title must
 // also match the native job and weapon type; never infer an article's identity.
 const WEAPON_PAGES = new Map([
@@ -670,6 +670,22 @@ function translateSearchControls() {
   }
 }
 
+// The macro generator is a separate tool. Translate only its landing-page
+// heading and exact launch link, not the generated commands or form values.
+function translateMacroLanding() {
+  if (!/^\/crafter-macro-generat\/?$/u.test(location.pathname)) return;
+  const heading = 'Crafter Macro Generat';
+  for (const element of document.querySelectorAll('#postContent :is(h2,h3,h4)')) {
+    replaceLabel(element, heading, uiName(heading));
+  }
+  const label = 'FF14 制作マクロ自動生成ツール';
+  for (const link of document.querySelectorAll('#postContent a[href]')) {
+    if (link.origin === location.origin && link.pathname === '/wp-content/plugins/ff14-macro-tool/assets/tool.html') {
+      replaceLabel(link, label, uiName(label));
+    }
+  }
+}
+
 function translateSplitSeriesLink() {
   for (const link of document.querySelectorAll('body.home #postContent a[href]')) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin
@@ -711,6 +727,7 @@ function translateAttirePage() {
   translateRecentPosts();
   translateArchiveControls();
   translateSearchControls();
+  translateMacroLanding();
   translateSplitSeriesLink();
   translateStructuredItems(weaponPage, weaponDetail);
   translateWeaponCatalogue(title, weaponPage);
