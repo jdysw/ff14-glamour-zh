@@ -14,6 +14,7 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '.widget-title,.widgettitle,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a';
 const ITEM = '#postContent a[href*="/lodestone/playguide/db/item/"]';
 const CARD = 'a.c--post-link[rel~="bookmark"]';
+const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
 const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
@@ -80,6 +81,17 @@ function localizeCard(card) {
   if (!source) return;
   const exact = articleName(source);
   if (exact) replaceLabel(heading, source, exact);
+}
+
+function translateRecentPosts() {
+  for (const link of document.querySelectorAll(RECENT)) {
+    if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
+    const source = link.textContent.trim();
+    // The native recent-post list has no category badge. Keep player titles
+    // (including their site's glamour prefix) rather than guessing by name.
+    if (/^ミラプリ\s*[:：]/u.test(source)) continue;
+    replaceLabel(link, source, articleName(source));
+  }
 }
 
 function hasCategory(name) {
@@ -197,18 +209,48 @@ function translateEquipmentMetadata() {
   }
 }
 
+function localizeRichMenu() {
+  for (const element of document.querySelectorAll('#postContent .a--richmenu-text')) {
+    if (element.closest(EXCLUDED) || element.querySelector('a,input,textarea,[contenteditable]')) continue;
+    const nodes = [];
+    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      if (node.parentElement?.closest('script,style,svg')) continue;
+      if (node.data.trim()) nodes.push(node);
+    }
+    if (nodes.length < 2) continue;
+    const parts = nodes.map(n => n.data.trim());
+    const combined = DICT['attire:' + parts.join('')];
+    const first = uiName(parts[0]);
+    const zh = combined || (first && parts.every(part => uiName(part) === first) ? first : null);
+    if (!zh) continue;
+    nodes[0].data = nodes[0].data.replace(parts[0], () => zh);
+    for (const n of nodes.slice(1)) n.data = '';
+  }
+}
+
 function dedupeRichHeadings() {
   for (const main of document.querySelectorAll('#postContent .a--h2rich-maincopy')) {
     const sub = main.parentElement?.querySelector(':scope > .a--h2rich-subcopy');
     if (!sub || sub === main) continue;
     const text = main.textContent.trim();
-    if (text && text === sub.textContent.trim()) sub.hidden = true;
+    if (text && text === sub.textContent.trim()) {
+      if (!sub.hidden) {
+        sub.hidden = true;
+        sub.dataset.zhxAttireDeduped = '1';
+      }
+    } else if (sub.dataset.zhxAttireDeduped) {
+      sub.hidden = false;
+      delete sub.dataset.zhxAttireDeduped;
+    }
   }
 }
 
 function translateAttirePage() {
   const title = document.querySelector('#jinrPostTitle');
   const nativeTitle = title?.textContent.trim();
+  localizeRichMenu();
   for (const element of document.querySelectorAll(UI)) {
     if (element.closest(EXCLUDED)) continue;
     const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -223,6 +265,7 @@ function translateAttirePage() {
 
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
+  translateRecentPosts();
   for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
     if (input.form?.action !== location.origin + '/') continue;
     const zh = uiName(input.placeholder);
@@ -259,11 +302,25 @@ function translateAttirePage() {
     const byHash = resolveByHash(hash);
     // A few Lodestone items have a known official name but no canonical
     // hash yet. The local fallback identifies the hash AND original label.
+    const fallback = DICT['attire:item:' + hash + ':' + native];
     const confirmed = byHash
-      ? (names.includes(byHash) ? byHash : null)
-      : DICT['attire:item:' + hash + ':' + native];
+      ? (names.includes(byHash) || fallback === byHash ? byHash : null)
+      : fallback;
     const zh = confirmed || (!byHash && names.length === 1 ? names[0] : null);
-    if (!zh) continue;
+    if (!zh) {
+      // A provisional name-only match can become ambiguous or contradicted
+      // when the canonical hash/name table arrives. Revert only our own label.
+      if (displayed !== native && replaceLabel(link, displayed, native)) {
+        delete link.dataset.zhxAttireNative;
+        delete link.dataset.zhxAttireLocalizedLabel;
+        if (!isGlamour && title?.dataset.zhxAttireNative === native
+            && title.textContent.trim() === displayed) {
+          replaceLabel(title, displayed, native);
+          delete title.dataset.zhxAttireNative;
+        }
+      }
+      continue;
+    }
     if (replaceLabel(link, displayed, zh)) {
       link.dataset.zhxAttireNative = native;
       link.dataset.zhxAttireLocalizedLabel = zh;
