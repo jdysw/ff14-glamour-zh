@@ -1388,6 +1388,22 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,'紫灯花耳环');
     assert.equal(d.querySelector('#postContent a').href,official+'00000000001/');
+    // Flower summaries omit colour, while the actual items retain it.
+    const flower = 'スイートピーネックレス';
+    assert.ok(_applyV3({candidatePolicy:1,names:flower+':レッド\t红色香豌豆花项链\t1\t1\n'+flower+':ブルー\t蓝色香豌豆花项链\t1\t1\n別の花:レッド\t红色未知花\t1\t1\n別の花:ブルー\t蓝色另一种花\t1\t1',hash:'00000000002\t红色香豌豆花项链'}));
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${flower}</h1><section id="postContent">
+      <p>マーケット取引可能</p><a href="${official}00000000002/">${flower}:レッド</a>
+      <a class="c--post-link" rel="bookmark" href="/sweet-pea-necklace/"><h2 class="a--post-title">${flower}</h2><span class="a--post-category category-flower">フラワーオーナメント</span></a>
+      <a class="c--post-link" rel="bookmark" href="/other/"><h2 class="a--post-title">別の花</h2><span class="a--post-category category-flower">フラワーオーナメント</span></a></section>
+      <nav><a href="/viper/">ヴァイパー</a><a href="/search/">検索</a></nav>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'香豌豆花项链');
+    assert.equal(d.querySelector('#postContent p').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#postContent > a').textContent,'红色香豌豆花项链');
+    assert.equal(decodeURI(d.querySelector('#postContent > a').href),wiki+'红色香豌豆花项链');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['香豌豆花项链','別の花']);
+    assert.deepEqual([...d.querySelectorAll('nav a')].map(el=>el.textContent),['蝰蛇剑士','搜索']);
     d.body.className = 'archive category';
     d.body.innerHTML = '<h1 id="jinrPostTitle">おしゃれ装備：黄金編</h1>';
     d.title = 'おしゃれ装備：黄金編〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';

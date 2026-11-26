@@ -1,7 +1,7 @@
 import { WIKI_ITEM } from '../core/constants.js';
 import { resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
-import { DICT, lookupDutyName } from '../core/data/dictionary.js';
+import { DICT, DICT_COMMON, lookupDutyName } from '../core/data/dictionary.js';
 
 export { startAttire, translateAttirePage };
 
@@ -39,12 +39,18 @@ function replaceLabel(element, source, translation) {
   return false;
 }
 
+function exactUiName(source) {
+  return DICT['attire:' + source]
+    || (Object.hasOwn(DICT_COMMON, source) ? DICT_COMMON[source] : null)
+    || lookupDutyName(source);
+}
+
 function uiName(source) {
-  const exact = DICT['attire:' + source] || lookupDutyName(source);
+  const exact = exactUiName(source);
   if (exact) return exact;
   const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
   if (count) {
-    const name = DICT['attire:' + count[1]] || lookupDutyName(count[1]);
+    const name = exactUiName(count[1]);
     return name ? name + count[2] : null;
   }
   const duty = /^Lv\s*(\d{1,3})\s*ID\s+(.+)$/iu.exec(source);
@@ -52,11 +58,22 @@ function uiName(source) {
   return name ? duty[1] + '级副本 ' + name : null;
 }
 
+// Derive a colour-neutral flower title only when two exact native item
+// names independently yield the same Chinese base after removing the colour.
+function flowerArticleName(source) {
+  const red = uniqueItemName(source + ':レッド');
+  const blue = uniqueItemName(source + ':ブルー');
+  if (!red?.startsWith('红色') || !blue?.startsWith('蓝色')) return null;
+  const base = red.slice(2);
+  return base && base === blue.slice(2) ? base : null;
+}
+
 // These display titles are not individual item identities. Never use them for
 // Wiki redirects or search conversion.
 function groupArticleName(source) {
-  if (!source) return null;
-  if (uniqueItemName(source)) return null;
+  if (!source || resolveAllByName(source).length) return null;
+  const flower = flowerArticleName(source);
+  if (flower) return flower;
   if (source === 'トリテレイアイヤリング' || source.endsWith('武器一覧')) return DICT['attire:' + source] || null;
   const matches = new Set();
   for (let i = source.indexOf('・'); i !== -1; i = source.indexOf('・', i + 1)) {
@@ -190,7 +207,7 @@ function translateStructuredItems() {
 }
 
 function equipmentMetadata(source) {
-  if (/^染色(?:不可|[◯○×✕])?$/u.test(source)) return uiName(source);
+  if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能') return uiName(source);
   const match = /^Lv\s*(\d{1,3})\s+(.+)$/iu.exec(source);
   if (!match) return null;
   const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
