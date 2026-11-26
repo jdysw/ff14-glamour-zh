@@ -1769,7 +1769,7 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     render('/creed-cuirass/',afMarkup('af/artefact2','Lv60忍者')
       .replace('</section>','<a id="guide" href="/al06/">'+guide+'</a><a id="other-guide" href="https://example.test/al06/">'+guide+'</a></section>'));
     assert.equal(d.querySelector('#instructions').textContent,'60级 忍者');
-    assert.equal(d.querySelector('#guide').textContent,'【晓月版】60级职业专属装备获取方式（旧神典石装备）');
+    assert.equal(d.querySelector('#guide').textContent,'【晓月版】禁书神典石：新生古典装备获取方式（旧神典石装备）');
     assert.equal(d.querySelector('#other-guide').textContent,guide);
     // The historical guide is an article, not an item-detail page.
     const tomeTitle = '〖暁月版〗法典：ドマ様式装備の入手方法〖過去トークン装備〗';
@@ -1786,6 +1786,19 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('#guide-prose').textContent,'セントリオ記章についての説明');
     render('/other/',tomeMarkup.replace('/category/nyuusyuhouhou/tomestone/','/category/glamour/'));
     assert.equal(d.querySelector('th').textContent,'セントリオ記章');
+    const mythTitle = '〖暁月版〗神話：復古調装備の入手方法〖過去トークン装備〗';
+    const mythZh = '【晓月版】神话神典石：仿古装备获取方式（旧神典石装备）';
+    render('/al02/', tomeMarkup.replace(tomeTitle,mythTitle).replace('</section>',
+      '<h2>アンティーク素材 対応部位</h2><p>Allagan tomestone of Mythology</p>'
+      + '<h3>セントリオ記章入手方法（2024年パッチ6.x現在）</h3>'
+      + '<p>強化方法</p><p>強化したいアイテム＋対応する強化用アイテム</p>'
+      + '<p id="guide-unchanged">強化方法についての説明</p></section>'));
+    assert.equal(d.querySelector('h1').textContent,mythZh);
+    assert.equal(d.querySelector('#postContent h2:nth-of-type(2)').textContent,'古董道具对应部位');
+    assert.equal(d.querySelector('h3').textContent,'兵团徽章获取方式（截至2024年6.x版本）');
+    assert.ok([...d.querySelectorAll('#postContent p')].some(e=>e.textContent==='强化方式'));
+    assert.ok([...d.querySelectorAll('#postContent p')].some(e=>e.textContent==='亚拉戈神话神典石'));
+    assert.equal(d.querySelector('#guide-unchanged').textContent,'強化方法についての説明');
     const questBase = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/';
     const bardQuest = questBase+'4c5e96e09d0/';
     render('/antiquated-storytellers-coat/',afMarkup('af/artefact3','吟遊詩人クエスト<br>『<a href="'+bardQuest+'">想い込められし歌</a>』<br>クエスト終了後にチェストを開けることで入手できます<br>再取得は遺失物管理人から再購入可能です<br>染色可能にするためには『禁断の地 エウレカ アネモス編』でアイテムを揃える必要があります'));
