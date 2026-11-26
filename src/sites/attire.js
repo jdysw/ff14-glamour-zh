@@ -71,6 +71,7 @@ function replaceLabel(element, source, translation) {
 
 function exactUiName(source) {
   return DICT['attire:' + source]
+    || DICT['attire:event:' + source]
     || (Object.hasOwn(DICT_COMMON, source) ? DICT_COMMON[source] : null)
     || lookupDutyName(source);
 }
@@ -354,6 +355,40 @@ function translateSourceCatalogue(title, nativeTitle) {
   }
 }
 
+// Historical seasonal reward links contain a year, event copy and an item
+// name. Keep the year, copy, DOM and destination; translate only the exact
+// final item name. A single text node may contain all three parts.
+function translateSeasonalRewardLinks() {
+  if (!hasCategory('seasonal-event-all') || hasCategory('glamour')) return;
+  for (const link of document.querySelectorAll('#postContent a[href]')) {
+    if (link.closest(EXCLUDED + ',' + ITEM_LINK + ',' + CARD) || link.origin !== location.origin) continue;
+    if (!/^\d{4}年/u.test(link.textContent.trim())) continue;
+    const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT);
+    let node;
+    let last;
+    while ((node = walker.nextNode())) {
+      if (node.data.trim() && !node.parentElement?.closest(EXCLUDED + ',script,style,svg')) last = node;
+    }
+    const text = last?.data.trim();
+    if (!text || text.length > 300) continue;
+    const exact = uniqueItemName(text);
+    if (exact) {
+      last.data = last.data.replace(text, () => exact);
+      continue;
+    }
+    const matches = new Map();
+    for (const space of text.matchAll(/\s+/gu)) {
+      const suffix = text.slice(space.index + space[0].length);
+      const zh = uniqueItemName(suffix);
+      if (zh) matches.set(suffix, zh);
+    }
+    if (matches.size === 1) {
+      const [suffix, zh] = [...matches][0];
+      last.data = last.data.replace(text, () => text.slice(0, -suffix.length) + zh);
+    }
+  }
+}
+
 function translateWeaponDetailMetadata() {
   // Only the native weapon-detail route uses these short, otherwise ambiguous
   // labels. Never translate arbitrary prose or change an official item anchor.
@@ -408,7 +443,9 @@ function translateStructuredItems(weaponPage, weaponDetail) {
 
 function equipmentMetadata(source) {
   if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能'
-      || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)) return uiName(source);
+      || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
+      || ['女性専用装備','男性専用装備','Fall Guys コラボレーションイベント',
+        '現在は終了しているイベントのため入手できません'].includes(source)) return uiName(source);
   const match = /^Lv\s*(\d{1,3})\s+(.+)$/iu.exec(source);
   if (!match) return null;
   const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
@@ -417,7 +454,22 @@ function equipmentMetadata(source) {
   return match[1] + '级 ' + jobs.join('／');
 }
 
+function translateAcquisitionLinks() {
+  for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/special/"],#postContent a[href*="/ffxivstore/"]')) {
+    if (link.closest(EXCLUDED)) continue;
+    const source = link.textContent.trim();
+    if (link.origin === 'https://store.finalfantasyxiv.com' && /^\/ffxivstore\/[^/]+\/product\/\d+\/?$/u.test(link.pathname)) {
+      replaceLabel(link, source, uniqueItemName(source));
+    } else if (/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+        && link.pathname.startsWith('/lodestone/special/')) {
+      const zh = eventName(source) || (source.startsWith('モグモグ★コレクション') && uiName(source));
+      replaceLabel(link, source, zh);
+    }
+  }
+}
+
 function translateEquipmentMetadata() {
+  translateAcquisitionLinks();
   for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/shop/"]')) {
     if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     replaceLabel(link, 'スクリップ取引窓口', uiName('スクリップ取引窓口'));
@@ -651,6 +703,7 @@ function translateAttirePage() {
 
   if (weaponDetail) translateWeaponDetailMetadata();
   translateSourceCatalogue(title, nativeTitle);
+  translateSeasonalRewardLinks();
   if (/^\/market\/?$/u.test(location.pathname)) replaceLabel(title, 'マーケット取引可能装備', uiName('マーケット取引可能装備'));
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);

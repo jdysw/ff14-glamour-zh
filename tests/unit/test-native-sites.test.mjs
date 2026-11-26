@@ -1600,6 +1600,38 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('#mog-pair').pathname,'/mameshiba-earring/');
     render('/all-saints-wake/', '<h1 id="jinrPostTitle">守護天節 / All Saints’ Wake</h1>');
     assert.equal(d.querySelector('h1').textContent,'守护天节');
+    // Seasonal links and official store acquisition labels must not lose
+    // their dates, native copy, nested nodes, or original destinations.
+    const cardigan = 'ヴァレンティオンコージー・カーディガン';
+    const gaia = 'ガイア・コスチュームセット';
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1'}));
+    render('/valentiones-day/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seasonal-event-all/">シーズナルイベント一覧</a></div></div>'
+      + '<h1 id="jinrPostTitle">ヴァレンティオンデー / Valentiones Day</h1><section id="postContent">'
+      + '<a id="reward-split" href="/cozy-valentione-cardigan/"><span>2026年</span><span>大きなケーキに宿る愛</span><strong>'+cardigan+'</strong></a>'
+      + '<a id="reward-combined" href="/cozy-valentione-cardigan/">2026年 大きなケーキに宿る愛 '+cardigan+'</a>'
+      + '<a id="reward-unknown" href="/unknown/">2026年 未確認の装備</a><p id="reward-copy">'+cardigan+'</p></section>');
+    assert.equal(d.querySelector('h1').textContent,'恋人节');
+    assert.equal(d.querySelector('#reward-split strong').textContent,'温暖恋人开襟毛衫');
+    assert.equal(d.querySelector('#reward-split span:nth-child(2)').textContent,'大きなケーキに宿る愛');
+    assert.equal(d.querySelector('#reward-combined').textContent,'2026年 大きなケーキに宿る愛 温暖恋人开襟毛衫');
+    assert.equal(d.querySelector('#reward-combined').pathname,'/cozy-valentione-cardigan/');
+    assert.equal(d.querySelector('#reward-unknown').textContent,'2026年 未確認の装備');
+    assert.equal(d.querySelector('#reward-copy').textContent,cardigan);
+    const store = 'https://store.finalfantasyxiv.com/ffxivstore/ja-jp/product/901';
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/00000000003/';
+    render('/gaias-attire/', '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent">'
+      + '<a href="'+official+'">'+gaia+'</a><p>女性専用装備</p><p>課金装備『<a id="store" href="'+store+'">'+gaia+'</a>』</p>'
+      + '<a id="foreign-store" href="https://example.test/ffxivstore/ja-jp/product/901">'+gaia+'</a>'
+      + '<div><span class="a--h2rich-subcopy">Moogle Treasure Trove</span><h2 class="a--h2rich-maincopy">モグモグ★コレクション</h2></div>'
+      + '<a id="event" href="https://jp.finalfantasyxiv.com/lodestone/special/2026/Valentiones_Day/example">ヴァレンティオンデー</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'盖娅服装套装');
+    assert.equal(d.querySelector('#postContent p').textContent,'女性专用装备');
+    assert.equal(d.querySelector('#store').textContent,'盖娅服装套装');
+    assert.equal(d.querySelector('#store').href,store);
+    assert.equal(d.querySelector('#foreign-store').textContent,gaia);
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'莫古莫古★大收集');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#event').textContent,'恋人节');
   } finally {
     for (const [key,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
