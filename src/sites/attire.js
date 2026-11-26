@@ -1,7 +1,7 @@
 import { WIKI_ITEM } from '../core/constants.js';
 import { resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
-import { DICT } from '../core/data/dictionary.js';
+import { DICT, lookupDutyName } from '../core/data/dictionary.js';
 
 export { startAttire, translateAttirePage };
 
@@ -16,6 +16,8 @@ const ITEM = '#postContent a[href*="/lodestone/playguide/db/item/"]';
 const CARD = 'a.c--post-link[rel~="bookmark"]';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
+const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
+const SITE_TITLE = '〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
 
 function uniqueItemName(source) {
   const names = resolveAllByName(source);
@@ -23,12 +25,12 @@ function uniqueItemName(source) {
 }
 
 function replaceLabel(element, source, translation) {
-  if (!element || !translation || source === translation) return false;
+  if (!element || !translation || source === translation || element.closest(EXCLUDED)) return false;
   const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walk.nextNode())) {
     // Do not flatten icons, nested links, or split bilingual marketing copy.
-    if (node.data.trim() !== source || node.parentElement?.closest('script,style')) continue;
+    if (node.data.trim() !== source || node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
     node.data = node.data.replace(source, () => translation);
     return true;
   }
@@ -49,40 +51,114 @@ function localizeCard(card) {
   const heading = card.querySelector('.a--post-title');
   const source = heading?.textContent.trim();
   if (!source) return;
-  const exact = uniqueItemName(source);
+  const exact = uniqueItemName(source) || uiName(source);
   if (exact) replaceLabel(heading, source, exact);
 }
 
+function hasCategory(name) {
+  return [...document.querySelectorAll('#jinrPostMeta .a--post-cat a')]
+    .some(link => link.origin === location.origin && link.pathname.split('/').includes(name)
+      && link.pathname.startsWith('/category/'));
+}
+
+function jobName(source) {
+  return JOBS.has(source) ? uiName(source) : null;
+}
+
+function dyeName(source) {
+  const label = ['染色不可', '無染色', '染色◯', '染色○', '染色×'].includes(source) && uiName(source);
+  if (label) return label;
+  const single = resolveDyeColor(source);
+  if (single) return single;
+  const colors = source.split(/[・／/]/u).map(part => resolveDyeColor(part.trim()));
+  return colors.length > 1 && colors.every(Boolean) ? colors.join('／') : null;
+}
+
+// The native rich cards can concatenate job/dye and item labels with no spaces.
+// Require both the prefix and complete item suffix to resolve; never guess by substring.
+function compositeName(source, prefixName) {
+  if (source.length > 180) return null;
+  const matches = new Set();
+  for (let i = 1; i < source.length; i++) {
+    const prefix = prefixName(source.slice(0, i).trim());
+    if (!prefix) continue;
+    const item = uniqueItemName(source.slice(i).trim());
+    if (item) matches.add(prefix + ' ' + item);
+  }
+  return matches.size === 1 ? [...matches][0] : null;
+}
+
+function localizeCompositeLink(link, prefixName) {
+  const source = link.textContent.trim();
+  const localized = compositeName(source, prefixName);
+  if (!localized) return;
+  if (replaceLabel(link, source, localized)) return;
+  const walk = document.createTreeWalker(link, NodeFilter.SHOW_TEXT);
+  const replacements = [];
+  let node;
+  while ((node = walk.nextNode())) {
+    const part = node.data.trim();
+    if (!part) continue;
+    if (node.parentElement?.closest(EXCLUDED + ',script,style')) return;
+    const zh = prefixName(part) || uniqueItemName(part) || compositeName(part, prefixName);
+    if (!zh) return;
+    replacements.push([node, part, zh]);
+  }
+  for (const [text, part, zh] of replacements) {
+    if (part !== zh) text.data = text.data.replace(part, () => zh);
+  }
+}
+
 function translateStructuredItems() {
-  // Only known item names in links on explicit catalogue pages, never free prose.
-  const catalogue = document.body.matches('.page') || /weapon-coffer/i.test(location.pathname);
-  if (catalogue) {
-    for (const link of document.querySelectorAll('#postContent :is(.wp-block-table,.wp-block-columns,.c--tab-contents) a[href]')) {
-      if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
-      const source = link.textContent.trim();
-      const zh = uniqueItemName(source);
-      if (zh) replaceLabel(link, source, zh);
+  const glamour = hasCategory('glamour');
+  const weapons = hasCategory('seriesb') || /weapon-coffer/i.test(location.pathname);
+  const catalogue = document.body.matches('.page') || weapons;
+  const detail = !glamour && !!uniqueItemName(document.querySelector('#jinrPostTitle')?.textContent.trim());
+  for (const link of document.querySelectorAll('#postContent a[href]')) {
+    if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
+    if (glamour) {
+      localizeCompositeLink(link, dyeName);
+      continue;
+    }
+    if (!catalogue && !detail) continue;
+    const source = link.textContent.trim();
+    const zh = uniqueItemName(source);
+    if (zh) replaceLabel(link, source, zh);
+    else if (weapons) localizeCompositeLink(link, jobName);
+  }
+  // The catalogue's official duty links use the shared duty dictionary.
+  for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/duty/"]')) {
+    if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
+    const source = link.textContent.trim();
+    replaceLabel(link, source, lookupDutyName(source));
+  }
+  // Keep Lodestone item links untouched until the identity-aware pass below.
+  if (!glamour) return;
+  for (const cell of document.querySelectorAll('#postContent .wp-block-table :is(td,th)')) {
+    if (cell.closest(EXCLUDED)) continue;
+    const walk = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,a[href]')) continue;
+      const source = node.data.trim();
+      const zh = uiName(source) || uniqueItemName(source) || dyeName(source);
+      if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
     }
   }
-  // Recipe tables have structured cells; preserve the rest of the author's article.
-  const glamour = [...document.querySelectorAll('#jinrPostMeta .a--post-cat a')]
-    .some(link => /\/category\/glamour(?:\/|$)/i.test(link.pathname));
-  if (glamour) {
-    for (const cell of document.querySelectorAll('#postContent .wp-block-table :is(td,th)')) {
-      if (cell.closest(EXCLUDED)) continue;
-      const walk = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walk.nextNode())) {
-        if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
-        const source = node.data.trim();
-        const zh = uiName(source) || uniqueItemName(source) || resolveDyeColor(source);
-        if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
-      }
-    }
+}
+
+function dedupeRichHeadings() {
+  for (const main of document.querySelectorAll('#postContent .a--h2rich-maincopy')) {
+    const sub = main.parentElement?.querySelector(':scope > .a--h2rich-subcopy');
+    if (!sub || sub === main) continue;
+    const text = main.textContent.trim();
+    if (text && text === sub.textContent.trim()) sub.hidden = true;
   }
 }
 
 function translateAttirePage() {
+  const title = document.querySelector('#jinrPostTitle');
+  const nativeTitle = title?.textContent.trim();
   for (const element of document.querySelectorAll(UI)) {
     if (element.closest(EXCLUDED)) continue;
     const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -95,6 +171,7 @@ function translateAttirePage() {
     }
   }
 
+  dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
     if (input.form?.action !== location.origin + '/') continue;
@@ -115,10 +192,7 @@ function translateAttirePage() {
     }
   }
 
-  const title = document.querySelector('#jinrPostTitle');
-  const nativeTitle = title?.textContent.trim();
-  const isGlamour = Array.from(document.querySelectorAll('#jinrPostMeta .a--post-cat a'))
-    .some(link => /\/category\/glamour(?:\/|$)/i.test(link.pathname));
+  const isGlamour = hasCategory('glamour');
   for (const link of document.querySelectorAll(ITEM)) {
     if (link.closest(EXCLUDED)) continue;
     const hash = LODESTONE_ITEM.exec(link.getAttribute('href'))?.[1].toLowerCase();
@@ -142,8 +216,9 @@ function translateAttirePage() {
   if (nativeTitle && localizedTitle && nativeTitle !== localizedTitle && document.title.startsWith(nativeTitle)) {
     document.title = localizedTitle + document.title.slice(nativeTitle.length);
   }
-  const siteTitle = uiName(document.title);
-  if (siteTitle) document.title = siteTitle;
+  if (document.title.endsWith(SITE_TITLE)) {
+    document.title = document.title.slice(0, -SITE_TITLE.length) + uiName(SITE_TITLE);
+  }
 }
 
 function startAttire() {
@@ -154,8 +229,8 @@ function startAttire() {
     handler(nodes) {
       if (nodes.some(node => {
         const el = node.nodeType === 1 ? node : node.parentElement;
-        return el?.closest('#postContent,#jinrPostList,#globalMenuList,#hamburgerMenuList,#footerMenuList')
-          || el?.querySelector('#postContent,#jinrPostList');
+        return el?.closest('#postContent,#jinrPostList,#globalMenuList,#hamburgerMenuList,#footerMenuList,aside')
+          || el?.querySelector('#postContent,#jinrPostList,aside');
       })) translateAttirePage();
     },
   });
