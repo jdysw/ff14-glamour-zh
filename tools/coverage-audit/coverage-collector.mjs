@@ -2,10 +2,11 @@
 // No telemetry, storage, network calls, or mutation.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { miramiruScope, edenScope, attireScope, ronkaScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
+const { miramiruScope, edenScope, fcScope, attireScope, ronkaScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
 export const COLLECTOR_JS = String.raw`(() => {
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
+  const fcScope = ${fcScope.toString()};
   const attireScope = ${attireScope.toString()};
   const ronkaScope = ${ronkaScope.toString()};
   const queryEcho = ${queryEcho.toString()};
@@ -76,7 +77,8 @@ export const COLLECTOR_JS = String.raw`(() => {
     const pageUrl = globalThis.location?.href;
     const echo = !!pageUrl && queryEcho(el,kind,pageUrl,text);
     const siteScope = echo ? 'user' : globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
-      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el)
+      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el,pageUrl)
+      : globalThis.location?.hostname === 'ff14-fc.com' ? fcScope(el,kind,pageUrl)
       : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text)
       : globalThis.location?.hostname === 'lookbook.ronkacloset.com' ? ronkaScope(el,kind) : null;
     const user = echo || siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');

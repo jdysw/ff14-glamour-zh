@@ -208,16 +208,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return { out, changed };
   }
   function translateBracketedDuties(text) {
-    const chunks = text.split('】');
-    for (let index = 0; index < chunks.length - 1; index++) {
-      const chunk = chunks[index];
-      const opening = chunk.indexOf('【');
-      if (opening < 0) continue;
-      const names = chunk.slice(opening + 1);
-      chunks[index] = chunk.slice(0, opening + 1)
-        + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
-    }
-    return chunks.join('】');
+    // Both title variants occur on the native equipment catalogue, including
+    // the source badges appended to titles and thumbnail alt labels.
+    return text.replace(/【([^【】]{1,160})】|〖([^〖〗]{1,160})〗/gu,
+      (whole, black, white) => {
+        const names = black ?? white;
+        const localized = names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
+        return whole[0] + localized + whole.at(-1);
+      });
   }
 
   function _trFCSubstr(text, t0, core) {
@@ -274,7 +272,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (isKnownOutfit) suffix = '套装';
       else if (match[3]) suffix = '装备';
     }
-    const translated = text.replace(match[0], match[1] + name + suffix);
+    let translated = text.replace(match[0], match[1] + name + suffix);
+    // The article frame is known UI, even before the item tables are ready.
+    // Preserve unknown source labels rather than guessing their game names.
+    const template = '各種族での見た目・入手方法';
+    const frame = fcUIValue(template);
+    if (frame) translated = translated.replace(template, frame);
+    translated = translateBracketedDuties(translated);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
 

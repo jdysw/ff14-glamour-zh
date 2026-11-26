@@ -1,5 +1,5 @@
 import { DICT, DICT_COMMON, DICT_MIRAMIRU } from '../core/data/dictionary.js';
-import { resolveByHash, resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
+import { resolveByHash, resolveByName, resolveAllByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { SKIP_TAGS, localScope, _markScan, dedupeByAncestor } from '../core/dom.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../core/item-links.js';
@@ -243,11 +243,20 @@ function isEdenEquipmentSearch(input, label) {
     && !!input.closest('main .v-toolbar .v-autocomplete');
 }
 
+function edenContestPrizeName(element, raw) {
+  // Only the contest's official prize-card captions/illustrations use this
+  // lookup. A creator's title or a sponsor name must not become a game item.
+  if (!/^#\/components\/contest\/?(?:\?|$)/u.test(globalThis.location?.hash || '')
+      || !element.closest('.prize-card :is(.prize-name,.prize-image)')) return null;
+  const names = resolveAllByName(raw.trim());
+  return names.length === 1 ? raw.replace(raw.trim(), () => names[0]) : null;
+}
+
 function translateEdenAttributes(element) {
   for (const attr of ['title', 'aria-label', 'alt', 'placeholder', 'tooltip-content']) {
     const value = element.getAttribute(attr);
     if (!value) continue;
-    const next = trEden(value);
+    const next = (['aria-label', 'alt'].includes(attr) && edenContestPrizeName(element, value)) || trEden(value);
     if (next !== value) element.setAttribute(attr, next);
   }
 }
@@ -325,7 +334,7 @@ function translateEdenText(node) {
   const name = item && resolveByName(raw.trim());
   const contextual = contextualEdenEditorLabel(element, raw);
   const translated = name || contextual;
-  const next = translated ? raw.replace(raw.trim(), translated) : trEden(raw);
+  const next = translated ? raw.replace(raw.trim(), translated) : edenContestPrizeName(element, raw) || trEden(raw);
   if (raw !== next) node.nodeValue = next;
 }
 

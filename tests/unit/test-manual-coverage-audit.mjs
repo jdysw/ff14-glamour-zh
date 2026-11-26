@@ -37,6 +37,15 @@ const customTag=node('SPAN','','');
 customTag.closest=selector=>selector==='a[href*="?tag="]'?{}:selector==='[data-slot="badge"]'?{textContent:'#ハイランダー (41)'}:null;
 assert.equal(C.classifyContext(customTag,'text','miramiru','https://miramiru.co/en/statistics').scope,'user');
 assert.equal(C.classifyContext(node('P','whitespace-pre-wrap','main'),'text','miramiru','https://miramiru.co/en/faq').scope,'ui');
+assert.equal(C.classifyContext(node('LI','','main .legal-content'),'text','miramiru','https://miramiru.co/ko/terms/').scope,'ui');
+assert.equal(C.classifyContext(node('P','','main'),'text','miramiru','https://miramiru.co/ko/sponsors/').scope,'ui');
+const contestUrl='https://mirapri.ff14eden.work/#/components/contest';
+assert.equal(C.classifyContext(node('DIV','prize-image','.prize-card :is(.prize-name,.prize-image)'),'attr:aria-label','eden',contestUrl).scope,'item');
+const related=node('H5','','');
+related.closest=selector=>selector==='a[href]'?{getAttribute:()=>'/equipment/example/'}:selector.includes('#scrollad h5')?{}:null;
+assert.equal(C.classifyContext(related,'text','fc','https://ff14-fc.com/').scope,'ui');
+assert.equal(C.normalizeItems([{kind:'attr:aria-label',text:'検索',ctx:{scope:'ui',ui:true}}],'eden')[0].ctx.scope,'ui');
+assert.equal(C.normalizeItems([{kind:'attr:aria-label',text:'未確認装備',ctx:{scope:'item',ui:false}}],'eden')[0].ctx.scope,'item');
 assert.equal(C.classifyContext(node('P','whitespace-pre-wrap','main .whitespace-pre-wrap'),'text','miramiru','https://miramiru.co/en/mirapuri/abc').scope,'user');
 for (const text of ['Miramiru','FINAL FANTASY XIV © SQUARE ENIX CO., LTD. All Rights Reserved.']) {
   assert.equal(C.category({kind:'text',text,ctx:{scope:'ui'}}),'exempt-ui');

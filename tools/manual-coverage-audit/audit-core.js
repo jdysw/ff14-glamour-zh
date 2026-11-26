@@ -70,6 +70,8 @@
         if(p.querySelector?.('a[href*="/mirapuri/"]'))return 'user';
       }
     }
+    if(/^\/(?:en\/|ko\/|ja\/)?terms\/?$/.test(path)&&el.closest?.('main .legal-content'))return 'ui';
+    if(/^\/(?:en\/|ko\/|ja\/)?sponsors\/?$/.test(path)&&el.closest?.('main')&&kind==='text')return 'ui';
     if(/^\/(?:en\/|ko\/|ja\/)?(?:about|faq|collection)\/?$/.test(path)&&el.closest?.('main'))return 'ui';
     return null;
   }
@@ -77,9 +79,26 @@
     const route=u.hash.split('?')[0].replace(/^#/, '') || '/';
     return /^\/(?:components\/(?:popular-equipment|glamour-recipe-maker|dye-finder|help|q&a|policy|contest|gallery\/[\w-]{1,85}))?\/?$/.test(route)?route:'';
   }
-  function edenScope(el){
+  function edenScope(el,url){
     if(el.closest?.('.image-container .overlay,.recipe-dialog-title-text,.recipe-dialog-user,.recipe-dialog-text,.gallery-hero-text,.gallery-tile-title,.gallery-tile-img'))return 'user';
     if(el.closest?.('[data-zhx-item],.v-data-table td,.v-list-item__title,.v-window-item .flex-grow-1,#equipment-view h6'))return 'item';
+    if(url&&/^#\/components\/contest\/?(?:\?|$)/u.test(new URL(url).hash)){
+      if(el.closest?.('.prize-card :is(.prize-name,.prize-image)'))return 'item';
+      if(el.closest?.('.contest-card .v-card__text'))return 'ui';
+    }
+    return null;
+  }
+  function fcScope(el,kind,url){
+    // Keep quoted posts and their image descriptions private.
+    if(el.closest?.('.twitter-tweet,.comment-body,.comment-content'))return 'user';
+    if(el.closest?.('#info-drop a.eorzeadb_link'))return 'item';
+    const link=el.closest?.('a[href]');
+    if(!link)return null;
+    let target;
+    try{target=new URL(link.getAttribute('href'),url)}catch{return null}
+    if(target.origin!==new URL(url).origin||!/^\/(?:equipment|summary)\/[^/]+\/?$/u.test(target.pathname))return null;
+    if(kind==='text'&&el.closest?.('#scrollad h5,.article_list__ttl,.kanren-t h5,.p-navi h5'))return 'ui';
+    if(kind==='attr:alt'&&el.closest?.('#scrollad img,.related_post__equipment img,.kanren img'))return 'item';
     return null;
   }
   function ronkaScope(el,kind){
@@ -177,7 +196,7 @@
     const linked=trimHref(link?.getAttribute?.('href')||'',url);
     const ad=AD_RE.test(full)||/^https:\/\/(?:www\.)?(?:amazon\.co\.jp|amzn\.to|rakuten\.co\.jp)\//i.test(linked);
     const echo=queryEcho(el,kind,url,text);
-    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el):site==='attire'?attireScope(el,kind,url,text):site==='ronka'?ronkaScope(el,kind):null;
+    const siteScope=site==='miramiru'?miramiruScope(el,kind,url):site==='eden'?edenScope(el,url):site==='fc'?fcScope(el,kind,url):site==='attire'?attireScope(el,kind,url,text):site==='ronka'?ronkaScope(el,kind):null;
     const item=ITEM_RE.test(full)||siteScope==='item';
     const artImage=kind==='attr:alt' && (ALT_ART.test(full) || el.closest?.('#gallery article,.glamour-card,.concept-card'));
     let scope='unknown';
@@ -285,7 +304,7 @@
         if(ctx.ad)scope='ad';
         else if(ctx.queryEcho===true)scope='user';
         else if(site==='ronka'&&ctx.scope==='item'&&!ctx.control)scope='item';
-        else if(site==='attire'&&ctx.scope==='ui'&&!ctx.user)scope='ui';
+        else if(ctx.scope==='ui'&&!ctx.user)scope='ui';
         else if(ctx.scope==='user'&&it.kind==='attr:alt'||authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';
         else if(it.kind==='document:title')scope='metadata';
@@ -318,7 +337,7 @@
       skippedOldPages:oldOk.size-comparable.size,skippedNewPages:nowOk.size-comparable.size};
   }
 
-  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,attireScope,ronkaScope,queryEcho,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
+  const api={TOOL_VERSION,SITES,AUTHORED,FORMAT,urlKey,siteFor,pageLanguage,miramiruScope,edenScope,fcScope,attireScope,ronkaScope,queryEcho,allowedRoute,trimHref,fnv,classifyContext,stablePath,stableKey,normalizeItems,
     category,hasForeign,pair,stateSignature,snapshotKey,sanitizeItem,readAudit,compareRuns};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   global.ZHXAuditCore=api;

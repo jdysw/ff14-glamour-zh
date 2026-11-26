@@ -141,6 +141,17 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
     assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
     assert.equal(typeof observer,'function');
+    globalThis.location = {hash:'#/components/contest'};
+    const prize = doc.createElement('div');
+    prize.innerHTML = '<div class="prize-card"><p class="prize-name">テスト装備</p><div class="prize-image" aria-label="テスト装備"></div><p class="sponsor">テスト装備</p><p class="prize-name">未確認の賞品</p></div>';
+    doc.body.append(prize);
+    translateEdenPage(prize,false);
+    assert.equal(prize.querySelector('.prize-name').textContent,'测试装备');
+    assert.equal(prize.querySelector('.prize-image').getAttribute('aria-label'),'测试装备');
+    assert.equal(prize.querySelector('.sponsor').textContent,'テスト装備');
+    assert.equal(prize.querySelector('.prize-name:last-child').textContent,'未確認の賞品');
+    prize.remove();
+    globalThis.location = {hash:'#/components/popular-equipment'};
     const added=doc.createElement('div'),child=doc.createElement('div'),dynamicInput=doc.createElement('input'),dynamicEditor=doc.createElement('div');child.className='v-list-item__title';child.textContent='placeholder';
     dynamicInput.value='編集中のタイトル';dynamicEditor.className='tui-image-editor-container tui-image-editor-menu-shape';dynamicEditor.setAttribute('tooltip-content','Shape');dynamicEditor.innerHTML='<ul class="tui-image-editor-submenu-item"><li class="tie-shape-button"><label>Circle</label></li></ul><input type="button" value="Detail">';
     added.append(child,dynamicInput,dynamicEditor);doc.body.appendChild(added);child.firstChild.nodeValue='テスト装備';
@@ -980,6 +991,10 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     assert.ok(trFC('〖FF14〗ファントムヴィジョン・ディフェンダー装備👗各種族での見た目・入手方法')
       .startsWith('〖FF14〗幻境意象御敌套装'));
     assert.equal(trFC('ファントムヴィジョン・ディフェンダー'), '幻境意象御敌');
+    const title = '〖FF14〗ファントムヴィジョン・ディフェンダー装備👗各種族での見た目・入手方法';
+    assert.equal(trFC(title+'〖ウィンダス：ザ・サードウォーク〗'), '〖FF14〗幻境意象御敌套装👗各种族外观·获取方式〖温达斯：第三巡行〗');
+    assert.ok(trFC(title+'【ウィンダス：ザ・サードウォーク】').endsWith('【温达斯：第三巡行】'));
+    assert.ok(trFC(title+'〖未確認の入手先〗').endsWith('〖未確認の入手先〗'));
     assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'));
     assert.equal(trFC('アライアンスレイド'), '团队任务');
     assert.equal(trFC('ノーマルレイド'), '普通大型任务');
