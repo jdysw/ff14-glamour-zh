@@ -51,7 +51,7 @@ function localizeCard(card) {
   const heading = card.querySelector('.a--post-title');
   const source = heading?.textContent.trim();
   if (!source) return;
-  const exact = uniqueItemName(source) || uiName(source);
+  const exact = uniqueItemName(source);
   if (exact) replaceLabel(heading, source, exact);
 }
 
@@ -100,6 +100,7 @@ function localizeCompositeLink(link, prefixName) {
     const part = node.data.trim();
     if (!part) continue;
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) return;
+    if (/^[・／/]+$/u.test(part)) continue;
     const zh = prefixName(part) || uniqueItemName(part) || compositeName(part, prefixName);
     if (!zh) return;
     replacements.push([node, part, zh]);
@@ -113,7 +114,8 @@ function translateStructuredItems() {
   const glamour = hasCategory('glamour');
   const weapons = hasCategory('seriesb') || /weapon-coffer/i.test(location.pathname);
   const catalogue = document.body.matches('.page') || weapons;
-  const detail = !glamour && !!uniqueItemName(document.querySelector('#jinrPostTitle')?.textContent.trim());
+  const title = document.querySelector('#jinrPostTitle');
+  const detail = !glamour && !!(title?.dataset.zhxAttireNative || uniqueItemName(title?.textContent.trim()));
   for (const link of document.querySelectorAll('#postContent a[href]')) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
     if (glamour) {
@@ -182,12 +184,15 @@ function translateAttirePage() {
 
   const searchTitle = document.querySelector('body.search #postHeader #jinrPostTitle');
   if (searchTitle) {
-    const original = searchTitle.dataset.zhxAttireSearchTitle || searchTitle.textContent.trim();
+    const current = searchTitle.textContent.trim();
+    const original = current === searchTitle.dataset.zhxAttireLocalizedTitle
+      ? searchTitle.dataset.zhxAttireSearchTitle : current;
     const match = /^「(.+)」の検索結果は([0-9,]+)件です$/u.exec(original);
     if (match) {
       const [, query, count] = match;
       if (replaceLabel(searchTitle, searchTitle.textContent.trim(), `「${uniqueItemName(query) || query}」的搜索结果：${count} 条`)) {
         searchTitle.dataset.zhxAttireSearchTitle = original;
+        searchTitle.dataset.zhxAttireLocalizedTitle = searchTitle.textContent.trim();
       }
     }
   }
@@ -198,7 +203,8 @@ function translateAttirePage() {
     const hash = LODESTONE_ITEM.exec(link.getAttribute('href'))?.[1].toLowerCase();
     if (!hash) continue;
     const displayed = link.textContent.trim();
-    const native = link.dataset.zhxAttireNative || displayed;
+    const native = displayed === link.dataset.zhxAttireLocalizedLabel
+      ? link.dataset.zhxAttireNative : displayed;
     const names = resolveAllByName(native);
     const byHash = resolveByHash(hash);
     // A few Lodestone items have a known official name but no canonical
@@ -208,9 +214,14 @@ function translateAttirePage() {
       : DICT['attire:item:' + hash + ':' + native];
     const zh = confirmed || (!byHash && names.length === 1 ? names[0] : null);
     if (!zh) continue;
-    if (replaceLabel(link, displayed, zh)) link.dataset.zhxAttireNative = native;
+    if (replaceLabel(link, displayed, zh)) {
+      link.dataset.zhxAttireNative = native;
+      link.dataset.zhxAttireLocalizedLabel = zh;
+    }
     if (confirmed && link.textContent.trim() === zh) link.href = WIKI_ITEM + encodeURIComponent(zh);
-    if (!isGlamour && native === nativeTitle) replaceLabel(title, nativeTitle, zh);
+    if (!isGlamour && native === nativeTitle && replaceLabel(title, nativeTitle, zh)) {
+      title.dataset.zhxAttireNative = nativeTitle;
+    }
   }
   const localizedTitle = title?.textContent.trim();
   if (nativeTitle && localizedTitle && nativeTitle !== localizedTitle && document.title.startsWith(nativeTitle)) {
