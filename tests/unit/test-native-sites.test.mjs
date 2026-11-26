@@ -1303,6 +1303,43 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     assert.deepEqual([...d.querySelectorAll('td')].map(td=>td.textContent),[zh,'不可染色']);
     assert.equal(d.querySelector('#postContent p').textContent,jp);
+    // The live recipe is a rich link card, not just a table.
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\nカララント:スノウホワイト\t雪白染剂\t1\t1\nカララント:ジェットブラック\t煤黑染剂\t1\t1',hash:hash+'\t'+zh});
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <h1 id="jinrPostTitle">ミラプリ：Rose du Désert</h1>
+      <section id="postContent">
+        <div><h2 class="a--h2rich-maincopy">ミラプリ</h2><span class="a--h2rich-subcopy">Glamour</span></div>
+        <a id="recipe" href="/field-commanders-coat/"><span>スノウホワイト・ジェットブラック</span><strong>${jp}</strong></a>
+        <a id="single" href="/field-commanders-coat/">無染色${jp}</a>
+        <a id="unverified" href="/other/">未収録色${jp}</a>
+        <a id="author-link" href="/field-commanders-coat/">${jp}</a>
+        <figure class="wp-block-table"><table><tbody><tr><td><a id="recipe-official" href="${official}${hash}/">${jp}</a></td></tr></tbody></table></figure>
+      </section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#recipe span').textContent,'雪白／煤黑');
+    assert.equal(d.querySelector('#recipe strong').textContent,zh);
+    assert.equal(d.querySelector('#recipe').pathname,'/field-commanders-coat/');
+    assert.equal(d.querySelector('#single').textContent,'未染色 '+zh);
+    assert.equal(d.querySelector('#unverified').textContent,'未収録色'+jp);
+    assert.equal(d.querySelector('#author-link').textContent,jp);
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'ミラプリ：Rose du Désert');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'幻化');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(decodeURI(d.querySelector('#recipe-official').href),wiki+zh);
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <section id="postContent"><a id="weapon" href="/field-commanders-coat/"><span>ナイト</span><strong>${jp}</strong></a>
+      <a id="duty" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/duty/841d3f69efd/">廃砦捜索 ダスクヴィジル</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('#weapon span').textContent,'骑士');
+    assert.equal(d.querySelector('#weapon strong').textContent,zh);
+    assert.equal(d.querySelector('#duty').textContent,'冰雪废堡暮卫塔');
+    d.body.className = 'archive category';
+    d.body.innerHTML = '<h1 id="jinrPostTitle">おしゃれ装備：黄金編</h1>';
+    d.title = 'おしゃれ装備：黄金編〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'外观装备：金曦之遗辉');
+    assert.equal(d.title,'外观装备：金曦之遗辉〖FF14 装备手帐〗｜幻化装备外观汇总');
     d.body.className = 'archive tag tag-mf';
     d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
     translateAttirePage();
