@@ -1368,6 +1368,22 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#group').pathname,'/cashmere-poncho/');
     assert.equal(decodeURI(d.querySelector('#poncho').href),wiki+'羊绒斗篷');
     assert.equal(d.title,'羊绒斗篷、青麻斗篷〖FF14 装备手帐〗｜幻化装备外观汇总');
+    d.body.insertAdjacentHTML('beforeend', `<ol id="breadCrumb"><li><a href="/">HOME</a></li>
+      <li><a href="/category/dungeons/">ダンジョン</a></li><li>＞${ponchos}</li></ol>
+      <label for="archive-select">アーカイブ</label><select id="archive-select">
+      <option value="">週を選択</option><option value="/2026/06/08/">2026年6月8日–2026年6月14日 (1)</option></select>`);
+    const archiveSelect = d.querySelector('#archive-select');
+    archiveSelect.selectedIndex = 1;
+    translateAttirePage();
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('#breadCrumb li')].map(el=>el.textContent),['首页','副本装备','＞羊绒斗篷、青麻斗篷']);
+    assert.deepEqual([...d.querySelectorAll('#breadCrumb a')].map(el=>el.pathname),['/','/category/dungeons/']);
+    assert.equal(d.querySelector('label[for="archive-select"]').textContent,'归档');
+    assert.equal(archiveSelect.options[0].textContent,'选择周');
+    assert.equal(archiveSelect.options[0].value,'');
+    assert.equal(archiveSelect.value,'/2026/06/08/');
+    assert.equal(archiveSelect.selectedIndex,1);
+
     d.body.innerHTML = `<h1 id="jinrPostTitle">トリテレイアイヤリング</h1><section id="postContent"><a href="${official}00000000001/">トリテレイアイヤリング:ブラック</a></section>`;
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,'紫灯花耳环');
