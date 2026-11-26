@@ -217,7 +217,7 @@ function translateWeaponCatalogue(title, page) {
   }
   // A few weapon entries have an image and caption but no item text link.
   for (const caption of document.querySelectorAll('#postContent figcaption')) {
-    if (caption.closest(ITEM_LINK)) continue;
+    if (caption.closest(ITEM_LINK) || caption.querySelector(ITEM_LINK)) continue;
     const text = caption.textContent.trim();
     replaceLabel(caption, text, uniqueItemName(text));
   }
