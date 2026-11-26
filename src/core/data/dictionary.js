@@ -730,6 +730,13 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
 
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
+    'attire:アラガントームストーン:万物 ロストアラガン武器一覧': '亚拉戈万物神典石 亚拉戈失传武器一览',
+    'attire:ネオキングダム武器一覧': '新生王国武器一览',
+    'attire:OTHER': '其他',
+    'attire:info': '关于本站及作者',
+    'attire:memo': '兴趣投稿',
+    'attire:Cosmic Exploration Crafter Macro Generator': '宇宙探索制作宏生成工具',
+    'attire:FF14 制作マクロ自動生成ツール': 'FF14 制作宏自动生成工具',
     'attire:染色✕': '不可染色',
     'attire:染色': '染色',
     'attire:Arms': '武器',
