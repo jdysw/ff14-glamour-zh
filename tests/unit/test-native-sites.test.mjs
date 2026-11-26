@@ -1334,6 +1334,30 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#weapon span').textContent,'骑士');
     assert.equal(d.querySelector('#weapon strong').textContent,zh);
     assert.equal(d.querySelector('#duty').textContent,'冰雪废堡暮卫塔');
+    d.body.innerHTML = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div><h1 id="jinrPostTitle">廃砦捜索 ダスクヴィジル マーシャル武器一覧</h1>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'冰雪废堡暮卫塔 军用武器一览');
+    const ponchos = 'カシミヤポンチョ・ラミーポンチョ';
+    _applyV3({candidatePolicy:1,names:'カシミヤポンチョ\t羊绒斗篷\t1\t1\nラミーポンチョ\t青麻斗篷\t1\t1',hash:'7d89571f76f\t羊绒斗篷'});
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/vanity/">Lv63ID 海底宮殿 紫水宮</a></div></div>
+      <h1 id="jinrPostTitle">${ponchos}</h1><section id="postContent"><p>Lv1 All Job</p><p>Lv63 モンク 侍</p><span>染色✕</span>
+      <p>これは作者の文章です。</p><a id="poncho" href="${official}7d89571f76f/">カシミヤポンチョ</a>
+      <a id="group" href="/cashmere-poncho/">${ponchos}</a></section>`;
+    d.title = ponchos+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'羊绒斗篷、青麻斗篷');
+    assert.equal(d.querySelector('#jinrPostMeta a').textContent,'63级副本 海底宫殿紫水宫');
+    assert.deepEqual([...d.querySelectorAll('#postContent p')].map(p=>p.textContent),['1级 全职业','63级 武僧／武士','これは作者の文章です。']);
+    assert.equal(d.querySelector('#postContent span').textContent,'不可染色');
+    assert.equal(d.querySelector('#group').textContent,'羊绒斗篷、青麻斗篷');
+    assert.equal(d.querySelector('#group').pathname,'/cashmere-poncho/');
+    assert.equal(decodeURI(d.querySelector('#poncho').href),wiki+'羊绒斗篷');
+    assert.equal(d.title,'羊绒斗篷、青麻斗篷〖FF14 装备手帐〗｜幻化装备外观汇总');
+    d.body.innerHTML = `<h1 id="jinrPostTitle">トリテレイアイヤリング</h1><section id="postContent"><a href="${official}00000000001/">トリテレイアイヤリング:ブラック</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'紫灯花耳环');
+    assert.equal(d.querySelector('#postContent a').href,official+'00000000001/');
     d.body.className = 'archive category';
     d.body.innerHTML = '<h1 id="jinrPostTitle">おしゃれ装備：黄金編</h1>';
     d.title = 'おしゃれ装備：黄金編〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
