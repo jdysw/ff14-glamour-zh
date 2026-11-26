@@ -55,10 +55,9 @@ test('真实中文搜索模块：输入筛选、查询判定和 URL 保留有效
   if (typeof document === 'undefined') assert.equal(startChineseSearch('mirapri'), undefined);
 });
 
-test('真实站点注册：九站生命周期、异常隔离与域名识别', () => {
-  assert.equal(SITE_REGISTRY.length, 9);
+test('真实站点注册：生命周期、异常隔离与域名识别', () => {
   assert.deepEqual(SITE_REGISTRY.map(row => row.id),
-    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'eden']);
+    ['mirapri', 'ec', 'wiki', 'fc', 'ronka', 'collection', 'endcloset', 'miramiru', 'eden', 'attire']);
   const events = [];
   const adapter = createSiteAdapter({
     id: 'mirapri',
@@ -84,6 +83,10 @@ test('真实站点注册：九站生命周期、异常隔离与域名识别', ()
     globalThis.location = { hostname: 'untrusted.test' };
     assert.equal(findSite()?.id, 'wiki');
     globalThis.window.__zhxTestSite = 'untrusted';
+    assert.equal(findSite(), null);
+    globalThis.location = { hostname: 'attire.jp' };
+    assert.equal(findSite()?.id, 'attire');
+    globalThis.location = { hostname: 'notattire.jp' };
     assert.equal(findSite(), null);
   } finally {
     if (previousWindow === undefined) delete globalThis.window;

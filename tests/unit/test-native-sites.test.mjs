@@ -6,6 +6,8 @@ import {Window as TestWindow} from 'happy-dom';
 import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
+import { createChineseSearchController } from '../../src/core/chinese-search.js';
+import { translateAttirePage } from '../../src/sites/attire.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
@@ -383,7 +385,7 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, _fireTablesReady, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
 import { parseItemIds } from '../../src/core/data/item-identity.js';
 import { itemNames } from '../../src/core/item-languages.js';
 
@@ -1231,5 +1233,139 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     else globalThis.document = doc;
     if (filter === undefined) delete globalThis.NodeFilter;
     else globalThis.NodeFilter = filter;
+  }
+});
+
+test('装備手帳：保留站内分类入口与正文，仅以确切物品身份改 Wiki 跳转', async () => {
+  const names = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(names.map(name => [name,globalThis[name]]));
+  const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
+  try {
+    const d = dom.document;
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/';
+    const jp = 'フィールドコマンダーコート';
+    const zh = '野战指挥官外套';
+    const wiki = 'https://ff14.huijiwiki.com/wiki/物品:';
+    const hash = '4551a07ab65';
+    d.body.innerHTML = `<nav><a href="/vanity-2/"><span>おしゃれ装備</span><svg></svg></a></nav>
+      <input value="検索"><h1 id="jinrPostTitle">${jp}</h1><section id="postContent">
+      <h2 class="a--h2rich-maincopy">アイテム情報</h2><p id="author">アイテム情報</p>
+      <a id="item" href="${official}${hash}/"><strong>${jp}</strong></a>
+      <a id="foreign" href="https://example.test/lodestone/playguide/db/item/${hash}/">${jp}</a>
+      <a id="custom" href="${official}${hash}/">作者的文字</a>
+      <a id="unknown" href="${official}00000000001/">未収録の装備</a>
+      <a id="new" href="${official}511859ea2ce/">アバランチブロウラー・トップス</a></section>`;
+    Object.assign(globalThis,{document:d,location:dom.location,window:dom,NodeFilter:dom.NodeFilter});
+    dom.__zhxTestSite = 'attire';
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'});
+    translateAttirePage();
+    assert.equal(d.querySelector('nav a').textContent,'外观装备');
+    assert.equal(d.querySelector('nav a').pathname,'/vanity-2/');
+    assert.equal(d.querySelectorAll('nav svg').length,1);
+    assert.equal(d.querySelector('input').value,'検索');
+    assert.equal(d.querySelector('#author').textContent,'アイテム情報');
+    assert.equal(d.querySelector('h2').textContent,'物品信息');
+    assert.equal(d.querySelector('h1').textContent,zh);
+    assert.equal(d.querySelector('#item strong').textContent,zh);
+    assert.equal(d.querySelector('#item').href,official+hash+'/','仅名字命中时保留原站物品链接');
+    assert.equal(decodeURI(d.querySelector('#new').href),wiki+'雪崩斗手上衣');
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh});
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(decodeURI(d.querySelector('#item').href),wiki+zh,'数据补齐后能够更新已翻译链接');
+    assert.equal(d.querySelector('#foreign').textContent,jp);
+    assert.equal(d.querySelector('#custom').textContent,'作者的文字');
+    assert.equal(d.querySelector('#unknown').textContent,'未収録の装備');
+    assert.equal(d.querySelector('#unknown').href,official+'00000000001/');
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
+    d.body.className = 'archive tag tag-mf';
+    d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'男女外观不同');
+    assert.equal(d.querySelector('nav a').textContent,'男女外观不同');
+    assert.equal(d.querySelector('nav a').pathname,'/tag/mf/');
+    d.body.className = 'search search-results';
+    d.body.innerHTML = `<header id="postHeader"><h1 id="jinrPostTitle">「${jp}」の検索結果は2件です</h1></header>
+      <section id="jinrPostList">
+        <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
+        <a class="c--post-link" rel="bookmark" href="/glamour-post/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
+      </section>`;
+    assert.ok(_applyV3({candidatePolicy:1,names:'未使用の装備\t未使用的装备\t1\t1'}));
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,`「${jp}」的搜索结果：2 条`);
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'});
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,`「${zh}」的搜索结果：2 条`);
+    assert.deepEqual([...d.querySelectorAll('h2')].map(h=>h.textContent),[zh,jp]);
+    assert.deepEqual([...d.querySelectorAll('.c--post-link')].map(a=>a.pathname),['/field-commanders-coat/','/glamour-post/']);
+  } finally {
+    for (const [name,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
+test('装備手帳中文搜索：原站 GET、候选选择及未匹配的原样提交', async () => {
+  const keys = ['document','location','window','FormData','innerWidth','innerHeight','__zhxChineseSearchBound'];
+  const prior = Object.fromEntries(keys.map(key=>[key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
+  const urls = [];
+  try {
+    const d = dom.document;
+    d.body.innerHTML = `<form role="search" method="get" id="JinrSearchBox" action="https://attire.jp/">
+      <input type="search" class="a--searchform-input" name="s" placeholder="キーワードを入力して検索">
+      <input type="hidden" name="post_type" value="post"><input type="submit"></form>
+      <form role="search" method="get" action="/" class="wp-block-search"><input type="search" name="s"></form>
+      <form role="search" method="get" action="https://foreign.invalid/"><input type="search" name="s"></form>
+      <form method="post" action="/"><input name="s" type="search"><textarea>野战指挥官外套</textarea></form>`;
+    Object.assign(globalThis,{document:d,window:dom,FormData:dom.FormData,innerWidth:1024,innerHeight:768,
+      location:{href:dom.location.href,hostname:'attire.jp',assign:url=>urls.push(new URL(url))},__zhxChineseSearchBound:false});
+    const {siteFiles} = readRuntimeV3('mirapri');
+    assert.ok(_applyV3({candidatePolicy:1,identity:parseItemIds(siteFiles.itemIds.text)}));
+    const search = createChineseSearchController();
+    search.startChineseSearch('attire');
+    _fireTablesReady();
+    const [overlay,sidebar,foreign,comment] = d.querySelectorAll('form');
+    const overlayInput = overlay.querySelector('[name="s"]');
+    overlayInput.value = '野战指挥官外套';
+    const submit = form => {
+      const e = new dom.Event('submit',{bubbles:true,cancelable:true});
+      form.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    assert.equal(submit(overlay),true);
+    assert.equal(urls[0].origin,'https://attire.jp');
+    assert.equal(urls[0].pathname,'/');
+    assert.deepEqual([...urls[0].searchParams],[['post_type','post'],['s','フィールドコマンダーコート']]);
+    assert.equal(overlayInput.value,'野战指挥官外套');
+    const input = sidebar.querySelector('input');
+    input.getBoundingClientRect = () => ({left:12,right:220,top:12,bottom:44,width:208,height:32});
+    input.value = '雪崩斗手';
+    input.dispatchEvent(new dom.Event('input',{bubbles:true}));
+    await new Promise(resolve=>setTimeout(resolve,100));
+    const choice = [...d.querySelectorAll('#zhx-chinese-suggest-list button')].find(b=>b.textContent.includes('雪崩斗手上衣'));
+    assert.ok(choice,'原站侧栏输入框显示真实词库中的中文候选');
+    const clicked = new dom.Event('pointerdown',{bubbles:true,cancelable:true});
+    choice.dispatchEvent(clicked);
+    assert.equal(urls.at(-1).searchParams.get('s'),'アバランチブロウラー・トップス');
+    const count = urls.length;
+    for (const text of ['没收录的任意中文','夜の幻装コート','フィールドコマンダーコート']) {
+      input.value=text;
+      assert.equal(submit(sidebar),false);
+    }
+    foreign.querySelector('input').value = overlayInput.value;
+    comment.querySelector('input').value = overlayInput.value;
+    assert.equal(submit(foreign),false);
+    assert.equal(submit(comment),false);
+    assert.equal(urls.length,count);
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key]=value;
+    }
+    await dom.happyDOM.close();
   }
 });

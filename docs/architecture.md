@@ -1,6 +1,6 @@
 # 架构与维护边界
 
-生产脚本启用九个应用站点，对应八个发布数据集。版本以 package.json 为准；当前协议与发布流程见 [V3 数据存储与发布](data-storage-optimization.md)。
+生产脚本启用十个应用站点，对应八个发布数据集。版本以 package.json 为准；当前协议与发布流程见 [V3 数据存储与发布](data-storage-optimization.md)。
 
 ## 运行时
 
