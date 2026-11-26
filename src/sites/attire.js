@@ -52,10 +52,9 @@ function uiName(source) {
 
 // These display titles are not individual item identities. Never use them for
 // Wiki redirects or search conversion.
-function articleName(source) {
+function groupArticleName(source) {
   if (!source) return null;
-  const exact = uniqueItemName(source);
-  if (exact) return exact;
+  if (uniqueItemName(source)) return null;
   if (source === 'トリテレイアイヤリング' || source.endsWith('武器一覧')) return DICT['attire:' + source] || null;
   const matches = new Set();
   for (let i = source.indexOf('・'); i !== -1; i = source.indexOf('・', i + 1)) {
@@ -63,7 +62,13 @@ function articleName(source) {
     const right = uniqueItemName(source.slice(i + 1));
     if (left && right) matches.add(left + '、' + right);
   }
-  return matches.size === 1 ? [...matches][0] : null;
+  if (matches.size === 1) return [...matches][0];
+  if (!matches.size && source === 'カシミヤポンチョ・ラミーポンチョ') return DICT['attire:' + source];
+  return null;
+}
+
+function articleName(source) {
+  return uniqueItemName(source) || groupArticleName(source);
 }
 
 function localizeCard(card) {
@@ -270,7 +275,7 @@ function translateAttirePage() {
   }
   if (title && !isGlamour && (itemDetail || hasCategory('seriesb'))) {
     const source = title.textContent.trim();
-    const zh = articleName(source);
+    const zh = groupArticleName(source);
     if (replaceLabel(title, source, zh)) title.dataset.zhxAttireNative = source;
   }
   const localizedTitle = title?.textContent.trim();
