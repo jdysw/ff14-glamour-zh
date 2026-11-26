@@ -503,7 +503,7 @@ function equipmentMetadata(source) {
       || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
       || ['女性専用装備','男性専用装備','Fall Guys コラボレーションイベント',
         '現在は終了しているイベントのため入手できません'].includes(source)) return uiName(source);
-  const match = /^Lv\s*(\d{1,3})\s+(.+)$/iu.exec(source);
+  const match = /^Lv\s*(\d{1,3})\s*(.+)$/iu.exec(source);
   if (!match) return null;
   const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[2])
     ? ['全职业'] : match[2].split(/\s+/u).map(jobName);
@@ -525,13 +525,99 @@ function translateAcquisitionLinks() {
   }
 }
 
+// Each quest hash is checked against its native title before translation.
+const AF_QUESTS = new Map([
+  ['34a689b3630', '輝きは不滅なりて'],
+  ['beb4c0a8e49', 'いつか君が言った言葉'],
+  ['8a95243a602', '誇り高き追放者'],
+  ['3a48c43814f', '不滅なる名コンビ'],
+  ['5fec56883e2', 'やっと、また会えたね'],
+  ['02aed005346', '燃えよゴージ！'],
+  ['a1074a175f6', '召喚士の使命'],
+  ['d522a7e2ce9', '紅の竜騎士'],
+  ['4c5e96e09d0', '想い込められし歌'],
+  ['07e9b7dbdb8', '我は銃士、友は騎士'],
+]);
+const AF_ROLE_LABELS = new Set([
+  'TANKロールクエスト', 'HEALERロールクエスト',
+  'ファイター系DPSロールクエスト', 'ソーサラー系DPSロールクエスト',
+]);
+const AF_MAIN_QUEST_LABEL = 'メインクエスト Lv79';
+const AF_GUIDE_TITLE = '〖暁月版〗禁書：新生古典装備の入手方法〖過去トークン装備〗';
+
+function afDetailLabel(source) {
+  return DICT['attire:af-detail:' + source];
+}
+
+function translateAfAcquisitionLinks(content) {
+  const questLinks = new Set();
+  for (const link of content.querySelectorAll('a[href]')) {
+    if (link.closest(EXCLUDED + ',' + ITEM_LINK)) continue;
+    const native = link.textContent.trim();
+    if (link.origin === location.origin && link.pathname === '/al06/') {
+      replaceLabel(link, AF_GUIDE_TITLE, afDetailLabel(AF_GUIDE_TITLE));
+      continue;
+    }
+    if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
+    const hash = /^\/lodestone\/playguide\/db\/quest\/([0-9a-f]{11})\/?$/iu.exec(link.pathname)?.[1].toLowerCase();
+    const quest = hash && AF_QUESTS.get(hash);
+    const zh = quest && DICT['attire:af-quest:' + quest];
+    if (zh && (native === quest || native === zh)) {
+      replaceLabel(link, native, zh);
+      if (link.textContent.trim() === zh) questLinks.add(link);
+      continue;
+    }
+    // Role quest category links are not individual quest identities.
+    if (AF_ROLE_LABELS.has(native) && link.pathname === '/lodestone/playguide/db/quest/'
+        && new URLSearchParams(link.search).get('category2') === '6'
+        && /^『/u.test(link.nextSibling?.textContent.trim() || '')) {
+      replaceLabel(link, native, '完成' + afDetailLabel(native));
+    }
+  }
+  return questLinks;
+}
+
+function afShadowbringersCondition(source, node, questLinks) {
+  const intro = /^漆黒のヴィランズ\s*(.*?)のアーティファクト\(AF\)です。?$/u.exec(source);
+  if (intro) {
+    const job = intro[1] && jobName(intro[1]);
+    return !intro[1] || job ? '暗影之逆焰的' + (job || '') + '职业专属装备（AF）。' : null;
+  }
+  // Preserve the original numbering, if present. Match whole known lines
+  // or a prefix/suffix adjacent to a verified quest anchor.
+  const step = /^(?:([123])[:：]\s*)?(.*)$/u.exec(source);
+  const number = step[1] ? step[1] + '. ' : '';
+  const line = step[2];
+  if (line === 'Lv80に到達') return number + afDetailLabel(line);
+  const complete = /^(.+?)『([^』]+)』をクリア$/u.exec(line);
+  if (complete && (complete[1] === AF_MAIN_QUEST_LABEL || AF_ROLE_LABELS.has(complete[1]))) {
+    const quest = DICT['attire:af-quest:' + complete[2]];
+    if (quest) return number + '完成' + afDetailLabel(complete[1]) + '《' + quest + '》';
+  }
+  if (questLinks.has(node.nextSibling)) {
+    const prefix = /^(.+?)『$/u.exec(line);
+    if (prefix && (prefix[1] === AF_MAIN_QUEST_LABEL || AF_ROLE_LABELS.has(prefix[1]))) {
+      return number + '完成' + afDetailLabel(prefix[1]) + '《';
+    }
+    if (line === '『') return number + '《';
+  }
+  if (line === '』をクリア' && questLinks.has(node.previousSibling)) return '》';
+  return null;
+}
+
 // AF entries repeat fixed acquisition, augmentation and dye-unlock
 // instructions. Limit exact templates to the verified AF detail categories.
 function translateAfDetailMetadata() {
   const augmented = hasCategory('afre');
-  if (!augmented && !hasCategory('artefact') && !hasCategory('artefact5') && !hasCategory('artefact6')) return;
+  const shadowbringers = hasCategory('artefact4');
+  const stormblood = hasCategory('artefact3');
+  const heavensward = hasCategory('artefact2');
+  if (!augmented && !shadowbringers && !stormblood && !heavensward
+      && !hasCategory('artefact') && !hasCategory('artefact5') && !hasCategory('artefact6')) return;
   const content = document.querySelector('#postContent');
   if (!content) return;
+  const questLinks = shadowbringers || stormblood || heavensward
+    ? translateAfAcquisitionLinks(content) : new Set();
   if (augmented) {
     for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/shop/124bcb85185"]')) {
       if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
@@ -547,7 +633,11 @@ function translateAfDetailMetadata() {
     const translated = node.data.split(/(\r?\n)/u).map(line => {
       const source = line.trim();
       const dye = source.endsWith('染色') && resolveDyeColor(source.slice(0, -2));
-      const zh = DICT['attire:af-detail:' + source]
+      const questJob = stormblood && /^(.+?)クエスト$/u.exec(source);
+      const job = questJob && jobName(questJob[1]);
+      const zh = afDetailLabel(source)
+        || (shadowbringers && afShadowbringersCondition(source, node, questLinks))
+        || (job && job + '职业任务')
         || (source === '染色可能にする方法' && uiName(source))
         || (augmented && source === 'モードゥナ' && DICT['attire:weapon-meta:モードゥナ'])
         || (source === '無染色' && uiName(source))
