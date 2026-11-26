@@ -730,6 +730,8 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
 
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
+    'attire:ダンジョン': '副本装备',
+    'attire:週を選択': '选择周',
     'attire:アラガントームストーン:万物 ロストアラガン武器一覧': '亚拉戈万物神典石 亚拉戈失传武器一览',
     'attire:ネオキングダム武器一覧': '新生王国武器一览',
     'attire:OTHER': '其他',
