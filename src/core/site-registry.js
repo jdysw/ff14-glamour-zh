@@ -14,7 +14,7 @@ import { startRonka, translateRonkaPage, translateRonkaTitle } from '../sites/ro
 import { startEndCloset, translateEndClosetPage, translateEndClosetTitle } from '../sites/endcloset.js';
 import { startMiramiru, translateMiramiruPage } from '../sites/miramiru.js';
 import { startEden, translateEdenPage } from '../sites/mirapri-eden.js';
-import { translateAttirePage } from '../sites/attire.js';
+import { startAttire, translateAttirePage } from '../sites/attire.js';
 export { SITE_REGISTRY, createSiteAdapter, findSite };
 
 const FC_EARLY_EQUIPMENT = 'a[href*="/equipment/"], a[href*="/equipment_"], a[href*="/playguide/db/item/"]';
@@ -136,7 +136,7 @@ const ACL_EARLY_EQUIPMENT = '.item-name > p:not(.region-name),.item-panel > .des
       onDataReady() { translateEdenPage(); },
       onPageShow: translateEdenPage,
     },
-    attire: { start: translateAttirePage, onDataReady: translateAttirePage, onPageShow: translateAttirePage },
+    attire: { start: startAttire, onDataReady: translateAttirePage, onPageShow: translateAttirePage },
   };
 
   const SITE_REGISTRY = SITE_POLICIES.map(({ id }) => {
