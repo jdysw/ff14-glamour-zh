@@ -730,6 +730,14 @@ export { DICT_MIRAMIRU, DICT, DICT_ACL, DICT_COMMON, DICT_EC, DICT_ENDCLOSET, DI
 
   // ⚠️ 自动生成（data/dictionaries/dict-main.json → build/userscript/inject_dicts.py）：勿手改本块；改词请改 JSON 后重新构建
   const DICT = { ...DICT_COMMON,
+    'attire:マーケット取引可能装備': '可在市场交易的装备',
+    'attire:クレセントアイル：北征編': '新月岛：北征之章',
+    'attire:weapon-meta:抜刀ギミック': '拔刀效果',
+    'attire:weapon-meta:種類': '种类',
+    'attire:weapon-meta:同デザイン武器': '同外观武器',
+    'attire:weapon-meta:Weapons of the same design': '同外观武器',
+    'attire:weapon-meta:セット防具': '配套防具',
+    'attire:weapon-meta:Set of Armor': '配套防具',
     'attire:ダンジョン': '副本装备',
     'attire:週を選択': '选择周',
     'attire:アラガントームストーン:万物 ロストアラガン武器一覧': '亚拉戈万物神典石 亚拉戈失传武器一览',

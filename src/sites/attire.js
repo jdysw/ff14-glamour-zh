@@ -197,19 +197,25 @@ function localizeCompositeLink(link, prefixName) {
   }
 }
 
-function currentWeaponPage() {
-  return WEAPON_PAGES.get(location.pathname.replace(/^\/|\/$/gu, ''));
+function weaponPageAt(pathname) {
+  return WEAPON_PAGES.get(pathname.replace(/^\/|\/$/gu, ''));
+}
+
+function weaponCatalogueName(source, page) {
+  if (!source || !page) return null;
+  const [job, type] = page;
+  const normalized = source.replace(/\s+/gu, '');
+  const native = '〖' + job + '〗' + type;
+  if (![native + '一覧', native, type + '一覧', type].includes(normalized)) return null;
+  const jobZh = jobName(job);
+  const typeZh = DICT['attire:weapon-type:' + type];
+  return jobZh && typeZh ? '【' + jobZh + '】' + typeZh + '一览' : null;
 }
 
 function translateWeaponCatalogue(title, page) {
   if (!page) return;
-  const [job, type] = page;
   const source = title?.textContent.trim();
-  const normalized = source?.replace(/\s+/gu, ' ');
-  const native = '〖' + job + '〗' + type;
-  if ([native + ' 一覧', native, type + ' 一覧', type].includes(normalized)) {
-    replaceLabel(title, source, '【' + jobName(job) + '】' + DICT['attire:weapon-type:' + type] + '一览');
-  }
+  replaceLabel(title, source, weaponCatalogueName(source, page));
   for (const heading of document.querySelectorAll('#postContent :is(h1,h2,h3,h4,h5,h6)')) {
     const text = heading.textContent.trim();
     const range = /^Lv(\d{1,3})\s*[～〜~]\s*Lv(\d{1,3})$/u.exec(text);
@@ -223,7 +229,20 @@ function translateWeaponCatalogue(title, page) {
   }
 }
 
-function translateStructuredItems(weaponPage) {
+function translateWeaponDetailMetadata() {
+  // Only the native weapon-detail route uses these short, otherwise ambiguous
+  // labels. Never translate arbitrary prose or change an official item anchor.
+  const selector = '#postContent :is(h2,h3,h4,p,span,strong,dt,dd,th,td,.rtoc-item a,.a--h2rich-maincopy,.a--h2rich-subcopy)';
+  for (const element of document.querySelectorAll(selector)) {
+    if (element.closest(EXCLUDED + ',' + ITEM_LINK) || element.querySelector(ITEM_LINK)) continue;
+    const source = element.textContent.trim();
+    const level = /^Lv\s*(\d{1,3})\s+ILv?\s*(\d{1,4})$/iu.exec(source);
+    const zh = DICT['attire:weapon-meta:' + source] || (level && '等级 ' + level[1] + '／品级 ' + level[2]);
+    if (zh) replaceLabel(element, source, zh);
+  }
+}
+
+function translateStructuredItems(weaponPage, weaponDetail) {
   const glamour = hasCategory('glamour');
   const weapons = hasCategory('seriesb') || /weapon-coffer/i.test(location.pathname);
   const catalogue = document.body.matches('.page') || weapons || !!weaponPage;
@@ -235,9 +254,9 @@ function translateStructuredItems(weaponPage) {
       localizeCompositeLink(link, dyeName);
       continue;
     }
-    if (!catalogue && !detail) continue;
+    if (!catalogue && !detail && !weaponDetail) continue;
     const source = link.textContent.trim();
-    const zh = articleName(source);
+    const zh = weaponCatalogueName(source, weaponPageAt(link.pathname)) || articleName(source);
     if (zh) replaceLabel(link, source, zh);
     else if (weapons) localizeCompositeLink(link, jobName);
   }
@@ -482,7 +501,8 @@ function translateSplitSeriesLink() {
 
 function translateAttirePage() {
   const title = document.querySelector('#jinrPostTitle');
-  const weaponPage = currentWeaponPage();
+  const weaponPage = weaponPageAt(location.pathname);
+  const weaponDetail = /^\/arms\/[^/]+\/?$/u.test(location.pathname) && !hasCategory('glamour');
   const nativeTitle = title?.textContent.trim();
   localizeRichMenu();
   for (const element of document.querySelectorAll(UI)) {
@@ -499,13 +519,15 @@ function translateAttirePage() {
     }
   }
 
+  if (weaponDetail) translateWeaponDetailMetadata();
+  if (/^\/market\/?$/u.test(location.pathname)) replaceLabel(title, 'マーケット取引可能装備', uiName('マーケット取引可能装備'));
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   translateRecentPosts();
   translateArchiveControls();
   translateSearchControls();
   translateSplitSeriesLink();
-  translateStructuredItems(weaponPage);
+  translateStructuredItems(weaponPage, weaponDetail);
   translateWeaponCatalogue(title, weaponPage);
 
   const searchTitle = document.querySelector('body.search #postHeader #jinrPostTitle');

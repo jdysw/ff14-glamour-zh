@@ -1513,6 +1513,34 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(decodeURI(d.querySelector('#official-caption').href),'https://ff14.huijiwiki.com/wiki/物品:'+zh);
     assert.equal(d.querySelector('#postContent p').textContent,jp);
     assert.deepEqual([...d.querySelectorAll('a[href^="/tag/"]')].map(el=>el.textContent),['#蝰蛇剑士','#眼镜','#未知のタグ']);
+    // The real /arms/ layout has a separate metadata and catalogue-navigation section.
+    globalThis.location = new URL('https://attire.jp/arms/white-gold-foil/');
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent">
+      <p id="level">Lv96 IL669</p><dl><dt>抜刀ギミック</dt><dd>発光</dd><dt>種類</dt><dd>未確認の分類</dd></dl>
+      <div><span class="a--h2rich-subcopy">Weapons of the same design</span><h2 class="a--h2rich-maincopy">同デザイン武器</h2></div>
+      <h2 class="wp-block-heading">セット防具</h2>
+      <a id="catalogue" href="/arcanist_s_grimoire/">〖召喚士〗魔道書一覧</a>
+      <a id="unrelated" href="/other/">〖召喚士〗魔道書一覧</a>
+      <p id="author">種類についての作者の文章</p>
+      <a href="${official}">${jp}</a></section>
+      <a rel="tag" href="/tag/north/">#クレセントアイル：北征編</a>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#level').textContent,'等级 96／品级 669');
+    assert.deepEqual([...d.querySelectorAll('dt')].map(el=>el.textContent),['拔刀效果','种类']);
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'同外观武器');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('.wp-block-heading').textContent,'配套防具');
+    assert.equal(d.querySelector('#catalogue').textContent,'【召唤师】魔导书一览');
+    assert.equal(d.querySelector('#catalogue').pathname,'/arcanist_s_grimoire/');
+    assert.equal(d.querySelector('#unrelated').textContent,'〖召喚士〗魔道書一覧');
+    assert.equal(d.querySelector('#author').textContent,'種類についての作者の文章');
+    assert.equal(d.querySelector('a[rel="tag"]').textContent,'#新月岛：北征之章');
+    globalThis.location = new URL('https://attire.jp/market/');
+    d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'可在市场交易的装备');
+    assert.equal(d.querySelector('#postContent p').textContent,'種類');
   } finally {
     for (const [key,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
