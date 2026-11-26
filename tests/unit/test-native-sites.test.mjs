@@ -1277,6 +1277,20 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#custom').textContent,'作者的文字');
     assert.equal(d.querySelector('#unknown').textContent,'未収録の装備');
     assert.equal(d.querySelector('#unknown').href,official+'00000000001/');
+    // A name-only label must revert if the canonical identity contradicts it.
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a id="conflict" href="${official}${hash}/">${jp}</a></section>`;
+    d.title = jp+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'}));
+    translateAttirePage();
+    assert.equal(d.querySelector('#conflict').textContent,zh);
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n別の装備\t另一件装备\t1\t1',hash:hash+'\t另一件装备'}));
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#conflict').textContent,jp);
+    assert.equal(d.querySelector('#conflict').href,official+hash+'/');
+    assert.equal(d.querySelector('h1').textContent,jp);
+    assert.ok(d.title.startsWith(jp));
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
       <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
     translateAttirePage();
@@ -1364,6 +1378,21 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,'外观装备：金曦之遗辉');
     assert.equal(d.title,'外观装备：金曦之遗辉〖FF14 装备手帐〗｜幻化装备外观汇总');
+    d.body.className = 'home';
+    d.body.innerHTML = `<section id="postContent"><div class="a--richmenu-text"><span>Market</span><span>マーケット</span></div>
+      <div class="a--richmenu-text"><span>Wolf Marks</span><span>PvP装備</span></div>
+      <div><span class="a--h2rich-maincopy">メニュー</span><h2 class="a--h2rich-subcopy">MENU</h2></div>
+      <a class="c--post-link" rel="bookmark" href="/neo-kingdom/"><h2 class="a--post-title">ネオキングダム武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>
+      <aside class="widget_recent_entries"><ul><li><a href="/lost-allagan/">アラガントームストーン:万物 ロストアラガン武器一覧</a></li><li><a href="/rose-du-desert/">ミラプリ：Rose du Désert</a></li></ul></aside>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('.a--richmenu-text')].map(el=>el.textContent),['市场','PvP 装备']);
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('.a--post-title').textContent,'新生王国武器一览');
+    assert.deepEqual([...d.querySelectorAll('aside a')].map(el=>el.textContent),['亚拉戈万物神典石 亚拉戈失传武器一览','ミラプリ：Rose du Désert']);
+    d.querySelector('.a--h2rich-subcopy').textContent = '別の見出し';
+    translateAttirePage();
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,false);
     d.body.className = 'archive tag tag-mf';
     d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
     translateAttirePage();
