@@ -1601,6 +1601,37 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#unrelated').textContent,'〖召喚士〗魔道書一覧');
     assert.equal(d.querySelector('#author').textContent,'種類についての作者の文章');
     assert.equal(d.querySelector('a[rel="tag"]').textContent,'#新月岛：北征之章');
+    // Native military-seal exchange metadata is identical on weapon and
+    // armor detail pages. Faction, quantity, and unknown author text stay distinct.
+    const gcMarkup = (currency, rank, place) => `<h1 id="jinrPostTitle">${jp}</h1>
+      <section id="postContent"><a href="${official}">${jp}</a>
+      <p id="range">Lv39～44 All Job</p><h3>交換に必要な軍票・階級</h3>
+      <p id="currency">${currency}</p><p id="rank"><img>4,200<br>${rank}</p>
+      <p id="gc-vendor">補給担当官<br>${place}</p><p id="gc-author">補給担当官についての説明</p>
+      <a id="gc-foreign" href="https://example.test/">補給担当官</a></section>`;
+    for (const [path,currency,rank,place,currencyZh,rankZh,vendorZh,placeZh] of [
+      ['/arms/lominsan-staff/','黒渦団軍票','甲軍曹','リムサ・ロミンサ：上甲板層','黑涡团军票','副漩士','黑涡团补给负责人','利姆萨·罗敏萨上层甲板'],
+      ['/arms/serpent-sergeants-cudgel/','双蛇党軍票','准牙士','グリダニア：新市街','双蛇党军票','牙士长','双蛇党补给负责人','格里达尼亚新街'],
+      ['/?p=119594','不滅隊軍票','准闘士','ウルダハ：ナル回廊','恒辉队军票','耀士长','恒辉队补给负责人','乌尔达哈现世回廊'],
+    ]) {
+      globalThis.location = new URL('https://attire.jp'+path);
+      d.body.innerHTML = gcMarkup(currency,rank,place);
+      translateAttirePage();
+      translateAttirePage();
+      assert.equal(d.querySelector('h3').textContent,'兑换所需军票及军衔');
+      assert.equal(d.querySelector('#currency').textContent,currencyZh);
+      assert.equal(d.querySelector('#rank').textContent,'4,200'+rankZh);
+      assert.equal(d.querySelector('#rank img').tagName,'IMG');
+      assert.equal(d.querySelector('#gc-vendor').innerHTML,vendorZh+'<br>'+placeZh);
+      assert.equal(d.querySelector('#gc-author').textContent,'補給担当官についての説明');
+      assert.equal(d.querySelector('#gc-foreign').textContent,'補給担当官');
+      assert.equal(d.querySelector('#range').textContent,'39～44级 全职业');
+    }
+    d.body.innerHTML = gcMarkup('不滅隊軍票','准闘士','ウルダハ：ナル回廊')
+      .replace('</section>','<p>黒渦団軍票</p></section>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#rank').textContent,'4,200准闘士');
+    assert.equal(d.querySelector('#gc-vendor').innerHTML,'補給担当官<br>ウルダハ：ナル回廊');
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();
