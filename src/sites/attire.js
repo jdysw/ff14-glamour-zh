@@ -1117,7 +1117,7 @@ function translateBreadcrumb(title, previous, current) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
     const source = node.data.trim().replace(/^[＞>]\s*/u, '');
     let zh;
-    if (state?.localized === current && (source === state.source || source === state.previous)) zh = current;
+    if (state && state.localized === current && (source === state.source || source === state.previous)) zh = current;
     else if (search) {
       const query = /^検索結果「(.+)」$/u.exec(source) || /^「(.+)」的搜索结果$/u.exec(source);
       if (query) zh = '「' + (uniqueItemName(query[1]) || query[1]) + '」的搜索结果';
@@ -1255,10 +1255,10 @@ function achievementAcquisitionLabel(source) {
   if (!hasCategory('achievement')) return null;
   const exact = DICT['attire:acquisition-note:' + source];
   if (exact) return exact;
-  const win = /^(初勝利|([1-9]\d{0,5})回勝利)で(頭|胴|手|脚|足)装備$/u.exec(source);
+  const win = /^(初勝利|([1-9]\d{0,5})回勝利)で(頭|胴|手|脚|足)装備([：:]?)$/u.exec(source);
   if (!win) return null;
   const slots = { 頭: '头部', 胴: '身体', 手: '手部', 脚: '腿部', 足: '脚部' };
-  return (win[2] ? '累计获胜' + win[2] + '次' : '首次获胜') + '可获得' + slots[win[3]] + '防具';
+  return (win[2] ? '累计获胜' + win[2] + '次' : '首次获胜') + '可获得' + slots[win[3]] + '防具' + win[4];
 }
 
 function translateAcquisitionAccordionLabels() {
