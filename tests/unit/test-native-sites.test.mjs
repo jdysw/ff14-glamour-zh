@@ -44,6 +44,22 @@ test('实站回归：候选原名、指南空白与概念卡片标题保持正�
     assert.equal(weapon.querySelector('.description p').dataset.zhxItem,'女王之荣光');
     assert.equal(decodeURIComponent(weapon.querySelector('a').href),'https://ff14.huijiwiki.com/wiki/物品:女王之荣光');
     assert.ok(dom.document.title.startsWith('女王之荣光'));
+    dom.document.title = 'FFXIV 装備図鑑 | FFXIV ARMOURY COLLECTION';
+    translateACLTitle();
+    assert.ok(dom.document.title.startsWith('FFXIV 装备图鉴'), '纯汉字词条也要翻译浏览器标题');
+    const filter = dom.document.createElement('div');
+    filter.id = 'search-menu';
+    filter.innerHTML = '<button title="yes"></button><input placeholder="調べたいキーワードを入力">';
+    dom.document.body.append(filter);
+    const button = filter.querySelector('button');
+    const search = filter.querySelector('input');
+    translateACLPage(button);
+    translateACLPage(search);
+    assert.equal(button.title, '是', '局部扫描必须处理根元素本身的属性');
+    assert.equal(search.placeholder, '输入想查询的关键词');
+    button.title = 'no';
+    translateACLPage(button);
+    assert.equal(button.title, '否');
     assert.ok(dom.document.querySelector('.item-panel:last-child a').href.includes('lodestone'),'未知武器保留原链接');
   } finally {
     for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
@@ -373,7 +389,7 @@ import {
   tr, trNode, trEl, translateMirapriTitle,
 } from '../../src/sites/mirapri.js';
 import {
-  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage,
+  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage, translateRonkaTitle,
 } from '../../src/sites/ronka.js';
 import {
   _trEndClosetDye, _trEndClosetItem, trEndCloset,
@@ -551,6 +567,10 @@ test('Ronka 实体翻译：韩文补丁前缀和装备标记', () => {
     const icon = chip.firstElementChild;
     translateRonkaPage(doc.body);
     assert.equal(shortcut.textContent, '查看包含“유저”的全部作品');
+    doc.title = 'GALLERY';
+    translateRonkaTitle();
+    assert.equal(doc.title, '作品集');
+    assert.equal(trRonka('constructor'), 'constructor');
     assert.equal(chip.textContent, '搜索： 유저');
     assert.equal(chip.firstElementChild, icon);
     assert.equal(doc.querySelector('.filter-title').textContent, '关键词');

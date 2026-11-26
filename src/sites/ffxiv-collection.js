@@ -278,6 +278,10 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
+    if (root.nodeType === 1) {
+      if (_aclAcceptNode(root) === NodeFilter.FILTER_REJECT) return;
+      _procACLNode(root);
+    }
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
     for (const n of snapshotTranslationNodes(root, _aclAcceptNode)) _procACLNode(n);
     safe(replaceACLLodestone, 'ACL lodestone 替换')(rootArg);
@@ -285,9 +289,13 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
 
   function translateACLTitle() {
     const t = document.title;
-    if (!t || !/[\u3040-\u30ff]/.test(t)) return;
-    const parts = t.split(/[|｜]/);
-    const nt = parts.map((x) => aclStandaloneSetName(x.trim()) || trACL(x.trim())).join(' ｜ ');
+    if (!t) return;
+    const parts = t.split(/[|｜]/).map(x => x.trim());
+    const translated = parts.map(x => aclStandaloneSetName(x) || trACL(x));
+    // Exact dictionary and item matches can be entirely kanji. Do not
+    // normalize an unrelated or already-localized title just for its separators.
+    if (!translated.some((x, i) => x !== parts[i])) return;
+    const nt = translated.join(' ｜ ');
     if (nt && nt !== t && nt.length <= 160) document.title = nt;
   }
 
@@ -296,9 +304,15 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     bindZhxItemClick('__zhxAclItemBound');
     safe(translateACLPage, 'ACL 全扫')();
     safe(translateACLTitle, 'ACL 标题')();
-    createTranslationObserver({ debounce: 300, handler(nodes) {
-      for (const n of nodes) safe(translateACLPage, 'ACL 局部')(n);
-      safe(translateACLTitle, 'ACL 标题')();
-    } });
+    createTranslationObserver({
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['title', 'aria-label', 'alt', 'placeholder'],
+      debounce: 300,
+      handler(nodes, texts) {
+        for (const n of [...nodes, ...texts]) safe(translateACLPage, 'ACL 局部')(n);
+        safe(translateACLTitle, 'ACL 标题')();
+      },
+    });
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

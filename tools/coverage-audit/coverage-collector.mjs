@@ -73,7 +73,8 @@ export const COLLECTOR_JS = String.raw`(() => {
     );
     const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
       || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
-    const echo = queryEcho(el,kind,location.href,text);
+    const pageUrl = globalThis.location?.href;
+    const echo = !!pageUrl && queryEcho(el,kind,pageUrl,text);
     const siteScope = echo ? 'user' : globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
       : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el)
       : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text)
