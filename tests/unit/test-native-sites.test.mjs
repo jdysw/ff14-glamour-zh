@@ -1374,10 +1374,21 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     d.body.innerHTML = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div><h1 id="jinrPostTitle">廃砦捜索 ダスクヴィジル マーシャル武器一覧</h1>';
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,'冰雪废堡暮卫塔 军用武器一览');
+    const coffer = 'ダークマホガニー・ウェポンチェスト〖ILv663〗 武器一覧';
+    const cofferZh = '深红木武器箱（品级663） 武器一览';
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <h1 id="jinrPostTitle">${coffer}</h1><section id="postContent"><a class="c--post-link" rel="bookmark" href="/dark-mahogany-weapon-coffer-il-663/"><h2 class="a--post-title">${coffer}</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>
+      <aside class="widget_recent_entries"><a href="/dark-mahogany-weapon-coffer-il-663/">${coffer}</a></aside>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,cofferZh);
+    assert.equal(d.querySelector('.a--post-title').textContent,cofferZh);
+    assert.equal(d.querySelector('.widget_recent_entries a').textContent,cofferZh);
+    assert.equal(d.querySelector('.c--post-link').pathname,'/dark-mahogany-weapon-coffer-il-663/');
     const ponchos = 'カシミヤポンチョ・ラミーポンチョ';
     _applyV3({candidatePolicy:1,names:'カシミヤポンチョ\t羊绒斗篷\t1\t1\nラミーポンチョ\t青麻斗篷\t1\t1',hash:'7d89571f76f\t羊绒斗篷'});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/vanity/">Lv63ID 海底宮殿 紫水宮</a></div></div>
-      <h1 id="jinrPostTitle">${ponchos}</h1><section id="postContent"><p>Lv1 All Job</p><p>Lv63 モンク 侍</p><span>染色✕</span>
+      <h1 id="jinrPostTitle">${ponchos}</h1><section id="postContent"><p>Lv1 All Job</p><p>Lv63 モンク 侍</p><p>Lv50 魔獣使い</p><span>染色✕</span>
       <p>これは作者の文章です。</p><a id="poncho" href="${official}7d89571f76f/">カシミヤポンチョ</a>
       <a id="group" href="/cashmere-poncho/">${ponchos}</a></section>`;
     d.title = ponchos+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
@@ -1385,7 +1396,7 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     assert.equal(d.querySelector('#jinrPostTitle').textContent,'羊绒斗篷、青麻斗篷');
     assert.equal(d.querySelector('#jinrPostMeta a').textContent,'63级副本 海底宫殿紫水宫');
-    assert.deepEqual([...d.querySelectorAll('#postContent p')].map(p=>p.textContent),['1级 全职业','63级 武僧／武士','これは作者の文章です。']);
+    assert.deepEqual([...d.querySelectorAll('#postContent p')].map(p=>p.textContent),['1级 全职业','63级 武僧／武士','50级 驯兽师','これは作者の文章です。']);
     assert.equal(d.querySelector('#postContent span').textContent,'不可染色');
     assert.equal(d.querySelector('#group').textContent,'羊绒斗篷、青麻斗篷');
     assert.equal(d.querySelector('#group').pathname,'/cashmere-poncho/');
@@ -1642,6 +1653,15 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'莫古莫古★大收集');
     assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
     assert.equal(d.querySelector('#event').textContent,'恋人节');
+    render('/crafter-macro-generat/', '<h1 id="jinrPostTitle">クラフターマクロ生成ツール</h1><section id="postContent">'
+      + '<h2>Crafter Macro Generat</h2><a id="launch" href="/wp-content/plugins/ff14-macro-tool/assets/tool.html?v=1785835485">FF14 制作マクロ自動生成ツール</a>'
+      + '<a id="other" href="/other/">FF14 制作マクロ自動生成ツール</a><p>テスト中～！手作業でデータ登録しているので抜けが多いです</p></section>');
+    assert.equal(d.querySelector('h1').textContent,'制作宏生成工具');
+    assert.equal(d.querySelector('h2').textContent,'制作宏生成工具');
+    assert.equal(d.querySelector('#launch').textContent,'FF14 制作宏自动生成工具');
+    assert.equal(d.querySelector('#launch').search,'?v=1785835485');
+    assert.equal(d.querySelector('#other').textContent,'FF14 制作マクロ自動生成ツール');
+    assert.equal(d.querySelector('#postContent p').textContent,'テスト中～！手作業でデータ登録しているので抜けが多いです');
   } finally {
     for (const [key,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
