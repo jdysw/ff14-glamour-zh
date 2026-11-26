@@ -729,6 +729,42 @@ function translateMacroLanding() {
   }
 }
 
+// The native homepage shows a Sunday-first Frontline calendar. A single
+// character such as 月 or 火 is not a safe global dictionary key.
+function translateFrontlineCalendar() {
+  const content = document.querySelector('body.home #postContent');
+  if (!content || !content.textContent.includes(uiName('月間FLカレンダー'))
+      && !content.textContent.includes('月間FLカレンダー')
+      && !content.textContent.includes('FRONTLINE CALENDAR')) return;
+  const buttons = [...content.querySelectorAll('button')].filter(button => !button.closest(EXCLUDED));
+  const prev = buttons.filter(button => button.textContent.trim() === '‹');
+  const next = buttons.filter(button => button.textContent.trim() === '›');
+  if (prev.length !== 1 || next.length !== 1) return;
+  const native = ['日', '月', '火', '水', '木', '金', '土'];
+  const localized = ['日', '一', '二', '三', '四', '五', '六'];
+  // Find the smallest shared calendar region containing both navigation
+  // buttons and exactly one matching row. Preserve the date cells and controls.
+  for (let region = prev[0].parentElement; region; region = region.parentElement) {
+    if (region.contains(next[0])) {
+      const rows = [region, ...region.querySelectorAll('div,tr,ul,ol,thead')].filter(row => {
+        if (row.closest(EXCLUDED) || row.children.length < 7) return false;
+        return native.every((day, i) => {
+          const cell = row.children[i];
+          return cell.textContent.trim() === day && !cell.matches('a,button,input,select,textarea')
+            && !cell.querySelector('a,button,input,select,textarea,[contenteditable]');
+        });
+      });
+      if (rows.length > 1) return;
+      if (rows.length === 1) {
+        const cells = [...rows[0].children].slice(0, 7);
+        cells.forEach((cell, i) => replaceLabel(cell, native[i], localized[i]));
+        return;
+      }
+    }
+    if (region === content) break;
+  }
+}
+
 function translateSplitSeriesLink() {
   for (const link of document.querySelectorAll('body.home #postContent a[href]')) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin
@@ -771,6 +807,7 @@ function translateAttirePage() {
   translateArchiveControls();
   translateSearchControls();
   translateMacroLanding();
+  translateFrontlineCalendar();
   translateSplitSeriesLink();
   translateStructuredItems(weaponPage, weaponDetail);
   translateWeaponCatalogue(title, weaponPage);
@@ -812,12 +849,14 @@ function startAttire() {
   translateAttirePage();
   // Batched observer only for added content; text mutations from our own
   // translations do not trigger it.
+  const regions = '#postContent,#jinrPostList,#postHeader,#jinrPostTitle,#jinrPostMeta,nav,'
+    + '#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,aside,'
+    + 'form[role="search"][method="get"],.widget_recent_entries,.wp-block-latest-posts,.wp-block-tag-cloud,.wp-block-categories,.wp-block-archives';
   createTranslationObserver({
     handler(nodes) {
       if (nodes.some(node => {
         const el = node.nodeType === 1 ? node : node.parentElement;
-        return el?.closest('#postContent,#jinrPostList,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,aside')
-          || el?.querySelector('#postContent,#jinrPostList,#breadCrumb,aside');
+        return el?.closest(regions) || el?.querySelector(regions);
       })) translateAttirePage();
     },
   });
