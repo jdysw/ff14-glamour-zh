@@ -1287,6 +1287,20 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('h1').textContent,'男女外观不同');
     assert.equal(d.querySelector('nav a').textContent,'男女外观不同');
     assert.equal(d.querySelector('nav a').pathname,'/tag/mf/');
+    d.body.className = 'search search-results';
+    d.body.innerHTML = `<header id="postHeader"><h1 id="jinrPostTitle">「${jp}」の検索結果は2件です</h1></header>
+      <section id="jinrPostList">
+        <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
+        <a class="c--post-link" rel="bookmark" href="/glamour-post/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
+      </section>`;
+    assert.ok(_applyV3({candidatePolicy:1,names:'未使用の装備\t未使用的装备\t1\t1'}));
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,`「${jp}」的搜索结果：2 条`);
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'});
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,`「${zh}」的搜索结果：2 条`);
+    assert.deepEqual([...d.querySelectorAll('h2')].map(h=>h.textContent),[zh,jp]);
+    assert.deepEqual([...d.querySelectorAll('.c--post-link')].map(a=>a.pathname),['/field-commanders-coat/','/glamour-post/']);
   } finally {
     for (const [name,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;

@@ -10,8 +10,14 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '#postContent .c--tab-contents :is(h2,h3),#postContent .c--accordion-contents strong,#postContent .c--accordion-title,'
   + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag) #jinrPostTitle';
 const ITEM = '#postContent a[href*="/lodestone/playguide/db/item/"]';
+const CARD = 'body:is(.home,.archive,.search) #jinrPostList a.c--post-link[rel~="bookmark"]';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
+
+function uniqueItemName(source) {
+  const names = resolveAllByName(source);
+  return names.length === 1 ? names[0] : null;
+}
 
 function replaceLabel(element, source, translation) {
   if (!element || !translation || source === translation) return false;
@@ -36,6 +42,26 @@ function translateAttirePage() {
       const source = node.data.trim();
       const localized = DICT['attire:' + source];
       if (localized && source !== localized) node.data = node.data.replace(source, () => localized);
+    }
+  }
+
+  for (const card of document.querySelectorAll(CARD)) {
+    const category = card.querySelector('.a--post-category');
+    if (!category || category.classList.contains('category-glamour')) continue;
+    const heading = card.querySelector('.a--post-title');
+    const source = heading?.textContent.trim();
+    if (source) replaceLabel(heading, source, uniqueItemName(source));
+  }
+
+  const searchTitle = document.querySelector('body.search #postHeader #jinrPostTitle');
+  if (searchTitle) {
+    const original = searchTitle.dataset.zhxAttireSearchTitle || searchTitle.textContent.trim();
+    const match = /^「(.+)」の検索結果は([0-9,]+)件です$/u.exec(original);
+    if (match) {
+      const [, query, count] = match;
+      if (replaceLabel(searchTitle, searchTitle.textContent.trim(), `「${uniqueItemName(query) || query}」的搜索结果：${count} 条`)) {
+        searchTitle.dataset.zhxAttireSearchTitle = original;
+      }
     }
   }
 
