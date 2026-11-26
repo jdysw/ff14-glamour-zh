@@ -350,20 +350,41 @@ function sourceCatalogueName(source, kind) {
 
 // Historical tomestone guides use exact headings and structured exchange
 // labels, not arbitrary prose. Preserve quantities, markup and all links.
+function tomestoneGuideLabel(source) {
+  const lookup = value => DICT['attire:tomestone-guide:' + value];
+  const exact = lookup(source);
+  if (exact) return exact;
+  // The historical headings vary only in optional whitespace before the
+  // version parenthesis; the underlying date and patch must remain intact.
+  const hunt = /^(同盟記章|セントリオ記章|モブハントの戦利品)入手方法\s*（2024年パッチ6\.x現在）$/u.exec(source);
+  if (hunt) return lookup(hunt[1] + '入手方法　（2024年パッチ6.x現在）');
+  return null;
+}
+
 function translateTomestoneGuide(title, nativeTitle) {
   if (hasCategory('glamour') || !hasCategory('tomestone')) return;
   replaceLabel(title, nativeTitle, DICT['attire:tomestone-title:' + nativeTitle]);
-  const selector = '#postContent :is(h1,h2,h3,h4,h5,h6,th,td,dt,dd,strong,.wp-block-columns p,.rtoc-item a)';
-  for (const element of document.querySelectorAll(selector)) {
-    if (element.closest(EXCLUDED + ',' + ITEM_LINK)) continue;
-    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walk.nextNode())) {
-      if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) continue;
-      const source = node.data.trim();
-      const zh = DICT['attire:tomestone-guide:' + source];
-      if (zh && source !== zh) node.data = node.data.replace(source, () => zh);
-    }
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  const selector = 'h1,h2,h3,h4,h5,h6,th,td,dt,dd,strong,li,.wp-block-columns p,.rtoc-item a,.a--h2rich-maincopy,.a--h2rich-subcopy';
+  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) continue;
+    const source = node.data.trim();
+    if (!source) continue;
+    const structural = parent.closest(selector);
+    // In ordinary paragraphs only allow the fixed standalone guide labels
+    // known to occur as separate headings or acquisition metadata.
+    const standalone = parent.closest('p') && (
+      /^(?:Sモブ|Aモブ|リスキーモブ手配書|モブ手配書|指定された対象Bモブ100（週1回 毎週更新）|対象モンスター8\/対象FATE20（毎日更新）|強化方法|強化したいアイテム＋対応する強化用アイテム|ラールガーズリーチ|クガネ|イシュガルド下層 エーテライト付近|Allagan tomestone of [A-Za-z]+)$/u.test(source)
+    );
+    if (!structural && !standalone) continue;
+    const link = parent.closest('a[href]');
+    if (link && link.origin !== location.origin) continue;
+    const zh = tomestoneGuideLabel(source);
+    if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
   }
 }
 
