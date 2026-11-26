@@ -1,5 +1,5 @@
 import { DICT_MIRAMIRU } from '../core/data/dictionary.js';
-import { resolveByHash, resolveByName, resolveDyeColor } from '../core/data/data-manager.js';
+import { resolveByHash, resolveByName, resolveAllByName, resolveDyeColor } from '../core/data/data-manager.js';
 import { SKIP_TAGS, _markScan, localScope } from '../core/dom.js';
 import { createTranslationObserver, observeBeforePaint } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
@@ -62,22 +62,43 @@ function trMiramiru(text, officialTag = false) {
   return text.replace(raw, zh);
 }
 
+function clearMiramiruIdentity(element) {
+  const previous = element.dataset.zhxMiramiruZh;
+  if (previous && element.getAttribute('title') === '查看灰机 Wiki：' + previous) element.removeAttribute('title');
+  delete element.dataset.zhxMiramiruZh;
+  delete element.dataset.zhxMiramiruName;
+}
+
 function translateMiramiruLink(element) {
   if (!element.matches?.(ITEM_LINK)) return;
   const href = element.getAttribute('href') || '';
   const hash = officialItem.exec(href)?.[1];
-  // A reused React node must not keep the preceding equipment's destination.
-  if (hash && element.dataset.zhxMiramiruHref !== href) {
-    delete element.dataset.zhxMiramiruZh;
-    element.dataset.zhxMiramiruHref = href;
+  const previous = element.dataset.zhxMiramiruZh;
+  const previousHref = element.dataset.zhxMiramiruHref;
+  // Only retain our own exact destination. React may reuse an anchor
+  // with an unrelated URL or remove its href entirely.
+  if (!hash) {
+    if (previous && href === WIKI_ITEM + encodeURIComponent(previous)) return;
+    clearMiramiruIdentity(element);
+    if (previousHref) element.dataset.zhxMiramiruReused = '1';
+    return;
   }
-  const name = hash ? element.querySelector('img[alt]')?.getAttribute('alt') : null;
-  const zh = (hash && (resolveByHash(hash) || resolveByName(name))) || element.dataset.zhxMiramiruZh;
+  if (previousHref && previousHref !== href) {
+    clearMiramiruIdentity(element);
+    element.dataset.zhxMiramiruReused = '1';
+  }
+  element.dataset.zhxMiramiruHref = href;
+  const name = element.querySelector('img[alt]')?.getAttribute('alt');
+  // A reused anchor may still contain the OLD item's alt during a React
+  // update. Its new official hash is authoritative; never guess from that
+  // potentially stale image. First-time links may use a unique name.
+  const candidates = !element.dataset.zhxMiramiruReused && name ? resolveAllByName(name) : [];
+  const zh = resolveByHash(hash) || (candidates.length === 1 ? candidates[0] : null);
   if (!zh) return;
-  if (hash && name) element.dataset.zhxMiramiruName = name;
-  if (element.dataset.zhxMiramiruZh !== zh) element.dataset.zhxMiramiruZh = zh;
-  const wiki = WIKI_ITEM + encodeURIComponent(zh);
-  if (href !== wiki) element.setAttribute('href', wiki);
+  if (name && (!element.dataset.zhxMiramiruReused || resolveByName(name) === zh))
+    element.dataset.zhxMiramiruName = name;
+  element.dataset.zhxMiramiruZh = zh;
+  element.setAttribute('href', WIKI_ITEM + encodeURIComponent(zh));
   const title = '查看灰机 Wiki：' + zh;
   if (element.getAttribute('title') !== title) element.setAttribute('title', title);
 }
@@ -144,8 +165,11 @@ function translateMiramiruText(raw, element) {
     : path === '/about/contributors' ? 'contributors' : path === '/sponsors' ? 'sponsors' : null;
   if (section && element.closest('main')) {
     const label = raw.trim();
-    const zh = knownMiramiruText(section + ':' + label);
-    if (zh) return raw.replace(label, zh);
+    // Legal prose is sometimes line-wrapped by JSX. The audit collector
+    // already collapses whitespace; match those same exact scoped entries.
+    const zh = knownMiramiruText(section + ':' + label)
+      || knownMiramiruText(section + ':' + label.replace(/\s+/gu, ' '));
+    if (zh) return raw.replace(label, () => zh);
   }
   // The visible brand spans are separate from the screen-reader subtitle.
   if (element.classList?.contains('sr-only') && element.parentElement?.tagName === 'H1'
@@ -166,7 +190,8 @@ function translateMiramiruText(raw, element) {
   if (/^(?:件|건|entries)$/.test(trimmed) && /^[\d,]+\s*(?:件|건|entries)$/.test(element.textContent.trim()))
     return raw.replace(trimmed, ' 篇投稿');
   const item = link?.dataset.zhxMiramiruZh;
-  if (item && trimmed && (trimmed === link.dataset.zhxMiramiruName || resolveByName(trimmed))) return raw.replace(trimmed, item);
+  if (item && trimmed && (trimmed === link.dataset.zhxMiramiruName || resolveByName(trimmed) === item))
+    return raw.replace(trimmed, () => item);
   const aboutParticle = /^\/(?:en\/|ko\/|ja\/)?about\/?$/.test(location.pathname)
     && element.closest('h1') && (trimmed === 'を' || trimmed === '을');
   if (aboutParticle) return raw.replace(trimmed, '，');
@@ -190,7 +215,13 @@ function processMiramiruNode(node) {
 function translateMiramiruPage(rootArg) {
   const root = rootArg || document.body || document.documentElement;
   if (!root) return;
-  if (root.nodeType === 3) { processMiramiruNode(root); translateMiramiruTitle(); return; }
+  if (root.nodeType === 3) {
+    const link = root.parentElement?.closest(ITEM_LINK);
+    if (link && !link.closest(SKIP)) translateMiramiruLink(link);
+    processMiramiruNode(root);
+    translateMiramiruTitle();
+    return;
+  }
   if (root.tagName === 'TEXTAREA') { translateMiramiruAttributes(root); return; }
   if (root.closest?.(SKIP)) return;
   _markScan(localScope(rootArg));

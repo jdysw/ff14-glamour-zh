@@ -298,12 +298,14 @@ export function isResidual(text, ctx = {}) {
   const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
   // Retained names in otherwise translated Chinese do not imply partial UI.
   // Remove only verified names; "关于 Miramiru Settings" remains a candidate.
-  let remainder = t.replace(/\b(?:Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|YouTube|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
+  // Match complete compound brands before their individual components.
+  let remainder = t.replace(/\b(?:FFXIV Fan Kit|Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|YouTube|The Lodestone|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
     .replace(/@[A-Za-z0-9_]{1,15}\b/g, '');
   if (ctx.site === 'miramiru' && hanCount) {
     // These exact names and relative routes are deliberately retained in the
     // site's translated FAQ. Do not ignore arbitrary Latin phrases.
-    remainder = remainder.replace(/\b(?:Google AdSense|Amazon Associates|Moshimo Affiliate|Supabase Auth|Supabase|Vercel|SQUARE ENIX CO\., LTD\.|The Lodestone|FFXIV Fan Kit|JPEG|PNG|WebP|OGP|Niique Noela|Anima|Mana|PR)\b/g, '')
+    remainder = remainder.replace(/\bSQUARE ENIX CO\., LTD\./g, '')
+      .replace(/\b(?:Google AdSense|Amazon Associates|Moshimo Affiliate|Supabase Auth|Supabase|Vercel|JPEG|PNG|WebP|OGP|Niique Noela|Anima|Mana|PR)\b/g, '')
       .replace(/\/(?:support|affiliate|commerce)\b/g, '');
   }
   const latinCount = (remainder.match(/[A-Za-z]/g) || []).length;

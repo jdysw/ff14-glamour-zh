@@ -143,18 +143,27 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
   // several independent, unambiguous armor slots agreeing on one Chinese
   // prefix may establish a family; do not infer it from a single item or
   // combine upgraded (RE) and unupgraded versions.
+  const FC_ARMOR_PARTS = [
+    /^(?:ヘルム|ハット|サークレット|マスク|キャップ|フード|バイザー|ゴーグル|クラウン|ターバン|ベレー|ヘッドギア|ヘッドバンド|バンダナ|コイフ)$/u,
+    /^(?:コート|アーマー|メイル|ローブ|ジャケット|チュニック|シャツ|ベスト|ダブレット|タバード|サーコート|シクラス)$/u,
+    /^(?:ガントレット|グローブ|アームガード|ハーフグローブ|ブレーサー|ミトン|アームレット)$/u,
+    /^(?:トラウザー|ブレー|ブリーチ|スロップ|キュロット|タイツ|ホーズ|パンツ|ボトム|スカート|サルエル|レギンス)$/u,
+    /^(?:ブーツ|サバトン|グリーヴ|シューズ|サンダル|ロングブーツ|サイブーツ|クラコー|レッグガード)$/u,
+  ];
   function fcBaseRoleSets(nameMap) {
     const sets = new Map();
+    const roles = Object.entries(FC_ROLE_ZH);
     for (const [native, zh] of Object.entries(nameMap)) {
       const separator = native.lastIndexOf('・');
       if (separator < 2 || native.endsWith('RE')) continue;
       const part = native.slice(separator + 1);
-      const role = Object.entries(FC_ROLE_ZH).find(([ja]) => part.startsWith(ja) && part.length > ja.length);
+      const role = roles.find(([ja]) => part.startsWith(ja) && part.length > ja.length);
       if (!role) continue;
       const [jaRole, zhRole] = role;
-      const slot = part.slice(jaRole.length);
-      // Explicit armor slots only; do not use furniture, weapons or accessories.
-      if (!/^(?:ヘルム|ハット|サークレット|マスク|キャップ|フード|バイザー|ゴーグル|クラウン|ターバン|ベレー|ヘッドギア|コート|アーマー|メイル|ローブ|ジャケット|チュニック|シャツ|ベスト|ダブレット|ガントレット|グローブ|アームガード|ハーフグローブ|ブレーサー|ミトン|トラウザー|ブレー|ブリーチ|スロップ|キュロット|タイツ|ホーズ|パンツ|ボトム|スカート|ブーツ|サバトン|グリーヴ|シューズ|サンダル|レギンス)$/u.test(slot)) continue;
+      // Count anatomical equipment slots, not different spellings of
+      // headgear. Three hats must not establish a full armor family.
+      const slot = FC_ARMOR_PARTS.findIndex(re => re.test(part.slice(jaRole.length)));
+      if (slot < 0) continue;
       const names = resolveAllByName(native);
       if (names.length !== 1 || names[0] !== zh) continue;
       const roleIndex = zh.indexOf(zhRole);

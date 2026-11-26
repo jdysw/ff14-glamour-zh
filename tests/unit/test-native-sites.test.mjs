@@ -349,6 +349,33 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(document.querySelector('main a').getAttribute('href'),'/ja/terms');
     assert.equal(document.querySelector('main li').textContent,'用户可随时自行删除账号。删除账号时，相关数据也会被删除。');
     assert.equal(document.querySelector('aside').textContent,'다음 행위를 금지합니다.');
+    document.body.innerHTML = '<main><p>본 약관은 운영자의 판단에 따라 변경될 수 있습니다.\n   중요한 변경이 있는 경우 서비스 내에서 안내합니다.\n변경된 약관은 본 페이지에 게시한 시점에서 효력이 발생합니다.</p></main>';
+    translateMiramiruPage();
+    assert.equal(document.querySelector('p').textContent,'运营方可自行决定修改本条款。如有重要变更，将在服务内通知。修订后的条款自发布于本页面之时起生效。');
+    _applyV3({candidatePolicy:1,names:'テスト旧装備\t测试旧装备\t1\t0\nテスト新装備\t测试新装备\t1\t0',hash:'aaaaaa\t测试旧装备\nbbbbbb\t测试新装备'});
+    globalThis.location = new URL('https://miramiru.co/en/mirapuri/test');
+    document.body.innerHTML = '<main><a class="eorzeadb_link" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/aaaaaa/"><img alt="テスト旧装備"><span>テスト旧装備</span></a></main>';
+    const itemLink = document.querySelector('a');
+    translateMiramiruPage();
+    assert.equal(itemLink.dataset.zhxMiramiruZh,'测试旧装备');
+    assert.equal(itemLink.querySelector('span').textContent,'测试旧装备');
+    itemLink.setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/cccccc/');
+    itemLink.querySelector('img').setAttribute('alt','テスト旧装備');
+    itemLink.querySelector('span').textContent='テスト新装備';
+    translateMiramiruPage(itemLink.querySelector('span').firstChild);
+    assert.equal(itemLink.getAttribute('href'),'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/cccccc/');
+    assert.equal(itemLink.dataset.zhxMiramiruZh,undefined);
+    assert.equal(itemLink.querySelector('span').textContent,'测试新装备');
+    itemLink.setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/bbbbbb/');
+    translateMiramiruPage(itemLink);
+    assert.equal(itemLink.dataset.zhxMiramiruZh,'测试新装备');
+    itemLink.setAttribute('href','/items/test');
+    itemLink.setAttribute('title','Original title');
+    translateMiramiruPage(itemLink);
+    assert.equal(itemLink.getAttribute('href'),'/items/test');
+    assert.equal(itemLink.getAttribute('title'),'Original title');
+    assert.equal(itemLink.dataset.zhxMiramiruZh,undefined);
+    _applyV3({candidatePolicy:1});
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();
@@ -452,7 +479,7 @@ import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, _fireTablesReady, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, _fireTablesReady, _tablesReady, dataInvalidate, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
 import { parseItemIds } from '../../src/core/data/item-identity.js';
 import { itemNames } from '../../src/core/item-languages.js';
 
@@ -1194,6 +1221,7 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
 
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
   const before = globalThis.location;
+  const wasReady = _tablesReady;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const source = dom.document;
   source.body.innerHTML = [
@@ -1222,6 +1250,10 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(fcSetDisplayText(label('item'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('individual'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('home'), 'ビーストハーダー', '兽牧'), '兽牧套装');
+    // _applyV3 alone publishes names but does not mark the tables ready.
+    // The derived item index is available only after the real ready signal.
+    _fireTablesReady();
+    cacheReset('derived');
     trimFCNode(label('cap'));
     trimFCNode(label('role-set'));
     trimFCNode(label('unverified'));
@@ -1233,7 +1265,14 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     const detail = source.createElement('h3');
     detail.textContent = 'アバランチブロウラー（全身）';
     assert.equal(fcSetDisplayText(detail.firstChild, 'アバランチブロウラー（全身）', '雪崩斗手（全身）'), '雪崩斗手套装（全身）');
+    assert.equal(fcVerifiedSetName('バトルフィールドローズ・コスチュームセット'),'战场玫瑰套装');
+    assert.equal(fcVerifiedSetName('ハンブル・コスチュームセット'),'平民套装');
+    assert.equal(fcVerifiedSetName('セイニャー・コスチュームセット'),'领主装备套装');
+    _applyV3({candidatePolicy:1,names:'テスト・アタイア\t测试套装\t1\t0'});
+    assert.equal(fcVerifiedSetName('テスト・コスチュームセット'),'测试套装');
+    assert.equal(fcVerifiedSetName('未確認・コスチュームセット'),null);
   } finally {
+    if (!wasReady) dataInvalidate();
     _applyV3({candidatePolicy:1});
     cacheReset('derived');
     if (before === undefined) delete globalThis.location;

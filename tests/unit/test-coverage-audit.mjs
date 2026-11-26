@@ -37,6 +37,8 @@ assert.equal(classify('Arms',{site:'eden',ui:true}),'real');
 assert.equal(classify('3. 带上话题 #ミラプリレシピ 并发布到 Twitter。（可选）',{site:'eden',ui:true,before:'3. タグ "#ミラプリレシピ" をつけて、Twitterに投稿する。(任意)'}),'ok');
 assert.equal(classify('观看 YouTube 直播',{site:'eden',ui:true,before:'YouTube配信を見る'}),'ok');
 assert.equal(classify('YouTube Settings',{site:'eden',ui:true}),'real');
+assert.equal(classify('装备物品信息使用 XIVAPI 及 FFXIV Fan Kit 的数据进行展示。',{site:'miramiru',ui:true,before:'장비 아이템 정보 표시에는 XIVAPI 및 FFXIV Fan Kit의 데이터를 이용하고 있습니다.'}),'ok');
+assert.equal(classify('FFXIV Fan Kit Settings',{site:'miramiru',ui:true}),'real');
 assert.equal(classify('未翻訳 #ミラプリレシピ',{site:'eden',ui:true}),'real');
 assert.equal(normalizeSiteUrl('https://www.ffxivcollection.com/sitemap.html/','https://www.ffxivcollection.com/',['www.ffxivcollection.com']),null);
 assert.equal(classify('투영 콘테스트',{ui:true}),'real');

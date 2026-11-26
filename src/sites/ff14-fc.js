@@ -90,9 +90,22 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
     ['カーウェン', '卡文套装'],
     ['ゼロルミナリー・コスチュームセット', '零点套装'],
+    // The shop title differs from the in-game attire name. These pairs
+    // are confirmed by the Chinese store and Item 50721/50722/45522.
+    ['バトルフィールドローズ・コスチュームセット', '战场玫瑰套装'],
+    ['ハンブル・コスチュームセット', '平民套装'],
+    ['セイニャー・コスチュームセット', '领主装备套装'],
   ]);
   function fcVerifiedSetName(name) {
-    return FC_VERIFIED_SET_ALIASES.get(name) || null;
+    const verified = FC_VERIFIED_SET_ALIASES.get(name);
+    if (verified) return verified;
+    if (!name.endsWith('・コスチュームセット')) return null;
+    // The shop commonly uses コスチュームセット where the canonical
+    // game item uses アタイア. Require the entire item name and one
+    // distinct Chinese set name; never translate the suffix by itself.
+    const canonical = name.slice(0, -'コスチュームセット'.length) + 'アタイア';
+    const values = resolveAllByName(canonical);
+    return values.length === 1 && /(?:套装|装束|服装组合)$/u.test(values[0]) ? values[0] : null;
   }
 
   function fcVerifiedSetText(text, label) {
@@ -767,14 +780,28 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const label = raw.trim();
     // Recommendation titles sometimes append a role group to a series.
     // Translate only if the entire native family and every role are known.
-    if (p?.closest?.('#scrollad h5')) {
+    if (p?.closest?.('#scrollad h5,.related_post__equipment .article_list__ttl')) {
+      // Exact set aliases take precedence over a parenthetical role group.
+      const exact = fcVerifiedSetName(label) || _getSeriesMap().get(label);
+      if (exact) {
+        const next = fcSetDisplayText(node, raw, raw.replace(label, () => exact));
+        if (next !== raw) node.nodeValue = next;
+        return;
+      }
       const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
       if (group) {
         const base = group[1].trim();
         const family = _getSeriesMap().get(base) || fcVerifiedSetName(base)
           || _getItemPfx().get(base) || _getSeriesPfx().get(base) || lookupDutyName(base);
         const roles = group[2].split('・').map(role => fcUIValue(role.trim()));
-        if (family && roles.every(Boolean)) node.nodeValue = raw.replace(label, () => family + '（' + roles.join('、') + '）');
+        if (family && roles.every(Boolean)) {
+          node.nodeValue = raw.replace(label, () => family + '（' + roles.join('、') + '）');
+          return;
+        }
+        // A known complete item/set must not be lost merely because its
+        // title contains parentheses. Unknown groups remain untouched.
+        const candidates = resolveAllByName(label);
+        if (candidates.length === 1) node.nodeValue = raw.replace(label, () => candidates[0]);
         return;
       }
     }
