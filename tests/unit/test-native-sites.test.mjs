@@ -605,6 +605,10 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
     assert.equal(aclStandaloneSetName('フリースピリッツ・アタイア'), '自由之魂套装');
     assert.equal(aclStandaloneSetName('フリースピリッツアタイア'), '自由之魂套装');
     assert.equal(aclStandaloneSetName('見本アタイア'), '正式示例装束');
+    assert.equal(aclStandaloneSetName('イースタンアタイア'), '上仙套装');
+    assert.equal(aclStandaloneSetName('スウィートドリームアタイア'), '美梦套装');
+    assert.equal(aclStandaloneSetName('ダメージド・マンダヴィルアタイア'), '破损的绅士套装');
+    assert.equal(trACL('イースタンアタイア'), 'イースタンアタイア');
     assert.equal(aclStandaloneSetName('ヘヴンスナイト・アーマー'), '苍穹骑士套装');
     assert.equal(aclStandaloneSetName('見本・アタイア'), '正式示例装束',
       '官方套装道具名优先于系列的通用后缀');
@@ -1807,8 +1811,20 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('.asr-card-trigger').getAttribute('aria-label'),'查看测试套装的详细信息');
     assert.equal(d.querySelector('.asr-card-trigger img').alt,'测试套装');
     assert.equal(d.querySelector('.c--accordion-contents p').textContent,'可在市场交易');
-    assert.equal(d.querySelector('#native-author').textContent,'未确认の説明文');
+    assert.equal(d.querySelector('#native-author').textContent,'未確認の説明文');
     assert.equal(d.querySelector('nav a').textContent,'可在市场购买：91～100级采集与制作职业装备');
+    render('/vanity-2/', '<h1 id="jinrPostTitle">外观装备</h1><nav id="breadCrumb"><ol><li><a href="/">HOME</a></li><li>おしゃれ装備</li></ol></nav>'
+      + '<section id="postContent"><span class="a--post-category">Lv50 IL70 ダークスチール・ヒッポグリフ・ヴァンヤ</span>'
+      + '<span class="a--post-category">lv98 IL675 カザナル・ガルガンチュア・サンダーシルク</span>'
+      + '<span class="a--post-category">Lv100 IL770 コートリーラヴァー</span>'
+      + '<span class="a--post-category">Lv96 IL669 ゴールドチタン・未確認の素材</span></section>');
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'外观装备');
+    assert.deepEqual([...d.querySelectorAll('.a--post-category')].map(e=>e.textContent),[
+      '50级（品级70）玄钢、骏鹰革、绢布装备','98级（品级675）卡扎纳尔、卡冈图亚革、落雷绢装备','100级（品级770）宫廷爱人装备','Lv96 IL669 ゴールドチタン・未確認の素材']);
+    render('/field-commanders-coat/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/achievement/">アチーブメント報酬</a></div></div>'
+      + '<section id="postContent"><dl><dt class="a--accordion-title">入手方法などはこちら</dt><dd class="c--accordion-contents"><p id="wins">初勝利で頭装備：<a href="/field-commanders-helm/">兜</a><br>100回勝利で胴装備</p><p id="comment">当サイトでは武器の撮影等で着用中です</p></dd></dl></section>');
+    assert.equal(d.querySelector('#wins').innerHTML,'首次获胜可获得头部防具：<a href="/field-commanders-helm/">兜</a><br>累计获胜100次可获得身体防具');
+    assert.equal(d.querySelector('#comment').textContent,'当サイトでは武器の撮影等で着用中です');
     render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
       + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
       + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'

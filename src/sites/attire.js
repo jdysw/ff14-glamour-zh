@@ -82,6 +82,7 @@ function tomestoneName(source) {
 function exactUiName(source) {
   return DICT['attire:' + source]
     || DICT['attire:event:' + source]
+    || DICT['attire:pvp-group:' + source]
     || (Object.hasOwn(DICT_COMMON, source) ? DICT_COMMON[source] : null)
     || tomestoneName(source)
     || lookupDutyName(source);
@@ -119,6 +120,14 @@ function uiName(source) {
   const market = /^マーケット購入可能[:：]\s*Lv\s*(\d{1,3})\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3})\s*ギャザラー[＆&]クラフター装備$/iu.exec(source);
   if (market && Number(market[1]) <= Number(market[2]))
     return '可在市场购买：' + market[1] + '～' + market[2] + '级采集与制作职业装备';
+  // Crafted-equipment categories carry a level, item level, and one or
+  // several family stems. Every stem must be verified; do not partially
+  // translate a category or synthesize a single item's identity.
+  const gear = /^Lv\s*(\d{1,3})\s+IL\s*(\d{1,4})\s+(.+)$/iu.exec(source);
+  if (gear) {
+    const families = gear[3].split('・').map(part => DICT['attire:gear-family:' + part.trim()]);
+    if (families.every(Boolean)) return gear[1] + '级（品级' + gear[2] + '）' + families.join('、') + '装备';
+  }
   const level = /^Lv\s*(\d{1,3})\s*[～〜~]$/iu.exec(source);
   return level ? level[1] + '级及以上' : null;
 }
@@ -1091,24 +1100,29 @@ function translateBreadcrumb(title, previous, current) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
     replaceLabel(link, 'HOME', DICT.HOME);
   }
-  if (!title || !previous || !current) return;
-  if (previous !== current) {
+  if (title && previous && current && previous !== current) {
     const prior = breadcrumbTitles.get(title);
     const source = prior?.localized === previous ? prior.source : previous;
     breadcrumbTitles.set(title, { source, previous, localized: current });
   }
-  const state = breadcrumbTitles.get(title);
-  if (!state || state.localized !== current) return;
+  const state = title && breadcrumbTitles.get(title);
   const crumb = document.querySelector('#breadCrumb [aria-current="page"]')
     || Array.from(document.querySelectorAll('#breadCrumb li')).at(-1);
-  if (!crumb || crumb.closest(EXCLUDED)) return;
+  if (!crumb || crumb.closest(EXCLUDED) || hasCategory('glamour')) return;
+  const staticPage = document.body.matches('.page,.archive.tag,.archive.category');
+  const search = document.body.matches('.search');
   const walk = document.createTreeWalker(crumb, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walk.nextNode())) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
     const source = node.data.trim().replace(/^[＞>]\s*/u, '');
-    if (source !== state.source && source !== state.previous) continue;
-    node.data = node.data.replace(source, () => current);
+    let zh;
+    if (state?.localized === current && (source === state.source || source === state.previous)) zh = current;
+    else if (search) {
+      const query = /^検索結果「(.+)」$/u.exec(source) || /^「(.+)」的搜索结果$/u.exec(source);
+      if (query) zh = '「' + (uniqueItemName(query[1]) || query[1]) + '」的搜索结果';
+    } else if (staticPage) zh = uiName(source);
+    if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
   }
 }
 
@@ -1237,6 +1251,16 @@ function translateWeaponFilter(weaponPage) {
   }
 }
 
+function achievementAcquisitionLabel(source) {
+  if (!hasCategory('achievement')) return null;
+  const exact = DICT['attire:acquisition-note:' + source];
+  if (exact) return exact;
+  const win = /^(初勝利|([1-9]\d{0,5})回勝利)で(頭|胴|手|脚|足)装備$/u.exec(source);
+  if (!win) return null;
+  const slots = { 頭: '头部', 胴: '身体', 手: '手部', 脚: '腿部', 足: '脚部' };
+  return (win[2] ? '累计获胜' + win[2] + '次' : '首次获胜') + '可获得' + slots[win[3]] + '防具';
+}
+
 function translateAcquisitionAccordionLabels() {
   for (const content of document.querySelectorAll('#postContent .c--accordion-contents')) {
     const heading = content.previousElementSibling;
@@ -1246,11 +1270,13 @@ function translateAcquisitionAccordionLabels() {
     let node;
     while ((node = walk.nextNode())) {
       if (node.parentElement?.closest(EXCLUDED + ',script,style,a[href]')) continue;
-      const source = node.data.trim();
-      if (['マーケット取引可能', '入手方法', 'アチーブメント報酬', 'PvP>フロントライン'].includes(source)) {
-        const zh = uiName(source);
-        if (zh) node.data = node.data.replace(source, () => zh);
-      }
+      const translated = node.data.split(/(\r?\n)/u).map(line => {
+        const source = line.trim();
+        const zh = achievementAcquisitionLabel(source)
+          || (['マーケット取引可能', '入手方法', 'アチーブメント報酬', 'PvP>フロントライン'].includes(source) && uiName(source));
+        return zh && zh !== source ? line.replace(source, () => zh) : line;
+      }).join('');
+      if (translated !== node.data) node.data = translated;
     }
   }
 }

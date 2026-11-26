@@ -60,6 +60,8 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
   // 只供明确的套装标题、相关文章链接和 gearset 图片说明调用，
   // 不参与单件物品通用翻译，避免覆盖国服正式装备名。
   function aclStandaloneSetName(native) {
+    const known = DICT_ACL['set:' + native];
+    if (known) return known;
     if (ACL_SET_RE.test(native)) return null; // 角色系列交给现有职能规则。
     // Native display titles may omit the separator, e.g. スウィートドリームアタイア.
     const match = /^(.+?)(・?)(アタイア|アーマー)$/u.exec(native);
