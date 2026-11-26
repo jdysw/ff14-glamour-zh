@@ -83,6 +83,18 @@ function uiName(source) {
   if (artifact) return exactUiName(artifact[1] + '編') + ' 职业专属装备';
   const craftArtifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)(ギャザラー|クラフター)AF$/u.exec(source);
   if (craftArtifact) return exactUiName(craftArtifact[1] + '編') + ' ' + exactUiName(craftArtifact[2] + 'AF');
+  // AF article headings pair a Japanese job name with its English equivalent.
+  // Only accept jobs present in the shared official job-name dictionary.
+  const jpJobAf = /^(.+?)\s*AF$/u.exec(source);
+  if (jpJobAf && JOBS.has(jpJobAf[1])) {
+    const job = exactUiName(jpJobAf[1]);
+    if (job) return job + '职业专属装备';
+  }
+  const enJobAf = /^(.+?)\s+artefact$/iu.exec(source);
+  if (enJobAf) {
+    const job = exactUiName(enJobAf[1]);
+    if (job && [...JOBS].some(native => exactUiName(native) === job)) return job + '职业专属装备';
+  }
   const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
   if (count) {
     const name = exactUiName(count[1]);
@@ -513,13 +525,20 @@ function translateAcquisitionLinks() {
   }
 }
 
-// The Endwalker and Dawntrail AF entries repeat the same acquisition and
-// dye-unlock instructions. Limit these exact templates to those categories;
-// do not translate free-form author text or quest-link labels here.
+// AF entries repeat fixed acquisition, augmentation and dye-unlock
+// instructions. Limit exact templates to the verified AF detail categories.
 function translateAfDetailMetadata() {
-  if (!hasCategory('artefact5') && !hasCategory('artefact6')) return;
+  const augmented = hasCategory('afre');
+  if (!augmented && !hasCategory('artefact') && !hasCategory('artefact5') && !hasCategory('artefact6')) return;
   const content = document.querySelector('#postContent');
   if (!content) return;
+  if (augmented) {
+    for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/shop/124bcb85185"]')) {
+      if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+          || !/^\/lodestone\/playguide\/db\/shop\/124bcb85185\/?$/u.test(link.pathname)) continue;
+      replaceLabel(link, 'カカラン', DICT['attire:af-detail:カカラン']);
+    }
+  }
   const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walk.nextNode())) {
@@ -527,8 +546,12 @@ function translateAfDetailMetadata() {
     // WordPress may use a <br> or a literal newline between fixed sentences.
     const translated = node.data.split(/(\r?\n)/u).map(line => {
       const source = line.trim();
+      const dye = source.endsWith('染色') && resolveDyeColor(source.slice(0, -2));
       const zh = DICT['attire:af-detail:' + source]
-        || (source === '染色可能にする方法' && uiName(source));
+        || (source === '染色可能にする方法' && uiName(source))
+        || (augmented && source === 'モードゥナ' && DICT['attire:weapon-meta:モードゥナ'])
+        || (source === '無染色' && uiName(source))
+        || (dye && dye + '染色');
       return zh && zh !== source ? line.replace(source, () => zh) : line;
     }).join('');
     if (translated !== node.data) node.data = translated;
