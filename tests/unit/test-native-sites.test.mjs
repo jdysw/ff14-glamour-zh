@@ -7,7 +7,7 @@ import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { createChineseSearchController } from '../../src/core/chinese-search.js';
-import { translateAttirePage } from '../../src/sites/attire.js';
+import { startAttire, translateAttirePage } from '../../src/sites/attire.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
@@ -1237,7 +1237,7 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
 });
 
 test('装備手帳：保留站内分类入口与正文，仅以确切物品身份改 Wiki 跳转', async () => {
-  const names = ['document','location','window','NodeFilter'];
+  const names = ['document','location','window','NodeFilter','MutationObserver'];
   const prior = Object.fromEntries(names.map(name => [name,globalThis[name]]));
   const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
   try {
@@ -1447,6 +1447,10 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     d.body.className = 'home';
     d.body.innerHTML = `<section id="postContent"><div class="a--richmenu-text"><span>Market</span><span>マーケット</span></div>
       <div class="a--richmenu-text"><span>Wolf Marks</span><span>PvP装備</span></div>
+      <div class="calendar"><div><span class="a--h2rich-maincopy">月間FLカレンダー</span><h2 class="a--h2rich-subcopy">FRONTLINE CALENDAR</h2></div>
+        <div><button id="prev-month">‹</button><button id="next-month">›</button></div>
+        <div id="weekdays"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>1</span></div></div>
+      <p id="outside-calendar">月</p>
       <p id="split-series">シ<a href="/category/seriesb/">リーズ武器一覧</a></p>
       <p id="other-split">シ<a href="/other/">リーズ武器一覧</a></p>
       <div><span class="a--h2rich-maincopy">メニュー</span><h2 class="a--h2rich-subcopy">MENU</h2></div>
@@ -1455,15 +1459,23 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     translateAttirePage();
     translateAttirePage();
     assert.deepEqual([...d.querySelectorAll('.a--richmenu-text')].map(el=>el.textContent),['市场','PvP 装备']);
+    assert.deepEqual([...d.querySelectorAll('#weekdays > span')].map(el=>el.textContent),['日','一','二','三','四','五','六','1']);
+    assert.equal(d.querySelector('#outside-calendar').textContent,'月');
+    assert.equal(d.querySelector('#prev-month').textContent,'‹');
+    assert.equal(d.querySelector('#next-month').textContent,'›');
+    d.querySelector('#weekdays').innerHTML = '<span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>2</span>';
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('#weekdays > span')].map(el=>el.textContent),['日','一','二','三','四','五','六','2']);
     assert.equal(d.querySelector('#split-series').textContent,'系列武器一览');
     assert.equal(d.querySelector('#split-series a').pathname,'/category/seriesb/');
     assert.equal(d.querySelector('#other-split').textContent,'シリーズ武器一覧');
-    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.ok([...d.querySelectorAll('.a--h2rich-subcopy')].every(el=>el.hidden));
     assert.equal(d.querySelector('.a--post-title').textContent,'新生王国武器一览');
     assert.deepEqual([...d.querySelectorAll('aside a')].map(el=>el.textContent),['亚拉戈万物神典石 亚拉戈失传武器一览','ミラプリ：Rose du Désert']);
-    d.querySelector('.a--h2rich-subcopy').textContent = '別の見出し';
+    const menuSub = [...d.querySelectorAll('.a--h2rich-subcopy')].find(el=>!el.closest('.calendar'));
+    menuSub.textContent = '別の見出し';
     translateAttirePage();
-    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,false);
+    assert.equal(menuSub.hidden,false);
     d.body.className = 'archive tag tag-mf';
     d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
     translateAttirePage();
@@ -1484,6 +1496,24 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('h1').textContent,`「${zh}」的搜索结果：2 条`);
     assert.deepEqual([...d.querySelectorAll('h2')].map(h=>h.textContent),[zh,jp]);
     assert.deepEqual([...d.querySelectorAll('.c--post-link')].map(a=>a.pathname),['/field-commanders-coat/','/glamour-post/']);
+    // The search header and a menu/form may be inserted outside postContent.
+    let notify;
+    globalThis.MutationObserver = class {
+      constructor(callback) { notify = callback; }
+      observe() {}
+    };
+    d.body.innerHTML = '';
+    startAttire();
+    const late = d.createElement('div');
+    late.innerHTML = '<header id="postHeader"><h1 id="jinrPostTitle">「未知」の検索結果は0件です</h1></header>'
+      + '<nav><a href="/market/">マーケット</a></nav>'
+      + '<form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索"></form>';
+    d.body.append(late);
+    notify([{type:'childList',addedNodes:[late]}]);
+    await new Promise(resolve=>setTimeout(resolve,60));
+    assert.equal(d.querySelector('h1').textContent,'「未知」的搜索结果：0 条');
+    assert.equal(d.querySelector('nav a').textContent,'市场');
+    assert.equal(d.querySelector('input').placeholder,'输入关键词搜索');
   } finally {
     for (const [name,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
