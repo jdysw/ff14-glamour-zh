@@ -347,6 +347,16 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (set && duty)
         return text.replace(label, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
     }
+    const unlock = /^「([^「」]{2,90})」の開放条件$/u.exec(label);
+    if (unlock) {
+      const duty = lookupDutyName(unlock[1]);
+      if (duty) return text.replace(label, '“' + duty + '”的开放条件');
+    }
+    const introduction = /^(.{2,90})とは$/u.exec(label);
+    if (introduction) {
+      const duty = lookupDutyName(introduction[1]);
+      if (duty) return text.replace(label, duty + '介绍');
+    }
     return trFCDutyDetail(text, label);
   }
 
@@ -782,8 +792,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function _wowFCInput(n) {
-    const ph = n.getAttribute('placeholder');
-    if (ph) { const nn = trFC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+    // Search & Filter stores its accessible field name in title, even
+    // when the visible placeholder was already localized.
+    for (const attr of ['placeholder', 'title', 'aria-label']) {
+      const label = n.getAttribute(attr);
+      if (label) {
+        const zh = trFC(label);
+        if (zh !== label) n.setAttribute(attr, zh);
+      }
+    }
     // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
     const v0 = n.getAttribute('value');
     if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {

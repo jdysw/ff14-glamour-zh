@@ -61,12 +61,18 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
   // 不参与单件物品通用翻译，避免覆盖国服正式装备名。
   function aclStandaloneSetName(native) {
     if (ACL_SET_RE.test(native)) return null; // 角色系列交给现有职能规则。
-    const match = /^(.+?)・(?:アタイア|アーマー)$/u.exec(native);
+    // Native display titles may omit the separator, e.g. スウィートドリームアタイア.
+    const match = /^(.+?)(・?)(アタイア|アーマー)$/u.exec(native);
     if (!match) return null;
-    const official = lookupJp2Zh(native);
-    if (official && /(?:套装|装束)$/u.test(official)) return official;
-    const series = _getSeriesMap().get(match[1]) || _getSeriesPfx().get(match[1])
-      || _getItemPfx().get(match[1]);
+    const canonical = match[1] + '・' + match[3];
+    const official = new Set([lookupJp2Zh(native), lookupJp2Zh(canonical)]
+      .filter(name => /(?:套装|装束)$/u.test(name || '')));
+    if (official.size > 1) return null;
+    if (official.size === 1) return [...official][0];
+    // Without the separator require the exact verified series stem. Do not
+    // infer a missing costume from a longer, unrelated item prefix.
+    const series = _getSeriesMap().get(match[1]) || (match[2] &&
+      (_getSeriesPfx().get(match[1]) || _getItemPfx().get(match[1])));
     if (!series || /[\u3040-\u30ff]/u.test(series) || !/[\u3400-\u9fff]/u.test(series)) return null;
     return /(?:套装|装束)$/u.test(series) ? series : series + '套装';
   }

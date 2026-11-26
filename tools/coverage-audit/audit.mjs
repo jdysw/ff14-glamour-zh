@@ -232,6 +232,9 @@ const EXEMPT_PATTERNS = [
   /^FF14$/i,
   /^Final Fantasy XIV$/i,
   /^Lodestone$/i,
+  /^NPC$/,
+  /^FANTASIAN$/,
+  /^© SQUARE ENIX © \d{4}, Made by FFXIV Mirapri Eden$/u,
   /^ERIONES$/i,
   /^Garland Data$/i,
   /^Gamer Escape$/i,
@@ -287,7 +290,8 @@ export function isResidual(text, ctx = {}) {
   const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
   // Retained names in otherwise translated Chinese do not imply partial UI.
   // Remove only verified names; "关于 Miramiru Settings" remains a candidate.
-  const latinCount = (t.replace(/Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter/g, '').match(/[A-Za-z]/g) || []).length;
+  const latinCount = (t.replace(/\b(?:Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
+    .replace(/@[A-Za-z0-9_]{1,15}\b/g, '').match(/[A-Za-z]/g) || []).length;
   return !hanCount || latinCount >= 6;
 }
 
@@ -310,6 +314,7 @@ function classifystatechange(t, before) {
 function isUserContent(t, ctx) {
   // Action controls inside a post are UI even if an ancestor is user-authored.
   // Keep text blocks / authored post titles as user content.
+  if (ctx.scope === 'user' && ctx.kind === 'attr:alt') return true;
   if (ctx.control) return false;
   if (ctx.user) return true;
   if (ctx.site === 'attire' && ctx.scope === 'ui') return false;
@@ -328,6 +333,7 @@ function isAdContext(ctx) {
   return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|amazon|rakuten|sponsor)/i.test(cls);
 }
 function isExempt(t, ctx) {
+  if (ctx.site === 'eden' && /^(?:Eden|HousingEden|en|ja|ko)$/u.test(t)) return true;
   if (SERVER_NAMES.has(t)) return true;
   if (/^[A-Z][A-Za-z ]{1,40}$/.test(t) && /(server|world)/i.test(ctx.cls || '')) return true;
   for (const re of EXEMPT_PATTERNS) if (re.test(t)) return true;

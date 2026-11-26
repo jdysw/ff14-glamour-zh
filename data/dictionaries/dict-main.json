@@ -1,6 +1,11 @@
 {
  "kind": "kv",
  "entries": {
+  "eden:Arms": "武器",
+  "eden:Tools": "工具",
+  "eden:Armor": "防具",
+  "eden:Accessories": "饰品",
+  "eden:IL:{count}": "品级：{count}",
   "attire:アラガントームストーン:数理": "亚拉戈数理神典石",
   "attire:アラガントームストーン:記憶": "亚拉戈记忆神典石",
   "attire:Allagan Tomestone of Mathematics": "亚拉戈数理神典石",

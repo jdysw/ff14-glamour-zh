@@ -11,7 +11,7 @@ export function normalizeSiteUrl(candidate, base, allowedHosts) {
     const u = new URL(candidate, base);
     if (u.protocol !== 'https:') return null;
     if (!allowedHosts.includes(u.hostname)) return null;
-    if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname)) return null;
+    if (DANGEROUS_PATH.test(u.pathname) || ASSET_EXT.test(u.pathname) || /^\/sitemap\.html?\/?$/iu.test(u.pathname)) return null;
     if (u.hostname === 'attire.jp' && (/^\/(?:wp-admin|wp-login\.php|wp-json|xmlrpc\.php)(?:\/|$)/i.test(u.pathname)
         || u.searchParams.has('replytocom') || u.searchParams.has('preview'))) return null;
     if (u.hostname === 'mirapri.ff14eden.work') return manual.allowedRoute(u.href) ? manual.urlKey(u.href) : null;

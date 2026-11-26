@@ -9,7 +9,8 @@ on:
       - '.github/workflows/live-coverage-audit.yml'
 concurrency:
   group: live-localization-audit-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Preserve active evidence collection; newer audit runs queue instead.
+  cancel-in-progress: false
 
 permissions:
   contents: read

@@ -70,6 +70,11 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(resolveByZh('测试装备'),null,'names 缺省时仍可清空上一版名称索引');
     _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
+    assert.equal(trEden('Arms'),'武器');
+    assert.equal(trEden('Tools'),'工具');
+    assert.equal(trEden('Armor'),'防具');
+    assert.equal(trEden('Accessories'),'饰品');
+    assert.equal(trEden('IL:795'),'品级：795');
     assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
     assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
     assert.equal(trEden('画像をダウンサンプリング→ΔEベースのクラスタリングで同系色を統合。ほぼ白（L>95）／ほぼ黒（L<5）は除外。 出力数は最大6色。'),
@@ -598,6 +603,8 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
     cacheReset('derived');
     cacheReset('lookup');
     assert.equal(aclStandaloneSetName('フリースピリッツ・アタイア'), '自由之魂套装');
+    assert.equal(aclStandaloneSetName('フリースピリッツアタイア'), '自由之魂套装');
+    assert.equal(aclStandaloneSetName('見本アタイア'), '正式示例装束');
     assert.equal(aclStandaloneSetName('ヘヴンスナイト・アーマー'), '苍穹骑士套装');
     assert.equal(aclStandaloneSetName('見本・アタイア'), '正式示例装束',
       '官方套装道具名优先于系列的通用后缀');
@@ -1008,6 +1015,9 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('アライアンスレイド「' + duty + '」の宝箱からランダムでドロップする。'),
       '从团队任务“水晶塔 古代人迷宫”的宝箱中随机掉落。');
     assert.equal(trFC('▷ ' + duty + ' の詳細情報'), '▷ 水晶塔 古代人迷宫的详细信息');
+    assert.equal(trFC('「' + duty + '」の開放条件'), '“水晶塔 古代人迷宫”的开放条件');
+    assert.equal(trFC(duty + 'とは'), '水晶塔 古代人迷宫介绍');
+    assert.equal(trFC('装備の2ヵ所染色対応！'), '装备支持双色染色！');
     assert.ok(trFC('「オブ・ライト」装備が「' + duty
       + '」のどの宝箱からドロップするか、ひと目でわかるツールです').includes('光之套装'));
     assert.equal(trFC('レイド'), '团队任务');
@@ -1188,11 +1198,13 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     assert.equal(trFC('≪' + key + '»'), '≪模拟译文»');
     assert.equal(trFC(key), '模拟译文');
     const input = element('INPUT', {
-      type: 'submit', placeholder: key, value: key,
+      type: 'submit', placeholder: key, value: key, title: '装備検索', 'aria-label': 'ヘアカタログ検索',
     });
     _wowFCInput(input);
     assert.equal(input.getAttribute('placeholder'), '模拟译文');
     assert.equal(input.getAttribute('value'), '模拟译文');
+    assert.equal(input.getAttribute('title'), '装备搜索');
+    assert.equal(input.getAttribute('aria-label'), '发型图鉴搜索');
     const title = element('A', { title: 'View all posts in ' + key });
     _trFCAttr(title, 'title');
     assert.equal(title.getAttribute('title'), '查看“模拟译文”分类下的全部文章');

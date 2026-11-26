@@ -139,6 +139,14 @@ function translateMiramiruDialogJob(raw, element) {
 }
 
 function translateMiramiruText(raw, element) {
+  const path = miramiruPathname();
+  const section = path === '/terms' ? 'terms' : path === '/about' ? 'about'
+    : path === '/about/contributors' ? 'contributors' : null;
+  if (section && element.closest('main')) {
+    const label = raw.trim();
+    const zh = knownMiramiruText(section + ':' + label);
+    if (zh) return raw.replace(label, zh);
+  }
   // The visible brand spans are separate from the screen-reader subtitle.
   if (element.classList?.contains('sr-only') && element.parentElement?.tagName === 'H1'
       && miramiruPathname() === '/') {

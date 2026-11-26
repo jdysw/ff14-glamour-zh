@@ -78,6 +78,12 @@
   function miramiruScope(el,kind,url){
     if(el.closest?.('a.eorzeadb_link,[data-zhx-miramiru-zh]'))return 'item';
     const path=new URL(url).pathname;
+    // Full-size and thumbnail alt texts inherit player-supplied titles.
+    // They are not UI labels even though the image sits inside a button.
+    if(/\/mirapuri\//.test(path)&&kind==='attr:alt'&&el.closest?.('button')&&
+        / - (?:Thumbnail )?\d+$/.test(el.getAttribute?.('alt')||''))return 'user';
+    if(/\/about\/contributors\/?$/.test(path)&&el.closest?.('h2.text-lg.font-semibold')&&
+        !['テストユーザーの皆様','各位测试用户'].includes(el.textContent?.trim()))return 'user';
     if(el.closest?.('a[href*="/users/"],a[href*="/tags/"],a[href*="/mirapuri/"]'))return 'user';
     const tagLink=el.closest?.('a[href*="?tag="]');
     if(tagLink&&el.closest?.('[data-slot="badge"]')?.textContent?.trim().startsWith('#'))return 'user';
@@ -253,7 +259,7 @@
         let scope='unknown';
         if(ctx.ad)scope='ad';
         else if(site==='attire'&&ctx.scope==='ui'&&!ctx.user)scope='ui';
-        else if(authored&&!ctx.control)scope='user';
+        else if(ctx.scope==='user'&&it.kind==='attr:alt'||authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';
         else if(it.kind==='document:title')scope='metadata';
         else if(ctx.control||ctx.ui&&it.kind==='text'||it.kind==='option')scope='ui';
