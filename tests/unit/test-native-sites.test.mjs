@@ -1584,6 +1584,14 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#coffer').textContent,'钻石神兵武器箱（品级525）');
     assert.equal(d.querySelector('#duty-name').textContent,'钻石神兵狂想作战');
     assert.equal(d.querySelector('#foreign-vendor').textContent,'カ・インタナ');
+    // Treasure sources and a coffer have exact display names, not inferred
+    // weapon identities. An inconsistent map/area combination stays native.
+    const dream = d.createElement('p');
+    dream.id = 'dream-source';
+    dream.innerHTML = 'マーケット取引可能<br>ドリーム・オブ・ウェポンチェスト<br>「宝物庫セノーテ・ジャジャグラル」';
+    d.querySelector('#postContent').append(dream);
+    translateAttirePage();
+    assert.equal(dream.textContent,'可在市场交易幻梦武器箱加加财富天坑');
     assert.deepEqual([...d.querySelectorAll('dt')].map(el=>el.textContent),['拔刀效果','种类']);
     assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'同外观武器');
     assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
@@ -1711,6 +1719,32 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     render('/glamour-post/',afMarkup('glamour',eAf));
     assert.equal(d.querySelector('#conditional').textContent,'染色◯（条件あり）');
     assert.equal(d.querySelector('#instructions').textContent,eAf);
+    const face = 'スタイルカタログ:テスト用眼鏡';
+    const faceZh = '测试用眼镜样式';
+    assert.ok(_applyV3({candidatePolicy:1,names:face+'\t'+faceZh+'\t1\t1',hash:'123456789ab\t'+faceZh}));
+    render('/?p=125414','<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/faceaccessory/">フェイスアクセサリー</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+face+'（フェイスアクセサリー）</h1><section id="postContent">'
+      + '<div><h2 class="a--h2rich-maincopy">カラーバリエーション</h2><span class="a--h2rich-subcopy">Color variations</span></div>'
+      + '<a id="face-item" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/123456789ab/">'+face+'</a>'
+      + '<p id="face-market">マーケット取引：◯</p><p id="face-source">宝の地図G18 「宝物庫 ボルト・オネイロン」</p>'
+      + '<p id="wrong-map">宝の地図G17 「宝物庫 ボルト・オネイロン」</p><p id="source-prose">宝物庫 ボルト・オネイロンについての説明</p>'
+      + '<div class="c--accordion-contents"><a id="allied" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/?category2=4&amp;category3=45&amp;category4=62">友好部族エクストラストーリー</a>'
+      + '<a id="friends" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/b10022ed563/">集うは我ら、信頼の絆</a>'
+      + '<a id="wrong-friends" href="https://example.test/lodestone/playguide/db/quest/b10022ed563/">集うは我ら、信頼の絆</a></div></section>');
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,faceZh+'（面部配饰）');
+    assert.equal(d.querySelector('#face-item').textContent,faceZh);
+    assert.ok(decodeURIComponent(d.querySelector('#face-item').href).endsWith(faceZh));
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'颜色一览');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#face-market').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#face-source').textContent,'G18藏宝图：巡梦金库');
+    assert.equal(d.querySelector('#wrong-map').textContent,'宝の地図G17 「宝物庫 ボルト・オネイロン」');
+    assert.equal(d.querySelector('#source-prose').textContent,'宝物庫 ボルト・オネイロンについての説明');
+    assert.equal(d.querySelector('#allied').textContent,'各族盟友任务');
+    assert.equal(d.querySelector('#friends').textContent,'友谊地久天长');
+    assert.equal(d.querySelector('#wrong-friends').textContent,'集うは我ら、信頼の絆');
+    // Retain the AF fixture's original game-data entries for the subsequent tests.
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1'}));
     const basicAf = '各ジョブのジョブクエストをコンプリートする';
     const repurchase = '各エリア遺失物管理人から再購入（1,000ギル）';
     render('/scholars-gown/', afMarkup('af/artefact',basicAf+'<br>Lv45：頭 手 脚 足<br>Lv50：胴<br>'+repurchase)
