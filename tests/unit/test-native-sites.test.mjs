@@ -1563,17 +1563,17 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
       translateAttirePage();
       translateAttirePage();
     };
-    assert.ok(_applyV3({candidatePolicy:1,names:'テスト装備・アタイア\t测试套装\t1\t1\n曖昧・アタイア\t测试甲套装\t1\t1\n曖昧アタイア\t测试乙套装\t1\t1'}));
+    assert.ok(_applyV3({candidatePolicy:1,names:'テスト装備・アタイア\t测试套装\t1\t1\n曖昧・アタイア\t测试甲套装\t1\t1\n曖昧アタイア\t测试乙套装\t1\t1\nマインキープ・アタイア\t富矿套装\t0\t0\nファイターアーマー\t勇战套装\t0\t0\nドラゴンランサーアーマー\t枪龙套装\t0\t0\n早乙女装束\t早乙女装束\t0\t0'}));
     render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
       + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
       + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'
       + '<a href="/augmented-minekings-work-shirt/">マインキング</a><a href="/augmented-fieldkeeps-shirt/">フィールドキープ</a>'
-      + '<a href="/test/">テスト装備</a><a href="/ambiguous/">曖昧</a>'
+      + '<a href="/augmented-minekeeps-overalls/">マインキープ</a><a href="/test/">テスト装備</a><a href="/ambiguous/">曖昧</a>'
       + '<p id="author">マインライズ</p><a href="/unknown/">未知のセット</a></section>');
     assert.equal(d.querySelector('h1').textContent,'采集与制作职业');
     assert.equal(d.querySelector('.c--tab-title').textContent,'按职业汇总');
     assert.deepEqual([...d.querySelectorAll('h2,h3')].map(e=>e.textContent),['采集职业专属装备','采矿工']);
-    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','测试套装','曖昧','未知のセット']);
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','富矿套装','测试套装','曖昧','未知のセット']);
     assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
     assert.equal(d.querySelector('#author').textContent,'マインライズ');
     render('/af-pld/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/af-nyuusyu/">入手方法：歴代ジョブAF</a></div></div>'
@@ -1581,6 +1581,16 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
       + '<a href="/gallant-surcoat/">新生AFガラント/Gallant</a><a href="/caballarius-cuirass/">黄金AFカバラリアス/Caballarius</a></section>');
     assert.equal(d.querySelector('h1').textContent,'骑士历代职业专属装备试穿图汇总');
     assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['重生之境 英骑套装','金曦之遗辉 迅骑套装']);
+    render('/af-war/', '<h1 id="jinrPostTitle">戦士 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/fighters-cuirass/">新生AF ファイター/Fighter’s</a><a href="/unknown/">黄金AF 未確認/Unknown</a></section>');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['重生之境 勇战套装','黄金AF 未確認/Unknown']);
+    render('/af-drg/', '<h1 id="jinrPostTitle">竜騎士 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/dragonlancers-plackart/">蒼天AF ドラゴンランサー/</a></section>');
+    assert.equal(d.querySelector('#postContent a').textContent,'苍穹之禁城 枪龙套装');
+    render('/af-sam/', '<h1 id="jinrPostTitle">侍 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/saotome-jinbaori/">暁月AF 早乙女/Saotome</a><a href="/sakonji-haori/">黄金AF 左近士羽織/Sakonji</a>'
+      + '<a href="/nameless-togi/">ジョブ取得時にもらえる装備品 無銘闘着/Nameless</a></section>');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晓月之终途 早乙女装束','金曦之遗辉 左近士装束','解锁职业时获得的装备 无名套装']);
     render('/pvp/', '<h1 id="jinrPostTitle">PvP装備</h1><section id="postContent"><h3>ヴァートゥ</h3>'
       + '<a href="/virtus-creed/">ヴァートゥ・クリード</a><h3>プレスティージ・ハイアラガン</h3></section>');
     assert.deepEqual([...d.querySelectorAll('h3')].map(e=>e.textContent),['美德','威望亚拉戈高位']);

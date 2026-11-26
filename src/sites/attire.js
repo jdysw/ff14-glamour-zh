@@ -261,24 +261,25 @@ function translateWeaponCatalogue(title, page) {
 }
 
 function afSetName(source) {
-  const match = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)AF\s*([^/]+)\s*\/.+$/u.exec(source);
+  // Some AF links omit the English label after '/', and newer jobs
+  // have a separate starting-equipment entry rather than an expansion.
+  const match = /^(?:(新生|蒼天|紅蓮|漆黒|暁月|黄金)AF|ジョブ取得時にもらえる装備品)\s*([^/]+)\/.*$/u.exec(source);
   if (!match) return null;
-  const set = DICT['attire:set:' + match[2].trim()];
-  return set ? exactUiName(match[1] + '編') + ' ' + set : null;
+  const set = catalogueSetName(match[2].trim());
+  const label = exactUiName(match[1] ? match[1] + '編' : 'ジョブ取得時にもらえる装備品');
+  return set && label ? label + ' ' + set : null;
 }
 
 function catalogueSetName(source) {
   const known = DICT['attire:set:' + source];
   if (known) return known;
-  // Outfit-glamour items provide exact, official set names. Never infer a
-  // series from arbitrary item-name prefixes or use the set for a Wiki redirect.
-  const names = new Set([
-    ...resolveAllByName(source + '・アタイア'),
-    ...resolveAllByName(source + 'アタイア'),
-  ]);
+  // Exact outfit-glamour items also use アーマー and 装束 for combat AF.
+  // Keep official names ending in 装束; do not append another suffix.
+  const suffixes = ['・アタイア', 'アタイア', '・アーマー', 'アーマー', '装束'];
+  const names = new Set(suffixes.flatMap(suffix => resolveAllByName(source + suffix)));
   if (names.size !== 1) return null;
   const name = [...names][0];
-  return name.endsWith('套装') ? name : null;
+  return /(?:套装|装束)$/u.test(name) ? name : null;
 }
 
 const MOG_REWARDS = new Set([
