@@ -1731,6 +1731,26 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.equal(d.querySelector('#unknown-shop').textContent,'カカラン');
     assert.equal(d.querySelector('#augmentation').textContent,'学士装备的改良材料');
     assert.equal(d.querySelector('#dye-caption').textContent,'煤黑染色');
+    const guide = '〖暁月版〗禁書：新生古典装備の入手方法〖過去トークン装備〗';
+    render('/creed-cuirass/',afMarkup('af/artefact2','Lv60忍者')
+      .replace('</section>','<a id="guide" href="/al06/">'+guide+'</a><a id="other-guide" href="https://example.test/al06/">'+guide+'</a></section>'));
+    assert.equal(d.querySelector('#instructions').textContent,'60级 忍者');
+    assert.equal(d.querySelector('#guide').textContent,'【晓月版】60级职业专属装备获取方式（旧神典石装备）');
+    assert.equal(d.querySelector('#other-guide').textContent,guide);
+    const questBase = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/';
+    const bardQuest = questBase+'4c5e96e09d0/';
+    render('/antiquated-storytellers-coat/',afMarkup('af/artefact3','吟遊詩人クエスト<br>『<a href="'+bardQuest+'">想い込められし歌</a>』<br>クエスト終了後にチェストを開けることで入手できます<br>再取得は遺失物管理人から再購入可能です<br>染色可能にするためには『禁断の地 エウレカ アネモス編』でアイテムを揃える必要があります'));
+    assert.equal(d.querySelector('#instructions').textContent,'吟游诗人职业任务『和平颂歌』完成任务后，打开获得的装备箱即可领取装备。可在失物管理人处重新购买。若要获得可染色装备，需在禁地优雷卡 常风之地收集所需道具。');
+    assert.equal(d.querySelector('#instructions a').href,bardQuest);
+    const mainQuest = questBase+'34a689b3630/';
+    const roleQuest = questBase+'5fec56883e2/';
+    render('/weathered-wicce-coat/',afMarkup('af/artefact4','漆黒のヴィランズ 黒魔道士のアーティファクト(AF)です。<br>1:メインクエスト Lv79『<a href="'+mainQuest+'">輝きは不滅なりて</a>』をクリア<br>2:Lv80に到達<br>3:ソーサラー系DPSロールクエスト『<a href="'+roleQuest+'">やっと、また会えたね</a>』をクリア<br>染色可能装備は極シタデルボズヤ追憶戦で入手できます。')
+      .replace('</section>','<a id="wrong-quest" href="'+roleQuest+'">輝きは不滅なりて</a><a id="foreign-quest" href="https://example.test/lodestone/playguide/db/quest/34a689b3630/">輝きは不滅なりて</a><p id="plain-quest">TANKロールクエスト『いつか君が言った言葉』をクリア</p></section>'));
+    assert.equal(d.querySelector('#instructions').textContent,'暗影之逆焰的黑魔法师职业专属装备（AF）。1. 完成79级主线任务《光辉不灭》2. 达到80级3. 完成魔法进攻职业职能任务《终于又能见到你了》可染色装备可通过博兹雅堡垒追忆战获取。');
+    assert.equal(d.querySelector('#plain-quest').textContent,'完成防护职业职能任务《你曾说过的话》');
+    assert.equal(d.querySelector('#wrong-quest').textContent,'輝きは不滅なりて');
+    assert.equal(d.querySelector('#foreign-quest').textContent,'輝きは不滅なりて');
+    assert.equal(d.querySelector('#instructions a').href,mainQuest);
     render('/glamour-post/',afMarkup('glamour',basicAf));
     assert.equal(d.querySelector('#instructions').textContent,basicAf);
     render('/gaias-attire/',storeMarkup);
