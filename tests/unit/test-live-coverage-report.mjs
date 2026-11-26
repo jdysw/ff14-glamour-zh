@@ -26,6 +26,15 @@ assert.equal(part.bySite.ec.status,'failed');
 assert.equal(part.pages.length,Object.keys(SITES).length);
 const complete=summarizeLive(Object.keys(SITES).map(good),at);
 assert.equal(complete.status,'scan-complete');
+const example=good('attire');
+example.items=[{kind:'text',text:'入手方法',before:'入手方法',path:'h2',ctx:{scope:'ui',ui:true,collapsed:true}},
+  {kind:'text',text:'入手方法',before:'入手方法',path:'h3',ctx:{scope:'ui',ui:true}},
+  {kind:'text',text:'非公開',redacted:true,ctx:{scope:'ui',ui:true}}];
+const groups=summarizeLive([example],at).candidates;
+assert.equal(groups.length,1);
+assert.equal(groups[0].occurrences,2);
+assert.equal(groups[0].pages,1);
+assert.equal(groups[0].collapsed,1);
 const v=toManualAudit(complete);
 assert.equal(v.format,'zhx-manual-audit-v2');
 assert.equal(Object.keys(v.pages).length,Object.keys(SITES).length);

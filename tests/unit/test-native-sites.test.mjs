@@ -1709,6 +1709,40 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     assert.equal(d.querySelector('#batch-vendor').innerHTML,'调查队的古钱鉴定师<br>新月岛北部');
     assert.equal(d.querySelector('#batch-note').textContent,material);
     assert.equal(d.querySelector('#slot').textContent,'不可装备腿部防具');
+    // Actual acquisition layouts include a linked coffer and exchange
+    // tables that omit the standard cost/vendor headings.
+    const cofferJp = 'テスト・チェスト';
+    const cofferZh = '测试装备箱';
+    const cofferHash = '00000000009';
+    const cofferUrl = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/'+cofferHash+'/';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n'+cofferJp+'\t'+cofferZh+'\t1\t1',hash:hash+'\t'+zh+'\n'+cofferHash+'\t'+cofferZh}));
+    globalThis.location = new URL('https://attire.jp/fieldfiends-costume-shirt/');
+    d.body.innerHTML = exchangeMarkup('<p id="coffer-note"><a href="'+cofferUrl+'">'+cofferJp+'</a>を開けることで装備一式入手できます。</p>'
+      + '<p id="rest-vendor">エニー<br>蒼天街</p><p id="rest-cost">フェトゥ参加証<br>50</p>'
+      + '<p id="rest-prize">イシュガルド復興『クポフォーチュン』の景品</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#coffer-note').textContent,'测试装备箱开启后即可获得整套装备。');
+    assert.equal(decodeURI(d.querySelector('#coffer-note a').href),'https://ff14.huijiwiki.com/wiki/物品:'+cofferZh);
+    assert.equal(d.querySelector('#rest-vendor').innerHTML,'艾妮<br>天穹街');
+    assert.equal(d.querySelector('#rest-cost').innerHTML,'庆典参加证书<br>50');
+    assert.equal(d.querySelector('#rest-prize').textContent,'重建伊修加德“库啵好运道”奖品');
+    globalThis.location = new URL('https://attire.jp/rule-breakers-vest/');
+    d.body.innerHTML = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/pvp/series-malmstones/">シリーズマルムストーン</a></div></div>'
+      + exchangeMarkup('<p id="series">シリーズ3 シリーズレベル25報酬</p><p id="old-series">シーズンが終了したため現在は入手できません</p>'
+      + '<p id="series-cost">トロフィークリスタル 1,500</p><p id="series-vendor">トロフィークリスタル取引窓口<br>ウルヴズジェイル係船場</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#series').textContent,'第3轮系列赛 等级25报酬');
+    assert.equal(d.querySelector('#old-series').textContent,'本轮已结束，目前无法获取。');
+    assert.equal(d.querySelector('#series-cost').textContent,'战利水晶 1,500');
+    assert.equal(d.querySelector('#series-vendor').innerHTML,'战利水晶交易员<br>狼狱停船场');
+    globalThis.location = new URL('https://attire.jp/arms/moonward-longsword/');
+    d.body.innerHTML = exchangeMarkup('<p id="old-currency">(旧:アラガントームストーン:経典)</p><p>取引に必要なアイテム</p><p>モブハントの戦利品</p>'
+      + '<p>販売ショップNPC</p><p id="hunt-vendor">ジャ・ラクシャイ<br>オールド・シャーレアン</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#old-currency').textContent,'（旧：亚拉戈经典神典石）');
+    assert.equal(d.querySelector('#hunt-vendor').innerHTML,'嘉·拉克莎<br>旧萨雷安');
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();

@@ -122,6 +122,13 @@
       if(el.closest?.('.a--h2rich-maincopy,.a--h2rich-subcopy,.a--richmenu-text,.c--tab-title,.c--accordion-title,.rtoc-item,.wp-block-heading'))return 'ui';
       if(el.closest?.('h2,h3,h4,h5,h6,th,dt'))return 'ui';
       if(el.closest?.('.c--accordion-contents td,.c--accordion-contents dd,.c--accordion-contents strong'))return 'ui';
+      // Only the site-authored acquisition accordion, not arbitrary
+      // collapsible player content, contains exchange/material metadata.
+      const acquisition=el.closest?.('.c--accordion-contents');
+      if(acquisition){
+        const heading=acquisition.previousElementSibling?.textContent?.trim()||'';
+        if(/^(?:入手方法などはこちら|查看获取方式等信息|入手方法|获取方式)$/.test(heading))return 'ui';
+      }
       return 'unknown';
     }
     return null;

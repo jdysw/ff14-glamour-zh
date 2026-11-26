@@ -23,15 +23,25 @@ export const COLLECTOR_JS = String.raw`(() => {
     }
     return parts.join(' > ');
   }
-  function visible(el) {
-    if (!el || !el.isConnected || el.closest('[hidden],[aria-hidden="true"]')) return false;
+  // Native acquisition accordions and tab panels already exist in the DOM.
+  // Read their text without clicking controls or changing the actual page.
+  function visibility(el) {
+    if (!el || !el.isConnected) return null;
+    const panel = globalThis.location?.hostname === 'attire.jp'
+      ? el.closest('#postContent .c--accordion-contents,#postContent .c--tab-contents') : null;
+    let collapsed = false;
     let p = el;
     while (p && p.nodeType === 1) {
       const c = getComputedStyle(p);
-      if (c.display === 'none' || c.visibility === 'hidden' || Number(c.opacity) === 0) return false;
+      const hidden = p.hasAttribute?.('hidden') || p.getAttribute?.('aria-hidden') === 'true'
+        || c.display === 'none' || c.visibility === 'hidden' || Number(c.opacity) === 0;
+      if (hidden) {
+        if (p !== panel) return null;
+        collapsed = true;
+      }
       p = p.parentElement;
     }
-    return el.getClientRects().length > 0 || el.tagName === 'OPTION';
+    return collapsed ? 'collapsed' : (el.getClientRects().length > 0 || el.tagName === 'OPTION' ? 'visible' : null);
   }
   function skipped(el) {
     if (!el || el.closest('script,style,noscript,template,iframe,svg,[contenteditable="true"]')) return true;
@@ -78,20 +88,21 @@ export const COLLECTOR_JS = String.raw`(() => {
     };
   }
   function push(el, value, kind) {
-    if (!visible(el) || skipped(el)) return;
+    const state = visibility(el);
+    if (!state || skipped(el)) return;
     const t = String(value || '').replace(/\s+/g, ' ').trim();
     if (!t || t.length > 500) return;
     const path = pathFor(el);
     const key = path + '\u0000' + kind + '\u0000' + t;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ kind, text: t, path, ctx: context(el, kind) });
+    out.push({ kind, text: t, path, ctx: { ...context(el, kind), collapsed: state === 'collapsed' } });
   }
   if (!document.body) return [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
       const p = n.parentElement;
-      if (!p || BAD.has(p.tagName) || skipped(p) || !visible(p)) return NodeFilter.FILTER_REJECT;
+      if (!p || BAD.has(p.tagName) || skipped(p) || !visibility(p)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });

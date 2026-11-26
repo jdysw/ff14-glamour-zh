@@ -350,10 +350,22 @@ function sourceCatalogueName(source, kind) {
 
 // Historical tomestone guides use exact headings and structured exchange
 // labels, not arbitrary prose. Preserve quantities, markup and all links.
+function huntVendorName(source) {
+  if (['ジャ・ラクシャイ','ウィルメッタ','サイル','イルフロイ','ユールモア'].includes(source)) {
+    return DICT['attire:exchange:' + source];
+  }
+  if (['クリスタリウム','モーエン商会の商人'].includes(source)) return DICT['attire:weapon-meta:' + source];
+  if (['オールド・シャーレアン','ラザハン'].includes(source)) return DICT['attire:tomestone-guide:' + source];
+  return null;
+}
+
 function tomestoneGuideLabel(source) {
   const lookup = value => DICT['attire:tomestone-guide:' + value];
-  const exact = lookup(source);
+  const exact = lookup(source) || huntVendorName(source);
   if (exact) return exact;
+  const quoted = /^「([^」]+)」$/u.exec(source);
+  const vendor = quoted && huntVendorName(quoted[1]);
+  if (vendor) return '「' + vendor + '」';
   // The historical headings vary only in optional whitespace before the
   // version parenthesis; the underlying date and patch must remain intact.
   const hunt = /^(同盟記章|セントリオ記章|モブハントの戦利品)入手方法\s*（2024年パッチ6\.x現在）$/u.exec(source);
@@ -379,6 +391,7 @@ function translateTomestoneGuide(title, nativeTitle) {
     // known to occur as separate headings or acquisition metadata.
     const standalone = parent.closest('p') && (
       /^(?:Sモブ|Aモブ|リスキーモブ手配書|モブ手配書|指定された対象Bモブ100（週1回 毎週更新）|対象モンスター8\/対象FATE20（毎日更新）|強化方法|強化したいアイテム＋対応する強化用アイテム|ラールガーズリーチ|クガネ|イシュガルド下層 エーテライト付近|Allagan tomestone of [A-Za-z]+)$/u.test(source)
+      || !!huntVendorName(source) || (source.startsWith('「') && !!tomestoneGuideLabel(source))
     );
     if (!structural && !standalone) continue;
     const link = parent.closest('a[href]');
@@ -773,6 +786,29 @@ function translateAfDetailMetadata() {
   }
 }
 
+function seriesRewardLabel(source) {
+  const combined = /^シリーズ\s*(\d*)\s+シリーズレベル\s*(\d+)報酬$/u.exec(source);
+  if (combined) return (combined[1] ? '第' + combined[1] + '轮系列赛 ' : '系列赛 ') + '等级' + combined[2] + '报酬';
+  const round = /^シリーズ\s*(\d+)$/u.exec(source);
+  if (round) return '第' + round[1] + '轮系列赛';
+  const level = /^シリーズレベル\s*(\d+)報酬$/u.exec(source);
+  if (level) return '系列赛等级' + level[1] + '报酬';
+  return source === 'シリーズ' ? '系列赛' : null;
+}
+
+function linkedCofferNote(node, source) {
+  if (!/^を開けることで装備一式入手できます。?$/u.test(source)) return null;
+  // The native coffer anchor remains intact (including confirmed Wiki
+  // redirects). Translate its adjacent sentence without guessing its name.
+  let previous = node.previousSibling;
+  while (previous?.nodeType === 3 && !previous.textContent.trim()) previous = previous.previousSibling;
+  if (!previous || previous.nodeType !== 1) return null;
+  const link = previous.matches(ITEM_LINK) ? previous : previous.querySelector('a[href]');
+  if (!link || previous.textContent.trim() !== link.textContent.trim()) return null;
+  const item = originalItem(link);
+  return item?.native.endsWith('チェスト') ? '开启后即可获得整套装备。' : null;
+}
+
 function translateOtherAcquisitionMetadata() {
   const content = document.querySelector('#postContent');
   if (!content) return;
@@ -789,6 +825,7 @@ function translateOtherAcquisitionMetadata() {
       }
     }
   }
+  const series = hasCategory('series-malmstones');
   // Acquisition details may be a plain text node inside a WordPress accordion
   // or a separate line in a paragraph. Never translate substrings of prose.
   const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
@@ -801,7 +838,8 @@ function translateOtherAcquisitionMetadata() {
       const source = line.trim();
       let zh = treasureSourceName(source);
       if (!zh && parent.closest('.c--accordion-contents')) {
-        zh = DICT['attire:acquisition-note:' + source];
+        zh = DICT['attire:acquisition-note:' + source] || linkedCofferNote(node, source)
+          || (series && seriesRewardLabel(source)) || DICT['attire:exchange:' + source];
         const coffer = /^(.+?チェスト)を開けることで装備一式入手できます。?$/u.exec(source);
         const name = coffer && uniqueItemName(coffer[1]);
         if (name) zh = '打开' + name + '即可获得整套装备。';
@@ -863,7 +901,7 @@ function exchangeDetailName(source) {
     return DICT_COMMON[name] || DICT['attire:tomestone-guide:' + name];
   };
   if (/^アラガントームストーン[:：][^\s]+$/u.test(source)) return currency(source);
-  const former = /^(?:（旧\s*[:：]?\s*(アラガントームストーン[:：][^\s）]+)）|旧\s*[:：]?\s*(アラガントームストーン[:：][^\s]+))$/u.exec(source);
+  const former = /^(?:[（(]旧\s*[:：]?\s*(アラガントームストーン[:：][^\s）)]+)[）)]|旧\s*[:：]?\s*(アラガントームストーン[:：][^\s]+))$/u.exec(source);
   if (former) {
     const zh = currency(former[1] || former[2]);
     if (zh) return former[1] ? '（旧：' + zh + '）' : '旧：' + zh;
@@ -896,7 +934,14 @@ function translateExchangeMetadata(weaponDetail) {
     const isVendor = source => EXCHANGE_VENDOR_LABELS.some(label => isHeading(source, label));
     const isCost = source => isHeading(source, EXCHANGE_HEADINGS[0]);
     const hasLabel = label => labels.has(label) || labels.has(exchangeDetailName(label));
-    if (!hasLabel(EXCHANGE_HEADINGS[0]) || !EXCHANGE_VENDOR_LABELS.some(hasLabel)) continue;
+    const headed = hasLabel(EXCHANGE_HEADINGS[0]) && EXCHANGE_VENDOR_LABELS.some(hasLabel);
+    // Older Restoration articles list currency and vendor without either
+    // heading. Require both markers in the same acquisition accordion.
+    const restoration = region !== content && hasLabel('エニー')
+      && ['蒼天街振興券','フェトゥ参加証'].some(hasLabel);
+    const seriesTrade = region !== content && hasCategory('series-malmstones')
+      && hasLabel('トロフィークリスタル取引窓口');
+    if (!headed && !restoration && !seriesTrade) continue;
     // Translate exact canonical material names inside a bounded cost block.
     // Do not infer item identity or alter links, and do not apply a general
     // item-name lookup to vendor labels or surrounding author prose.
@@ -913,7 +958,9 @@ function translateExchangeMetadata(weaponDetail) {
           inCost = false;
           vendorsRemaining--;
         }
-        const zh = exchangeDetailName(source) || (!toc && inCost && source && uniqueItemName(source));
+        const count = seriesTrade && /^(?:トロフィークリスタル|戦利水晶)\s+([\d,]+)$/u.exec(source);
+        const name = !toc && source && (inCost || restoration && text.parentElement?.closest('td,dd,p')) && uniqueItemName(source);
+        const zh = exchangeDetailName(source) || (count && uiName('トロフィークリスタル') + ' ' + count[1]) || name;
         return zh && source !== zh ? line.replace(source, () => zh) : line;
       }).join('');
       if (translated !== text.data) text.data = translated;

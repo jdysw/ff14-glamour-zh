@@ -1,8 +1,12 @@
 name: Live localization coverage audit (10 sites)
-# 外站审计按需执行；WAF/网络故障不充当代码 PR 的测试结果。
-# 手动运行仍严格要求完整证据，受阻站点不能计为“零漏翻”。
+# 手动审计严格；涉及审计基础设施的 PR 自动执行诊断，但外站故障不阻塞普通代码测试。
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/coverage-audit/**'
+      - 'tools/manual-coverage-audit/audit-core.js'
+      - '.github/workflows/live-coverage-audit.yml'
 concurrency:
   group: live-localization-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -87,6 +91,7 @@ jobs:
           path: tests/.cache/coverage-report/
           retention-days: 14
           if-no-files-found: warn
-      - name: Fail if any required site is missing or blocked
+      - name: Record incomplete coverage (strict only for manual runs)
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('tests/.cache/coverage-report/coverage-audit-live.json'));if(x.status!=='scan-complete'){console.error('Incomplete localization audit: '+x.status);process.exit(1)}"

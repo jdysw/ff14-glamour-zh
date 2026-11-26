@@ -273,7 +273,8 @@ async function main() {
         const norm = normalizeSiteUrl(p.url, p.url, hosts);
         if (!norm || visited.has(norm)) continue;
         const template = templateKey(norm);
-        if (discover && (templateCounts.get(template) || 0) >= perTemplate) continue;
+        // Explicit seeds are curated by acquisition type; a common URL template must not hide them.
+        if (discover && p.depth > 0 && (templateCounts.get(template) || 0) >= perTemplate) continue;
         visited.add(norm);
         templateCounts.set(template, (templateCounts.get(template) || 0) + 1);
         console.log('  扫描 ' + (p.id || template) + ': ' + norm);

@@ -47,8 +47,23 @@ export function summarizeLive(rows,now=new Date().toISOString()){
   const states=Object.values(bySite);
   const status=states.every(s=>s.status==='scan-complete')?'scan-complete':
     states.some(s=>s.ok)?'partial':'failed';
+  const groups=new Map();
+  for(const p of pages){
+    if(p.status!=='ok')continue;
+    for(const it of p.items){
+      if(it.redacted||it.ctx?.scope!=='ui'||!['real','wrong'].includes(it.category))continue;
+      const key=JSON.stringify([p.site,it.text]);
+      const g=groups.get(key)||{site:p.site,text:it.text,occurrences:0,pageIds:new Set(),collapsed:0};
+      g.occurrences++;
+      g.pageIds.add(p.pageId);
+      if(it.ctx?.collapsed)g.collapsed++;
+      groups.set(key,g);
+    }
+  }
+  const candidates=[...groups.values()].map(g=>({...g,pageIds:[...g.pageIds],pages:g.pageIds.size}))
+    .sort((a,b)=>b.pages-a.pages||b.occurrences-a.occurrences||a.site.localeCompare(b.site)||a.text.localeCompare(b.text));
   return {generatedAt:now,status,scope:'bounded public pages, NOT site-wide localization coverage',
-    stats:coverageStats(pages),bySite,pages};
+    stats:coverageStats(pages),bySite,candidates,pages};
 }
 function toV11Item(it){
   const ctx={...(it.ctx||{})};
@@ -80,7 +95,9 @@ export function toManualAudit(report){
 }
 export function writeLiveReports(report,out){
   fs.mkdirSync(out,{recursive:true});
-  const {pages,...summary}=report;
+  const {pages,candidates,...summary}=report;
+  summary.distinctUiCandidates=candidates.length;
+  fs.writeFileSync(path.join(out,'coverage-audit-live-candidates.json'),JSON.stringify(candidates,null,2)+'\n','utf8');
   const header=['# FF14 汉化审计（'+Object.keys(report.bySite).length+' 站）','',
     '本轮扫描状态：**'+summary.status+'**（仅限采集到的页面，不能代表整站汉化率）','',
     '|站点|状态|有效页面|失败页面|','|---|---|---:|---:|'];
@@ -96,6 +113,6 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   const opt=(key,fallback)=>{const i=args.indexOf(key);return i>=0&&args[i+1]?args[i+1]:fallback;};
   const report=summarizeLive(loadLiveResults(path.resolve(opt('--input',CACHE_DIR))));
   writeLiveReports(report,path.resolve(opt('--out','tests/.cache/coverage-report')));
-  console.log(JSON.stringify({status:report.status,stats:report.stats,bySite:report.bySite},null,2));
+  console.log(JSON.stringify({status:report.status,stats:report.stats,bySite:report.bySite,distinctUiCandidates:report.candidates.length,topUiCandidates:report.candidates.slice(0,100)},null,2));
   if(args.includes('--strict')&&report.status!=='scan-complete')process.exitCode=1;
 }
