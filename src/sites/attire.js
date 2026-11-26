@@ -168,7 +168,7 @@ function facewearArticleName(source) {
 }
 
 function articleName(source) {
-  return afSummaryName(source) || eventName(source) || uniqueItemName(source) || facewearArticleName(source) || groupArticleName(source);
+  return DICT['attire:tomestone-title:' + source] || afSummaryName(source) || eventName(source) || uniqueItemName(source) || facewearArticleName(source) || groupArticleName(source);
 }
 
 function localizeCard(card) {
@@ -346,6 +346,25 @@ function sourceCatalogueName(source, kind) {
   if (kind === 'af') return afSetName(source) || uiName(source);
   if (kind === 'seasonal') return eventName(source) || uiName(source);
   return (kind === 'hand-land' ? catalogueSetName(source) : DICT['attire:set:' + source]) || uiName(source);
+}
+
+// Historical tomestone guides use exact headings and structured exchange
+// labels, not arbitrary prose. Preserve quantities, markup and all links.
+function translateTomestoneGuide(title, nativeTitle) {
+  if (hasCategory('glamour') || !hasCategory('tomestone')) return;
+  replaceLabel(title, nativeTitle, DICT['attire:tomestone-title:' + nativeTitle]);
+  const selector = '#postContent :is(h1,h2,h3,h4,h5,h6,th,td,dt,dd,strong,.wp-block-columns p,.rtoc-item a)';
+  for (const element of document.querySelectorAll(selector)) {
+    if (element.closest(EXCLUDED + ',' + ITEM_LINK)) continue;
+    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) continue;
+      const source = node.data.trim();
+      const zh = DICT['attire:tomestone-guide:' + source];
+      if (zh && source !== zh) node.data = node.data.replace(source, () => zh);
+    }
+  }
 }
 
 function translateSourceCatalogue(title, nativeTitle) {
@@ -1007,6 +1026,7 @@ function translateAttirePage() {
 
   if (weaponDetail) translateWeaponDetailMetadata();
   translateSourceCatalogue(title, nativeTitle);
+  translateTomestoneGuide(title, nativeTitle);
   translateSeasonalRewardLinks();
   if (/^\/market\/?$/u.test(location.pathname)) replaceLabel(title, 'マーケット取引可能装備', uiName('マーケット取引可能装備'));
   dedupeRichHeadings();
