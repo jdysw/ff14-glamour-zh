@@ -18,7 +18,7 @@ const CARD = 'a.c--post-link[rel~="bookmark"]';
 const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
-const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者'.split(' '));
+const JOBS = new Set('ナイト 戦士 暗黒騎士 ガンブレイカー 竜騎士 リーパー モンク 侍 忍者 ヴァイパー 吟遊詩人 機工士 踊り子 黒魔道士 召喚士 赤魔道士 青魔道士 ピクトマンサー 白魔道士 学者 占星術師 賢者 採掘師 園芸師 漁師 木工師 鍛冶師 甲冑師 彫金師 革細工師 裁縫師 錬金術師 調理師'.split(' '));
 // Explicit catalogue routes from the site's weapon navigation. The title must
 // also match the native job and weapon type; never infer an article's identity.
 const WEAPON_PAGES = new Map([
@@ -78,6 +78,8 @@ function exactUiName(source) {
 function uiName(source) {
   const exact = exactUiName(source);
   if (exact) return exact;
+  const artifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)アーティファクト$/u.exec(source);
+  if (artifact) return exactUiName(artifact[1] + '編') + ' 职业专属装备';
   const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
   if (count) {
     const name = exactUiName(count[1]);
@@ -116,8 +118,30 @@ function groupArticleName(source) {
   return null;
 }
 
+function afSummaryName(source) {
+  const match = /^(.+?)\s+歴代AF\s+男女着用SSまとめ$/u.exec(source || '');
+  if (!match) return null;
+  const job = jobName(match[1] === '踊り子士' ? '踊り子' : match[1]);
+  return job ? job + '历代职业专属装备试穿图汇总' : null;
+}
+
+function eventName(source) {
+  if (!source) return null;
+  const text = source.replace(/[’']/gu, '').trim();
+  const lookup = value => DICT['attire:event:' + value];
+  const exact = lookup(text);
+  if (exact) return exact;
+  // The event catalogue has English + Japanese, and individual pages
+  // use Japanese / English. Require both labels to identify the same event.
+  for (let i = 1; i < text.length; i++) {
+    const first = lookup(text.slice(0, i).trim().replace(/\/$/u, '').trim());
+    if (first && first === lookup(text.slice(i).replace(/^\s*\/\s*/u, '').trim())) return first;
+  }
+  return null;
+}
+
 function articleName(source) {
-  return uniqueItemName(source) || groupArticleName(source);
+  return afSummaryName(source) || eventName(source) || uniqueItemName(source) || groupArticleName(source);
 }
 
 function localizeCard(card) {
@@ -230,6 +254,50 @@ function translateWeaponCatalogue(title, page) {
     if (caption.closest(ITEM_LINK) || caption.querySelector(ITEM_LINK)) continue;
     const text = caption.textContent.trim();
     replaceLabel(caption, text, uniqueItemName(text));
+  }
+}
+
+function afSetName(source) {
+  const match = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)AF\s*([^/]+)\s*\/.+$/u.exec(source);
+  if (!match) return null;
+  const set = DICT['attire:set:' + match[2].trim()];
+  return set ? exactUiName(match[1] + '編') + ' ' + set : null;
+}
+
+function sourceCatalogueName(source, kind) {
+  if (kind === 'af') return afSetName(source) || uiName(source);
+  if (kind === 'seasonal') return eventName(source) || uiName(source);
+  return DICT['attire:set:' + source] || uiName(source);
+}
+
+function translateSourceCatalogue(title, nativeTitle) {
+  const path = location.pathname.replace(/\/$/u, '');
+  const kind = path === '/hand-land' ? 'hand-land'
+    : path === '/pvp' ? 'pvp' : path === '/s-g' ? 'seasonal'
+      : path === '/gc' ? 'gc' : afSummaryName(nativeTitle) || hasCategory('af-nyuusyu') ? 'af' : null;
+  // Event names and AF index titles are display labels, not item identities.
+  const titleZh = afSummaryName(nativeTitle) || eventName(nativeTitle);
+  if (!hasCategory('glamour')) replaceLabel(title, nativeTitle, titleZh);
+  if (!kind) return;
+  const current = title?.textContent.trim();
+  replaceLabel(title, current, uiName(current));
+  const selector = '#postContent :is(h2,h3,h4,h5,h6,.c--tab-title,.a--richmenu-text,.a--h2rich-maincopy,.a--h2rich-subcopy,.rtoc-item a,a[href])';
+  for (const element of document.querySelectorAll(selector)) {
+    if (element.closest(EXCLUDED + ',' + ITEM_LINK + ',' + CARD) || element.querySelector(ITEM_LINK)) continue;
+    if (element.matches('a[href]') && element.origin !== location.origin && kind !== 'gc') continue;
+    const source = element.textContent.trim();
+    const zh = sourceCatalogueName(source, kind);
+    if (replaceLabel(element, source, zh) || kind !== 'seasonal' || !eventName(source)) continue;
+    // Keep the two nested DOM nodes and their links/icons, removing only
+    // the repeated translated event label.
+    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let node;
+    while ((node = walk.nextNode())) if (node.data.trim()) nodes.push(node);
+    if (nodes.length === 2 && nodes.every(n => eventName(n.data.trim()) === zh)) {
+      nodes[0].data = nodes[0].data.replace(nodes[0].data.trim(), () => zh);
+      nodes[1].data = '';
+    }
   }
 }
 
@@ -524,6 +592,7 @@ function translateAttirePage() {
   }
 
   if (weaponDetail) translateWeaponDetailMetadata();
+  translateSourceCatalogue(title, nativeTitle);
   if (/^\/market\/?$/u.test(location.pathname)) replaceLabel(title, 'マーケット取引可能装備', uiName('マーケット取引可能装備'));
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);

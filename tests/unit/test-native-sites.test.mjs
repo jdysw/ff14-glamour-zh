@@ -1549,6 +1549,57 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
   }
 });
 
+test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async () => {
+  const keys = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(keys.map(key => [key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/hand-land/'});
+  try {
+    const d = dom.document;
+    Object.assign(globalThis,{document:d,window:dom,NodeFilter:dom.NodeFilter});
+    const render = (path, markup) => {
+      globalThis.location = new URL('https://attire.jp'+path);
+      d.body.className = 'page';
+      d.body.innerHTML = markup;
+      translateAttirePage();
+      translateAttirePage();
+    };
+    render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
+      + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
+      + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'
+      + '<p id="author">マインライズ</p><a href="/unknown/">未知のセット</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'采集与制作职业');
+    assert.equal(d.querySelector('.c--tab-title').textContent,'按职业汇总');
+    assert.deepEqual([...d.querySelectorAll('h2,h3')].map(e=>e.textContent),['采集职业专属装备','采矿工']);
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','未知のセット']);
+    assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
+    assert.equal(d.querySelector('#author').textContent,'マインライズ');
+    render('/af-pld/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/af-nyuusyu/">入手方法：歴代ジョブAF</a></div></div>'
+      + '<h1 id="jinrPostTitle">ナイト 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/gallant-surcoat/">新生AFガラント/Gallant</a><a href="/caballarius-cuirass/">黄金AFカバラリアス/Caballarius</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'骑士历代职业专属装备试穿图汇总');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['重生之境 英骑套装','金曦之遗辉 迅骑套装']);
+    render('/pvp/', '<h1 id="jinrPostTitle">PvP装備</h1><section id="postContent"><h3>ヴァートゥ</h3>'
+      + '<a href="/virtus-creed/">ヴァートゥ・クリード</a><h3>プレスティージ・ハイアラガン</h3></section>');
+    assert.deepEqual([...d.querySelectorAll('h3')].map(e=>e.textContent),['美德','威望亚拉戈高位']);
+    assert.equal(d.querySelector('#postContent a').textContent,'美德忠骑套装');
+    render('/s-g/', '<h1 id="jinrPostTitle">シーズナル</h1><section id="postContent"><h2>定期開催</h2>'
+      + '<a href="/heavensturn/"><span>Heavensturn</span><span>降神祭</span></a>'
+      + '<a href="/little-ladies-day/">Little Ladies Day プリンセスデー</a>'
+      + '<p>作者の文章</p></section>');
+    assert.equal(d.querySelector('h1').textContent,'季节活动');
+    assert.equal(d.querySelector('h2').textContent,'定期活动');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['降神节','女儿节']);
+    assert.equal(d.querySelector('#postContent a').pathname,'/heavensturn/');
+    render('/all-saints-wake/', '<h1 id="jinrPostTitle">守護天節 / All Saints’ Wake</h1>');
+    assert.equal(d.querySelector('h1').textContent,'守护天节');
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
 test('装備手帳中文搜索：原站 GET、候选选择及未匹配的原样提交', async () => {
   const keys = ['document','location','window','FormData','innerWidth','innerHeight','__zhxChineseSearchBound'];
   const prior = Object.fromEntries(keys.map(key=>[key,globalThis[key]]));
