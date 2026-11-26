@@ -801,6 +801,77 @@ function translateOtherAcquisitionMetadata() {
   }
 }
 
+// Native weapon details and armor acquisition accordions share these labels.
+// Restrict replacements to an exchange region with both native section markers.
+const EXCHANGE_HEADINGS = ['取引に必要なアイテム', '販売ショップNPC'];
+
+function exchangeDetailName(source) {
+  if (source === '入手方法' || EXCHANGE_HEADINGS.includes(source)
+      || ['クレセントアイル：南征編', 'クレセントアイル：北征編'].includes(source)) {
+    return uiName(source);
+  }
+  const exact = DICT['attire:exchange:' + source];
+  if (exact) return exact;
+  if (['同盟記章', 'セントリオ記章', 'モブハントの戦利品', 'ラザハン', 'オールド・シャーレアン'].includes(source)) {
+    return DICT['attire:tomestone-guide:' + source];
+  }
+  if (['ロウェナ商会の商人', 'モードゥナ', 'イディルシャイア', 'イシュガルド：下層', 'クリスタリウム'].includes(source)) {
+    return DICT['attire:weapon-meta:' + source];
+  }
+  const gcLocation = {
+    'リムサ・ロミンサ：上甲板層': '黒渦団',
+    'グリダニア：新市街': '双蛇党',
+    'ウルダハ：ナル回廊': '不滅隊',
+  };
+  if (Object.hasOwn(gcLocation, source)) return DICT['attire:gc:' + gcLocation[source] + ':' + source];
+  // Current and historical currencies share the authoritative dictionary;
+  // only a known complete currency name may be substituted.
+  const currency = value => {
+    const name = value.replace('：', ':');
+    return DICT_COMMON[name] || DICT['attire:tomestone-guide:' + name];
+  };
+  if (/^アラガントームストーン[:：][^\s]+$/u.test(source)) return currency(source);
+  const former = /^(?:（旧\s*[:：]?\s*(アラガントームストーン[:：][^\s）]+)）|旧\s*[:：]?\s*(アラガントームストーン[:：][^\s]+))$/u.exec(source);
+  if (former) {
+    const zh = currency(former[1] || former[2]);
+    if (zh) return former[1] ? '（旧：' + zh + '）' : '旧：' + zh;
+  }
+  return null;
+}
+
+function translateExchangeMetadata(weaponDetail) {
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  const accordions = [...content.querySelectorAll('.c--accordion-contents')];
+  const regions = weaponDetail || !accordions.length ? [content] : accordions;
+  for (const region of regions) {
+    const nodes = [];
+    const labels = new Set();
+    const walk = document.createTreeWalker(region, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK + ',' + CARD)) continue;
+      const link = parent.closest('a[href]');
+      if (link && link.origin !== location.origin
+          && !(/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+            && /^\/lodestone\/playguide\/db\/shop\/[0-9a-f]{11}\/?$/i.test(link.pathname))) continue;
+      const lines = node.data.split(/(\r?\n)/u);
+      for (const line of lines) if (line.trim()) labels.add(line.trim());
+      nodes.push([node, lines]);
+    }
+    if (!EXCHANGE_HEADINGS.every(label => labels.has(label) || labels.has(uiName(label)))) continue;
+    for (const [text, lines] of nodes) {
+      const translated = lines.map(line => {
+        const source = line.trim();
+        const zh = exchangeDetailName(source);
+        return zh && source !== zh ? line.replace(source, () => zh) : line;
+      }).join('');
+      if (translated !== text.data) text.data = translated;
+    }
+  }
+}
+
 function translateEquipmentMetadata() {
   translateAcquisitionLinks();
   translateAfDetailMetadata();
@@ -1125,7 +1196,10 @@ function translateAttirePage() {
   const isGlamour = hasCategory('glamour');
   const itemDetail = translateOfficialItems(isGlamour ? null : title) && !isGlamour;
   if (itemDetail) translateEquipmentMetadata();
-  if (!isGlamour && (weaponDetail || itemDetail)) translateGrandCompanyMetadata();
+  if (!isGlamour && (weaponDetail || itemDetail)) {
+    translateGrandCompanyMetadata();
+    translateExchangeMetadata(weaponDetail);
+  }
   if (title && !isGlamour && (itemDetail || hasCategory('seriesb'))) {
     const source = title.textContent.trim();
     const zh = groupArticleName(source);
