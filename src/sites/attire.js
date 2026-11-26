@@ -486,6 +486,7 @@ function translateStructuredItems(weaponPage, weaponDetail) {
 }
 
 function equipmentMetadata(source) {
+  if (/^染色[◯○]\s*[（(]条件あり[）)]$/u.test(source)) return uiName('染色◯（条件あり）');
   if (/^染色(?:不可|[◯○×✕])?$/u.test(source) || source === 'マーケット取引可能'
       || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
       || ['女性専用装備','男性専用装備','Fall Guys コラボレーションイベント',
@@ -512,8 +513,31 @@ function translateAcquisitionLinks() {
   }
 }
 
+// The Endwalker and Dawntrail AF entries repeat the same acquisition and
+// dye-unlock instructions. Limit these exact templates to those categories;
+// do not translate free-form author text or quest-link labels here.
+function translateAfDetailMetadata() {
+  if (!hasCategory('artefact5') && !hasCategory('artefact6')) return;
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,a[href]')) continue;
+    // WordPress may use a <br> or a literal newline between fixed sentences.
+    const translated = node.data.split(/(\r?\n)/u).map(line => {
+      const source = line.trim();
+      const zh = DICT['attire:af-detail:' + source]
+        || (source === '染色可能にする方法' && uiName(source));
+      return zh && zh !== source ? line.replace(source, () => zh) : line;
+    }).join('');
+    if (translated !== node.data) node.data = translated;
+  }
+}
+
 function translateEquipmentMetadata() {
   translateAcquisitionLinks();
+  translateAfDetailMetadata();
   for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/shop/"]')) {
     if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     replaceLabel(link, 'スクリップ取引窓口', uiName('スクリップ取引窓口'));
