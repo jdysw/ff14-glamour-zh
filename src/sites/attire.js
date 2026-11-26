@@ -156,7 +156,7 @@ function translateStructuredItems() {
   const title = document.querySelector('#jinrPostTitle');
   const detail = !glamour && !!(title?.dataset.zhxAttireNative || articleName(title?.textContent.trim()));
   for (const link of document.querySelectorAll('#postContent a[href]')) {
-    if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
+    if (link.closest(EXCLUDED + ',' + CARD) || link.origin !== location.origin) continue;
     if (glamour) {
       localizeCompositeLink(link, dyeName);
       continue;
@@ -221,7 +221,7 @@ function localizeRichMenu() {
     }
     if (nodes.length < 2) continue;
     const parts = nodes.map(n => n.data.trim());
-    const combined = DICT['attire:' + parts.join('')];
+    const combined = DICT['attire:' + parts.join('')] || DICT['attire:' + parts.join(' ')];
     const first = uiName(parts[0]);
     const zh = combined || (first && parts.every(part => uiName(part) === first) ? first : null);
     if (!zh) continue;
@@ -256,7 +256,7 @@ function translateAttirePage() {
     const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walk.nextNode())) {
-      if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,a[href*="/lodestone/playguide/db/item/"]')) continue;
       const source = node.data.trim();
       const localized = uiName(source);
       if (localized && source !== localized) node.data = node.data.replace(source, () => localized);
