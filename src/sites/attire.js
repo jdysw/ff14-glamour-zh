@@ -11,7 +11,8 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '#postContent .c--tab-contents :is(h2,h3),#postContent .c--accordion-contents strong,#postContent .c--accordion-title,'
   + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag,.archive.category) #jinrPostTitle,'
   + '#postContent .wp-block-heading,#postContent .wp-block-button__link,#postContent .a--post-category,'
-  + '.widget-title,.widgettitle,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a';
+  + '.widget-title,.widgettitle,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a,'
+  + '.jinr-widget-area .wp-block-heading,#snsShareLabel,#snsShareBottomInner .a--sns-label,.rtoc_open_close,.d--archive-subtitle,#postContent .a--accordion-title';
 const ITEM_LINK = 'a[href*="/lodestone/playguide/db/item/"],a[data-zhx-attire-item]';
 const ITEM = '#postContent :is(' + ITEM_LINK + ')';
 const CARD = 'a.c--post-link[rel~="bookmark"]';
@@ -47,6 +48,7 @@ const WEAPON_PAGES = new Map([
   ['sage_s_arm', ['賢者', '賢具']],
 ]);
 const SITE_TITLE = '〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+const SITE_TITLES = [SITE_TITLE, SITE_TITLE.replace('〖', '【').replace('〗', '】')];
 const breadcrumbTitles = new WeakMap();
 const itemLinks = new WeakMap();
 const itemTitles = new WeakMap();
@@ -112,8 +114,13 @@ function uiName(source) {
     return name ? name + count[2] : null;
   }
   const duty = /^Lv\s*(\d{1,3})\s*ID\s+(.+)$/iu.exec(source);
-  const name = duty && lookupDutyName(duty[2]);
-  return name ? duty[1] + '级副本 ' + name : null;
+  const name = duty && (DICT['attire:' + duty[2]] || lookupDutyName(duty[2]));
+  if (name) return duty[1] + '级副本 ' + name;
+  const market = /^マーケット購入可能[:：]\s*Lv\s*(\d{1,3})\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3})\s*ギャザラー[＆&]クラフター装備$/iu.exec(source);
+  if (market && Number(market[1]) <= Number(market[2]))
+    return '可在市场购买：' + market[1] + '～' + market[2] + '级采集与制作职业装备';
+  const level = /^Lv\s*(\d{1,3})\s*[～〜~]$/iu.exec(source);
+  return level ? level[1] + '级及以上' : null;
 }
 
 // Derive a colour-neutral flower title only when two exact native item
@@ -178,8 +185,14 @@ function facewearArticleName(source) {
   return zh ? zh + '（' + uiName('フェイスアクセサリー') + '）' : null;
 }
 
+function tomestoneTitleName(source) {
+  if (!source) return null;
+  return DICT['attire:tomestone-title:' + source]
+    || DICT['attire:tomestone-title:' + source.replaceAll('【', '〖').replaceAll('】', '〗')];
+}
+
 function articleName(source) {
-  return DICT['attire:tomestone-title:' + source] || afSummaryName(source) || eventName(source) || uniqueItemName(source) || facewearArticleName(source) || groupArticleName(source);
+  return tomestoneTitleName(source) || afSummaryName(source) || eventName(source) || uniqueItemName(source) || facewearArticleName(source) || groupArticleName(source);
 }
 
 function localizeCard(card) {
@@ -266,7 +279,7 @@ function weaponPageAt(pathname) {
 function weaponCatalogueName(source, page) {
   if (!source || !page) return null;
   const [job, type] = page;
-  const normalized = source.replace(/\s+/gu, '');
+  const normalized = source.replace(/\s+/gu, '').replaceAll('【', '〖').replaceAll('】', '〗');
   const native = '〖' + job + '〗' + type;
   if (![native + '一覧', native, type + '一覧', type].includes(normalized)) return null;
   const jobZh = jobName(job);
@@ -386,7 +399,7 @@ function tomestoneGuideLabel(source) {
 
 function translateTomestoneGuide(title, nativeTitle) {
   if (hasCategory('glamour') || !hasCategory('tomestone')) return;
-  replaceLabel(title, nativeTitle, DICT['attire:tomestone-title:' + nativeTitle]);
+  replaceLabel(title, nativeTitle, tomestoneTitleName(nativeTitle));
   const content = document.querySelector('#postContent');
   if (!content) return;
   const selector = 'h1,h2,h3,h4,h5,h6,th,td,dt,dd,strong,li,.wp-block-columns p,.rtoc-item a,.a--h2rich-maincopy,.a--h2rich-subcopy';
@@ -1190,7 +1203,68 @@ function translateOfficialItems(title) {
   return hasItems;
 }
 
+function translateSiteChrome() {
+  for (const [selector, attr] of [['#headerLogoLink', 'title'], ['#headerLogoImage', 'alt']]) {
+    const el = document.querySelector(selector);
+    const source = el?.getAttribute(attr);
+    if (SITE_TITLES.includes(source)) el.setAttribute(attr, uiName(source));
+  }
+  const copyright = document.querySelector('#copyright');
+  const source = copyright?.textContent.trim();
+  const match = source && /^(\d{4}(?:[–—-]\d{4})?\s+)(.+)$/u.exec(source);
+  if (match && SITE_TITLES.includes(match[2]))
+    replaceLabel(copyright, source, match[1] + uiName(match[2]));
+}
+
+function translateWeaponFilter(weaponPage) {
+  if (!weaponPage) return;
+  for (const label of document.querySelectorAll('#postContent .asr .asr-group > summary,#postContent .asr .asr-reset,#postContent .asr .asr-more')) {
+    const source = label.textContent.trim();
+    const more = /^さらに([\d,]+)件表示$/u.exec(source);
+    const zh = more ? '再显示 ' + more[1] + ' 项'
+      : DICT['attire:weapon-meta:' + source] || uiName(source);
+    if (zh) replaceLabel(label, source, zh);
+  }
+  for (const button of document.querySelectorAll('#postContent .asr .asr-card-trigger')) {
+    const source = button.getAttribute('aria-label');
+    const match = source && /^(.+)の詳細を表示$/u.exec(source);
+    const zh = match && uniqueItemName(match[1]);
+    if (zh) button.setAttribute('aria-label', '查看' + zh + '的详细信息');
+    for (const img of button.querySelectorAll('img[alt]')) {
+      const name = uniqueItemName(img.getAttribute('alt'));
+      if (name) img.setAttribute('alt', name);
+    }
+  }
+}
+
+function translateAcquisitionAccordionLabels() {
+  for (const content of document.querySelectorAll('#postContent .c--accordion-contents')) {
+    const heading = content.previousElementSibling;
+    if (!heading?.matches('.a--accordion-title,.c--accordion-title')
+      || !['入手方法などはこちら', uiName('入手方法などはこちら')].includes(heading.textContent.trim())) continue;
+    const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walk.nextNode())) {
+      if (node.parentElement?.closest(EXCLUDED + ',script,style,a[href]')) continue;
+      const source = node.data.trim();
+      if (['マーケット取引可能', '入手方法', 'アチーブメント報酬', 'PvP>フロントライン'].includes(source)) {
+        const zh = uiName(source);
+        if (zh) node.data = node.data.replace(source, () => zh);
+      }
+    }
+  }
+}
+
 function translateSearchControls() {
+  // WordPress block search can omit role/method; translate display attributes
+  // without touching query parameters, input values or form destinations.
+  for (const button of document.querySelectorAll('form.wp-block-search .wp-block-search__button')) {
+    if (button.closest(EXCLUDED)) continue;
+    replaceLabel(button, '検索', uiName('検索'));
+    for (const attr of ['aria-label', 'title']) {
+      if (button.getAttribute(attr) === '検索') button.setAttribute(attr, uiName('検索'));
+    }
+  }
   for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
     const form = input.form;
     if (form?.action !== location.origin + '/') continue;
@@ -1198,6 +1272,9 @@ function translateSearchControls() {
     if (zh && zh !== input.placeholder) input.placeholder = zh;
     for (const button of form.querySelectorAll('button[type="submit"],button:not([type])')) {
       replaceLabel(button, '検索', uiName('検索'));
+      for (const attr of ['aria-label', 'title']) {
+        if (button.getAttribute(attr) === '検索') button.setAttribute(attr, uiName('検索'));
+      }
     }
     // A named submit input contributes its value to the GET request.
     for (const button of form.querySelectorAll('input[type="submit"]:not([name])')) {
@@ -1310,7 +1387,9 @@ function translateAttirePage() {
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   translateRecentPosts();
   translateArchiveControls();
+  translateSiteChrome();
   translateSearchControls();
+  translateWeaponFilter(weaponPage);
   translateLoadMore();
   translateMacroLanding();
   translateFrontlineCalendar();
@@ -1334,6 +1413,7 @@ function translateAttirePage() {
   }
 
   const isGlamour = hasCategory('glamour');
+  if (!isGlamour) translateAcquisitionAccordionLabels();
   const itemDetail = translateOfficialItems(isGlamour ? null : title) && !isGlamour;
   if (itemDetail) translateEquipmentMetadata();
   if (!isGlamour && (weaponDetail || itemDetail)) {
@@ -1350,9 +1430,8 @@ function translateAttirePage() {
   if (nativeTitle && localizedTitle && nativeTitle !== localizedTitle && document.title.startsWith(nativeTitle)) {
     document.title = localizedTitle + document.title.slice(nativeTitle.length);
   }
-  if (document.title.endsWith(SITE_TITLE)) {
-    document.title = document.title.slice(0, -SITE_TITLE.length) + uiName(SITE_TITLE);
-  }
+  const siteTitle = SITE_TITLES.find(label => document.title.endsWith(label));
+  if (siteTitle) document.title = document.title.slice(0, -siteTitle.length) + uiName(siteTitle);
 }
 
 function startAttire() {

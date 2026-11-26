@@ -18,6 +18,9 @@ assert.equal(classify('关于 Miramiru',{ui:true,before:'About Miramiru'}),'ok')
 assert.equal(classify('关于 Miramiru Settings',{ui:true,before:'About Miramiru Settings'}),'wrong');
 assert.equal(classify('Miramiru Settings',{ui:true}),'real');
 assert.equal(classify('NPC',{site:'fc',ui:true}),'exempt');
+assert.equal(classify('Facebook',{site:'attire',ui:true}),'exempt');
+assert.equal(classify('LINE',{site:'attire',ui:true}),'exempt');
+assert.equal(classify('Facebook Settings',{site:'attire',ui:true}),'real');
 assert.equal(classify('Eden',{site:'eden',ui:true}),'exempt');
 assert.equal(classify('从 Lodestone 导入装备',{site:'eden',ui:true,before:'Import equipment from Lodestone'}),'ok');
 assert.equal(classify('本站使用 Google Analytics 进行访问统计。',{site:'eden',ui:true,before:'This site uses Google Analytics'}),'ok');

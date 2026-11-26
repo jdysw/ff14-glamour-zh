@@ -333,6 +333,7 @@ function isAdContext(ctx) {
   return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|amazon|rakuten|sponsor)/i.test(cls);
 }
 function isExempt(t, ctx) {
+  if (ctx.site === 'attire' && /^(?:Facebook|LINE)$/u.test(t)) return true;
   if (ctx.site === 'eden' && /^(?:Eden|HousingEden|en|ja|ko)$/u.test(t)) return true;
   if (SERVER_NAMES.has(t)) return true;
   if (/^[A-Z][A-Za-z ]{1,40}$/.test(t) && /(server|world)/i.test(ctx.cls || '')) return true;

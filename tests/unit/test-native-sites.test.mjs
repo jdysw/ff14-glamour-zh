@@ -1783,6 +1783,32 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
       translateAttirePage();
     };
     assert.ok(_applyV3({candidatePolicy:1,names:'テスト装備・アタイア\t测试套装\t1\t1\n曖昧・アタイア\t测试甲套装\t1\t1\n曖昧アタイア\t测试乙套装\t1\t1\nマインキープ・アタイア\t富矿套装\t0\t0\nファイターアーマー\t勇战套装\t0\t0\nドラゴンランサーアーマー\t枪龙套装\t0\t0\n早乙女装束\t早乙女装束\t0\t0'}));
+    const brand = '【FF14 装備手帳】｜ミラプリ用装備見た目まとめ';
+    const brandZh = '【FF14 装备手帐】｜幻化装备外观汇总';
+    d.title = brand;
+    render('/gladiator_s_arm/', '<header><a id="headerLogoLink" title="'+brand+'"><img id="headerLogoImage" alt="'+brand+'"></a></header>'
+      + '<footer id="copyright">2021–2026 '+brand+'</footer><div class="jinr-widget-area"><h2 class="wp-block-heading">Recent Posts</h2></div>'
+      + '<span id="snsShareLabel">SHARE</span><div id="snsShareBottomInner"><span class="a--sns-label">URL copy</span></div>'
+      + '<form class="wp-block-search" action="/"><button class="wp-block-search__button" aria-label="検索">検索</button></form>'
+      + '<h1 id="jinrPostTitle">【ナイト】片手剣 一覧</h1><section id="postContent">'
+      + '<div class="asr"><details class="asr-group"><summary>種類</summary></details><button class="asr-reset">絞り込み解除</button><button class="asr-more">さらに24件表示</button>'
+      + '<button class="asr-card-trigger" aria-label="テスト装備・アタイアの詳細を表示"><img alt="テスト装備・アタイア"></button></div>'
+      + '<dl><dt class="a--accordion-title">入手方法などはこちら</dt><dd class="c--accordion-contents"><p>マーケット取引可能</p><p id="native-author">未確認の説明文</p></dd></dl></section>'
+      + '<nav><a href="/test/">マーケット購入可能：Lv91～Lv100 ギャザラー＆クラフター装備</a></nav>');
+    assert.equal(d.title,brandZh);
+    assert.equal(d.querySelector('#headerLogoLink').title,brandZh);
+    assert.equal(d.querySelector('#headerLogoImage').alt,brandZh);
+    assert.equal(d.querySelector('#copyright').textContent,'2021–2026 '+brandZh);
+    assert.equal(d.querySelector('.wp-block-search__button').getAttribute('aria-label'),'搜索');
+    assert.equal(d.querySelector('.jinr-widget-area h2').textContent,'最新文章');
+    assert.equal(d.querySelector('#snsShareLabel').textContent,'分享');
+    assert.equal(d.querySelector('.asr-reset').textContent,'清除筛选');
+    assert.equal(d.querySelector('.asr-more').textContent,'再显示 24 项');
+    assert.equal(d.querySelector('.asr-card-trigger').getAttribute('aria-label'),'查看测试套装的详细信息');
+    assert.equal(d.querySelector('.asr-card-trigger img').alt,'测试套装');
+    assert.equal(d.querySelector('.c--accordion-contents p').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#native-author').textContent,'未确认の説明文');
+    assert.equal(d.querySelector('nav a').textContent,'可在市场购买：91～100级采集与制作职业装备');
     render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
       + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
       + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'
