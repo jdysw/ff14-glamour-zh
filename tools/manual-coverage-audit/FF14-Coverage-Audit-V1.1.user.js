@@ -161,7 +161,8 @@
         }
       }
     }
-    if(el.closest?.('nav,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,#jinrPostMeta .a--post-cat,a[rel~="tag"],.a--post-category'))return 'ui';
+    if(el.closest?.('nav,#globalMenuList,#hamburgerMenuList,#footerMenuList,#breadCrumb,#jinrPostMeta .a--post-cat,a[rel~="tag"],.a--post-category,.widget_nav_menu .menu a,a.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a'))return 'ui';
+    if(el.closest?.('#postContent .a--sns-label,#postContent .a--postlist-more'))return 'ui';
     if(glamour&&el.closest?.('#jinrPostTitle,#postContent'))return 'user';
     if(el.closest?.('#jinrPostTitle')){
       const guide=categories.some(a=>a.pathname?.split('/').some(p=>['tomestone','af-nyuusyu','seriesb'].includes(p)));

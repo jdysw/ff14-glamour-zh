@@ -70,6 +70,10 @@ gearNote.closest=selector=>selector==='.c--accordion-contents p'?paragraph:selec
 const gearUrl='https://attire.jp/field-commanders-coat/';
 assert.equal(C.attireScope(gearNote,'text',gearUrl,editorial),'user');
 assert.equal(C.attireScope(gearNote,'text',gearUrl,requirement),'ui');
+const tagCloud={closest:sel=>sel.includes('a.tag-cloud-link')?{}:null};
+assert.equal(C.attireScope(tagCloud,'attr:aria-label',gearUrl,'眼鏡 (12件の項目)'),'ui');
+const sidebar={closest:sel=>sel.includes('.widget_nav_menu .menu a')?{}:null};
+assert.equal(C.attireScope(sidebar,'text',gearUrl,'歴代ジョブAF'),'ui');
 const old=[{status:'ok',site:'fc',url:'https://ff14-fc.com/',state:'a',items:[it('検索する','x')]}];
 const now=[{status:'ok',site:'fc',url:'https://ff14-fc.com/',state:'a',items:[it('搜索','x')]}];
 assert.equal(C.compareRuns(old,now).resolved.length,1);

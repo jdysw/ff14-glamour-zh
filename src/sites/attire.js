@@ -11,8 +11,8 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '#postContent .c--tab-contents :is(h2,h3),#postContent .c--accordion-contents strong,#postContent .c--accordion-title,'
   + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag,.archive.category) #jinrPostTitle,'
   + '#postContent .wp-block-heading,#postContent .wp-block-button__link,#postContent .a--post-category,'
-  + '.widget-title,.widgettitle,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a,'
-  + '.jinr-widget-area .wp-block-heading,#snsShareLabel,#snsShareBottomInner .a--sns-label,.rtoc_open_close,.d--archive-subtitle,#postContent .a--accordion-title';
+  + '.widget-title,.widgettitle,.widget_nav_menu .menu a,.tag-cloud-link,.wp-block-tag-cloud a,.wp-block-categories a,.wp-block-archives a,'
+  + '.jinr-widget-area .wp-block-heading,#snsShareLabel,#snsShareBottomInner .a--sns-label,#postContent .a--sns-label,.rtoc_open_close,.d--archive-subtitle,#postContent .a--accordion-title';
 const ITEM_LINK = 'a[href*="/lodestone/playguide/db/item/"],a[data-zhx-attire-item]';
 const ITEM = '#postContent :is(' + ITEM_LINK + ')';
 const CARD = 'a.c--post-link[rel~="bookmark"]';
@@ -1112,6 +1112,20 @@ function dedupeRichHeadings() {
   }
 }
 
+function translateTagCloudLabels() {
+  // WordPress generates aria-label as "tag name (number of items)".
+  // Localize the description, not the tag slug, count, or link destination.
+  for (const link of document.querySelectorAll('a.tag-cloud-link[aria-label]')) {
+    if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
+    const source = link.getAttribute('aria-label');
+    const match = /^(.+?)\s*[（(]([\d,]+)\s*(?:件(?:の(?:項目|記事|投稿|アイテム))?|個(?:の項目)?|項目|items?|posts?)[）)]$/iu.exec(source);
+    if (!match) continue;
+    const native = match[1].trim();
+    const zh = uiName(native) || native;
+    link.setAttribute('aria-label', zh + '（' + match[2] + ' 项）');
+  }
+}
+
 function translateArchiveControls() {
   // The site's WordPress weekly archive starts with this exact prompt.
   // Change only the display label, never the destination or selected index.
@@ -1352,7 +1366,7 @@ function translateSearchControls() {
 // heading and exact launch link, not the generated commands or form values.
 // Native load-more buttons can sit outside navigation and rich headings.
 function translateLoadMore() {
-  for (const element of document.querySelectorAll('#postContent :is(a[href],button)')) {
+  for (const element of document.querySelectorAll('#postContent :is(a[href],button,.jinr-loadmore .a--postlist-more,.a--postlist-more)')) {
     if (element.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK)) continue;
     if (element.matches('a[href]') && element.origin !== location.origin) continue;
     const source = element.textContent.trim();
@@ -1452,6 +1466,7 @@ function translateAttirePage() {
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
   translateEquipmentImageLabels(weaponDetail);
   translateRecentPosts();
+  translateTagCloudLabels();
   translateArchiveControls();
   translateSiteChrome();
   translateSearchControls();

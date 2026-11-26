@@ -61,6 +61,13 @@ test('实站回归：候选原名、指南空白与概念卡片标题保持正�
     button.title = 'no';
     translateACLPage(button);
     assert.equal(button.title, '否');
+    globalThis.location = new URL('https://www.ffxivcollection.com/policy/');
+    dom.document.body.innerHTML = '<div id="contents"><p>お客様は下記の<a href="https://adssettings.google.com/">Googleアカウントの広告設定ページ</a>で、インタレストベースでの広告掲載に使用されるDoubleClickCookieを無効にできます。また</p></div><aside>お客様は下記の</aside>';
+    translateACLPage();
+    const policy = dom.document.querySelector('#contents p');
+    assert.equal(policy.textContent,'您可以通过下方的Google 账号广告设置页面停用用于个性化广告投放的 DoubleClick Cookie。此外，访问');
+    assert.equal(policy.querySelector('a').href,'https://adssettings.google.com/');
+    assert.equal(dom.document.querySelector('aside').textContent,'お客様は下記の');
   } finally {
     for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
     dom.happyDOM.abort();
@@ -672,6 +679,8 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
       '单件装备描述区域不得被套装标题规则污染');
     assert.equal(_trACLGearsetAlt("フリースピリッツ・アタイア's gearset image."),
       '自由之魂套装的装备展示图');
+    assert.equal(_trACLGearsetAlt("ダメージド・マンダヴィルアタイア's gearset image male."),
+      '破损的绅士套装的装备展示图（男性角色）');
     globalThis.document = { title: 'フリースピリッツ・アタイア ｜ FFXIV ARMOURY COLLECTION' };
     translateACLTitle();
     assert.equal(globalThis.document.title, '自由之魂套装 ｜ FFXIV ARMOURY COLLECTION');
@@ -1372,7 +1381,7 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
       <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
       <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
       <a class="c--post-link" rel="bookmark" href="/glamour-post/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
-      <p>${jp}</p></section><a class="tag-cloud-link" href="/tag/boots/">眼鏡 (12)</a>`;
+      <p>${jp}</p></section><div class="widget_nav_menu"><ul class="menu"><li><a href="/category/af/">歴代ジョブAF</a></li><li><a href="/category/eureka/anemos/">アネモス（染色可能紅蓮AF）</a></li><li><a href="/category/trials/memoria-misera-extreme/">極シタデル・ボズヤ追憶戦</a></li></ul></div><a class="tag-cloud-link" href="/tag/boots/" aria-label="眼鏡 (12件の項目)">眼鏡 (12)</a><a class="tag-cloud-link" href="/tag/other/" aria-label="未知のタグ (3 items)">未知のタグ</a>`;
     translateAttirePage();
     translateAttirePage();
     assert.equal(d.querySelector('nav a').textContent,'蝰蛇剑士');
@@ -1386,6 +1395,9 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.deepEqual([...d.querySelectorAll('.c--post-link img')].map(img=>img.alt),[zh,jp]);
     assert.equal(d.querySelector('#postContent p').textContent,jp);
     assert.equal(d.querySelector('.tag-cloud-link').textContent,'眼镜 (12)');
+    assert.equal(d.querySelector('.tag-cloud-link').getAttribute('aria-label'),'眼镜（12 项）');
+    assert.equal(d.querySelector('a[href="/tag/other/"]').getAttribute('aria-label'),'未知のタグ（3 项）');
+    assert.deepEqual([...d.querySelectorAll('.widget_nav_menu a')].map(a=>a.textContent),['历代职业专属装备','常风（可染色的红莲职业专属装备）','博兹雅堡垒追忆战']);
     d.body.className = 'single';
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
       <section id="postContent"><figure class="wp-block-table"><table><tbody><tr><td>${jp}</td><td>染色不可</td></tr></tbody></table></figure><p>${jp}</p></section>`;

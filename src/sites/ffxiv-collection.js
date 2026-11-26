@@ -215,8 +215,11 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     const setTitle = pe?.closest?.('h1,h2,h3,.related-equipment a')
       && !pe?.closest?.('.item-name,.item-panel')
       ? aclStandaloneSetName(label) : null;
+    const policy = /^\/policy\/?$/u.test(globalThis.location?.pathname || '')
+      && pe?.closest?.('#contents') && DICT_ACL['policy:' + label];
     let next;
-    if (setTitle) next = raw.replace(label, setTitle);
+    if (policy) next = raw.replace(label, () => policy);
+    else if (setTitle) next = raw.replace(label, setTitle);
     else if (label === 'of' && pe?.closest?.('#navigation')) next = raw.replace('of', '/');
     else next = trACL(raw);
     if (next !== raw) {
@@ -235,7 +238,7 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
   }
 
   function _trACLGearsetAlt(value) {
-    const match = value.match(/^(.+?)'s gearset image(?: (female|male) model)?\.$/i);
+    const match = value.match(/^(.+?)'s gearset image(?: (female|male)(?: model)?)?\.$/i);
     if (!match) return null;
     const setName = aclStandaloneSetName(match[1]) || trACL(match[1]);
     if (setName === match[1] || /[ぁ-んァ-ヶー]/.test(setName)) return null;
