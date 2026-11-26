@@ -1281,6 +1281,12 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
       <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
+    d.body.className = 'archive tag tag-mf';
+    d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'男女外观不同');
+    assert.equal(d.querySelector('nav a').textContent,'男女外观不同');
+    assert.equal(d.querySelector('nav a').pathname,'/tag/mf/');
   } finally {
     for (const [name,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;

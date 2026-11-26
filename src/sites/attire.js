@@ -8,7 +8,7 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '#breadCrumb a,#jinrPostMeta .a--post-cat a,a[rel~="tag"],.a--post-category,'
   + '#postContent :is(.a--richmenu-text,.a--h2rich-maincopy,.a--h2rich-subcopy,.c--tab-title,.rtoc-item a),'
   + '#postContent .c--tab-contents :is(h2,h3),#postContent .c--accordion-contents strong,#postContent .c--accordion-title,'
-  + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body.page #jinrPostTitle';
+  + '#postContent #ws h5,body.home #postContent .has-text-align-center a,body:is(.page,.archive.tag) #jinrPostTitle';
 const ITEM = '#postContent a[href*="/lodestone/playguide/db/item/"]';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
