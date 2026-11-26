@@ -1,5 +1,5 @@
 import { CACHE_CAP_LOOKUP, _cacheReg, _en2zhCache, _lcs90, cacheGuard, cacheRegister } from './cache-primitives.js';
-import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data/data-manager.js';
+import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName, resolveAllByName } from './data/data-manager.js';
 import { DICT_FC, dictGetRevision } from './data/dictionary.js';
 // 无本地调用方的基础层符号直接转发，保留旧模块的导出接口。
 export { DAY_MS, _countIncludes, _shortestStr, cacheReset } from './cache-primitives.js';
@@ -139,6 +139,36 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     return sets;
   }
 
+  // Recover missing role-specific series from canonical armor records. Only
+  // several independent, unambiguous armor slots agreeing on one Chinese
+  // prefix may establish a family; do not infer it from a single item or
+  // combine upgraded (RE) and unupgraded versions.
+  function fcBaseRoleSets(nameMap) {
+    const sets = new Map();
+    for (const [native, zh] of Object.entries(nameMap)) {
+      const separator = native.lastIndexOf('・');
+      if (separator < 2 || native.endsWith('RE')) continue;
+      const part = native.slice(separator + 1);
+      const role = Object.entries(FC_ROLE_ZH).find(([ja]) => part.startsWith(ja) && part.length > ja.length);
+      if (!role) continue;
+      const [jaRole, zhRole] = role;
+      const slot = part.slice(jaRole.length);
+      // Explicit armor slots only; do not use furniture, weapons or accessories.
+      if (!/^(?:ヘルム|ハット|サークレット|マスク|キャップ|フード|バイザー|ゴーグル|クラウン|ターバン|ベレー|ヘッドギア|コート|アーマー|メイル|ローブ|ジャケット|チュニック|シャツ|ベスト|ダブレット|ガントレット|グローブ|アームガード|ハーフグローブ|ブレーサー|ミトン|トラウザー|ブレー|ブリーチ|スロップ|キュロット|タイツ|ホーズ|パンツ|ボトム|スカート|ブーツ|サバトン|グリーヴ|シューズ|サンダル|レギンス)$/u.test(slot)) continue;
+      const names = resolveAllByName(native);
+      if (names.length !== 1 || names[0] !== zh) continue;
+      const roleIndex = zh.indexOf(zhRole);
+      if (roleIndex < 2 || roleIndex + zhRole.length >= zh.length) continue;
+      const key = native.slice(0, separator + 1) + jaRole;
+      const localized = zh.slice(0, roleIndex + zhRole.length);
+      const entry = sets.get(key) || { name: localized, slots: new Set() };
+      entry.slots.add(slot);
+      if (entry.name !== localized) entry.name = null;
+      sets.set(key, entry);
+    }
+    return sets;
+  }
+
   function _getItemPfx() {
     if (_itemPfxCache) return _itemPfxCache;
     _itemPfxCache = new Map();
@@ -150,6 +180,9 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
         if (list.length < 2) continue;
         const sub = _lcs90(list);
         if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
+      }
+      for (const [key, {name, slots}] of fcBaseRoleSets(nameMap)) {
+        if (name && slots.size >= 3 && !Object.hasOwn(DICT_FC, key) && !_getSeriesMap().has(key)) _itemPfxCache.set(key, name);
       }
       for (const [key, {name, count}] of fcAugmentedRoleSets(nameMap)) {
         if (name && count >= 3 && !DICT_FC[key]) _itemPfxCache.set(key, name);

@@ -765,6 +765,19 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
     const label = raw.trim();
+    // Recommendation titles sometimes append a role group to a series.
+    // Translate only if the entire native family and every role are known.
+    if (p?.closest?.('#scrollad h5')) {
+      const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
+      if (group) {
+        const base = group[1].trim();
+        const family = _getSeriesMap().get(base) || fcVerifiedSetName(base)
+          || _getItemPfx().get(base) || _getSeriesPfx().get(base) || lookupDutyName(base);
+        const roles = group[2].split('・').map(role => fcUIValue(role.trim()));
+        if (family && roles.every(Boolean)) node.nodeValue = raw.replace(label, () => family + '（' + roles.join('、') + '）');
+        return;
+      }
+    }
     const garoBare = fcGaroBareHeading(node, label);
     if (garoBare !== null) {
       if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
@@ -774,11 +787,22 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const path = globalThis.location?.pathname || '';
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
     const name = fullBody ? label.slice(0, -fullBody.length) : label;
-    if (fcSetTitleContext(p, label, path)
-      && /^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
-      && !(fcUIValue(name) || _getSeriesMap().get(name) || fcVerifiedSetName(name)
-        || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
-        || (!fcItemName(name) && _getItemPfx().get(name)))) return;
+    if (fcSetTitleContext(p, label, path)) {
+      const series = _getSeriesMap().get(name) || fcVerifiedSetName(name)
+        || fcScopedSetName(name, p) || _getSeriesPfx().get(name);
+      // /equipment/ also contains individual clothing and accessories, as
+      // seen in the randomly selected sidebar cards. Exact, unique item
+      // identities must not be blocked by the set-only protection.
+      const candidates = resolveAllByName(name);
+      if (!series && !fullBody && candidates.length === 1 && candidates[0] !== name) {
+        node.nodeValue = raw.replace(label, () => candidates[0]);
+        return;
+      }
+      const prefix = !candidates.length && _getItemPfx().get(name);
+      if (/^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
+          && !(fcUIValue(name) || series || prefix)) return;
+      if (!series && !prefix && candidates.length > 1) return;
+    }
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);

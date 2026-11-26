@@ -336,6 +336,19 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.deepEqual([...document.querySelectorAll('main h1,main h2,main h3')].map(e=>e.textContent),['在 Miramiru 举办自己的比赛','举办流程','奖品规模（参考）','评审公正性','比赛冠名权','自定比赛主题']);
     assert.equal(document.querySelector('main p').textContent,'如需了解页面浏览量、日活跃用户数等具体数据，可联系获取。');
     assert.equal(document.querySelector('aside').textContent,'개최까지의 흐름');
+    globalThis.location = new URL('https://miramiru.co/en/sponsors/');
+    document.body.innerHTML = '<main><h3>1. Reach out</h3><h3>2. Shape the plan</h3><h3>3. Launch &amp; promote</h3></main>';
+    translateMiramiruPage();
+    assert.deepEqual([...document.querySelectorAll('h3')].map(e=>e.textContent),['1. 联系咨询','2. 完善策划','3. 举办与宣传']);
+    globalThis.location = new URL('https://miramiru.co/ko/terms/');
+    document.body.innerHTML = '<main class="legal-content"><p>다음 행위를 금지합니다.</p><p>이 문서는 비공식 한국어 번역본입니다. 법적 구속력이 있는 문서는 <a href="/ja/terms">일본어 원문</a>입니다.</p><li>계정은 언제든지 직접 삭제할 수 있습니다. 삭제 시 관련 데이터도 삭제됩니다.</li></main><aside>다음 행위를 금지합니다.</aside>';
+    translateMiramiruPage();
+    translateMiramiruPage();
+    assert.equal(document.querySelector('main p').textContent,'禁止下列行为。');
+    assert.equal(document.querySelector('main a').textContent,'日文原文');
+    assert.equal(document.querySelector('main a').getAttribute('href'),'/ja/terms');
+    assert.equal(document.querySelector('main li').textContent,'用户可随时自行删除账号。删除账号时，相关数据也会被删除。');
+    assert.equal(document.querySelector('aside').textContent,'다음 행위를 금지합니다.');
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();
@@ -1190,12 +1203,13 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     '<h4 id="item">試験の腕輪</h4>',
     '<a href="/equipment/example/"><span id="home">ビーストハーダー</span></a>',
     '<a href="/equipment/example/"><span id="individual">試験の腕輪</span></a>',
+    '<div id="scrollad"><a href="/equipment/test-cap/"><h5 id="cap">テストキャップ</h5></a><a href="/equipment/test-set/"><h5 id="role-set">テストシリーズ・キャスター</h5></a><a href="/equipment/unknown/"><h5 id="unverified">未知のセット(タンク)</h5></a></div>',
   ].join('');
   try {
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      names: '試験の腕輪\t试验手镯\t1\t0',
+      names: '試験の腕輪\t试验手镯\t1\t0\nテストキャップ\t测试帽\t1\t0\nテストシリーズ・キャスターハット\t测试系列咏咒帽\t1\t0\nテストシリーズ・キャスターローブ\t测试系列咏咒长袍\t1\t0\nテストシリーズ・キャスターグローブ\t测试系列咏咒手套\t1\t0',
       series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧',
     }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
@@ -1208,6 +1222,12 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(fcSetDisplayText(label('item'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('individual'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('home'), 'ビーストハーダー', '兽牧'), '兽牧套装');
+    trimFCNode(label('cap'));
+    trimFCNode(label('role-set'));
+    trimFCNode(label('unverified'));
+    assert.equal(label('cap').nodeValue,'测试帽','推荐栏单件装备不能被套装保护拦截');
+    assert.equal(label('role-set').nodeValue,'测试系列咏咒套装','至少三个一致部件才生成套装展示名称');
+    assert.equal(label('unverified').nodeValue,'未知のセット(タンク)','未知套装不产生半译名');
     globalThis.location = new URL('https://ff14-fc.com/equipment/example/');
     assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
     const detail = source.createElement('h3');

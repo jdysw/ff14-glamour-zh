@@ -34,6 +34,10 @@ assert.equal(classify('从 Lodestone 导入装备',{site:'eden',ui:true,before:'
 assert.equal(classify('本站使用 Google Analytics 进行访问统计。',{site:'eden',ui:true,before:'This site uses Google Analytics'}),'ok');
 assert.equal(classify('FANTASIAN联动 (3)',{site:'fc',ui:true,before:'FANTASIANコラボ (3)'}),'ok');
 assert.equal(classify('Arms',{site:'eden',ui:true}),'real');
+assert.equal(classify('3. 带上话题 #ミラプリレシピ 并发布到 Twitter。（可选）',{site:'eden',ui:true,before:'3. タグ "#ミラプリレシピ" をつけて、Twitterに投稿する。(任意)'}),'ok');
+assert.equal(classify('观看 YouTube 直播',{site:'eden',ui:true,before:'YouTube配信を見る'}),'ok');
+assert.equal(classify('YouTube Settings',{site:'eden',ui:true}),'real');
+assert.equal(classify('未翻訳 #ミラプリレシピ',{site:'eden',ui:true}),'real');
 assert.equal(normalizeSiteUrl('https://www.ffxivcollection.com/sitemap.html/','https://www.ffxivcollection.com/',['www.ffxivcollection.com']),null);
 assert.equal(classify('투영 콘테스트',{ui:true}),'real');
 assert.equal(classify('染色',{site:'collection',ui:true}),'ok','Miramiru terminology must not mark another site as untranslated');
