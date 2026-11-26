@@ -223,7 +223,8 @@ function translateMiramiruTitle() {
   if (path === '/collection' && hasSuffix && label.endsWith(repeatedBrand)) {
     label = label.slice(0, -repeatedBrand.length);
   }
-  const next = translateMiramiruTagline(trMiramiru(label)) + (hasSuffix ? suffix : '');
+  const localized = path === '/sponsors' && knownMiramiruText('sponsors:' + label.trim());
+  const next = translateMiramiruTagline(localized || trMiramiru(label)) + (hasSuffix ? suffix : '');
   if (next !== source) document.title = next;
 }
 

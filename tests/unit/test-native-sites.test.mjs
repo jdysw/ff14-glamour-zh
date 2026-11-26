@@ -44,6 +44,7 @@ test('实站回归：候选原名、指南空白与概念卡片标题保持正�
     assert.equal(weapon.querySelector('.description p').dataset.zhxItem,'女王之荣光');
     assert.equal(decodeURIComponent(weapon.querySelector('a').href),'https://ff14.huijiwiki.com/wiki/物品:女王之荣光');
     assert.ok(dom.document.title.startsWith('女王之荣光'));
+    assert.ok(dom.document.querySelector('.item-panel:last-child a').href.includes('lodestone'),'未知武器保留原链接');
     dom.document.title = 'FFXIV 装備図鑑 | FFXIV ARMOURY COLLECTION';
     translateACLTitle();
     assert.ok(dom.document.title.startsWith('FFXIV 装备图鉴'), '纯汉字词条也要翻译浏览器标题');
@@ -60,7 +61,6 @@ test('实站回归：候选原名、指南空白与概念卡片标题保持正�
     button.title = 'no';
     translateACLPage(button);
     assert.equal(button.title, '否');
-    assert.ok(dom.document.querySelector('.item-panel:last-child a').href.includes('lodestone'),'未知武器保留原链接');
   } finally {
     for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
     dom.happyDOM.abort();
@@ -310,6 +310,14 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     assert.equal(document.querySelector('h1').textContent,'在 Miramiru 举办自己的比赛');
     assert.equal(document.querySelector('h2').textContent,'评审公正性');
     assert.equal(document.querySelector('#other').textContent,'Judging Neutrality');
+    globalThis.location = new URL('https://miramiru.co/ko/sponsors/');
+    document.title = 'Miramiru에서 직접 콘테스트를 주최해 보세요 | Miramiru';
+    document.body.innerHTML = '<main><h1>Miramiru에서 직접 콘테스트를 주최해 보세요</h1><h2>개최까지의 흐름</h2><h2>상품 규모 가이드</h2><h2>심사 중립성에 대하여</h2><h3>콘테스트 네이밍 권리</h3><h3>테마 결정권</h3><p>구체적 PV·DAU 등의 사이트 통계는 문의 시 개별 제공합니다.</p></main><aside>개최까지의 흐름</aside>';
+    translateMiramiruPage();
+    assert.equal(document.title,'在 Miramiru 举办自己的比赛 | Miramiru');
+    assert.deepEqual([...document.querySelectorAll('main h1,main h2,main h3')].map(e=>e.textContent),['在 Miramiru 举办自己的比赛','举办流程','奖品规模（参考）','评审公正性','比赛冠名权','自定比赛主题']);
+    assert.equal(document.querySelector('main p').textContent,'如需了解页面浏览量、日活跃用户数等具体数据，可联系获取。');
+    assert.equal(document.querySelector('aside').textContent,'개최까지의 흐름');
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();
@@ -1362,8 +1370,8 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
       <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索">
       <button type="submit">検索</button><input type="submit" value="検索"><input type="submit" name="action" value="検索"></form>
       <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
-      <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
-      <a class="c--post-link" rel="bookmark" href="/glamour-post/"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
+      <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
+      <a class="c--post-link" rel="bookmark" href="/glamour-post/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
       <p>${jp}</p></section><a class="tag-cloud-link" href="/tag/boots/">眼鏡 (12)</a>`;
     translateAttirePage();
     translateAttirePage();
@@ -1375,6 +1383,7 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('.wp-block-columns a').textContent,zh);
     assert.equal(d.querySelector('.wp-block-columns a').pathname,'/field-commanders-coat/');
     assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(h=>h.textContent),[zh,jp]);
+    assert.deepEqual([...d.querySelectorAll('.c--post-link img')].map(img=>img.alt),[zh,jp]);
     assert.equal(d.querySelector('#postContent p').textContent,jp);
     assert.equal(d.querySelector('.tag-cloud-link').textContent,'眼镜 (12)');
     d.body.className = 'single';
@@ -1866,6 +1875,8 @@ test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async
     assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','富矿套装','测试套装','曖昧','未知のセット']);
     assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
     assert.equal(d.querySelector('#author').textContent,'マインライズ');
+    render('/shadowbringers/', '<section id="postContent"><figure><img alt="極ダイヤウェポン捕獲作戦 武器一覧"><img alt="未確認の説明"></figure></section>');
+    assert.deepEqual([...d.querySelectorAll('figure img')].map(img=>img.alt),['钻石神兵狂想作战 武器一览','未確認の説明']);
     // All expansion catalogues share level-aware Japanese/English headings.
     for (const [path,level] of [['a-realm-reborn',50],['heavensward',60],['stormblood',70],['shadowbringers',80],['endwalker',90],['dawntrail',100]]) {
       const markup = '<section id="postContent"><div><span class="a--h2rich-subcopy">Lv'+level+' Dungeons</span><h2 class="a--h2rich-maincopy">レベル'+level+'ID装備</h2></div>'

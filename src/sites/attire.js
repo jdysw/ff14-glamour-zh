@@ -213,6 +213,14 @@ function localizeCard(card) {
   if (!source) return;
   const exact = articleName(source);
   if (exact) replaceLabel(heading, source, exact);
+  // Card images often repeat their heading in alt. Only replace that
+  // verified label, including on a later pass after the heading was localized.
+  const current = heading.textContent.trim();
+  for (const image of card.querySelectorAll('img[alt]')) {
+    const alt = image.getAttribute('alt').trim();
+    const zh = articleName(alt);
+    if (zh && (alt === source || zh === current) && alt !== zh) image.setAttribute('alt', zh);
+  }
 }
 
 function translateRecentPosts() {
@@ -455,6 +463,32 @@ function translateExpansionCatalogue() {
     if (heading.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK) || heading.querySelector(ITEM_LINK)) continue;
     const source = heading.textContent.trim();
     replaceLabel(heading, source, expansionSectionName(source, path));
+  }
+}
+
+// Translate only exact catalogue captions and verified item names, not
+// arbitrary editor-written image descriptions or player glamour artwork.
+function translateEquipmentImageLabels(weaponDetail) {
+  if (hasCategory('glamour')) return;
+  const path = location.pathname.replace(/\/$/u, '');
+  const expansion = EXPANSION_CATALOGUES.has(path);
+  for (const img of document.querySelectorAll('#postContent img[alt]')) {
+    if (img.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK)) continue;
+    const source = img.getAttribute('alt').trim();
+    if (!source) continue;
+    const blogcard = img.closest('a.o--blogcard-link');
+    let zh;
+    if (blogcard && blogcard.origin === location.origin) {
+      zh = articleName(source);
+    } else if (img.closest('figure') && (weaponDetail || expansion)) {
+      zh = uniqueItemName(source);
+      if (!zh && expansion) {
+        const duty = /^(.+?)\s+武器一覧$/u.exec(source);
+        const name = duty && (DICT['attire:weapon-meta:' + duty[1]] || lookupDutyName(duty[1]));
+        zh = articleName(source) || (name && name + ' 武器一览') || exactUiName(source);
+      }
+    }
+    if (zh && zh !== source) img.setAttribute('alt', zh);
   }
 }
 
@@ -1416,6 +1450,7 @@ function translateAttirePage() {
   if (/^\/market\/?$/u.test(location.pathname)) replaceLabel(title, 'マーケット取引可能装備', uiName('マーケット取引可能装備'));
   dedupeRichHeadings();
   for (const card of document.querySelectorAll(CARD)) localizeCard(card);
+  translateEquipmentImageLabels(weaponDetail);
   translateRecentPosts();
   translateArchiveControls();
   translateSiteChrome();
