@@ -252,6 +252,8 @@ function review(row, translated, evidence, articleTitles) {
   if (names.some(v => /套装套装|装束套装|夏装组合套装|套装装备/u.test(v))) issues.push('duplicate-set-suffix');
   if (new Set(names).size > 1) issues.push('context-disagreement');
   const titles = Object.values(articleTitles).filter(Boolean);
+  if (new Set(titles).size > 1) issues.push('article-title-context-disagreement');
+  if (titles.some(title => /套装(?:[（(][^）)]{1,60}[）)])?装备|套装套装|装束套装|组合套装|·刃・刃/u.test(title))) issues.push('article-title-duplicate-set-suffix');
   if (titles.some(title => KANA.test(title))) issues.push('article-title-kana-residual');
   const expectedHead = ['【FF14】' + row.native, '〖FF14〗' + row.native];
   const nativeHead = expectedHead.find(head => row.articleTitle?.startsWith(head));
@@ -303,7 +305,12 @@ function auditCatalogue(report) {
       .map(line => line.split('\t')).filter(parts => parts.length === 9);
     const normalizeEnglish = value => value.toLowerCase().replace(/[^a-z0-9]/g,'');
     const englishIndex = new Map();
+    const officialZhIndex = new Map();
     for (const [id,zh,en,ja] of officialRows) {
+      if (id && zh) {
+        if (!officialZhIndex.has(zh)) officialZhIndex.set(zh, []);
+        officialZhIndex.get(zh).push({id,zh,en,ja});
+      }
       const key = normalizeEnglish(en);
       if (!key || !/(?:套装|装束|组合)$/u.test(zh)) continue;
       if (!englishIndex.has(key)) englishIndex.set(key,[]);
@@ -315,7 +322,11 @@ function auditCatalogue(report) {
       const evidence = evidenceFor(row.native,identity.rows,series);
       const slug = row.path?.split('/')[2] || '';
       const englishCandidates = englishIndex.get(normalizeEnglish(slug)) || [];
-      return {...row,translated,articleTitles,evidence,englishCandidates,issues:review(row,translated,evidence,articleTitles)};
+      // Include bundle rows even when the runtime equipment index only has the
+      // individual piece or a same-named material. Name matches alone do not
+      // establish page identity and must not clear any existing review flag.
+      const officialNameMatches = officialZhIndex.get(translated.catalogueZh) || [];
+      return {...row,translated,articleTitles,evidence,englishCandidates,officialNameMatches,issues:review(row,translated,evidence,articleTitles)};
     });
     // Identical translated names on different native equipment pages need
     // semantic review, even if every individual card replay is consistent.
@@ -334,6 +345,7 @@ function auditCatalogue(report) {
       for (const issue of row.issues) report.issueCounts[issue] = (report.issueCounts[issue] || 0) + 1;
     report.checked = report.results.length;
     report.reviewCount = report.results.filter(r => r.issues.length).length;
+    report.reviewWithOfficialNameMatch = report.results.filter(r => r.issues.length && r.officialNameMatches.length).length;
     report.articleTitleCount = report.results.filter(r => r.articleTitle).length;
     report.articleCardKanaCount = report.results.filter(r => KANA.test(r.articleTitles.card || '')).length;
     report.documentTitleKanaCount = report.results.filter(r => KANA.test(r.articleTitles.document || '')).length;
@@ -348,5 +360,5 @@ catch(e) { report.errors.push(String(e.message || e)); }
 report.status = report.catalogueComplete && report.checked === report.expected && !report.errors.length ? 'complete' : 'partial';
 report.semanticStatus = report.status !== 'complete' || report.reviewCount ? 'needs-review' : 'no-detected-issues';
 save(report);
-console.log(JSON.stringify({status:report.status,semanticStatus:report.semanticStatus,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,articleTitleCount:report.articleTitleCount,articleCardKanaCount:report.articleCardKanaCount,documentTitleKanaCount:report.documentTitleKanaCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
+console.log(JSON.stringify({status:report.status,semanticStatus:report.semanticStatus,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,reviewWithOfficialNameMatch:report.reviewWithOfficialNameMatch,articleTitleCount:report.articleTitleCount,articleCardKanaCount:report.articleCardKanaCount,documentTitleKanaCount:report.documentTitleKanaCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
 if (report.status !== 'complete') process.exitCode = 1;
