@@ -754,7 +754,14 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
     const translated = ecEditorialImageLabel(el, old) || trEC(old);
     if (!old.endsWith(' image')) return translated;
     const name = old.slice(0, -6);
-    const localized = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
+    // Both catalogues can share a native series name. Determine the
+    // thumbnail's own destination before resolving a display title.
+    const href = el.closest?.('a[href]')?.getAttribute?.('href') || '';
+    const path = href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
+    let localized;
+    if (/^\/accessories\/[^/?#]+(?:[/?#]|$)/u.test(path)) localized = ecAccessoryDisplayName(name);
+    else if (/^\/gearset\/[^/?#]+(?:[/?#]|$)/u.test(path)) localized = ecGearsetDisplayName(name);
+    else localized = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
     return localized ? localized + '图片' : translated;
   }
 

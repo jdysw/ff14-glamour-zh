@@ -318,7 +318,11 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
           '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>' +
           '<a href="/accessories/avalanche-leaders">Avalanche Leader\'s <span>Token Exchange</span></a>' +
           '<a href="/accessories/avalanche-brawlers">Avalanche Brawler\'s Accessories <span>Token Exchange</span></a>' +
-          '<a href="/gearset/festival-neotunic">Festival Neotunic <span>Mogstation Set</span></a>';
+          '<a href="/gearset/festival-neotunic">Festival Neotunic <span>Mogstation Set</span></a>' +
+          '<a href="/gearset/avalanche-leaders"><img id="leader-set" alt="Avalanche Leader\'s image">Avalanche Leader\'s</a>' +
+          '<a href="/gearset/avalanche-brawlers"><img id="brawler-set" alt="Avalanche Brawler\'s image">Avalanche Brawler\'s</a>' +
+          '<a href="https://ffxiv.eorzeacollection.com/accessories/avalanche-leaders"><img id="leader-earring" alt="Avalanche Leader\'s image">Avalanche Leader\'s</a>' +
+          '<a href="/gearset/graffiti-neotunic"><img id="graffiti-set" alt="Graffiti Neotunic image">Graffiti Neotunic</a>';
         translateECPage();
         assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
           [['5.0', '暗影之逆焰'], ['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
@@ -329,6 +333,10 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         assert.equal(d.querySelector('[href="/accessories/avalanche-leaders"]').textContent, '雪崩领导者饰品 代币兑换');
         assert.equal(d.querySelector('[href="/accessories/avalanche-brawlers"]').textContent, '雪崩斗手饰品 代币兑换');
         assert.equal(d.querySelector('[href="/gearset/festival-neotunic"]').textContent, '欢庆新式文化衫套装 商城');
+        assert.deepEqual(['leader-set','brawler-set','leader-earring','graffiti-set'].map(id => d.getElementById(id).alt),
+          ['雪崩领导者套装图片','雪崩斗手套装图片','雪崩领导者饰品图片','涂鸦新式文化衫套装图片']);
+        assert.equal(d.querySelector('[href="/gearset/avalanche-leaders"]').textContent, '雪崩领导者套装');
+        assert.equal(d.querySelector('[href="/gearset/avalanche-brawlers"]').textContent, '雪崩斗手套装');
       });
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/facewear') }, () => {
         d.title = 'Facewear | Eorzea Collection';

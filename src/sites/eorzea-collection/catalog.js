@@ -28,6 +28,7 @@ const EC_GEARSET_ROLE_SERIES = new Map([
 ]);
 const EC_GEARSET_SINGLE_SERIES = new Set([
   "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
+  "Avalanche Leader's", "Avalanche Brawler's",
   'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
   'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
   'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
@@ -45,7 +46,10 @@ const EC_GEARSET_HOODED_FITS = Object.freeze({
 // 这些译名核对自 data/source/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
 // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
 const EC_GEARSET_NAME_EXTRAS = Object.freeze({
-  'Graffiti Neotunic': '涂鸦新式上衣套装',
+  // EC live Gearsets catalogue, distinct from the same-named earring pages.
+  "Avalanche Leader's": '雪崩领导者套装', // Item 52590
+  "Avalanche Brawler's": '雪崩斗手套装', // Item 52589
+  'Graffiti Neotunic': '涂鸦新式文化衫套装', // Items 52433–52435
   'Festival Neotunic': '欢庆新式文化衫套装',
   "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
   'Mistwake': '雾迹',

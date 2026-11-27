@@ -103,7 +103,10 @@ assert.equal(tr('Vana\u0027dielian Casting'), '瓦纳·迪尔咏咒套装');
 assert.equal(tr('Praemagitek Healing'), '前魔导治愈套装');
 assert.equal(tr('Beastmaster\u0027s'), '兽主套装');
 assert.equal(tr('Yozakura'), '夜樱装束');
-assert.equal(tr('Graffiti Neotunic'), '涂鸦新式上衣套装');
+assert.equal(tr('Graffiti Neotunic'), '涂鸦新式文化衫套装');
+assert.equal(tr("Avalanche Leader's"), '雪崩领导者套装');
+assert.equal(tr("Avalanche Brawler's"), '雪崩斗手套装');
+assert.equal(api.ecAccessoryDisplayName("Avalanche Leader's"), '雪崩领导者饰品');
 // An EC Gearset with one item must not gain the same suffix as a real pack.
 assert.equal(tr('Blooming Eyeglasses Set'), '彩花装饰眼镜');
 assert.equal(tr('Chicken Eyeglasses Seasonal Event Gear'), '彩蛋小鸡眼镜 季节活动装备');
