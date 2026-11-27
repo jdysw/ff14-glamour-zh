@@ -12,7 +12,7 @@ permissions:
   actions: read
 jobs:
   ec:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '4983d005c2e6ddc012d8ad811c97dfd1a5493ce7' && github.run_attempt == 1 }}
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'a1098560737f49613217368f430570df0d83d03f' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -28,18 +28,43 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ec-cloud-smoke-redacted
-          run-id: '45965878063'
+          run-id: '45975356392'
           github-token: ${{ github.token }}
           path: tests/.cache/ec-resume/
+      - name: Retrieve initial redacted catalogue observations
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ec-cloud-smoke-redacted
+          run-id: '45962873233'
+          github-token: ${{ github.token }}
+          path: tests/.cache/ec-history/initial/
+      - name: Retrieve second redacted catalogue observations
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ec-cloud-smoke-redacted
+          run-id: '45963607215'
+          github-token: ${{ github.token }}
+          path: tests/.cache/ec-history/second/
+      - name: Retrieve third redacted catalogue observations
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ec-cloud-smoke-redacted
+          run-id: '45965878063'
+          github-token: ${{ github.token }}
+          path: tests/.cache/ec-history/third/
       - name: Prepare exact candidate runtime data and shared collector
         run: |
           npm ci
           npm run build
           mkdir -p tests/.cache/ec-cloud-raw
-          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',priorityPages:['https://ffxiv.eorzeacollection.com/gearsets?page=5','https://ffxiv.eorzeacollection.com/gearsets?page=7','https://ffxiv.eorzeacollection.com/gearsets?page=8'],pageInteractions:{'https://ffxiv.eorzeacollection.com/gearsets?page=7':'orderBy','https://ffxiv.eorzeacollection.com/gearsets?page=8':'rarity'},priorityDetails:['https://ffxiv.eorzeacollection.com/gearset/mica-neotunic','https://ffxiv.eorzeacollection.com/gearset/cosmosuit','https://ffxiv.eorzeacollection.com/gearset/sharlayan-prodigys','https://ffxiv.eorzeacollection.com/gearset/black-cosmos-corsage','https://ffxiv.eorzeacollection.com/gearset/black-hyacinth-corsage','https://ffxiv.eorzeacollection.com/gearset/black-campanula-corsage','https://ffxiv.eorzeacollection.com/gearset/noct'],pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
+          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',priorityPages:['https://ffxiv.eorzeacollection.com/gearsets?page=8','https://ffxiv.eorzeacollection.com/gearsets?page=9','https://ffxiv.eorzeacollection.com/gearsets?page=10'],pageInteractions:{'https://ffxiv.eorzeacollection.com/gearsets?page=8':'rarity'},priorityDetails:['https://ffxiv.eorzeacollection.com/gearset/pelubill','https://ffxiv.eorzeacollection.com/gearset/cloche','https://ffxiv.eorzeacollection.com/gearset/goblin','https://ffxiv.eorzeacollection.com/gearset/spriggan-cap','https://ffxiv.eorzeacollection.com/gearset/coronal','https://ffxiv.eorzeacollection.com/gearset/lords','https://ffxiv.eorzeacollection.com/gearset/onion','https://ffxiv.eorzeacollection.com/gearset/cobalt-tungsten-fending'],pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
           node tests/run.mjs test-coverage-audit test-ec-gearsets unit/test-native-ec.test.mjs
           python3 -m py_compile tools/coverage-audit/ec-cloud-smoke.py tools/coverage-audit/ec-catalog-audit.py
           python3 -m pip install 'playwright==1.55.0'
+      - name: Replay all historical public catalogue names with current resolver
+        env:
+          ZHX_AUDIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node tools/coverage-audit/ec-catalog-replay.mjs tests/.cache/ec-catalog-replay.json tests/.cache/ec-history tests/.cache/ec-resume
       - name: Check public access rules and verify permitted pages
         env:
           BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
@@ -58,5 +83,6 @@ jobs:
           path: |
             tests/.cache/ec-cloud-public/
             tests/.cache/ec-catalog-manifest.json
+            tests/.cache/ec-catalog-replay.json
           retention-days: 14
           if-no-files-found: warn

@@ -153,25 +153,46 @@ def select_filter(page, control):
         raise ValueError("Unknown public select control")
     form = page.locator("form#filter_form")
     select = page.locator("form#filter_form select#" + control)
-    if not form.count() or form.evaluate("(f)=>f.method") != "get" or not select.count() or not select.first.is_visible():
-        return None, None
+    if not form.count() or form.evaluate("(f)=>f.method") != "get" or select.count() != 1:
+        return None, {"control": control, "reason": "public GET select unavailable"}
+    advanced_opened = False
+    if control == "rarity" and not select.is_visible():
+        # The preceding real scan located Advanced Filters in a native
+        # .collapse-trigger. Open it as a normal user would; never force a
+        # hidden option or rewrite the site's DOM / request parameters.
+        trigger = page.locator("form#filter_form .collapse-trigger").filter(
+            has_text=re.compile(r"^\s*(Advanced Filters|高级筛选)\s*$"))
+        if trigger.count() != 1 or not trigger.is_visible():
+            return None, {"control": control, "reason": "advanced filter trigger unavailable"}
+        trigger.click(timeout=5000)
+        try:
+            select.wait_for(state="visible", timeout=5000)
+        except PlaywrightTimeout:
+            return None, {"control": control, "reason": "advanced filter did not open"}
+        advanced_opened = True
+    if not select.is_visible():
+        return None, {"control": control, "reason": "native select hidden"}
     index = select.evaluate("(el)=>[...el.options].findIndex((o,i)=>i!==el.selectedIndex&&!o.disabled&&!o.parentElement.disabled)")
     if index < 0:
         return None, None
     before = select.evaluate("(el)=>el.selectedIndex")
+    original_url = page.url
+    selection = {"control": control, "fromIndex": before, "requestedIndex": index,
+                 "advancedOpened": advanced_opened}
     try:
         with page.expect_navigation(wait_until="domcontentloaded", timeout=5000) as navigation:
             select.select_option(index=index, timeout=5000)
-        return navigation.value, {"control": control, "fromIndex": before, "requestedIndex": index}
+        return navigation.value, selection
     except PlaywrightTimeout:
         # Native select did not submit. Use only the verified GET filter form.
-        if select.count() and select.evaluate("(el)=>el.selectedIndex") == index:
+        if (page.url == original_url and page.evaluate("window.__zhxAuditInjected === true")
+                and select.count() == 1 and select.evaluate("(el)=>el.selectedIndex") == index):
             button = page.locator("form#filter_form button#save")
             if button.count() and button.is_visible() and form.evaluate("(f)=>f.method") == "get":
                 with page.expect_navigation(wait_until="domcontentloaded", timeout=15000) as navigation:
                     button.click(timeout=5000)
-                return navigation.value, {"control": control, "fromIndex": before, "requestedIndex": index}
-        return None, {"control": control, "fromIndex": before, "requestedIndex": index}
+                return navigation.value, selection
+        return None, selection
 
 
 def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
@@ -312,7 +333,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                 response, selected = select_filter(page, action.removeprefix("select-"))
                 state["selection"] = selected
             if not response:
-                state["reason"] = "no verified native navigation"
+                state["reason"] = (state.get("selection") or {}).get("reason", "no verified native navigation")
                 return
             status = response.status
             state["httpStatus"] = status
