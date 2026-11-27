@@ -323,6 +323,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   // the Arcadion division must be translated as a unit instead of producing 中量级級.
   const FC_ARTICLE_SOURCE_LABELS = new Map([
     ['メインクエ', '主线任务'],
+    ['種族装束', '种族服装'],
+    ['守護天節', '守护天节'],
+    ['クリスマス', '圣诞节'],
     ['パンデモニウム天獄', '万魔殿 荒天之狱'],
     ['パンデモニウム煉獄', '万魔殿 炼净之狱'],
     ['パンデモニウム辺獄零式', '零式万魔殿 边境之狱'],
@@ -372,7 +375,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (/^[【〖]FF14[】〗].{1,24}?AF(?:\d{1,2}|[（(]PvP[）)])/u.test(original.trim())) return translated;
     const source = /(?:各種族での)?見た目・入手方法([【〖])([^】〗]{1,100})([】〗])/u.exec(original);
     if (!source) return translated;
-    const zh = FC_ARTICLE_SOURCE_LABELS.get(source[2]) || lookupDutyName(source[2]) || fcUIValue(source[2]);
+    const zh = FC_ARTICLE_SOURCE_LABELS.get(source[2]) || lookupDutyName(source[2]);
     if (!zh) return translated;
     const frame = source[0].startsWith('各種族での') ? '各种族外观·获取方式' : '外观·获取方式';
     return translated.replace(/(?:各種族での見た目・入手方法|見た目・入手方法|各种族外观·获取方式|外观·获取方式)[【〖][^】〗]{1,100}[】〗]/u,
