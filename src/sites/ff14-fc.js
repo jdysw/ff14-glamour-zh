@@ -299,7 +299,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const series = (suffix.test(direct || '') ? direct : null)
       || _getSeriesMap().get(native) || fcVerifiedSetName(native)
       || _getSeriesPfx().get(native) || (!fcItemName(native) && _getItemPfx().get(native));
-    if (!series || series === native) return null;
+    if (!series || (series === native && !suffix.test(series))) return null;
     return suffix.test(series) ? series : series + '套装';
   }
 
@@ -319,17 +319,81 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       + '装备' + levelZh + icon + frame + open + name + close);
   }
 
-  function fcArticleTitle(text, label) {
+  // Article source tags are metadata, not item-name fragments. In particular,
+  // the Arcadion division must be translated as a unit instead of producing 中量级級.
+  const FC_ARTICLE_SOURCE_LABELS = new Map([
+    ['メインクエ', '主线任务'],
+    ['パンデモニウム天獄', '万魔殿 荒天之狱'],
+    ['パンデモニウム煉獄', '万魔殿 炼净之狱'],
+    ['パンデモニウム辺獄零式', '零式万魔殿 边境之狱'],
+    ['希望の園エデン：覚醒編', '伊甸希望乐园 觉醒之章'],
+    ['希望の園エデン：共鳴編', '伊甸希望乐园 共鸣之章'],
+    ['希望の園エデン：再生編', '伊甸希望乐园 再生之章'],
+    ['至天の座アルカディア：ライトヘビー級', '阿卡狄亚登天斗技场 轻量级'],
+    ['至天の座アルカディア：クルーザー級', '阿卡狄亚登天斗技场 中量级'],
+    ['至天の座アルカディア：ヘビー級', '阿卡狄亚登天斗技场 重量级'],
+    ['宝物庫エキサイトロン', '惊奇百宝城'],
+    ['宝物庫 エルピス・ギュムナシオン祭殿', '厄尔庇斯育体宝殿'],
+    ['宝物庫セノーテ・ジャジャグラル', '加加财富天坑'],
+    ['宝の地図G18 宝物庫 ボルト・オネイロン', 'G18藏宝图 巡梦金库'],
+    ['着ぐるみ', '玩偶服'],
+    ['チャイナドレス', '旗袍'],
+    ['シリーズレベル/PvP', '系列等级/PvP'],
+    ['シリーズレベル/PvP/おしゃれ装備', '系列等级/PvP/时装'],
+    ['7.4クラフタースクリップ', '7.4巧手工票'],
+    ['7.4ギャザラースクリップ', '7.4大地工票'],
+    ['7.2クラフタースクリップ', '7.2巧手工票'],
+    ['7.2ギャザラースクリップ', '7.2大地工票'],
+    ['クラフタースクリップ紫貨', '巧手紫票'],
+    ['守護天節2022', '守护天节2022'],
+    ['ヘッドホン装備', '耳机装备'],
+    ['学ラン/制服', '立领校服/制服'],
+    ['牙狼〈GARO〉コラボ', '牙狼〈GARO〉联动'],
+    ['九尾の妖狐', '九尾妖狐'],
+    ['郵便屋さん', '邮差'],
+    ['お姫様', '公主'],
+    ['執事服', '管家服'],
+    ['チマチョゴリ', '朝鲜族传统服装'],
+    ['雪だるま', '雪人'],
+    ['トナカイ着ぐるみ', '驯鹿玩偶服'],
+    ['トナカイ服', '驯鹿服'],
+    ['サスペンダー付きネクタイシャツ', '带背带的领带衬衫'],
+    ['6.0髪飾り', '6.0发饰'],
+    ['エッグハント/着ぐるみ', '彩蛋狩猎/玩偶服'],
+    ['ウサギの着ぐるみ', '兔子玩偶服'],
+    ['フォールガイズコラボ/Fall Guys', '糖豆人联动/Fall Guys'],
+    ['モンハンワイルズ コラボ/MHW', '怪物猎人：荒野联动/MHW'],
+    ['FFタクティクス/FFT', '最终幻想战略版/FFT'],
+  ]);
+
+  function fcArticleSourceLabel(original, translated) {
+    if (!/^[【〖]FF14[】〗]/u.test(original.trim()) || translated === original) return translated;
+    // AF titles end in an outfit name rather than an acquisition-source tag.
+    if (/^[【〖]FF14[】〗].{1,24}?AF(?:\d{1,2}|[（(]PvP[）)])/u.test(original.trim())) return translated;
+    const source = /(?:各種族での)?見た目・入手方法([【〖])([^】〗]{1,100})([】〗])/u.exec(original);
+    if (!source) return translated;
+    const zh = FC_ARTICLE_SOURCE_LABELS.get(source[2]) || lookupDutyName(source[2]) || fcUIValue(source[2]);
+    if (!zh) return translated;
+    const frame = source[0].startsWith('各種族での') ? '各种族外观·获取方式' : '外观·获取方式';
+    return translated.replace(/(?:各種族での見た目・入手方法|見た目・入手方法|各种族外观·获取方式|外观·获取方式)[【〖][^】〗]{1,100}[】〗]/u,
+      () => frame + source[1] + zh + source[3]);
+  }
+
+  function fcArticleTitle(text, label, path, element) {
     // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
     // 较新文章可能省略 👗，直接使用「装備各種族での見た目・入手方法」。
     const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔])|各種族での見た目・入手方法)/u.exec(label);
     if (!match) return null;
     const scoped = FC_VERIFIED_SHORT_SET_PATHS.get(match[2]);
-    const path = globalThis.location?.pathname || '';
-    // 详情页标题与 document.title 并非 DOM 套装标题，需单独恢复已核实的短称。
-    const scopedName = scoped?.path === path ? scoped.zh : null;
-    const name = fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
-    if (!name || name === match[2]) return null;
+    const linked = fcLinkedPath(element);
+    const target = linked === undefined ? path : linked;
+    // Match a full outfit only in an equipment-page or linked catalogue context.
+    const scopedName = scoped?.path === target ? scoped.zh : null;
+    const isOutfit = match[4] === '👗' || !match[4];
+    const setName = isOutfit && /^\/equipment\/[^/]+\/?$/u.test(target || '')
+      ? fcAFArticleSetName(match[2], path, element) : null;
+    const name = setName || fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
+    if (!name || (name === match[2] && !setName)) return null;
     // 仅完整系列名且确有「装備」的文章标题加“套装”；
     // 单件物品与武器继续保留“装备”，未核实系列不猜译。
     const mappedSeries = _getSeriesMap().get(match[2]);
@@ -469,6 +533,10 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
 
   function trFC(text, path = globalThis.location?.pathname || '', element = null) {
     if (!text) return text;
+    return fcArticleSourceLabel(text, trFCText(text, path, element));
+  }
+
+  function trFCText(text, path, element) {
     const t0 = text.trim();
     if (!t0) return text;
     const exact = _trFCExact(text, t0, path);
@@ -480,7 +548,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (t0.length > 120) return text;
     const equipment = fcJobEquipment(text, t0);
     if (equipment !== null) return equipment;
-    const article = fcArticleTitle(text, t0);
+    const article = fcArticleTitle(text, t0, path, element);
     if (article !== null) return article;
     const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
     const s2 = _trFCDecor(text, t0, core);
