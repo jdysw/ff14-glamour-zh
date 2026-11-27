@@ -1231,7 +1231,8 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     '<h4 id="item">試験の腕輪</h4>',
     '<a href="/equipment/example/"><span id="home">ビーストハーダー</span></a>',
     '<a href="/equipment/example/"><span id="individual">試験の腕輪</span></a>',
-    '<div id="scrollad"><a href="/equipment/test-cap/"><h5 id="cap">テストキャップ</h5></a><a href="/equipment/test-set/"><h5 id="role-set">テストシリーズ・キャスター</h5></a><a href="/equipment/unknown/"><h5 id="unverified">未知のセット(タンク)</h5></a></div>',
+    '<div id="scrollad"><a href="/equipment/test-cap/"><h5 id="cap">テストキャップ</h5></a><a href="/equipment/test-set/"><h5 id="role-set">テストシリーズ・キャスター</h5></a><a href="/equipment/unknown/"><h5 id="unverified">未知のセット(タンク)</h5></a><dl><a href="/equipment/garo/"><dt><img id="rec-alt" alt="魔戒法師・陽"></dt><dd><h5 id="rec-title">魔戒法師・陽</h5></dd></a></dl></div>',
+    '<div id="info-drop"><div class="eorzeadb_link" id="drop-item">テストキャップ（頭防具）</div><div class="eorzeadb_link" id="drop-unknown">未知の装備（頭防具）</div></div>',
   ].join('');
   try {
     globalThis.window = dom;
@@ -1239,7 +1240,7 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(_applyV3({
       candidatePolicy: 1,
       names: '試験の腕輪\t试验手镯\t1\t0\nテストキャップ\t测试帽\t1\t0\nテストシリーズ・キャスターハット\t测试系列咏咒帽\t1\t0\nテストシリーズ・キャスターローブ\t测试系列咏咒长袍\t1\t0\nテストシリーズ・キャスターグローブ\t测试系列咏咒手套\t1\t0',
-      series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧',
+      series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧\n魔戒法師の装束・陽|魔戒法师装束·阳',
     }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
     const label = id => source.querySelector('#' + id).firstChild;
@@ -1258,6 +1259,14 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     trimFCNode(label('cap'));
     trimFCNode(label('role-set'));
     trimFCNode(label('unverified'));
+    trimFCNode(label('drop-item'));
+    trimFCNode(label('drop-unknown'));
+    trimFCNode(label('rec-title'));
+    _trFCAttr(source.querySelector('#rec-alt'), 'alt');
+    assert.equal(label('drop-item').nodeValue,'测试帽（头部防具）');
+    assert.equal(label('drop-unknown').nodeValue,'未知の装備（頭防具）','未解析物品保留完整原文');
+    assert.equal(label('rec-title').nodeValue,'魔戒法师装束·阳');
+    assert.equal(source.querySelector('#rec-alt').getAttribute('alt'),'魔戒法师装束·阳');
     assert.equal(label('cap').nodeValue,'测试帽','推荐栏单件装备不能被套装保护拦截');
     assert.equal(label('role-set').nodeValue,'测试系列咏咒套装','至少三个一致部件才生成套装展示名称');
     assert.equal(label('unverified').nodeValue,'未知のセット(タンク)','未知套装不产生半译名');

@@ -802,7 +802,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function fcRecommendationText(node, raw, label) {
-    const exact = fcVerifiedSetName(label) || _getSeriesMap().get(label);
+    const exact = fcVerifiedSetName(label) || fcGaroSetName(label) || _getSeriesMap().get(label);
     if (exact) return fcSetDisplayText(node, raw, raw.replace(label, () => exact));
     const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
     if (!group) return null;
@@ -818,12 +818,31 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return candidates.length === 1 ? raw.replace(label, () => candidates[0]) : raw;
   }
 
+  // Native dungeon drop lists append the equipment slot to the exact item
+  // name. Resolve the complete game identity before translating the suffix.
+  // Unknown/ambiguous names must remain intact for the next data-ready pass.
+  function fcDropItemText(raw, label) {
+    const match = /^(.{1,100}?)[（(](頭防具|胴防具|手防具|脚防具|足防具)[）)]$/u.exec(label);
+    if (!match) return null;
+    const names = resolveAllByName(match[1].trim());
+    const slot = fcUIValue(match[2]);
+    return names.length === 1 && slot
+      ? raw.replace(label, () => names[0] + '（' + slot + '）') : raw;
+  }
+
   function trimFCNode(node) {
     const raw = node.nodeValue;
     const label = raw?.trim();
     if (!label) return;
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
+    if (p?.closest?.('#info-drop .eorzeadb_link')) {
+      const drop = fcDropItemText(raw, label);
+      if (drop !== null) {
+        if (drop !== raw) node.nodeValue = drop;
+        return;
+      }
+    }
     if (p?.closest?.('#scrollad h5,.related_post__equipment .article_list__ttl')) {
       const next = fcRecommendationText(node, raw, label);
       if (next !== null) {
@@ -857,7 +876,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
     const name = fullBody ? label.slice(0, -fullBody.length) : label;
     const series = _getSeriesMap().get(name) || fcVerifiedSetName(name)
-      || fcScopedSetName(name, element) || _getSeriesPfx().get(name);
+      || fcGaroSetName(name) || fcScopedSetName(name, element) || _getSeriesPfx().get(name);
     // Sidebar cards also contain individual clothing and accessories.
     const candidates = resolveAllByName(name);
     if (!series && !fullBody && candidates.length === 1 && candidates[0] !== name) {
@@ -897,9 +916,30 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     }
   }
 
+  // Recommendation thumbnails often repeat the visible title. Use the same
+  // context-sensitive resolver for both, but leave distinct captions alone.
+  function fcRecommendationAlt(image, value) {
+    const heading = image.closest?.('#scrollad dl')?.querySelector('h5');
+    if (!heading) return null;
+    const label = value.trim();
+    const node = { parentElement: heading };
+    const group = fcRecommendationText(node, value, label);
+    const short = group === null ? fcGaroBareHeading(node, label) : null;
+    const next = group ?? (short !== null ? value.replace(label, () => short) : fcCardText(node, value, label));
+    const title = heading.textContent.trim();
+    return title === label || title === next.trim() ? next : null;
+  }
+
   function _trFCAttr(n, key) {
     const value = n.getAttribute(key);
     if (!value || value.length > 160) return;
+    if (key === 'alt') {
+      const card = fcRecommendationAlt(n, value);
+      if (card !== null) {
+        if (card !== value) n.setAttribute(key, card);
+        return;
+      }
+    }
     const match = key === 'title' && value.match(/^View all posts in (.+)$/);
     const group = match && DICT_FC[match[1]];
     const scoped = fcShortSetQuotedAttribute(value, n);
