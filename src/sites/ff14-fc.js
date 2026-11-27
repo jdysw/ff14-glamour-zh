@@ -1108,8 +1108,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   ]);
 
   // The catalogue uses 【】 while native article headings also use 〖〗.
-  // Register only whole-label variants of existing scoped entries.
-  for (const [native, record] of [...FC_VERIFIED_SHORT_SET_PATHS]) {
+  // Register only whole-label variants of existing scoped entries. Newly
+  // appended variants normalize to the same two keys, so iteration terminates.
+  for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
     const alternate = native.replaceAll('【', '〖').replaceAll('】', '〗');
     const catalogue = native.replaceAll('〖', '【').replaceAll('〗', '】');
     for (const variant of [alternate, catalogue]) {
