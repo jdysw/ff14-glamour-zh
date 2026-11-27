@@ -957,7 +957,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['レッド', { path: '/equipment/red/', zh: '赤红套装', strictLink: true }], // Item 20465, 20466, 20467, 20468, 20469
     ['カシミヤ', { path: '/equipment/cashmere/', zh: '羊绒斗篷套装', strictLink: true }], // Item 45246
     ['サマーフォーマル・ドレス', { path: '/equipment/summertide_formal_dress/', zh: '夏令礼裙套装', strictLink: true, itemConflict: true }], // Item 47261
-    ['スプリングドレス', { path: '/equipment/spring_dress/', zh: '春意礼服套装', strictLink: true, itemConflict: true }], // Item 7540
+    ['スプリングドレス', { path: '/equipment/spring_dress/', zh: '春意套装', strictLink: true, itemConflict: true }], // Item 45126; single dress 7540
+    ['グラスレザー', { path: '/equipment/glass_leather/', zh: '玻璃革组合', strictLink: true, itemConflict: true }], // Item 45343; material 27976
     ['アカシア・ディフェンダー', { path: '/equipment/acacia_chromite_of_fending/', zh: '相思木御敌套装', strictLink: true }], // Item 44022
     ['アカシア・スレイヤー', { path: '/equipment/acacia_chromite_of_maiming/', zh: '相思木制敌套装', strictLink: true }], // Item 44022
     ['アカシア・ストライカー', { path: '/equipment/acacia_chromite_of_striking/', zh: '相思木强袭套装', strictLink: true }], // Item 44022
