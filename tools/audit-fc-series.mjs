@@ -13,7 +13,7 @@ import { trimFCNode, _trFCAttr } from '../src/sites/ff14-fc.js';
 const URL = 'https://ff14-fc.com/equipment_series_search/';
 const OUT = path.resolve('tests/.cache/fc-series-audit');
 const KANA = /[\u3041-\u3096\u30a1-\u30fa\u30fd-\u30ff]/u;
-const SUFFIX = /(?:套装|装束|服装组合|夏装组合)(?:·[阴阳])?$/u;
+const SUFFIX = /(?:套装|装束|组合)(?:·[阴阳]|（[^（）]+）)?$/u;
 
 // Run in the original, untranslated document. Only read the site's native
 // search-result cards, not footer recommendations, advertisements or posts.
@@ -271,10 +271,23 @@ function auditCatalogue(report) {
     globalThis.NodeFilter = dom.NodeFilter;
     _fireTablesReady();
     report.dataRows = identity.rows.length;
+    const officialRows = fs.readFileSync('data/source/ff14-items.tsv','utf8').split('\n').slice(1)
+      .map(line => line.split('\t')).filter(parts => parts.length === 9);
+    const normalizeEnglish = value => value.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const englishIndex = new Map();
+    for (const [id,zh,en,ja] of officialRows) {
+      const key = normalizeEnglish(en);
+      if (!key || !/(?:套装|装束|组合)$/u.test(zh)) continue;
+      if (!englishIndex.has(key)) englishIndex.set(key,[]);
+      englishIndex.get(key).push({id,zh,en,ja});
+    }
+    report.officialSourceRows = officialRows.length;
     report.results = report.catalogue.map(row => {
       const translated = replay(row,dom.document);
       const evidence = evidenceFor(row.native,identity.rows,series);
-      return {...row,translated,evidence,issues:review(row,translated,evidence)};
+      const slug = row.path?.split('/')[2] || '';
+      const englishCandidates = englishIndex.get(normalizeEnglish(slug)) || [];
+      return {...row,translated,evidence,englishCandidates,issues:review(row,translated,evidence)};
     });
     report.issueCounts = {};
     for (const row of report.results)

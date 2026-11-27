@@ -1187,6 +1187,14 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.deepEqual([...catalogue.querySelectorAll('h4')].slice(0,3).map(h=>h.textContent),
       ['深红套装','蝰蛇套装','日影兰咏咒套装']);
     assert.notEqual(catalogue.querySelectorAll('h4')[3].textContent,'日影兰咏咒套装');
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/mens_black_summer/"></a></dt><dd><h4>ブラックサマー（男性用）</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/ao_dai/"></a></dt><dd><h4>アオザイ</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/doctores_tank/"></a></dt><dd><h4>ドクトル(タンク・スレイヤー)</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/anemos_chivalrous/"></a></dt><dd><h4>シヴァルラス・アネモス</h4></dd></dl></div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h=>h.textContent),
+      ['纯黑男式夏装组合','奥黛套装','教练套装（防护、制敌）','常风侠义套装']);
     catalogue.remove();
     globalThis.location = new URL('https://ff14-fc.com/equipment/of_light/');
     assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
