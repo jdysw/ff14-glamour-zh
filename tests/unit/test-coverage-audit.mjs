@@ -52,6 +52,8 @@ assert.equal(templateKey('https://attire.jp/arms/book-of-electrum/'),templateKey
 assert.notEqual(templateKey('https://attire.jp/?s=フィールドコマンダーコート'),templateKey('https://attire.jp/'));
 assert.equal(normalizeSiteUrl('https://attire.jp/wp-login.php','https://attire.jp/', ['attire.jp']),null);
 assert.equal(classify('入手方法',{site:'attire',ui:true,scope:'ui',cls:'a--post-title'}),'real');
+assert.equal(classify('フィールドコマンダーコート',{site:'attire',scope:'item',cls:'a--post-title d--bold c--post-contents'}),'real');
+assert.equal(classify('フィールドコマンダーコート',{site:'attire',scope:'user',user:true,cls:'a--post-title'}),'user');
 assert.equal(classify('検索',{site:'eden',ui:true}),'real');
 assert.equal(normalizeSiteUrl('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private', 'https://mirapri.ff14eden.work/', ['mirapri.ff14eden.work']), 'https://mirapri.ff14eden.work/#/components/popular-equipment');
 assert.notEqual(templateKey('https://mirapri.ff14eden.work/#/'),templateKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));

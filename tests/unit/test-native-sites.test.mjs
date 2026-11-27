@@ -1489,8 +1489,8 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
       <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索">
       <button type="submit">検索</button><input type="submit" value="検索"><input type="submit" name="action" value="検索"></form>
       <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
-      <a class="c--post-link" rel="bookmark" href="/field-commanders-coat/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-achievement">アチーブメント報酬</span></a>
-      <a class="c--post-link" rel="bookmark" href="/glamour-post/"><img alt="${jp}"><h2 class="a--post-title">${jp}</h2><span class="a--post-category category-glamour">ミラプリ</span></a>
+      <article class="o--postlist-item"><a class="c--post-link" href="/field-commanders-coat/"><img alt="${jp}"><div class="a--post-title d--bold c--post-contents">${jp}</div><div class="a--post-category c--post-meta">アチーブメント報酬</div></a></article>
+      <article class="o--postlist-item"><a class="c--post-link" href="/glamour-post/"><img alt="${jp}"><div class="a--post-title">${jp}</div><div class="a--post-category c--post-meta">ミラプリ</div></a></article>
       <p>${jp}</p></section><div class="widget_nav_menu"><ul class="menu"><li><a href="/category/af/">歴代ジョブAF</a></li><li><a href="/category/eureka/anemos/">アネモス（染色可能紅蓮AF）</a></li><li><a href="/category/trials/memoria-misera-extreme/">極シタデル・ボズヤ追憶戦</a></li></ul></div><a class="tag-cloud-link" href="/tag/boots/" aria-label="眼鏡 (12件の項目)">眼鏡 (12)</a><a class="tag-cloud-link" href="/tag/other/" aria-label="未知のタグ (3 items)">未知のタグ</a>`;
     translateAttirePage();
     translateAttirePage();

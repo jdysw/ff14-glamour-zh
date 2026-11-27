@@ -130,10 +130,14 @@
   }
   function attireScope(el,kind,url,text){
     if(el.closest?.('a[href*="/lodestone/playguide/db/item/"],[data-zhx-attire-item]'))return 'item';
-    const card=el.closest?.('a.c--post-link[rel~="bookmark"]');
+    const card=el.closest?.('a.c--post-link[rel~="bookmark"],.o--postlist-item > a.c--post-link[href]');
     if(card){
       if(el.closest?.('.a--post-category'))return 'ui';
-      if(card.querySelector?.('.a--post-category.category-glamour'))return 'user';
+      const category=card.querySelector?.('.a--post-category');
+      const label=category?.textContent?.trim();
+      const title=card.querySelector?.('.a--post-title')?.textContent?.trim()||'';
+      if(!label||category.classList?.contains('category-glamour')||['ミラプリ','幻化'].includes(label)
+        ||/^(?:ミラプリ|幻化)\s*[:：]/u.test(title))return 'user';
       if(kind==='attr:alt'||el.closest?.('.a--post-title'))return 'item';
     }
     if(el.closest?.('#comments,.comment-list,.a--post-author,.widget_recent_entries'))return 'user';
@@ -202,7 +206,7 @@
     let scope='unknown';
     if(ad)scope='ad';
     else if(echo)scope='user';
-    else if(site==='ronka'&&siteScope==='item'&&!control)scope='item';
+    else if(siteScope==='item'&&!control&&(site==='ronka'||site==='attire'&&/\ba--post-title\b/u.test(cls)))scope='item';
     else if((authored||likelyGallery||artImage||siteScope==='user') && siteScope!=='ui' && (!control||kind==='attr:alt'))scope='user';
     else if(item && !control)scope='item';
     else if(kind==='document:title')scope='metadata';
@@ -303,7 +307,7 @@
         let scope='unknown';
         if(ctx.ad)scope='ad';
         else if(ctx.queryEcho===true)scope='user';
-        else if(site==='ronka'&&ctx.scope==='item'&&!ctx.control)scope='item';
+        else if(ctx.scope==='item'&&!ctx.control&&(site==='ronka'||site==='attire'&&!ctx.user&&/\ba--post-title\b/u.test(String(ctx.cls||''))))scope='item';
         else if(ctx.scope==='ui'&&!ctx.user)scope='ui';
         else if(ctx.scope==='user'&&it.kind==='attr:alt'||authored&&!ctx.control)scope='user';
         else if(itemName&&!ctx.control)scope='item';

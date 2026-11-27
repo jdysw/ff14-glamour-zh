@@ -15,7 +15,7 @@ const UI = 'nav a,#globalMenuList a,#hamburgerMenuList a,#footerMenuList a,.a--s
   + '.jinr-widget-area .wp-block-heading,#snsShareLabel,#snsShareBottomInner .a--sns-label,#postContent .a--sns-label,.rtoc_open_close,.d--archive-subtitle,#postContent .a--accordion-title';
 const ITEM_LINK = 'a[href*="/lodestone/playguide/db/item/"],a[data-zhx-attire-item]';
 const ITEM = '#postContent :is(' + ITEM_LINK + ')';
-const CARD = 'a.c--post-link[rel~="bookmark"]';
+const CARD = 'a.c--post-link[rel~="bookmark"],.o--postlist-item > a.c--post-link[href]';
 const RECENT = '.widget_recent_entries a,.wp-block-latest-posts__post-title';
 const LODESTONE_ITEM = /^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com\/lodestone\/playguide\/db\/item\/([0-9a-f]{11})\/?(?:\?patch=latest)?$/i;
 const EXCLUDED = 'form textarea,input,[contenteditable],#comments,.comment-list';
@@ -222,10 +222,14 @@ function articleName(source) {
 function localizeCard(card) {
   if (card.closest(EXCLUDED) || card.origin !== location.origin) return;
   const category = card.querySelector('.a--post-category');
-  if (!category || category.classList.contains('category-glamour')) return;
   const heading = card.querySelector('.a--post-title');
   const source = heading?.textContent.trim();
-  if (!source) return;
+  // Some JIN:R list templates omit the category slug class and bookmark
+  // relation. The explicit glamour category/title still protects creator text.
+  const categoryLabel = category?.textContent.trim();
+  if (!categoryLabel || category.classList.contains('category-glamour')
+    || ['ミラプリ', '幻化'].includes(categoryLabel) || !source
+    || /^(?:ミラプリ|幻化)\s*[:：]/u.test(source)) return;
   const exact = articleName(source);
   if (exact) replaceLabel(heading, source, exact);
   // Card images often repeat their heading in alt. Only replace that
@@ -233,8 +237,10 @@ function localizeCard(card) {
   const current = heading.textContent.trim();
   for (const image of card.querySelectorAll('img[alt]')) {
     const alt = image.getAttribute('alt').trim();
-    const zh = articleName(alt);
-    if (zh && (alt === source || zh === current) && alt !== zh) image.setAttribute('alt', zh);
+    // An independently verified exact item name is also safe when the
+    // thumbnail depicts a different piece from the article heading.
+    const zh = uniqueItemName(alt) || ((alt === source || articleName(alt) === current) && articleName(alt));
+    if (zh && alt !== zh) image.setAttribute('alt', zh);
   }
 }
 

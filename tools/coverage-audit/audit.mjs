@@ -334,7 +334,7 @@ function isUserContent(t, ctx) {
   if (ctx.queryEcho === true || ctx.scope === 'user' && ctx.kind === 'attr:alt') return true;
   if (ctx.control) return false;
   if (ctx.user) return true;
-  if (ctx.site === 'attire' && ctx.scope === 'ui') return false;
+  if (ctx.site === 'attire' && (ctx.scope === 'ui' || ctx.scope === 'item' && /\ba--post-title\b/u.test(ctx.cls || ''))) return false;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
   if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;
   // Creation / publication timestamps belong to post metadata, not authored UI.
