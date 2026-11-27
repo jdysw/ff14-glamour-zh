@@ -75,7 +75,7 @@ const official=indexOfficialItems('id\tzh\ten\tja\ta\tb\tc\td\te\n9289\t朴素�
 const idEvidence=redactItems([
   {kind:'text',before:'ロングスカート',text:'长裙',path:'a',ctx:{scope:'item'}},
   {kind:'text',before:'ロングスカート',text:'朴素长裙',path:'b',ctx:{scope:'item'}},
-  {kind:'text',before:'玩家原创名称',text:'未翻訳',path:'c',ctx:{scope:'item'}},
+  {kind:'text',before:'玩家原创名称',text:'未翻訳の装備',path:'c',ctx:{scope:'item'}},
   {kind:'text',before:'ロングスカート',text:'玩家私人内容',path:'d',ctx:{scope:'user',user:true}},
 ],'fc',official);
 assert.deepEqual(idEvidence[0].itemIdentityEvidence,{status:'name-needs-review',candidateIds:['9289'],candidateCount:1});

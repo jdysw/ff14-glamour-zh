@@ -1046,6 +1046,8 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     cards.forEach(card => trimFCNode(card.firstChild));
     assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
     assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
+    assert.equal(trFC("イゼル・コスチュームセット"), "冰心装备套装");
+    assert.equal(trFC("【FF14】イゼル・コスチュームセット装備👗各種族での見た目・入手方法【氷の巫女イゼル】"), "【FF14】冰心装备套装👗各种族外观·获取方式【冰之巫女伊塞勒】");
     // Exact Item bundle names verified against the offline multilingual data.
     for (const [native, path, zh, title, localized] of [
       ["アーマーガッパ","/equipment/imp/","河童蓑衣装备套装","【FF14】アーマーガッパ装備👗各種族での見た目・入手方法【着ぐるみ】","【FF14】河童蓑衣装备套装👗各种族外观·获取方式【玩偶服】"],
@@ -2148,6 +2150,13 @@ test('装備手帳武器汇总：职业标题、等级分段、图注及标签',
     translateAttirePage();
     assert.equal(d.querySelector('#old-currency').textContent,'（旧：亚拉戈经典神典石）');
     assert.equal(d.querySelector('#hunt-vendor').innerHTML,'嘉·拉克莎<br>旧萨雷安');
+    const figure = d.createElement('figure');
+    const photo = d.createElement('img');
+    photo.alt = "ムーンワード・ロングソード（Moonward Longsword）— FF14 IL570 Lv90 ナイト用片手剣、モブハントの戦利品で交換できるMoonward武器の見た目・外観画像 / Appearance of the FF14 IL570 Paladin sword “Moonward Longsword”, obtainable via Hunt currency.";
+    figure.append(photo);
+    d.querySelector('#postContent').append(figure);
+    translateAttirePage();
+    assert.equal(photo.alt, "月卫长剑（Moonward Longsword）—— FF14 品级570、90级骑士用单手剑，可使用怪物狩猎的战利品兑换的月卫武器外观展示图。");
     globalThis.location = new URL('https://attire.jp/market/');
     d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
     translateAttirePage();

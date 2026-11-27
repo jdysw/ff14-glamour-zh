@@ -509,6 +509,8 @@ function equipmentImageName(img, source, weaponDetail, expansion) {
   const blogcard = img.closest('a.o--blogcard-link');
   if (blogcard?.origin === location.origin) return articleName(source);
   if (!img.closest('figure') || !(weaponDetail || expansion)) return null;
+  const caption = weaponDetail && DICT['attire:weapon-image:' + source];
+  if (caption) return caption;
   const exact = uniqueItemName(source);
   if (exact || !expansion) return exact;
   const duty = /(?<!\s)\s+武器一覧$/u.exec(source);
