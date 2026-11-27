@@ -111,6 +111,11 @@ assert.equal(api.ecAccessoryDisplayName("Avalanche Leader's"), '雪崩领导者�
 assert.equal(tr('Blooming Eyeglasses Set'), '彩花装饰眼镜');
 assert.equal(tr('Chicken Eyeglasses Seasonal Event Gear'), '彩蛋小鸡眼镜 季节活动装备');
 assert.equal(tr('Masha Neotunic'), '大码马夏文化衫');
+for (const [title, zh] of [["Cosmic Explorer's","宇宙探索者套装"],["Comfy Valentione","舒心恋人套装"],["Cozy Valentione","温暖恋人套装"],["Powersuit","宇宙动力服套装"],["Narumi Neotunic","大码鸣海文化衫"],["Picot Neotunic","大码皮科特文化衫"],["Ulala Neotunic","大码乌拉拉文化衫"]]) {
+  assert.equal(tr(title), zh);
+  assert.equal(tr(title + ' Set'), zh);
+  assert.equal(tr(title + ' Seasonal Event Gear'), zh + ' 季节活动装备');
+}
 assert.equal(tr("Aunt Tii's Neotunic Set"), '缇姨塔可饼新式文化衫套装');
 assert.equal(tr('Unverified Eyeglasses'), null);
 assert.equal(tr('Plain Hooded'), '素色卫衣套装');
@@ -185,6 +190,11 @@ for (const [en, zh] of [
   ['Galatea Attire', '伽拉忒亚装备套装'],
   ['Hope Attire [F]', '希望套装【女】'],
   ['Alpha Wolf Attire', '头狼套装'],
+  ['Comfy Valentione Attire', '舒心恋人套装'],
+  ['Cozy Valentione Attire', '温暖恋人套装'],
+  ['Oversized Narumi Neotunic', '大码鸣海文化衫'],
+  ['Oversized Picot Neotunic', '大码皮科特文化衫'],
+  ['Oversized Ulala Neotunic', '大码乌拉拉文化衫'],
 ]) {
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }

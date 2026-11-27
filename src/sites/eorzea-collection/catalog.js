@@ -29,6 +29,7 @@ const EC_GEARSET_ROLE_SERIES = new Map([
 const EC_GEARSET_SINGLE_SERIES = new Set([
   "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
   "Avalanche Leader's", "Avalanche Brawler's",
+  "Cosmic Explorer's", 'Comfy Valentione', 'Cozy Valentione', 'Powersuit',
   'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
   'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
   'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
@@ -49,6 +50,10 @@ const EC_GEARSET_NAME_EXTRAS = Object.freeze({
   // EC live Gearsets catalogue, distinct from the same-named earring pages.
   "Avalanche Leader's": '雪崩领导者套装', // Item 52590
   "Avalanche Brawler's": '雪崩斗手套装', // Item 52589
+  "Cosmic Explorer's": '宇宙探索者套装', // Both gender variants 52599/52603
+  'Comfy Valentione': '舒心恋人套装', // Item 50715
+  'Cozy Valentione': '温暖恋人套装', // Item 50714
+  'Powersuit': '宇宙动力服套装', // Two pieces 50301/50302
   'Graffiti Neotunic': '涂鸦新式文化衫套装', // Items 52433–52435
   'Festival Neotunic': '欢庆新式文化衫套装',
   "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
@@ -79,7 +84,7 @@ const EC_GEARSET_NAME_EXTRAS = Object.freeze({
   'Star Tech Gathering': '星际科技大地套装',
 });
 // EC labels every /gearset page "Set", but these verified pages each
-// link to just one official item (FFXIV item IDs 50285–50290 and 50849).
+// link to just one official item (FFXIV item IDs 50285–50290 and 50848–50851).
 // Use the item's official name even when EC drops its fit from the title.
 const EC_SINGLE_ITEM_GEARSETS = new Map([
   ['Blooming Eyeglasses', '彩花装饰眼镜'],
@@ -89,6 +94,9 @@ const EC_SINGLE_ITEM_GEARSETS = new Map([
   ['Slim Frame Eggy Eyeglasses', '窄框彩蛋眼镜'],
   ['Spriggan Eyeglasses', '魔石精眼镜'],
   ['Masha Neotunic', '大码马夏文化衫'],
+  ['Narumi Neotunic', '大码鸣海文化衫'], // Item 50850
+  ['Picot Neotunic', '大码皮科特文化衫'], // Item 50851
+  ['Ulala Neotunic', '大码乌拉拉文化衫'], // Item 50848
 ]);
 // 分类后缀仅用于解析卡片同节点文本；不允许把来源名误识别为套装名。
 const EC_GEARSET_SOURCES = [

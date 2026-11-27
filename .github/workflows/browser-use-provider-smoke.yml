@@ -9,9 +9,10 @@ on:
       - 'tools/coverage-audit/ec-catalog-audit.py'
 permissions:
   contents: read
+  actions: read
 jobs:
   ec:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '1c8766384d504846dc5f01ab5a2766b575558bb1' && github.run_attempt == 1 }}
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'd12a2003c15391949954d501bcbb2f1cd955f4b6' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -23,13 +24,20 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Retrieve previous public catalogue evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ec-cloud-smoke-redacted
+          run-id: '45962873233'
+          github-token: ${{ github.token }}
+          path: tests/.cache/ec-resume/
       - name: Prepare exact candidate runtime data and shared collector
         run: |
           npm ci
           npm run build
           mkdir -p tests/.cache/ec-cloud-raw
-          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
-          node tests/run.mjs test-coverage-audit unit/test-native-ec.test.mjs
+          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',priorityPages:['https://ffxiv.eorzeacollection.com/gearsets?page=2','https://ffxiv.eorzeacollection.com/fashion-accessories?page=2','https://ffxiv.eorzeacollection.com/gearsets?page=3','https://ffxiv.eorzeacollection.com/gearsets?page=4'],priorityDetails:['https://ffxiv.eorzeacollection.com/gearset/cosmic-explorers','https://ffxiv.eorzeacollection.com/gearset/narumi-neotunic','https://ffxiv.eorzeacollection.com/gearset/picot-neotunic','https://ffxiv.eorzeacollection.com/gearset/ulala-neotunic','https://ffxiv.eorzeacollection.com/gearset/comfy-valentione','https://ffxiv.eorzeacollection.com/gearset/cozy-valentione','https://ffxiv.eorzeacollection.com/gearset/powersuit'],pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
+          node tests/run.mjs test-coverage-audit test-ec-gearsets unit/test-native-ec.test.mjs
           python3 -m py_compile tools/coverage-audit/ec-cloud-smoke.py tools/coverage-audit/ec-catalog-audit.py
           python3 -m pip install 'playwright==1.55.0'
       - name: Check public access rules and verify permitted pages

@@ -175,10 +175,28 @@ def select_piece(page):
 def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
     scripts = {**scripts, "catalog_inventory": INVENTORY_JS}
     started = time.monotonic()
-    visited = []
+    resume_path = ROOT / "tests/.cache/ec-resume/ec-catalog-manifest.json"
+    prior = json.loads(resume_path.read_text(encoding="utf-8")) if resume_path.exists() else {}
+    if prior and prior.get("stoppedOnAccessDenial"):
+        raise RuntimeError("Previous batch stopped on site denial; do not resume")
+    previous_revision = prior.get("revision")
+    visited = [{**row, "revision": row.get("revision", previous_revision)} for row in prior.get("visited", [])]
+    previous_count = len(visited)
     discovered = {}
-    summaries = {}
-    interactions = []
+    observed_pages = set()
+    for old in visited:
+        inventory = old.get("inventory", {})
+        for url in inventory.get("details", []):
+            route = public_route(url)
+            if route and DETAIL_RE.fullmatch(route) and url == ORIGIN + route:
+                discovered.setdefault(url, old["id"])
+        for url in inventory.get("pagination", {}).get("observedPageLinks", []):
+            path = public_route(url)
+            params = parse_qsl(urlsplit(url).query)
+            if path in LIST_PATHS and len(params) == 1 and params[0][0] == "page" and re.fullmatch(r"[1-9]\d{0,5}", params[0][1]):
+                observed_pages.add(url)
+    summaries = dict(prior.get("cataloguePagination", {}))
+    interactions = [{**row, "revision": row.get("revision", previous_revision)} for row in prior.get("interactions", [])]
     denied = False
     documents = 0
 
@@ -191,9 +209,13 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
         after = clean_inventory(row.pop("inventoryAfter", None), cfg["url"])
         # JSON evidence for every completed/failed attempt remains separate
         # from the manifest. State identifiers cannot hide a failed scan.
+        requested_page = dict(parse_qsl(urlsplit(cfg["url"]).query)).get("page")
+        if requested_page and row["status"] == "ok" and before.get("pagination", {}).get("current") != int(requested_page):
+            row.update(status="failed", error="requested pagination state not confirmed")
         save(row)
         key = cfg["id"]
         visited.append({"id": key, "url": cfg["url"], "status": row["status"],
+                        "revision": os.environ.get("ZHX_AUDIT_SHA", ""),
                         "httpStatus": row.get("httpStatus", 0), "error": row.get("error"),
                         "before": row.get("beforeCount", 0), "after": len(row.get("items", [])),
                         "inventory": before, "translatedInventory": after})
@@ -213,6 +235,8 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
         data = {
             "revision": os.environ.get("ZHX_AUDIT_SHA", ""), "status": "partial",
             "documentBudget": MAX_DOCUMENTS, "documentAttempts": documents,
+            "priorVisitRecords": previous_count, "currentBatchVisitRecords": len(visited)-previous_count,
+            "priorRevision": previous_revision,
             "cataloguePagination": summaries, "visited": visited, "interactions": interactions,
             "discoveredDetailCount": len(discovered), "pendingDetails": pending,
             "stoppedOnAccessDenial": denied,
@@ -238,7 +262,19 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
             return False
         route_path = public_route(seed["url"])
         cfg = {"id": seed["id"] + "-" + action, "url": seed["url"]}
-        state = {"id": cfg["id"], "kind": action, "status": "not-verified"}
+        state = {"id": cfg["id"], "kind": action, "status": "not-verified",
+                 "revision": os.environ.get("ZHX_AUDIT_SHA", "")}
+        refusals = []
+
+        def note_refusal(response):
+            try:
+                if (response.request.is_navigation_request() and response.frame == page.main_frame
+                        and response.status in (401, 403, 429, 503)):
+                    refusals.append(response.status)
+            except Exception:
+                pass
+
+        page.on("response", note_refusal)
         try:
             install_read_only_guard(page, parser, agent, route_path)
             time.sleep(delay)
@@ -271,12 +307,68 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
         except Exception as error:
             state["reason"] = type(error).__name__
         finally:
+            if refusals:
+                denied = True
+                state.update(status="not-verified", reason="access refused", httpStatus=refusals[-1])
             interactions.append(state)
+            page.remove_listener("response", note_refusal)
             write_manifest()
             print("EC interaction", state["id"], state["status"], flush=True)
         return state["status"] == "verified"
 
+    def resume_batch():
+        # Every URL must have been observed in the preceding same-repository
+        # artifact. Prior visits are retained as historical evidence, not
+        # automatically promoted to the current candidate revision.
+        priority_pages = scripts.get("priorityPages", [])
+        priority_details = scripts.get("priorityDetails", [])
+        if any(url not in observed_pages for url in priority_pages) or any(url not in discovered for url in priority_details):
+            raise RuntimeError("Resume priority URL absent from prior native evidence")
+        for url in priority_pages:
+            if not budget():
+                break
+            kind = public_route(url).strip("/")
+            number = dict(parse_qsl(urlsplit(url).query))["page"]
+            cfg = {"id": kind + "-page-" + number, "url": url}
+            page = new_scan(cfg)
+            if page:
+                try:
+                    if kind == "gearsets" and number == "2" and visited[-1]["status"] == "ok":
+                        # Use the translated page to test the actual public GET filter.
+                        interact(page, {"id": "gearsets-page-2", "url": ORIGIN + "/gearsets"}, "select-piece")
+                finally:
+                    page.close()
+        for url in priority_details:
+            if not budget():
+                break
+            route = urlsplit(url).path.strip("/").replace("/", "-", 1)
+            page = new_scan({"id": route, "url": url})
+            if page:
+                page.close()
+        # If there is room after explicit priorities, continue along actual
+        # previously observed finite catalogue links and pending detail URLs.
+        completed = {row["url"] for row in visited if row["status"] == "ok"}
+        for url in sorted(observed_pages - completed, key=lambda x: (public_route(x), int(dict(parse_qsl(urlsplit(x).query))["page"]))):
+            if not budget():
+                break
+            kind = public_route(url).strip("/")
+            number = dict(parse_qsl(urlsplit(url).query))["page"]
+            page = new_scan({"id": kind + "-page-" + number, "url": url})
+            if page:
+                page.close()
+        completed = {row["url"] for row in visited if row["status"] == "ok"}
+        for url in sorted(set(discovered) - completed):
+            if not budget():
+                break
+            route = urlsplit(url).path.strip("/").replace("/", "-", 1)
+            page = new_scan({"id": route, "url": url})
+            if page:
+                page.close()
+
     try:
+        if prior:
+            resume_batch()
+            return not denied and any(row["status"] == "ok" for row in visited[previous_count:])
         # Discover every catalogue's first page, even if a template lacks
         # pagination. Do not infer a one-page catalogue from absent controls.
         for seed in scripts["pages"]:
