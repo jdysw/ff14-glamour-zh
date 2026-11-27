@@ -16,9 +16,13 @@ export function ecPublicScope(el,kind,url){
     if(/^\/(?:gearset|accessories)\/[^/]+\/?$/u.test(linked.pathname)
       &&el.closest?.('.collection.gearset')&&['text','attr:alt','attr:title'].includes(kind))return 'ui';
   }
-  if(/^\/(?:gearsets|accessories)\/?$/u.test(route.pathname)
-    &&kind==='attr:alt'&&el.closest?.('.collection.gearset')
-    &&el.matches?.('img.tooltip-trigger,img.image.is-16x16'))return 'ui';
+  // These two card templates use different root classes. Action images
+  // are children of .tooltip-trigger (not necessarily that class themselves).
+  if(/^\/(?:gearsets|accessories)\/?$/u.test(route.pathname)&&kind==='attr:alt'){
+    const card=el.closest?.('.collection.gearset,.collection.accessory');
+    if(card&&el.matches?.('img')&&el.closest?.('.collection-actions .b-tooltip .tooltip-trigger'))return 'ui';
+    if(card&&el.matches?.('img.image.is-16x16')&&el.closest?.('.tag.is-background-dark'))return 'ui';
+  }
   if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'
     &&el.closest?.('.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'))return 'ui';
   return null;

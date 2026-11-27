@@ -319,7 +319,11 @@ const ecNode=(href,classes,match=false)=>({
 const ecUrl='https://ffxiv.eorzeacollection.com/gearsets';
 assert.equal(ecPublicScope(ecNode('/gearset/avalanche-brawlers',['.collection.gearset']),'attr:alt',ecUrl),'ui');
 assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['.collection.gearset']),'attr:alt',ecUrl),'user');
-assert.equal(ecPublicScope(ecNode(null,['.collection.gearset'],true),'attr:alt',ecUrl),'ui');
+const ecCardRoot='.collection.gearset,.collection.accessory';
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.collection-actions .b-tooltip .tooltip-trigger'],true),'attr:alt',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.tag.is-background-dark'],true),'attr:alt','https://ffxiv.eorzeacollection.com/accessories'),'ui');
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',[ecCardRoot,'.collection-actions .b-tooltip .tooltip-trigger'],true),'attr:alt',ecUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot],true),'attr:alt',ecUrl),null);
 const aboutClasses=['.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'];
 assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'ui');
 assert.equal(ecPublicScope(ecNode('/creator/123',aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'user');

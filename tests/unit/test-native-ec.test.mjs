@@ -71,6 +71,11 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
   withGlobals({ location: { pathname: '/glamours' } }, () => {
     trimECNode(text);
     assert.equal(text.nodeValue, '共 1,234 条结果');
+    for (const [source, want] of [['Ranged DPS','远程物理职业'],['Ranged','远程物理职业'],['Caster DPS','远程魔法职业'],['Caster','远程魔法职业'],['Tanks','防护职业'],['Healers','治疗职业']]) {
+      const role = { nodeType: 3, nodeValue: source, parentElement: contentParent };
+      trimECNode(role);
+      assert.equal(role.nodeValue, want);
+    }
     assert.equal(contentParent.dataset.zhixiaSourceText, '1,234 results');
     for(const [source,want] of [['Oct 2nd, 2026','2026年10月2日'],['January 15, 2025','2025年1月15日'],['Test 12, 2024','Test 12, 2024']]){
       const date={nodeType:3,nodeValue:source,parentElement:contentParent};trimECNode(date);assert.equal(date.nodeValue,want);
@@ -517,7 +522,7 @@ test('EC 阳伞详情：配饰导航、获取方式、图片说明和页面标�
     }
     translateECAttrs();
     assert.equal(icon.getAttribute('alt'), '天蓝阳伞图标');
-    assert.equal(icon.getAttribute('title'), '所有输出职业');
+    assert.equal(icon.getAttribute('title'), '所有进攻职业');
     translateECTitle();
     assert.equal(doc.title, '阳伞 | Eorzea Collection');
   });

@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   ec:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'cb16ebbdfdf8cc1c2518102088482a1a8a9511a2' && github.run_attempt == 1 }}
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'afbb6ef5315ac49ffbbfb12cd4d0e32101503ae1' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -28,7 +28,7 @@ jobs:
           npm run build
           mkdir -p tests/.cache/ec-cloud-raw
           node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='about'),{id:'accessories',url:'https://ffxiv.eorzeacollection.com/accessories',type:'list'}],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
-          node tests/run.mjs test-coverage-audit
+          node tests/run.mjs test-coverage-audit test-native-ec
           python3 -m py_compile tools/coverage-audit/ec-cloud-smoke.py
           python3 -m pip install 'playwright==1.55.0'
       - name: Check public access rules and verify permitted pages
