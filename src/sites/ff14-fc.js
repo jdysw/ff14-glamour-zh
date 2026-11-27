@@ -872,6 +872,21 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['オーラム(タンク・スレイヤー)', { path: '/equipment/aurum_tank/', zh: '皇金套装（防护、制敌）', strictLink: true }], // Item 31555, 31561, 31567
     ['オーラム(ファイター)', { path: '/equipment/aurum_dow/', zh: '皇金套装（战斗精英）', strictLink: true }], // Item 31555, 31561, 31567
     ['オーラム(ソーサラー)', { path: '/equipment/aurum_dom/', zh: '皇金套装（魔法导师）', strictLink: true }], // Item 31555, 31561, 31567
+    // Replica gear retains the official Chinese item-name qualifier in every set title.
+    ['レプリカ・バハムート・ディフェンダー', { path: '/equipment/replica_dreadwyrm_of_fending/', zh: '龙神御敌套装（复制品）', strictLink: true }], // Item 13892–13896
+    ['レプリカ・バハムート・スレイヤー', { path: '/equipment/replica_dreadwyrm_of_maiming/', zh: '龙神制敌套装（复制品）', strictLink: true }], // Item 13897–13901
+    ['レプリカ・バハムート・ストライカー', { path: '/equipment/replica_dreadwyrm_of_striking/', zh: '龙神强袭套装（复制品）', strictLink: true }], // Item 13902–13906
+    ['レプリカ・バハムート・スカウト', { path: '/equipment/replica_dreadwyrm_of_scouting/', zh: '龙神游击套装（复制品）', strictLink: true }], // Item 13922–13926
+    ['レプリカ・バハムート・レンジャー', { path: '/equipment/replica_dreadwyrm_of_aiming/', zh: '龙神精准套装（复制品）', strictLink: true }], // Item 13907–13911
+    ['レプリカ・バハムート・キャスター', { path: '/equipment/replica_dreadwyrm_of_casting/', zh: '龙神咏咒套装（复制品）', strictLink: true }], // Item 13917–13921
+    ['レプリカ・バハムート・ヒーラー', { path: '/equipment/replica_dreadwyrm_of_healing/', zh: '龙神治愈套装（复制品）', strictLink: true }], // Item 13912–13916
+    ['レプリカ・ハイアラガン・ディフェンダー', { path: '/equipment/replica_high_allagan_of_fending/', zh: '亚拉戈高位御敌套装（复制品）', strictLink: true }], // Item 13848–13852
+    ['レプリカ・ハイアラガン・スレイヤー', { path: '/equipment/replica_high_allagan_of_maiming/', zh: '亚拉戈高位制敌套装（复制品）', strictLink: true }], // Item 13853–13857
+    ['レプリカ・ハイアラガン・ストライカー', { path: '/equipment/replica_high_allagan_of_striking/', zh: '亚拉戈高位强袭套装（复制品）', strictLink: true }], // Item 13858–13862
+    ['レプリカ・ハイアラガン・レンジャー', { path: '/equipment/replica_high_allagan_of_aiming/', zh: '亚拉戈高位精准套装（复制品）', strictLink: true }], // Item 13863–13867
+    ['レプリカ・ハイアラガン・キャスター', { path: '/equipment/replica_high_allagan_of_casting/', zh: '亚拉戈高位咏咒套装（复制品）', strictLink: true }], // Item 13873–13877
+    ['レプリカ・ハイアラガン・ヒーラー', { path: '/equipment/replica_high_allagan_of_healing/', zh: '亚拉戈高位治愈套装（复制品）', strictLink: true }], // Item 13868–13872
+    ['レプリカ・ヘヴィアラガン', { path: '/equipment/replica_allagan_of_fending/', zh: '亚拉戈重套装（复制品）', strictLink: true }], // Item 13805–13808
     ['レプリカ・アラガンスレイヤー', { path: '/equipment/replica_allagan_of_maiming/', zh: '亚拉戈制敌套装（复制品）', strictLink: true }], // Item 13809, 13810, 13811, 13812, 13813
     ['レプリカ・アラガンストライカー', { path: '/equipment/replica_allagan_of_striking/', zh: '亚拉戈强袭套装（复制品）', strictLink: true }], // Item 13814, 13815, 13816, 13817, 13818
     ['レプリカ・アラガンレンジャー', { path: '/equipment/replica_allagan_of_aiming/', zh: '亚拉戈精准套装（复制品）', strictLink: true }], // Item 13819, 13820, 13821, 13822, 13823
