@@ -1220,7 +1220,7 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
 });
 
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
-  const before = globalThis.location;
+  const previous = { location: globalThis.location, window: globalThis.window };
   const wasReady = _tablesReady;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const source = dom.document;
@@ -1234,6 +1234,7 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     '<div id="scrollad"><a href="/equipment/test-cap/"><h5 id="cap">テストキャップ</h5></a><a href="/equipment/test-set/"><h5 id="role-set">テストシリーズ・キャスター</h5></a><a href="/equipment/unknown/"><h5 id="unverified">未知のセット(タンク)</h5></a></div>',
   ].join('');
   try {
+    globalThis.window = dom;
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
@@ -1281,8 +1282,10 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     if (!wasReady) dataInvalidate();
     _applyV3({candidatePolicy:1});
     cacheReset('derived');
-    if (before === undefined) delete globalThis.location;
-    else globalThis.location = before;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
     dom.close();
   }
 });
