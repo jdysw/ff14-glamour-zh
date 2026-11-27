@@ -921,6 +921,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['レプリカ・ハイアラガン・キャスター', { path: '/equipment/replica_high_allagan_of_casting/', zh: '亚拉戈高位咏咒套装（复制品）', strictLink: true }], // Item 13873–13877
     ['レプリカ・ハイアラガン・ヒーラー', { path: '/equipment/replica_high_allagan_of_healing/', zh: '亚拉戈高位治愈套装（复制品）', strictLink: true }], // Item 13868–13872
     ['レプリカ・ヘヴィアラガン', { path: '/equipment/replica_allagan_of_fending/', zh: '亚拉戈重套装（复制品）', strictLink: true }], // Item 13805–13808
+    // The native short labels omit RE, but the actual acquisition/summary lists contain upgraded armor.
+    ['ロストアラガン・ディフェンダー', { path: '/equipment/augmented_lost_allagan_of_fending/', zh: '改良型亚拉戈失传御敌套装', strictLink: true }], // Items 19297–19301
+    ['ロストアラガン・スレイヤー', { path: '/equipment/augmented_lost_allagan_of_maiming/', zh: '改良型亚拉戈失传制敌套装', strictLink: true }], // Items 19303–19307
+    ['ロストアラガン・ストライカー', { path: '/equipment/augmented_lost_allagan_of_striking/', zh: '改良型亚拉戈失传强袭套装', strictLink: true }], // Items 19309–19313
+    ['ロストアラガン・スカウト', { path: '/equipment/augmented_lost_allagan_of_scouting/', zh: '改良型亚拉戈失传游击套装', strictLink: true }], // Items 19321–19325
+    ['ロストアラガン・レンジャー', { path: '/equipment/augmented_lost_allagan_of_aiming/', zh: '改良型亚拉戈失传精准套装', strictLink: true }], // Items 19315–19319
+    ['ロストアラガン・キャスター', { path: '/equipment/augmented_lost_allagan_of_casting/', zh: '改良型亚拉戈失传咏咒套装', strictLink: true }], // Items 19333–19337
+    ['ロストアラガン・ヒーラー', { path: '/equipment/augmented_lost_allagan_of_healing/', zh: '改良型亚拉戈失传治愈套装', strictLink: true }], // Items 19327–19331
     ['レプリカ・アラガンスレイヤー', { path: '/equipment/replica_allagan_of_maiming/', zh: '亚拉戈制敌套装（复制品）', strictLink: true }], // Item 13809, 13810, 13811, 13812, 13813
     ['レプリカ・アラガンストライカー', { path: '/equipment/replica_allagan_of_striking/', zh: '亚拉戈强袭套装（复制品）', strictLink: true }], // Item 13814, 13815, 13816, 13817, 13818
     ['レプリカ・アラガンレンジャー', { path: '/equipment/replica_allagan_of_aiming/', zh: '亚拉戈精准套装（复制品）', strictLink: true }], // Item 13819, 13820, 13821, 13822, 13823
