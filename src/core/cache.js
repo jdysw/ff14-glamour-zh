@@ -1,5 +1,5 @@
 import { CACHE_CAP_LOOKUP, _cacheReg, _en2zhCache, _lcs90, cacheGuard, cacheRegister } from './cache-primitives.js';
-import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName, resolveAllByName } from './data/data-manager.js';
+import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName, resolveAllByName, findItemsByName, hasItemIdentities } from './data/data-manager.js';
 import { DICT_FC, dictGetRevision } from './data/dictionary.js';
 // 无本地调用方的基础层符号直接转发，保留旧模块的导出接口。
 export { DAY_MS, _countIncludes, _shortestStr, cacheReset } from './cache-primitives.js';
@@ -150,19 +150,30 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     /^(?:トラウザー|ブレー|ブリーチ|スロップ|キュロット|タイツ|ホーズ|パンツ|ボトム|スカート|サルエル|レギンス)$/u,
     /^(?:ブーツ|サバトン|グリーヴ|シューズ|サンダル|ロングブーツ|サイブーツ|クラコー|レッグガード)$/u,
   ];
+  function fcArmorSlot(native, zh, part) {
+    // The identity dataset has canonical equipment slots, including uncommon
+    // Japanese part names. Only use the lexical fallback for legacy data
+    // without identities; unknown/non-armor or conflicting slots are not evidence.
+    if (!hasItemIdentities()) return FC_ARMOR_PARTS.findIndex(re => re.test(part));
+    const records = findItemsByName(native, 'ja');
+    const slot = records[0]?.slot;
+    return slot != null && slot < 5
+      && records.every(row => row.slot === slot && row.zh === zh) ? slot : -1;
+  }
+
   function fcBaseRoleSets(nameMap) {
     const sets = new Map();
     const roles = Object.entries(FC_ROLE_ZH);
     for (const [native, zh] of Object.entries(nameMap)) {
       const separator = native.lastIndexOf('・');
-      if (separator < 2 || native.endsWith('RE')) continue;
+      if (separator < 2 || /(?:RE|SP)$/u.test(native)) continue;
       const part = native.slice(separator + 1);
       const role = roles.find(([ja]) => part.startsWith(ja) && part.length > ja.length);
       if (!role) continue;
       const [jaRole, zhRole] = role;
       // Count anatomical equipment slots, not different spellings of
       // headgear. Three hats must not establish a full armor family.
-      const slot = FC_ARMOR_PARTS.findIndex(re => re.test(part.slice(jaRole.length)));
+      const slot = fcArmorSlot(native, zh, part.slice(jaRole.length));
       if (slot < 0) continue;
       const names = resolveAllByName(native);
       if (names.length !== 1 || names[0] !== zh) continue;
