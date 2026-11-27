@@ -148,9 +148,11 @@ def next_page(page, route_path):
     return navigation.value
 
 
-def select_piece(page):
+def select_filter(page, control):
+    if control not in {"piece", "patch", "dyes", "rarity", "orderBy"}:
+        raise ValueError("Unknown public select control")
     form = page.locator("form#filter_form")
-    select = page.locator("form#filter_form select#piece")
+    select = page.locator("form#filter_form select#" + control)
     if not form.count() or form.evaluate("(f)=>f.method") != "get" or not select.count() or not select.first.is_visible():
         return None, None
     index = select.evaluate("(el)=>[...el.options].findIndex((o,i)=>i!==el.selectedIndex&&!o.disabled&&!o.parentElement.disabled)")
@@ -160,7 +162,7 @@ def select_piece(page):
     try:
         with page.expect_navigation(wait_until="domcontentloaded", timeout=5000) as navigation:
             select.select_option(index=index, timeout=5000)
-        return navigation.value, {"control": "piece", "fromIndex": before, "requestedIndex": index}
+        return navigation.value, {"control": control, "fromIndex": before, "requestedIndex": index}
     except PlaywrightTimeout:
         # Native select did not submit. Use only the verified GET filter form.
         if select.count() and select.evaluate("(el)=>el.selectedIndex") == index:
@@ -168,8 +170,8 @@ def select_piece(page):
             if button.count() and button.is_visible() and form.evaluate("(f)=>f.method") == "get":
                 with page.expect_navigation(wait_until="domcontentloaded", timeout=15000) as navigation:
                     button.click(timeout=5000)
-                return navigation.value, {"control": "piece", "fromIndex": before, "requestedIndex": index}
-        return None, {"control": "piece", "fromIndex": before, "requestedIndex": index}
+                return navigation.value, {"control": control, "fromIndex": before, "requestedIndex": index}
+        return None, {"control": control, "fromIndex": before, "requestedIndex": index}
 
 
 def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
@@ -282,7 +284,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
             if action == "next-page":
                 response = next_page(page, route_path)
             else:
-                response, selected = select_piece(page)
+                response, selected = select_filter(page, action.removeprefix("select-"))
                 state["selection"] = selected
             if not response:
                 state["reason"] = "no verified native navigation"
@@ -301,7 +303,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                 state["status"] = "verified" if row["status"] == "ok" and current == 2 else "not-verified"
             else:
                 selected = state.get("selection") or {}
-                values = [c.get("selectedIndex") for c in inventory.get("controls", []) if c.get("id") == "piece"]
+                values = [c.get("selectedIndex") for c in inventory.get("controls", []) if c.get("id") == selected.get("control")]
                 state["status"] = "verified" if row["status"] == "ok" and values == [selected.get("requestedIndex")] else "not-verified"
             record(row, cfg)
         except Exception as error:
@@ -333,9 +335,10 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
             page = new_scan(cfg)
             if page:
                 try:
-                    if kind == "gearsets" and number == "2" and visited[-1]["status"] == "ok":
-                        # Use the translated page to test the actual public GET filter.
-                        interact(page, {"id": "gearsets-page-2", "url": ORIGIN + "/gearsets"}, "select-piece")
+                    control = scripts.get("pageInteractions", {}).get(url)
+                    if control and kind == "gearsets" and visited[-1]["status"] == "ok":
+                        # Only configured public native selects, no synthetic query requests.
+                        interact(page, {"id": cfg["id"], "url": ORIGIN + "/gearsets"}, "select-" + control)
                 finally:
                     page.close()
         for url in priority_details:

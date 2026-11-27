@@ -23,6 +23,14 @@ export function ecPublicScope(el,kind,url){
     if(card&&el.matches?.('img')&&el.closest?.('.collection-actions .b-tooltip .tooltip-trigger'))return 'ui';
     if(card&&el.matches?.('img.image.is-16x16')&&el.closest?.('.tag.is-background-dark'))return 'ui';
   }
+  // Public catalogue detail headings are site-owned even when the visible
+  // title is split into nested spans. Never include glamour/creator titles.
+  if(/^\/(?:gearset|accessories|facewear|fashion-accessory)\/[a-z0-9-]{1,120}\/?$/u.test(route.pathname)){
+    if(kind==='document:title')return 'ui';
+    if(kind==='text'&&el.closest?.('h1.title.has-negative-letter-spacing'))return 'ui';
+    if(kind==='attr:alt'&&el.closest?.('a.eorzeadb_link .gear-icon'))return 'item';
+    if(kind==='text'&&el.closest?.('.list-item-title a.eorzeadb_link'))return 'item';
+  }
   if(kind==='attr:label'&&el.closest?.('#filter_form select optgroup[label]'))return 'ui';
   if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'
     &&el.closest?.('.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'))return 'ui';
@@ -154,7 +162,11 @@ export const COLLECTOR_JS = String.raw`(() => {
     for (const el of document.querySelectorAll('#filter_form select optgroup[label]'))
       push(el, el.getAttribute('label'), 'attr:label');
   }
-  if (document.title) out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: false, user: false, ad: false } });
+  if (document.title) {
+    const publicTitle = globalThis.location?.hostname === 'ffxiv.eorzeacollection.com'
+      && ecPublicScope(document.documentElement, 'document:title', location.href)==='ui';
+    out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: publicTitle, user: false, ad: false, scope: publicTitle?'ui':undefined } });
+  }
   return out;
 })()`;
 

@@ -327,6 +327,11 @@ assert.equal(ecPublicScope(ecNode(null,[ecCardRoot],true),'attr:alt',ecUrl),null
 assert.equal(ecPublicScope(ecNode(null,['#filter_form select optgroup[label]']),'attr:label',ecUrl),'ui');
 assert.equal(ecPublicScope(ecNode('/creator/123',['#filter_form select optgroup[label]']),'attr:label',ecUrl),'user');
 assert.equal(ecPublicScope(ecNode(null,[]),'attr:label',ecUrl),null);
+const detailUrl='https://ffxiv.eorzeacollection.com/gearset/legend';
+assert.equal(ecPublicScope(ecNode(null,['h1.title.has-negative-letter-spacing']),'text',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,[]),'document:title',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,[]),'document:title','https://ffxiv.eorzeacollection.com/glamour/123/player-look'),null);
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['h1.title.has-negative-letter-spacing']),'text',detailUrl),'user');
 const aboutClasses=['.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'];
 assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'ui');
 assert.equal(ecPublicScope(ecNode('/creator/123',aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'user');
