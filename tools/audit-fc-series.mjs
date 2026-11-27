@@ -8,7 +8,7 @@ import { ensureChrome, DEFAULT_PORT } from '../tests/helpers/chrome.mjs';
 import { readRuntimeV3 } from '../tests/helpers/v3-cache.mjs';
 import { parseItemIds } from '../src/core/data/item-identity.js';
 import { _applyV3, _fireTablesReady } from '../src/core/data/data-manager.js';
-import { trimFCNode, _trFCAttr } from '../src/sites/ff14-fc.js';
+import { trimFCNode, _trFCAttr, translateFCTitle } from '../src/sites/ff14-fc.js';
 
 const URL = 'https://ff14-fc.com/equipment_series_search/';
 const OUT = path.resolve('tests/.cache/fc-series-audit');
@@ -193,6 +193,8 @@ function replay(row, doc) {
   }
   const catalogue = withAnchor(doc,row,'h4',dd,row.headingLinked);
   const catalogueZh = translatedTitle(catalogue);
+  const articleCard = row.articleTitle
+    ? translatedTitle(withAnchor(doc,{...row,native:row.articleTitle},'h3',dd,false)) : null;
   const sidebar = doc.createElement('div');
   sidebar.id = 'scrollad';
   const dl = doc.createElement('dl');
@@ -205,11 +207,18 @@ function replay(row, doc) {
   const recommendationZh = translatedTitle(rec);
   _trFCAttr(img,'alt');
   let detailZh = null;
+  let documentTitle = null;
   if (row.path) {
     globalThis.location = new globalThis.URL(row.path,'https://ff14-fc.com');
     detailZh = translatedTitle(withAnchor(doc,row,'h5',root,false));
+    if (row.articleTitle) {
+      doc.title = row.articleTitle;
+      translateFCTitle();
+      documentTitle = doc.title;
+    }
   }
-  const result = { catalogueZh, recommendationZh, imageZh:img.alt, detailZh };
+  const result = { translated:{ catalogueZh, recommendationZh, imageZh:img.alt, detailZh },
+    articleTitles:{card:articleCard,document:documentTitle} };
   root.remove();
   return result;
 }
@@ -236,12 +245,21 @@ function evidenceFor(native, items, series) {
   };
 }
 
-function review(row, translated, evidence) {
+function review(row, translated, evidence, articleTitles) {
   const issues = [];
   const names = Object.values(translated).filter(v => v !== null);
   if (names.some(v => KANA.test(v))) issues.push('kana-residual');
   if (names.some(v => /套装套装|装束套装|夏装组合套装|套装装备/u.test(v))) issues.push('duplicate-set-suffix');
   if (new Set(names).size > 1) issues.push('context-disagreement');
+  const afTitle = row.articleTitle && /^[【〖]FF14[】〗].{1,24}?AF(?:\d{1,2}|[（(]PvP[）)])/u.test(row.articleTitle)
+    && ['【' + row.native + '】','〖' + row.native + '〗'].some(end => row.articleTitle.endsWith(end));
+  if (afTitle) {
+    const titles = Object.values(articleTitles).filter(Boolean);
+    const expected = ['【' + translated.catalogueZh + '】','〖' + translated.catalogueZh + '〗'];
+    if (titles.length !== 2 || titles.some(title => !expected.some(end => title.endsWith(end))))
+      issues.push('af-title-set-disagreement');
+    if (titles.some(title => KANA.test(title))) issues.push('af-title-kana-residual');
+  }
   if (row.native.startsWith('レプリカ・') && names.some(v => !v.includes('（复制品）')))
     issues.push('missing-replica-qualifier');
   const canonical = [...new Set(evidence.items.map(r => r.zh))];
@@ -285,11 +303,11 @@ function auditCatalogue(report) {
     }
     report.officialSourceRows = officialRows.length;
     report.results = report.catalogue.map(row => {
-      const translated = replay(row,dom.document);
+      const {translated,articleTitles} = replay(row,dom.document);
       const evidence = evidenceFor(row.native,identity.rows,series);
       const slug = row.path?.split('/')[2] || '';
       const englishCandidates = englishIndex.get(normalizeEnglish(slug)) || [];
-      return {...row,translated,evidence,englishCandidates,issues:review(row,translated,evidence)};
+      return {...row,translated,articleTitles,evidence,englishCandidates,issues:review(row,translated,evidence,articleTitles)};
     });
     // Identical translated names on different native equipment pages need
     // semantic review, even if every individual card replay is consistent.
