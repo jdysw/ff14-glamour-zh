@@ -1049,6 +1049,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
     // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
     // Native whole-outfit headings may share their source label with an individual item.
+    ['グリムグリズリー・スーツ', { path: '/equipment/grisly_bear_suit/', zh: '狰狞熊套装', strictLink: true, itemConflict: true }], // Item 52402, 52403; in-game combination name
+    ['ガジャスーツ', { path: '/equipment/gaja_suit/', zh: '小象套装', strictLink: true, itemConflict: true }], // Item 45436
+    ['トードスーツ', { path: '/equipment/toad_suit/', zh: '蟾蜍套装', strictLink: true, itemConflict: true }], // Item 27937 and matching head; in-game set
+    ['ポーキースーツ', { path: '/equipment/swine_body/', zh: '波奇套装', strictLink: true, itemConflict: true }], // Item 45230
+    ['チキンスーツ', { path: '/equipment/chicken_suit/', zh: '小鸡套装', strictLink: true, itemConflict: true }], // Item 45425
+    ['ラビットスーツ', { path: '/equipment/rabbit_suit/', zh: '兔子套装', strictLink: true, itemConflict: true }], // Item 30045 and matching head; in-game combination name
+    ['レインコート', { path: '/equipment/raincoat/', zh: '雨衣套装', strictLink: true, itemConflict: true }], // Item 24592; hood, coat and boots
     ['コンカラー', { path: '/equipment/conquerors/', zh: '征服套装', strictLink: true, itemConflict: true }], // Item 51395; same bare JP label can name a weapon (Item 7353)
     ['アウトサイダー', { path: '/equipment/outsiders/', zh: '外来者套装', strictLink: true, itemConflict: true }], // Item 27256–27260, 27266; five armor pieces, not a gunblade
     ['フランネル', { path: '/equipment/flannel/', zh: '法兰绒背带衬衫套装', strictLink: true, itemConflict: true }], // Item 45263; distinguish from crafting material
@@ -1214,9 +1221,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const native = racePhoto?.[1] || allRaces?.[1];
     if (!native) return null;
     const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
-    // The same name can identify one piece and an entire outfit. A race
-    // photo without an explicit set context must retain the individual item.
-    const scoped = !racePhoto || !record?.itemConflict ? fcScopedSetName(native, node) : null;
+    // Both gallery formats can depict an individual piece, not just the
+    // whole outfit. A shared native label must retain its individual item name.
+    const scoped = !record?.itemConflict ? fcScopedSetName(native, node) : null;
     const name = scoped || fcVerifiedSetName(native) || fcGaroSetName(native) || fcItemName(native);
     if (!name) return null;
     if (racePhoto) {
