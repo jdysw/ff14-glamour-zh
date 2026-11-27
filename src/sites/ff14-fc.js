@@ -104,7 +104,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['スウィートドリームアタイア', '美梦套装'],
     ['東方殿方衣装セット', '东方公子套装'],
     ['東方美玉衣装セット', '东方美玉套装'],
-    ['風雅衣装セット', '风雅套装'],
+    ['風雅衣装セット', '风雅装束'],
     ['エデンモーン・キャスター', '伊甸之晨咏咒套装'],
     // JP store titles differ from CN store / item names; use whole-label matches.
     // Gear stems verified against Item 46032 and Item 11338/11352.
@@ -304,7 +304,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const outfitArticle = match[4] === '👗' || !match[4];
     const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
     let suffix = '';
-    if (!/(?:套装|装束|夏装组合)(?:·[阴阳])?$/u.test(name)) {
+    if (!/(?:套装|装束|夏装组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(name)) {
       if (isKnownOutfit) suffix = '套装';
       else if (match[3]) suffix = '装备';
     }
@@ -1010,7 +1010,39 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['アンドロイド旧式:射', { path: '/equipment/obsolete_androids_of_aiming/', zh: '人造人旧式精准套装', strictLink: true }], // member-name stem
     ['アンドロイド旧式:術', { path: '/equipment/obsolete_androids_of_casting/', zh: '人造人旧式咏咒套装', strictLink: true }], // member-name stem
     ['アンドロイド旧式:医', { path: '/equipment/obsolete_androids_of_healing/', zh: '人造人旧式治愈套装', strictLink: true }], // member-name stem
+    // Semantic review: exact bundle names and localized member-name display groups.
+    ['コスモスーツ', { path: '/equipment/cosmosuit/', zh: '宇航服套装', strictLink: true }], // Item 48744
+    ['モント・コスチュームセット', { path: '/equipment/king_of_leonis_attire/', zh: '雷欧尼斯国王套装', strictLink: true }], // Item 45575
+    ['左近士', { path: '/equipment/sakonji/', zh: '左近士装束', strictLink: true }], // Item 50622
+    ['百地', { path: '/equipment/momochi/', zh: '百地装束', strictLink: true }], // Item 50618
+    ['紫洲武人', { path: '/equipment/shishu_bujin/', zh: '紫州武人装束', strictLink: true }], // Item 45525
+    ['紫洲御前', { path: '/equipment/shishu_gozen/', zh: '紫州御前装束', strictLink: true }], // Item 45526
+    ['春日【劣】', { path: '/equipment/weathered_kasuga/', zh: '旧化的春日装束', strictLink: true }], // localized member-name stem; display group
+    ['服部【劣】', { path: '/equipment/weathered_hattori/', zh: '旧化的服部装束', strictLink: true }], // localized member-name stem; display group
+    ['春日【想】', { path: '/equipment/idealized_kasuga/', zh: '理想化的春日装束', strictLink: true }], // localized member-name stem; display group
+    ['服部【想】', { path: '/equipment/idealized_hattori/', zh: '理想化的服部装束', strictLink: true }], // localized member-name stem; display group
+    ['明珍【劣】', { path: '/equipment/antiquated_myochin/', zh: '旧化的明珍装束', strictLink: true }], // localized member-name stem; display group
+    ['影隠【劣】', { path: '/equipment/antiquated_kage-kakushi/', zh: '旧化的影隐装束', strictLink: true }], // localized member-name stem; display group
+    ['明珍【風】', { path: '/equipment/anemos_myochin/', zh: '常风明珍装束', strictLink: true }], // localized member-name stem; display group
+    ['影隠【風】', { path: '/equipment/anemos_kage-kakushi/', zh: '常风影隐装束', strictLink: true }], // Item 50567
+    ['明珍【徳】', { path: '/equipment/virtu_myochin/', zh: '美德明珍装束', strictLink: true }], // Item 45457
+    ['伊賀【徳】', { path: '/equipment/virtu_iga/', zh: '美德伊贺装束', strictLink: true }], // localized set name
+    ['伊賀', { path: '/equipment/iga/', zh: '伊贺装束', strictLink: true }], // Item 50539
+    ['早乙女', { path: '/equipment/saotome/', zh: '早乙女装束', strictLink: true }], // Item 50603
+    ['蜂屋', { path: '/equipment/hachiya/', zh: '蜂屋装束', strictLink: true }], // Item 50599
+    ['無銘', { path: '/equipment/nameless/', zh: '无名套装', strictLink: true }], // localized coffer name; display group
+    ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
   ]);
+
+  // The catalogue uses 【】 while native article headings also use 〖〗.
+  // Register only whole-label variants of existing scoped entries.
+  for (const [native, record] of [...FC_VERIFIED_SHORT_SET_PATHS]) {
+    const alternate = native.replaceAll('【', '〖').replaceAll('】', '〗');
+    const catalogue = native.replaceAll('〖', '【').replaceAll('〗', '】');
+    for (const variant of [alternate, catalogue]) {
+      if (!FC_VERIFIED_SHORT_SET_PATHS.has(variant)) FC_VERIFIED_SHORT_SET_PATHS.set(variant, record);
+    }
+  }
 
   function fcAnchorPath(link) {
     try {
@@ -1194,7 +1226,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束|夏装组合)(?:·[阴阳])?$/u.test(officialName)) {
+    if (/(?:套装|装束|夏装组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
