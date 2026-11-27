@@ -136,8 +136,13 @@ def scan(page, cfg, scripts, dist, cloud):
 
 def execute(cdp, scripts, dist, cloud):
     pages = scripts["pages"]
-    if len(pages) != 4 or any(not allowed_origin(row["url"]) for row in pages):
-        raise RuntimeError("Expected four fixed public EC seeds")
+    fixed_seeds = {"/", "/glamours", "/gearsets", "/accessories", "/about"}
+    if not 1 <= len(pages) <= len(fixed_seeds) or any(
+        not allowed_origin(row["url"]) or urlsplit(row["url"]).path.rstrip("/") not in
+        {path.rstrip("/") for path in fixed_seeds} or urlsplit(row["url"]).query
+        for row in pages
+    ):
+        raise RuntimeError("Expected a bounded set of fixed public EC seeds")
     with sync_playwright() as playwright:
         browser = playwright.chromium.connect_over_cdp(cdp, timeout=25000)
         try:
@@ -147,7 +152,7 @@ def execute(cdp, scripts, dist, cloud):
                 delay = read_rules(page, pages)
             except Exception as error:
                 print("EC rule check stopped: " + type(error).__name__, flush=True)
-                save({"site": "ec", "pageId": "home", "url": pages[0]["url"],
+                save({"site": "ec", "pageId": pages[0]["id"], "url": pages[0]["url"],
                       "items": [], "status": "failed", "error": "robots policy unavailable or restrictive; no business page requested",
                       "channel": "browser-use-cloud", "revision": os.environ.get("ZHX_AUDIT_SHA", "")})
                 return False

@@ -3,7 +3,28 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { miramiruScope, edenScope, fcScope, attireScope, ronkaScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
+// These regions were observed in the successful public EC seed scans.
+// Keep player links and images out of the public catalogue/UI evidence.
+export function ecPublicScope(el,kind,url){
+  const route=new URL(url);
+  if(route.hostname!=='ffxiv.eorzeacollection.com')return null;
+  const href=el.closest?.('a[href]')?.getAttribute?.('href');
+  let linked=null;
+  try{if(href)linked=new URL(href,url)}catch{return null}
+  if(linked?.origin===route.origin){
+    if(/^\/(?:glamour|companion-glamour|creator)\/\d+(?:[/?#]|$)/u.test(linked.pathname))return 'user';
+    if(/^\/(?:gearset|accessories)\/[^/]+\/?$/u.test(linked.pathname)
+      &&el.closest?.('.collection.gearset')&&['text','attr:alt','attr:title'].includes(kind))return 'ui';
+  }
+  if(/^\/(?:gearsets|accessories)\/?$/u.test(route.pathname)
+    &&kind==='attr:alt'&&el.closest?.('.collection.gearset')
+    &&el.matches?.('img.tooltip-trigger,img.image.is-16x16'))return 'ui';
+  if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'
+    &&el.closest?.('.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'))return 'ui';
+  return null;
+}
 export const COLLECTOR_JS = String.raw`(() => {
+  const ecPublicScope = ${ecPublicScope.toString()};
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
   const fcScope = ${fcScope.toString()};
@@ -80,7 +101,8 @@ export const COLLECTOR_JS = String.raw`(() => {
       : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el,pageUrl)
       : globalThis.location?.hostname === 'ff14-fc.com' ? fcScope(el,kind,pageUrl)
       : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text)
-      : globalThis.location?.hostname === 'lookbook.ronkacloset.com' ? ronkaScope(el,kind) : null;
+      : globalThis.location?.hostname === 'lookbook.ronkacloset.com' ? ronkaScope(el,kind)
+      : globalThis.location?.hostname === 'ffxiv.eorzeacollection.com' ? ecPublicScope(el,kind,pageUrl) : null;
     const user = echo || siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
     const ui = siteScope === 'ui' || siteScope !== 'item' && siteScope !== 'user' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')

@@ -8,7 +8,7 @@ import {
   normalizeSiteUrl, templateKey, selectDiscoveredPages, pairSnapshots,
   latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure, siteAccessDenial,
 } from '../../tools/coverage-audit/coverage-core.mjs';
-import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
+import { LINKS_JS, AUDIT_READY_JS, ecPublicScope } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
 const header = renderUserscriptHeader();
@@ -309,6 +309,21 @@ assert.equal(hiddenText('1','1','A',{href:'https://example.com/amazon-review'})[
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.control, false);
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.user, true,
   'ordinary authored nested text must remain excluded');
+const ecNode=(href,classes,match=false)=>({
+  closest(selector){
+    if(selector==='a[href]')return href?{getAttribute:()=>href}:null;
+    return classes.includes(selector)?this:null;
+  },
+  matches:()=>match,
+});
+const ecUrl='https://ffxiv.eorzeacollection.com/gearsets';
+assert.equal(ecPublicScope(ecNode('/gearset/avalanche-brawlers',['.collection.gearset']),'attr:alt',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['.collection.gearset']),'attr:alt',ecUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,['.collection.gearset'],true),'attr:alt',ecUrl),'ui');
+const aboutClasses=['.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'];
+assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'ui');
+assert.equal(ecPublicScope(ecNode('/creator/123',aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'user');
+assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text',ecUrl),null);
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');
