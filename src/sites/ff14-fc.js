@@ -1048,6 +1048,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['無銘', { path: '/equipment/nameless/', zh: '无名套装', strictLink: true }], // localized coffer name; display group
     ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
     // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
+    // Native whole-outfit headings may share their source label with an individual item.
+    ['コンカラー', { path: '/equipment/conquerors/', zh: '征服套装', strictLink: true, itemConflict: true }], // Item 51395; same bare JP label can name a weapon (Item 7353)
+    ['アウトサイダー', { path: '/equipment/outsiders/', zh: '外来者套装', strictLink: true, itemConflict: true }], // Item 27256–27260, 27266; five armor pieces, not a gunblade
+    ['フランネル', { path: '/equipment/flannel/', zh: '法兰绒背带衬衫套装', strictLink: true, itemConflict: true }], // Item 45263; distinguish from crafting material
+    ['ヴァーシティ・ジャケット', { path: '/equipment/varsity_jacket/', zh: '校园外套套装', strictLink: true, itemConflict: true }], // Item 45441
+    ['ボタンド・ヴァーシティジャケット', { path: '/equipment/buttoned_varsity_jacket/', zh: '系扣校园外套套装', strictLink: true, itemConflict: true }], // Item 45442
+    ['ウラエウスボディアーマー', { path: '/equipment/uraeus_body_armor/', zh: '圣蜥蜴革组合', strictLink: true, itemConflict: true }], // Item 45190
+    ['クァールビーチホルター', { path: '/equipment/coeurl_beach_halter/', zh: '豹纹夏衣套装', strictLink: true, itemConflict: true }], // display group; both skirt and shorts variants, see Item 45136 and the corresponding coffer
+    ['クァールタリスマン', { path: '/equipment/coeurl_talisman/', zh: '豹纹护身符套装', strictLink: true, itemConflict: true }], // display group; Item 36120 contains both bottom variants
     ['LV式', { path: '/equipment/lv55/', zh: '河畔堡驻军装束', strictLink: true }], // Item 50483
     ['碧甲羅之', { path: '/equipment/the_blue/', zh: '碧甲装束', strictLink: true }], // Item 45290
     ['アルマ・コスチュームセット', { path: '/equipment/almas_attire/', zh: '威风凛凛套装', strictLink: true }], // Item 45364
