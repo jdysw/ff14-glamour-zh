@@ -9,6 +9,7 @@ import http.client
 import json
 import os
 import re
+import time
 from urllib.parse import urlsplit
 
 API_HOST = "api.browser-use.com"
@@ -36,11 +37,31 @@ def api_request(key, method, path, payload=None):
         connection.close()
 
 
+def secure_cdp_endpoint(key, browser_id, session):
+    # A browser may expose an HTTPS discovery URL or a secure WebSocket,
+    # and the API schema permits null while initialization is pending.
+    for attempt in range(4):
+        value = session.get("cdpUrl")
+        if isinstance(value, str) and value:
+            parsed = urlsplit(value)
+            if parsed.scheme in ("wss", "https") and parsed.hostname:
+                print("Secure CDP endpoint available (" + parsed.scheme + ")", flush=True)
+                return value
+            print("Unexpected or insecure CDP endpoint scheme", flush=True)
+            raise RuntimeError("Unsupported CDP endpoint")
+        if attempt < 3:
+            time.sleep(2)
+            session = api_request(key, "GET", "/api/v4/browsers/" + browser_id)
+    print("No CDP endpoint returned for the created session", flush=True)
+    raise RuntimeError("Missing CDP endpoint")
+
+
 def check_page(cdp_url, target):
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.connect_over_cdp(cdp_url, timeout=25000)
+        print('CDP connection established', flush=True)
         try:
             context = browser.contexts[0]
             page = context.pages[0] if context.pages else context.new_page()
@@ -60,7 +81,7 @@ def check_page(cdp_url, target):
 
 
 def main():
-    key = os.environ.get("BROWSER_USE_API_KEY")
+    key = os.environ.pop("BROWSER_USE_API_KEY", None)
     mode = os.environ.get("BROWSER_USE_PROBE_MODE")
     if not key or mode not in TARGETS:
         raise SystemExit("Configure the repository secret and select a probe mode")
@@ -76,9 +97,8 @@ def main():
     if not isinstance(browser_id, str) or not re.fullmatch(r"[0-9a-fA-F-]{36}", browser_id):
         raise SystemExit("Unexpected browser identifier; session will expire at its short timeout")
     try:
-        cdp_url = session.get("cdpUrl")
-        if not isinstance(cdp_url, str) or not cdp_url.startswith("wss://"):
-            raise RuntimeError("Missing secure CDP endpoint")
+        print("Browser session created", flush=True)
+        cdp_url = secure_cdp_endpoint(key, browser_id, session)
         check_page(cdp_url, TARGETS[mode])
     finally:
         api_request(key, "PATCH", "/api/v4/browsers/" + browser_id, {"action": "stop"})
