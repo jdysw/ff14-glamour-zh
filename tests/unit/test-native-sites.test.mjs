@@ -1261,6 +1261,26 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       '【FF14】钐镰客 AF5装备（90级）👗各种族外观·获取方式【丰获套装】');
     assert.equal(trFC('【FF14】侍AF3(アネモス)装備👗各種族での見た目・入手方法【明珍【風】】', '/equipment/anemos_myochin/'),
       '【FF14】武士 AF3（常风）装备👗各种族外观·获取方式【常风明珍装束】');
+    const previousNinja = DICT_FC['乱波装束'];
+    try {
+      // Identical Japanese/Chinese canonical names are valid resolved names.
+      DICT_FC['乱波装束'] = '乱波装束';
+      assert.equal(trFC('【FF14】忍者AF1装備👗各種族での見た目・入手方法【乱波装束】', '/equipment/augmented_ninja/'),
+        '【FF14】忍者 AF1装备👗各种族外观·获取方式【乱波装束】');
+    } finally {
+      if (previousNinja === undefined) delete DICT_FC['乱波装束'];
+      else DICT_FC['乱波装束'] = previousNinja;
+    }
+    assert.equal(trFC('【FF14】アスフォデロース・キャスター装備👗各種族での見た目・入手方法【パンデモニウム辺獄零式】',
+      '/equipment/asphodelos_of_casting/'),
+      '【FF14】日影兰咏咒套装👗各种族外观·获取方式【零式万魔殿 边境之狱】');
+    assert.equal(trFC('【FF14】LV式装備👗各種族での見た目・入手方法【メインクエ】', '/equipment/lv55/'),
+      '【FF14】河畔堡驻军装束👗各种族外观·获取方式【主线任务】');
+    assert.equal(trFC('【FF14】ミコッテ女性♀初期服装備👗見た目・入手方法【種族装束】'),
+      '【FF14】猫魅族女性初始服装👗外观·获取方式【种族服装】');
+    assert.equal(trFC('【FF14】オブ・ライト装備👗各種族での見た目・入手方法【至天の座アルカディア：クルーザー級】',
+      '/equipment/of_light/'),
+      '【FF14】光之套装👗各种族外观·获取方式【阿卡狄亚登天斗技场 中量级】');
     catalogue.remove();
     // The crafted South Seas clothes are not the earlier swimwear series.
     globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas/');
