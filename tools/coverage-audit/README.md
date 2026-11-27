@@ -53,6 +53,18 @@ GitHub 托管 Runner 曾对 EC 四个公开种子页（首页、幻化列表、�
 3. 默认脱敏导出 JSON，用 `node tools/manual-coverage-audit/generate-report.mjs <导出文件.json>` 生成独立报告。提交 SHA 仅为操作者记录，不能作为工具自动验证过的版本标识。
 4. 保留自动访问失败报告和手动验收报告两个证据来源，不以手动样本覆盖失败记录或冒充全站自动扫描成功。
 
+### Browser Use Cloud 连通性检查
+
+通过仓库 Settings → Secrets and variables → Actions 创建名为 `BROWSER_USE_API_KEY` 的 repository secret。不要把密钥写入代码、日志或工作流输入框。
+
+在现有 `Live localization coverage audit` 工作流手动选择本次 PR 分支，输入 `browser_use_probe` 选项：
+
+- `provider`：验证 API 鉴权及单个云浏览器访问 example.com 的能力，不访问 EC。
+- `ec-authorized`：已确认站方允许该方式后，验证同一个无代理短时会话能否打开 EC 首页；拒绝即停止，不重试。
+- `off`：保留原十站点审计行为。
+
+该检查只确认连通性，不能当成汉化验收；不上传原始网页、账户信息、密钥或 CDP 地址。会话最长三分钟，完成后主动停止，可能产生少量 Browser Use 使用费用。只在手动触发时读取 secret，PR 自动审计不使用它。
+
 ## 分类与报告
 
 - 日文假名、韩文残留默认记为待核查项，不能仅凭 CJK 汉字断言已中文化。

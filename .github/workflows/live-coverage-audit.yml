@@ -2,6 +2,15 @@ name: Live localization coverage audit (10 sites)
 # 手动审计严格；涉及审计基础设施的 PR 自动执行诊断，但外站故障不阻塞普通代码测试。
 on:
   workflow_dispatch:
+    inputs:
+      browser_use_probe:
+        description: 'Optional single Browser Use session (EC only with site authorization)'
+        type: choice
+        options:
+          - 'off'
+          - provider
+          - ec-authorized
+        default: 'off'
   pull_request:
     paths:
       - 'tools/coverage-audit/**'
@@ -15,7 +24,21 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  browser-use-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.browser_use_probe != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install remote CDP client
+        run: python3 -m pip install 'playwright==1.55.0'
+      - name: Check authorized browser connectivity
+        env:
+          BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
+          BROWSER_USE_PROBE_MODE: ${{ inputs.browser_use_probe }}
+        run: python3 tools/coverage-audit/browser-use-probe.py
   scan:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.browser_use_probe == 'off' }}
     name: Scan ${{ matrix.site }}
     runs-on: ubuntu-latest
     timeout-minutes: 58
@@ -67,7 +90,7 @@ jobs:
   report:
     name: Aggregate and enforce truthful audit status
     needs: scan
-    if: always()
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.browser_use_probe == 'off') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
