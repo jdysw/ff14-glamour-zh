@@ -1171,6 +1171,24 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       assert.equal(link.querySelector('img.bare-alt').getAttribute('alt'), chinese);
       assert.equal(link.getAttribute('href'), href);
     }
+    // The live series directory has unlinked dd/h4 labels and a sibling
+    // equipment anchor. Verified URL-specific names must beat generic names.
+    globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
+    const catalogue = doc.createElement('div');
+    catalogue.id = 'search-filter-results-8722';
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/crimson/"><img></a></dt><dd><h4>クリムゾン</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/vipers/"></a></dt><dd><h4>ヴァイパー</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/asphodelos_of_casting/"></a></dt><dd><h4>アスフォデロース・キャスター</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/unrelated/"></a></dt><dd><h4>アスフォデロース・キャスター</h4></dd></dl>'
+      + '</div>';
+    doc.body.append(catalogue);
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].slice(0,3).map(h=>h.textContent),
+      ['深红套装','蝰蛇套装','日影兰咏咒套装']);
+    assert.notEqual(catalogue.querySelectorAll('h4')[3].textContent,'日影兰咏咒套装');
+    catalogue.remove();
+    globalThis.location = new URL('https://ff14-fc.com/equipment/of_light/');
     assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
     const summary = doc.createElement('section');
     summary.innerHTML = '<span>Point</span><h2>まとめ</h2>';

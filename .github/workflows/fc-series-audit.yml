@@ -5,6 +5,11 @@ on:
     paths:
       - 'tools/audit-fc-series.mjs'
       - '.github/workflows/fc-series-audit.yml'
+      - 'src/sites/ff14-fc.js'
+      - 'src/core/cache.js'
+      - 'src/core/item-resolver.js'
+      - 'data/dictionaries/dict-fc.json'
+      - 'data/source/**'
 concurrency:
   group: fc-series-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false

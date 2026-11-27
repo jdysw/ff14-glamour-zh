@@ -178,7 +178,20 @@ function replay(row, doc) {
   globalThis.location = new globalThis.URL(URL);
   const root = doc.createElement('div');
   doc.body.append(root);
-  const catalogue = withAnchor(doc,row,'h4',root,row.headingLinked);
+  root.id = 'search-filter-results-8722';
+  const cards = doc.createElement('div');
+  cards.className = 'equipment-search-results-content';
+  const card = doc.createElement('dl');
+  const dd = doc.createElement('dd');
+  root.append(cards);
+  cards.append(card);
+  card.append(dd);
+  if (!row.headingLinked && row.path) {
+    const link = doc.createElement('a');
+    link.href = 'https://ff14-fc.com' + row.path;
+    card.append(link);
+  }
+  const catalogue = withAnchor(doc,row,'h4',dd,row.headingLinked);
   const catalogueZh = translatedTitle(catalogue);
   const sidebar = doc.createElement('div');
   sidebar.id = 'scrollad';
