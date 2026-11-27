@@ -287,6 +287,38 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return text.replace(label, result);
   }
 
+  // The native AF article starts with a job/AF generation, not the outfit.
+  // Resolve its trailing set label in the same equipment-page context as cards.
+  function fcAFArticleSetName(native, path, element) {
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
+    const linked = fcLinkedPath(element);
+    if (record && (linked === record.path || (linked === undefined && path === record.path))) return record.zh;
+    if (record?.strictLink) return null;
+    const suffix = /(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u;
+    const direct = fcKnownName(native);
+    const series = (suffix.test(direct || '') ? direct : null)
+      || _getSeriesMap().get(native) || fcVerifiedSetName(native)
+      || _getSeriesPfx().get(native) || (!fcItemName(native) && _getItemPfx().get(native));
+    if (!series || series === native) return null;
+    return suffix.test(series) ? series : series + '套装';
+  }
+
+  function fcAFArticleTitle(text, label, path, element) {
+    const match = /^([【〖]FF14[】〗])(.{1,24}?)AF(\d{1,2})?(?:[（(](アネモス|PvP)[）)])?装備(?:[（(]Lv(\d{1,3})[）)])?(👗?)各種族での見た目・入手方法([【〖])(.{1,80})([】〗])(?=$|\s*[|｜])/u.exec(label);
+    if (!match || (!match[3] && match[4] !== 'PvP')) return null;
+    const [, marker, nativeJob, generation = '', variant, level, icon, open, native, close] = match;
+    const job = fcUIValue(nativeJob === '赤魔導士' ? '赤魔道士' : nativeJob);
+    const name = fcAFArticleSetName(native, path, element);
+    const frame = fcUIValue('各種族での見た目・入手方法');
+    const variantZh = variant === 'アネモス' ? fcUIValue(variant) : variant;
+    // Keep unresolved native labels intact for the data-ready rescan.
+    if (!job || !name || !frame || (variant && !variantZh)) return text;
+    const qualifier = variantZh ? '（' + variantZh + '）' : '';
+    const levelZh = level ? '（' + level + '级）' : '';
+    return text.replace(match[0], marker + job + ' AF' + generation + qualifier
+      + '装备' + levelZh + icon + frame + open + name + close);
+  }
+
   function fcArticleTitle(text, label) {
     // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
     // 较新文章可能省略 👗，直接使用「装備各種族での見た目・入手方法」。
@@ -435,12 +467,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return trFCRelated(text, t0) || trFCAcquisition(text, t0);
   }
 
-  function trFC(text, path = globalThis.location?.pathname || '') {
+  function trFC(text, path = globalThis.location?.pathname || '', element = null) {
     if (!text) return text;
     const t0 = text.trim();
     if (!t0) return text;
     const exact = _trFCExact(text, t0, path);
     if (exact !== null) return exact;
+    const afArticle = fcAFArticleTitle(text, t0, path, element);
+    if (afArticle !== null) return afArticle;
     const dynamic = trFCDynamic(text, t0);
     if (dynamic !== null) return dynamic;
     if (t0.length > 120) return text;
@@ -1335,7 +1369,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     }
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
-    const resolved = translated ? raw.replace(label, translated) : trFC(raw);
+    const resolved = translated ? raw.replace(label, translated) : trFC(raw, path, p);
     return fcSetDisplayText(node, raw, resolved);
   }
 
