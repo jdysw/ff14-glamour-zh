@@ -877,6 +877,139 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['レプリカ・アラガンレンジャー', { path: '/equipment/replica_allagan_of_aiming/', zh: '亚拉戈精准套装（复制品）', strictLink: true }], // Item 13819, 13820, 13821, 13822, 13823
     ['レプリカ・アラガンキャスター', { path: '/equipment/replica_allagan_of_casting/', zh: '亚拉戈咏咒套装（复制品）', strictLink: true }], // Item 13797, 13829, 13830, 13831, 13832, 13833
     ['レプリカ・アラガンヒーラー', { path: '/equipment/replica_allagan_of_healing/', zh: '亚拉戈治愈套装（复制品）', strictLink: true }], // Item 13798, 13824, 13825, 13826, 13827, 13828
+    // Full catalogue semantic review: page identity beats generic UI/job names.
+    // Use official item stems for display groups; preserve historical role and gender terms.
+    ['コートリーラヴァー・キャスター', { path: '/equipment/courtly_lovers_of_casting/', zh: '宫廷爱人咏咒套装', strictLink: true }], // Item 49301–49305
+    ['カーペンター', { path: '/equipment/carpenters/', zh: '木匠套装', strictLink: true }], // Item 2920, 3229, 3481
+    ['ゴールドスミス', { path: '/equipment/goldsmiths/', zh: '金匠套装', strictLink: true }], // Item 2923, 3232, 3484
+    ['ディガー', { path: '/equipment/diggers/', zh: '矿工套装', strictLink: true }], // Item 2928, 3237, 3489
+    ['カッター', { path: '/equipment/cutters/', zh: '樵夫套装', strictLink: true }], // Item 2929, 3238, 3490
+    ['フィッシャー', { path: '/equipment/pullers/', zh: '渔人套装', strictLink: true }], // Item 2930, 3239, 3491
+    ['グリフ', { path: '/equipment/glyphic/', zh: '塑形套装', strictLink: true }], // Item 42630
+    ['ヴィカー', { path: '/equipment/halonic_vicars/', zh: '战女神牧师套装', strictLink: true }], // Item 11270, 11277
+    ['インクイジター', { path: '/equipment/halonic_inquisitors/', zh: '战女神判官套装', strictLink: true }], // Item 11266, 11273, 51355
+    ['ストライカー', { path: '/equipment/foestrikers/', zh: '强打套装', strictLink: true }], // Item 3034, 3329, 3554, 3786
+    ['オステア', { path: '/equipment/austere/', zh: '苦行套装', strictLink: true }], // Item 6713, 6719, 6725
+    ['スカリー', { path: '/equipment/shikarees/', zh: '狩猎者套装', strictLink: true }], // Item 7462–7464
+    ['アテナ', { path: '/equipment/divine_wisdom/', zh: '雅典娜套装', strictLink: true }], // Item 8230–8232
+    ['アモン', { path: '/equipment/amons/', zh: '亚蒙套装', strictLink: true }], // Item 8322–8324
+    ['ウェザード・ボイイ', { path: '/equipment/weathered_boii/', zh: '旧化的波伊套装', strictLink: true }], // Item 25246–25248
+    ['ウェザード・フィリ', { path: '/equipment/weathered_fili/', zh: '旧化的诗彩套装', strictLink: true }], // Item 25256–25258
+    ['ウェザード・ガンスリンガー', { path: '/equipment/weathered_gunslingers/', zh: '旧化的枪徒套装', strictLink: true }], // Item 25291–25293
+    ['ウェザード・アルバテル', { path: '/equipment/weathered_arbatel/', zh: '旧化的古术套装', strictLink: true }], // Item 25276–25278
+    ['ウェザード・シヴァルラス', { path: '/equipment/antiquated_chivalrous/', zh: '旧化的侠义套装', strictLink: true }], // Item 17742–17744
+    ['ウェザード・セブンスヘブン', { path: '/equipment/antiquated_seventh_heaven/', zh: '旧化的七天套装', strictLink: true }], // Item 17767–17769
+    ['ウェザード・オラター', { path: '/equipment/antiquated_orators/', zh: '旧化的雄辩套装', strictLink: true }], // Item 17782–17784
+    ['クリード', { path: '/equipment/creed/', zh: '忠骑套装', strictLink: true }], // Item 11779–11781
+    ['ラベジャー', { path: '/equipment/ravagers/', zh: '凶战套装', strictLink: true }], // Item 11789–11791
+    ['カオス', { path: '/equipment/chaos/', zh: '混沌套装', strictLink: true }], // Item 11809–11811
+    ['タントラ', { path: '/equipment/tantra/', zh: '秘武套装', strictLink: true }], // Item 11784–11786
+    ['アエド', { path: '/equipment/aoidos/', zh: '叙诗套装', strictLink: true }], // Item 11799–11801
+    ['マシーナリー', { path: '/equipment/machinists/', zh: '机工套装', strictLink: true }], // Item 11814–11816
+    ['コーラー', { path: '/equipment/callers/', zh: '唤魂套装', strictLink: true }], // Item 11829–11831
+    ['オリゾン', { path: '/equipment/orison/', zh: '白祈套装', strictLink: true }], // Item 11819–11821
+    ['サバント', { path: '/equipment/savants/', zh: '学术套装', strictLink: true }], // Item 11834–11836
+    ['ウェルキン', { path: '/equipment/welkin/', zh: '司天套装', strictLink: true }], // Item 11839–11841
+    ['フレースヴェルグ', { path: '/equipment/hraesvelgr/', zh: '圣龙套装', strictLink: true }], // Item 30762–30764
+    ['レベル', { path: '/equipment/rebel/', zh: '叛逆套装', strictLink: true }], // Item 28590, 28591
+    ['クレセント', { path: '/equipment/crescent/', zh: '弦月套装', strictLink: true }], // Item 8557–8561
+    ['セーラー', { path: '/equipment/sailor/', zh: '水手套装', strictLink: true }], // Item 7535, 7537, 7538
+    ['イディル・ガーディアンRE', { path: '/equipment/augmented_shire_custodians/', zh: '改良型田园管理者套装', strictLink: true }], // Item 16341–16343
+    ['イディル・ハンターRE', { path: '/equipment/augmented_shire_conservators/', zh: '改良型田园监督者套装', strictLink: true }], // Item 16359–16361
+    ['イディル・フィロソファーRE', { path: '/equipment/augmented_shire_philosophers/', zh: '改良型田园哲学者套装', strictLink: true }], // Item 16377–16379
+    ['イディル・プロフェッサーRE', { path: '/equipment/augmented_shire_preceptors/', zh: '改良型田园训导者套装', strictLink: true }], // Item 16371–16373
+    ['クラウン', { path: '/equipment/clowns/', zh: '小丑套装', strictLink: true }], // Item 35863–35867
+    ['パメラー', { path: '/equipment/pummelers/', zh: '殴击套装', strictLink: true }], // Item 33957–33959
+    ['アレジアンス', { path: '/equipment/allegiance/', zh: '忠卫套装', strictLink: true }], // Item 34022–34024
+    ['ティアマット', { path: '/equipment/tiamat/', zh: '暗龙套装', strictLink: true }], // Item 33962–33964
+    ['リーパー', { path: '/equipment/reapers/', zh: '丰获套装', strictLink: true }], // Item 34037–34041
+    ['ブリオソ', { path: '/equipment/brioso/', zh: '蓬勃套装', strictLink: true }], // Item 33967–33969
+    ['スピコナ', { path: '/equipment/spaekonas/', zh: '命巫套装', strictLink: true }], // Item 33977–33979
+    ['シアファニー', { path: '/equipment/theophany/', zh: '显灵套装', strictLink: true }], // Item 33972–33974
+    ['アストロノミア', { path: '/equipment/astronomia/', zh: '天文套装', strictLink: true }], // Item 34007–34009
+    ['ホープ【M】', { path: '/equipment/hope_m/', zh: '希望套装〖男〗', strictLink: true }], // gender-specific Hope gear
+    ['ホープ【F】', { path: '/equipment/hope_f/', zh: '希望套装〖女〗', strictLink: true }], // gender-specific Hope gear
+    ['リオレウスRE【M】', { path: '/equipment/augmented_rathalos_m/', zh: '改良型火龙套装〖男〗', strictLink: true }], // Augmented Rathalos gear
+    ['リオレウスRE【F】', { path: '/equipment/augmented_rathalos_f/', zh: '改良型火龙套装〖女〗', strictLink: true }], // Augmented Rathalos gear
+    ['夜鶴', { path: '/equipment/yakaku/', zh: '夜鹤套装', strictLink: true }], // Item 45509, 45510; combined site group
+    ['ミルキングRE', { path: '/equipment/augmented_millkings/', zh: '改良型仙木套装', strictLink: true }], // Item 21219
+    ['ミルキープRE', { path: '/equipment/augmented_millkeeps/', zh: '改良型珍木套装', strictLink: true }], // Item 15665
+    ['フォージキングRE', { path: '/equipment/augmented_forgekings/', zh: '改良型圣铁套装', strictLink: true }], // Item 21224
+    ['フォージキープRE', { path: '/equipment/augmented_forgekeeps/', zh: '改良型镔铁套装', strictLink: true }], // Item 15670
+    ['ハンマーキングRE', { path: '/equipment/augmented_hammerkings/', zh: '改良型玄甲套装', strictLink: true }], // Item 21229
+    ['ハンマーキープRE', { path: '/equipment/augmented_hammerkeeps/', zh: '改良型戎甲套装', strictLink: true }], // Item 15675
+    ['ジェムキングRE', { path: '/equipment/augmented_gemkings/', zh: '改良型鎏金套装', strictLink: true }], // Item 21234
+    ['ジェムキープRE', { path: '/equipment/augmented_gemkeeps/', zh: '改良型镂金套装', strictLink: true }], // Item 15680
+    ['ハイドキングRE', { path: '/equipment/augmented_hidekings/', zh: '改良型韦革套装', strictLink: true }], // Item 21239
+    ['ハイドキープRE', { path: '/equipment/augmented_hidekeeps/', zh: '改良型精革套装', strictLink: true }], // Item 15685
+    ['ボルトキングRE', { path: '/equipment/augmented_boltkings/', zh: '改良型绮衣套装', strictLink: true }], // Item 21244
+    ['ボルトキープRE', { path: '/equipment/augmented_boltkeeps/', zh: '改良型锦衣套装', strictLink: true }], // Item 15690
+    ['コルドロンキングRE', { path: '/equipment/augmented_cauldronkings/', zh: '改良型炼师套装', strictLink: true }], // Item 21249
+    ['コルドロンキープRE', { path: '/equipment/augmented_cauldronkeeps/', zh: '改良型炼真套装', strictLink: true }], // Item 15695
+    ['ガリーキングRE', { path: '/equipment/augmented_galleykings/', zh: '改良型烹炙套装', strictLink: true }], // Item 21254
+    ['ガリーキープRE', { path: '/equipment/augmented_galleykeeps/', zh: '改良型烹饪套装', strictLink: true }], // Item 15700
+    ['マインキングRE', { path: '/equipment/augmented_minekings/', zh: '改良型精矿套装', strictLink: true }], // Item 21259
+    ['マインキープRE', { path: '/equipment/augmented_minekeeps/', zh: '改良型富矿套装', strictLink: true }], // Item 15705
+    ['フィールドキングRE', { path: '/equipment/augmented_fieldkings/', zh: '改良型百草套装', strictLink: true }], // Item 21264
+    ['フィールドキープRE', { path: '/equipment/augmented_fieldkeeps/', zh: '改良型园野套装', strictLink: true }], // Item 15710
+    ['タックルキングRE', { path: '/equipment/augmented_tacklekings/', zh: '改良型渔采套装', strictLink: true }], // Item 21269
+    ['タックルキープRE', { path: '/equipment/augmented_tacklekeeps/', zh: '改良型渔灯套装', strictLink: true }], // Item 15715
+    ['羅刹【武士】', { path: '/equipment/rakshasa_of_fending/', zh: '罗刹豪士套装', strictLink: true }], // member-name stem
+    ['羅刹【槍士】', { path: '/equipment/rakshasa_of_maiming/', zh: '罗刹枪士套装', strictLink: true }], // member-name stem
+    ['羅刹【拳士】', { path: '/equipment/rakshasa_of_striking/', zh: '罗刹拳士套装', strictLink: true }], // member-name stem
+    ['羅刹【間士】', { path: '/equipment/rakshasa_of_scouting/', zh: '罗刹间士套装', strictLink: true }], // member-name stem
+    ['羅刹【弓士】', { path: '/equipment/rakshasa_of_aiming/', zh: '罗刹弓士套装', strictLink: true }], // member-name stem
+    ['羅刹【術士】', { path: '/equipment/rakshasa_of_casting/', zh: '罗刹术士套装', strictLink: true }], // member-name stem
+    ['羅刹【学士】', { path: '/equipment/rakshasa_of_healing/', zh: '罗刹学士套装', strictLink: true }], // member-name stem
+    ['紫水【武士】', { path: '/equipment/shisui_of_fending/', zh: '紫水豪士装束', strictLink: true }], // member-name stem
+    ['紫水【槍士】', { path: '/equipment/shisui_of_maiming/', zh: '紫水枪士装束', strictLink: true }], // member-name stem
+    ['紫水【拳士】', { path: '/equipment/shisui_of_striking/', zh: '紫水拳士装束', strictLink: true }], // member-name stem
+    ['紫水【間士】', { path: '/equipment/shisui_of_scouting/', zh: '紫水间士装束', strictLink: true }], // member-name stem
+    ['紫水【弓士】', { path: '/equipment/shisui_of_aiming/', zh: '紫水弓士装束', strictLink: true }], // member-name stem
+    ['紫水【術士】', { path: '/equipment/shisui_of_casting/', zh: '紫水术士装束', strictLink: true }], // member-name stem
+    ['紫水【学士】', { path: '/equipment/shisui_of_healing/', zh: '紫水学士装束', strictLink: true }], // member-name stem
+    ['延夏【武士】', { path: '/equipment/yanxian_of_fending/', zh: '延夏豪士装束', strictLink: true }], // member-name stem
+    ['延夏【槍士】', { path: '/equipment/yanxian_of_maiming/', zh: '延夏枪士装束', strictLink: true }], // member-name stem
+    ['延夏【拳士】', { path: '/equipment/yanxian_of_striking/', zh: '延夏拳士装束', strictLink: true }], // member-name stem
+    ['延夏【間士】', { path: '/equipment/yanxian_of_scouting/', zh: '延夏间士装束', strictLink: true }], // member-name stem
+    ['延夏【弓士】', { path: '/equipment/yanxian_of_aiming/', zh: '延夏弓士装束', strictLink: true }], // member-name stem
+    ['延夏【術士】', { path: '/equipment/yanxian_of_casting/', zh: '延夏术士装束', strictLink: true }], // member-name stem
+    ['延夏【学士】', { path: '/equipment/yanxian_of_healing/', zh: '延夏学士装束', strictLink: true }], // member-name stem
+    ['羅漢【武士】', { path: '/equipment/arhat_of_fending/', zh: '罗汉豪士套装', strictLink: true }], // member-name stem
+    ['羅漢【槍士】', { path: '/equipment/arhat_of_maiming/', zh: '罗汉枪士套装', strictLink: true }], // member-name stem
+    ['羅漢【拳士】', { path: '/equipment/arhat_of_striking/', zh: '罗汉拳士套装', strictLink: true }], // member-name stem
+    ['羅漢【間士】', { path: '/equipment/arhat_of_scouting/', zh: '罗汉间士套装', strictLink: true }], // member-name stem
+    ['羅漢【弓士】', { path: '/equipment/arhat_of_aiming/', zh: '罗汉弓士套装', strictLink: true }], // member-name stem
+    ['羅漢【術士】', { path: '/equipment/arhat_of_casting/', zh: '罗汉术士套装', strictLink: true }], // member-name stem
+    ['羅漢【学士】', { path: '/equipment/arhat_of_healing/', zh: '罗汉学士套装', strictLink: true }], // member-name stem
+    ['源氏【武士】', { path: '/equipment/genji_of_fending/', zh: '源氏之豪士套装', strictLink: true }], // member-name stem
+    ['源氏【槍士】', { path: '/equipment/genji_of_maiming/', zh: '源氏之枪士套装', strictLink: true }], // member-name stem
+    ['源氏【拳士】', { path: '/equipment/genji_of_striking/', zh: '源氏之拳士套装', strictLink: true }], // member-name stem
+    ['源氏【間士】', { path: '/equipment/genji_of_scouting/', zh: '源氏之间士套装', strictLink: true }], // member-name stem
+    ['源氏【弓士】', { path: '/equipment/genji_of_aiming/', zh: '源氏之弓士套装', strictLink: true }], // member-name stem
+    ['源氏【術士】', { path: '/equipment/genji_of_casting/', zh: '源氏之术士套装', strictLink: true }], // member-name stem
+    ['源氏【学士】', { path: '/equipment/genji_of_healing/', zh: '源氏之学士套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:重', { path: '/equipment/yorha_type-51_of_fending/', zh: '寄叶五一式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:攻', { path: '/equipment/yorha_type-51_of_maiming/', zh: '寄叶五一式制敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:格', { path: '/equipment/yorha_type-51_of_striking/', zh: '寄叶五一式强袭套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:軽', { path: '/equipment/yorha_type-51_of_scouting/', zh: '寄叶五一式游击套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:射', { path: '/equipment/yorha_type-51_of_aiming/', zh: '寄叶五一式精准套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:術', { path: '/equipment/yorha_type-51_of_casting/', zh: '寄叶五一式咏咒套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:医', { path: '/equipment/yorha_type-51_of_healing/', zh: '寄叶五一式治愈套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:重', { path: '/equipment/yorha_type-53_of_fending/', zh: '寄叶五三式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:攻', { path: '/equipment/yorha_type-53_of_maiming/', zh: '寄叶五三式制敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:格', { path: '/equipment/yorha_type-53_of_striking/', zh: '寄叶五三式强袭套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:軽', { path: '/equipment/yorha_type-53_of_scouting/', zh: '寄叶五三式游击套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:射', { path: '/equipment/yorha_type-53_of_aiming/', zh: '寄叶五三式精准套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:術', { path: '/equipment/yorha_type-53_of_casting/', zh: '寄叶五三式咏咒套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:医', { path: '/equipment/yorha_type-53_of_healing/', zh: '寄叶五三式治愈套装', strictLink: true }], // member-name stem
+    ['ヨルハ五五式:重', { path: '/equipment/yorha_type-55_of_fending/', zh: '寄叶五五式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五五式:攻', { path: '/equipment/yorha_type-55_of_maiming/', zh: '寄叶五五式制敌套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:格', { path: '/equipment/obsolete_androids_of_striking/', zh: '人造人旧式强袭套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:軽', { path: '/equipment/obsolete_androids_of_scouting/', zh: '人造人旧式游击套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:射', { path: '/equipment/obsolete_androids_of_aiming/', zh: '人造人旧式精准套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:術', { path: '/equipment/obsolete_androids_of_casting/', zh: '人造人旧式咏咒套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:医', { path: '/equipment/obsolete_androids_of_healing/', zh: '人造人旧式治愈套装', strictLink: true }], // member-name stem
   ]);
 
   function fcAnchorPath(link) {
