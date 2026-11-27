@@ -169,7 +169,8 @@ assert.equal(tr('Fuath Battle Content Gear'), '水妖装束 战斗内容装备')
 assert.equal(tr('Hope [F]'), '希望套装【女】');
 assert.equal(tr('Hope [M]'), '希望套装【男】');
 assert.equal(tr('Eagleclaw'), '雕爪套装');
-assert.equal(tr('Legend Crafted Glamour'), null, '无国服核验译名的套装不猜译');
+assert.equal(tr('Legend Crafted Glamour'), '神话传令官套装 制作幻化', '实测且官译核实的系列应翻译');
+assert.equal(tr('Unverified Placeholder Series Crafted Glamour'), null, '无国服核验译名的套装不猜译');
 assert.equal(tr("Prishe's Healing"), null, '未收录的职业变体不能虚构套装');
 
 // 独立从国服物品表核对新增的系列译名，不用维护代码中的映射反向生成预期。

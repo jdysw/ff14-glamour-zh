@@ -12,7 +12,7 @@ permissions:
   actions: read
 jobs:
   ec:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '9fd09984ff5ac46a87b4c95069571db156e05dc7' && github.run_attempt == 1 }}
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'cbf0747dcc00c1d095aeb3dde52a9fe71f3ab8fa' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
