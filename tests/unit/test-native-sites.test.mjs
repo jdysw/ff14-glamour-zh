@@ -1048,6 +1048,11 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
     // Exact Item bundle names verified against the offline multilingual data.
     for (const [native, path, zh, title, localized] of [
+      ["アーマーガッパ","/equipment/imp/","河童蓑衣装备套装","【FF14】アーマーガッパ装備👗各種族での見た目・入手方法【着ぐるみ】","【FF14】河童蓑衣装备套装👗各种族外观·获取方式【玩偶服】"],
+      ["アーバン","/equipment/urban/","都市外套组合","【FF14】アーバン装備👗各種族での見た目・入手方法","【FF14】都市外套组合👗各种族外观·获取方式"],
+      ["レベル","/equipment/rebel/","叛逆外套组合","【FF14】レベル装備👗各種族での見た目・入手方法","【FF14】叛逆外套组合👗各种族外观·获取方式"],
+      ["オメガM・コスチュームセット","/equipment/omega-m_attire/","欧米茄M服装装备套装","【FF14】オメガM・コスチュームセット👗各種族での見た目・入手方法【オメガ装備】","【FF14】欧米茄M服装装备套装👗各种族外观·获取方式【欧米茄装备】"],
+      ["オメガF・コスチュームセット","/equipment/omega-f_attire/","欧米茄F服装装备套装","【FF14】オメガF・コスチュームセット👗各種族での見た目・入手方法【オメガ装備】","【FF14】欧米茄F服装装备套装👗各种族外观·获取方式【欧米茄装备】"],
       ["ラムザ","/equipment/ramzas/","拉姆萨装备套装","【FF14】ラムザ装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】拉姆萨装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
       ["オヴェリア","/equipment/ovelias/","奥薇莉亚装备套装","【FF14】オヴェリア装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】奥薇莉亚装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
       ["ガフガリオン","/equipment/gaffgarions/","加夫加利昂装备套装","【FF14】ガフガリオン装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】加夫加利昂装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
@@ -1068,6 +1073,11 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
       assert.equal(name.textContent, zh, path);
       assert.equal(article.textContent, localized, path);
       assert.equal(trFC(title + ' | ミラプリライフ', path), localized + ' | 幻化生活', path);
+      const img = dom.document.createElement('img');
+      img.alt = title;
+      article.parentElement.append(img);
+      _trFCAttr(img, 'alt');
+      assert.equal(img.alt, localized, path);
     }
     for (const [nativeTitle, translatedTitle, path] of [
       ["【FF14】星芒祭⛄スノーマンセット装備👗各種族での見た目・入手方法【雪だるま】","【FF14】星芒节⛄雪人套装👗各种族外观·获取方式【雪人】","/equipment/snowman_attire/"],

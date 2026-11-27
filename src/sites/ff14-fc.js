@@ -856,7 +856,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['バニー', { path: '/equipment/bunny/', zh: '兔女郎套装', strictLink: true }],
     ['カジュアル', { path: '/equipment/casual/', zh: '休闲套装', strictLink: true }],
     ['クポクポ', { path: '/equipment/kupo/', zh: '库啵套装', strictLink: true }],
-    ['アーバン', { path: '/equipment/urban/', zh: '都市套装', strictLink: true }],
+    ['アーバン', { path: '/equipment/urban/', zh: '都市外套组合', strictLink: true }], // Item 45371; verified equipment detail group
     ['サバイバー', { path: '/equipment/survival/', zh: '幸存者套装', strictLink: true }],
     ['アスフォデロース・キャスター', { path: '/equipment/asphodelos_of_casting/', zh: '日影兰咏咒套装', strictLink: true }],
     ['アスフォデロース・ヒーラー', { path: '/equipment/asphodelos_of_healing/', zh: '日影兰治愈套装', strictLink: true }],
@@ -1087,7 +1087,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['サバント', { path: '/equipment/savants/', zh: '学术套装', strictLink: true }], // Item 11834–11836
     ['ウェルキン', { path: '/equipment/welkin/', zh: '司天套装', strictLink: true }], // Item 11839–11841
     ['フレースヴェルグ', { path: '/equipment/hraesvelgr/', zh: '圣龙套装', strictLink: true }], // Item 30762–30764
-    ['レベル', { path: '/equipment/rebel/', zh: '叛逆套装', strictLink: true }], // Item 28590, 28591
+    ['レベル', { path: '/equipment/rebel/', zh: '叛逆外套组合', strictLink: true }], // Item 45372; verified equipment detail group
     ['クレセント', { path: '/equipment/crescent/', zh: '弦月套装', strictLink: true }], // Item 8557–8561
     ['セーラー', { path: '/equipment/sailor/', zh: '水手套装', strictLink: true }], // Item 7535, 7537, 7538
     ['イディル・ガーディアンRE', { path: '/equipment/augmented_shire_custodians/', zh: '改良型田园管理者套装', strictLink: true }], // Item 16341–16343
@@ -1219,6 +1219,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['サマーインディゴ', { path: '/equipment/summer_indigo/', zh: '夏季靛蓝组合', strictLink: true }], // Item 45344
     ['天つ水影流', { path: '/equipment/amatsu/', zh: '天水影流装束', strictLink: true }], // Item 45180
     ['クウェインチュレル', { path: '/equipment/quaintrelles/', zh: '风尚褶边套装', strictLink: true }], // Item 45315
+    ['アーマーガッパ', { path: '/equipment/imp/', zh: '河童蓑衣装备套装', strictLink: true }], // Item 45538; verified equipment detail group
+    ['オメガM・コスチュームセット', { path: '/equipment/omega-m_attire/', zh: '欧米茄M服装装备套装', strictLink: true, itemConflict: true }], // Item 45434; verified equipment detail group
+    ['オメガF・コスチュームセット', { path: '/equipment/omega-f_attire/', zh: '欧米茄F服装装备套装', strictLink: true, itemConflict: true }], // Item 45435; verified equipment detail group
     // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
     // Native whole-outfit headings may share their source label with an individual item.
     ['グリムグリズリー・スーツ', { path: '/equipment/grisly_bear_suit/', zh: '狰狞熊套装', strictLink: true, itemConflict: true }], // Item 52402, 52403; in-game combination name
@@ -1562,6 +1565,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   // Recommendation thumbnails often repeat the visible title. Use the same
   // context-sensitive resolver for both, but leave distinct captions alone.
   function fcRecommendationAlt(image, value) {
+    const exact = fcExactArticleText(value, value.trim());
+    if (exact !== null) return exact;
     const heading = image.closest?.('#scrollad dl')?.querySelector('h5');
     if (!heading) return null;
     const label = value.trim();
