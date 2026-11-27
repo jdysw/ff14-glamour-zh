@@ -6,9 +6,9 @@ import {
 } from '../../tools/coverage-audit/audit.mjs';
 import {
   normalizeSiteUrl, templateKey, selectDiscoveredPages, pairSnapshots,
-  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure,
+  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure, siteAccessDenial,
 } from '../../tools/coverage-audit/coverage-core.mjs';
-import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
+import { LINKS_JS, AUDIT_READY_JS, ecPublicScope } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
 
 const header = renderUserscriptHeader();
@@ -17,11 +17,43 @@ assert.equal(classify('FFXIV WEAPON COLLECTION',{ui:true}),'exempt');
 assert.equal(classify('关于 Miramiru',{ui:true,before:'About Miramiru'}),'ok');
 assert.equal(classify('关于 Miramiru Settings',{ui:true,before:'About Miramiru Settings'}),'wrong');
 assert.equal(classify('Miramiru Settings',{ui:true}),'real');
+assert.equal(classify('ー',{site:'fc',ui:true}),'ok');
+assert.equal(classify('ーーーーー',{site:'attire',ui:true}),'ok');
+assert.equal(classify('・Google AdSense 广告',{site:'miramiru',ui:true}),'ok');
+assert.equal(classify('推广声明详见 /affiliate，商业信息详见 /commerce。',{site:'miramiru',ui:true}),'ok');
+assert.equal(classify('这些权限由网站使用的身份认证平台 Supabase Auth 提供。',{site:'miramiru',ui:true}),'ok');
+assert.equal(classify('Miramiru runs on your support',{site:'miramiru',ui:true}),'real');
+assert.equal(classify('Google AdSense 设置说明 Settings',{site:'miramiru',ui:true}),'real');
+assert.equal(classify('・未翻訳の説明',{site:'miramiru',ui:true}),'real');
+assert.equal(classify('NPC',{site:'fc',ui:true}),'exempt');
+assert.equal(classify('Facebook',{site:'attire',ui:true}),'exempt');
+assert.equal(classify('LINE',{site:'attire',ui:true}),'exempt');
+assert.equal(classify('Facebook Settings',{site:'attire',ui:true}),'real');
+assert.equal(classify('Eden',{site:'eden',ui:true}),'exempt');
+assert.equal(classify('从 Lodestone 导入装备',{site:'eden',ui:true,before:'Import equipment from Lodestone'}),'ok');
+assert.equal(classify('本站使用 Google Analytics 进行访问统计。',{site:'eden',ui:true,before:'This site uses Google Analytics'}),'ok');
+assert.equal(classify('FANTASIAN联动 (3)',{site:'fc',ui:true,before:'FANTASIANコラボ (3)'}),'ok');
+assert.equal(classify('Arms',{site:'eden',ui:true}),'real');
+assert.equal(classify('3. 带上话题 #ミラプリレシピ 并发布到 Twitter。（可选）',{site:'eden',ui:true,before:'3. タグ "#ミラプリレシピ" をつけて、Twitterに投稿する。(任意)'}),'ok');
+assert.equal(classify('观看 YouTube 直播',{site:'eden',ui:true,before:'YouTube配信を見る'}),'ok');
+assert.equal(classify('YouTube Settings',{site:'eden',ui:true}),'real');
+assert.equal(classify('装备物品信息使用 XIVAPI 及 FFXIV Fan Kit 的数据进行展示。',{site:'miramiru',ui:true,before:'장비 아이템 정보 표시에는 XIVAPI 및 FFXIV Fan Kit의 데이터를 이용하고 있습니다.'}),'ok');
+assert.equal(classify('FFXIV Fan Kit Settings',{site:'miramiru',ui:true}),'real');
+assert.equal(classify('未翻訳 #ミラプリレシピ',{site:'eden',ui:true}),'real');
+assert.equal(normalizeSiteUrl('https://www.ffxivcollection.com/sitemap.html/','https://www.ffxivcollection.com/',['www.ffxivcollection.com']),null);
 assert.equal(classify('투영 콘테스트',{ui:true}),'real');
 assert.equal(classify('染色',{site:'collection',ui:true}),'ok','Miramiru terminology must not mark another site as untranslated');
 assert.equal(classify('染色',{site:'miramiru',ui:true}),'real');
 
 assert.ok(SITES.eden, 'Eden 的 hash 路由业务页必须可审计');
+assert.ok(SITES.attire.pages.length >= 25, '装備手帳应覆盖目录、装备、武器、兑换、AF、搜索和幻化等种子页');
+assert.equal(templateKey('https://attire.jp/?p=125327'),templateKey('https://attire.jp/torna-tunic/'));
+assert.equal(templateKey('https://attire.jp/arms/book-of-electrum/'),templateKey('https://attire.jp/arms/quick-silver/'));
+assert.notEqual(templateKey('https://attire.jp/?s=フィールドコマンダーコート'),templateKey('https://attire.jp/'));
+assert.equal(normalizeSiteUrl('https://attire.jp/wp-login.php','https://attire.jp/', ['attire.jp']),null);
+assert.equal(classify('入手方法',{site:'attire',ui:true,scope:'ui',cls:'a--post-title'}),'real');
+assert.equal(classify('フィールドコマンダーコート',{site:'attire',scope:'item',cls:'a--post-title d--bold c--post-contents'}),'real');
+assert.equal(classify('フィールドコマンダーコート',{site:'attire',scope:'user',user:true,cls:'a--post-title'}),'user');
 assert.equal(classify('検索',{site:'eden',ui:true}),'real');
 assert.equal(normalizeSiteUrl('https://mirapri.ff14eden.work/#/components/popular-equipment?search=private', 'https://mirapri.ff14eden.work/', ['mirapri.ff14eden.work']), 'https://mirapri.ff14eden.work/#/components/popular-equipment');
 assert.notEqual(templateKey('https://mirapri.ff14eden.work/#/'),templateKey('https://mirapri.ff14eden.work/#/components/popular-equipment'));
@@ -277,6 +309,37 @@ assert.equal(hiddenText('1','1','A',{href:'https://example.com/amazon-review'})[
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.control, false);
 assert.equal(hiddenText('1', '1', 'SPAN')[0]?.ctx.user, true,
   'ordinary authored nested text must remain excluded');
+const ecNode=(href,classes,match=false)=>({
+  closest(selector){
+    if(selector==='a[href]')return href?{getAttribute:()=>href}:null;
+    return classes.includes(selector)?this:null;
+  },
+  matches:()=>match,
+});
+const ecUrl='https://ffxiv.eorzeacollection.com/gearsets';
+assert.equal(ecPublicScope(ecNode('/gearset/avalanche-brawlers',['.collection.gearset']),'attr:alt',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['.collection.gearset']),'attr:alt',ecUrl),'user');
+const ecCardRoot='.collection.gearset,.collection.accessory';
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.collection-actions .b-tooltip .tooltip-trigger'],true),'attr:alt',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.tag.is-background-dark'],true),'attr:alt','https://ffxiv.eorzeacollection.com/accessories'),'ui');
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',[ecCardRoot,'.collection-actions .b-tooltip .tooltip-trigger'],true),'attr:alt',ecUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,[ecCardRoot],true),'attr:alt',ecUrl),null);
+assert.equal(ecPublicScope(ecNode(null,['#filter_form select optgroup[label]']),'attr:label',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode('/creator/123',['#filter_form select optgroup[label]']),'attr:label',ecUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,[]),'attr:label',ecUrl),null);
+const detailUrl='https://ffxiv.eorzeacollection.com/gearset/legend';
+assert.equal(ecPublicScope(ecNode(null,['h1.title.has-negative-letter-spacing']),'text',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,[]),'document:title',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,['.gear-icon-box-slot-name,.divider.is-background.has-text-primary']),'text',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,['.column.is-3 .box .is-flex'],true),'attr:alt',detailUrl),'ui');
+assert.equal(ecPublicScope(ecNode(null,['.has-text-craft-name.eorzeadb_link']),'text',detailUrl),'item');
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['.column.is-3 .box .is-flex'],true),'attr:alt',detailUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,[]),'document:title','https://ffxiv.eorzeacollection.com/glamour/123/player-look'),null);
+assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',['h1.title.has-negative-letter-spacing']),'text',detailUrl),'user');
+const aboutClasses=['.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'];
+assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'ui');
+assert.equal(ecPublicScope(ecNode('/creator/123',aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'user');
+assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text',ecUrl),null);
 assert.doesNotThrow(() => new Function(COLLECTOR_JS));
 assert.doesNotThrow(() => new Function(LINKS_JS));
 console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN, report and collector passed');
@@ -285,6 +348,15 @@ console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN,
 assert.match(nonContentPageReason({title:'Ronka Closet',body:'This page could not be found.'}),/404/);
 assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:404}),/HTTP 404/);
 assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:403}),/HTTP 403/);
+const ecHost = ['ffxiv.eorzeacollection.com'];
+const ecIdentity = {finalUrl:'https://ffxiv.eorzeacollection.com/',title:'EC',body:'Forbidden'};
+for (const status of [401,403,429]) {
+  assert.match(siteAccessDenial({...ecIdentity,httpStatus:status},ecHost),new RegExp('HTTP '+status));
+}
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:404},ecHost),null);
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:200},ecHost),null);
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:403,finalUrl:'https://unrelated.example/'},ecHost),null);
+assert.match(siteAccessDenial({...ecIdentity,httpStatus:503,title:'Just a moment...',body:'Performing security verification by Cloudflare'},ecHost),/WAF/);
 assert.equal(nonContentPageReason({title:'News',body:'An article discussing 404 pages in detail'}),null);
 assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'https://other.example/'},['ff14-fc.com']),/cross-origin/);
 assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'http://ff14-fc.com/'},['ff14-fc.com']),/cross-origin/);

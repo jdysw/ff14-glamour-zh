@@ -1,10 +1,21 @@
 import { CACHE_CAP_LOOKUP, _jp2zhCache, _getSeriesMap, cacheGuard } from './cache.js';
-import { resolveByName } from './data/data-manager.js';
+import { resolveByName, resolveAllByName } from './data/data-manager.js';
 // 仅转发其他模块拥有的符号，避免在此建立多余的本地绑定。
 export { _en2zhCache } from './cache.js';
 export { tryEnToZh } from './data/data-manager.js';
 export { _jp2zhCache, _mutualPrefix, _prefixBest, _stripSeriesHit, lookupJp2Zh, lookupSeries };
 
+
+  // Display-only alias: the Japanese shop often calls an outfit
+  // 「コスチュームセット」 where the in-game item uses 「アタイア」.
+  // Prefer exact identities, never resolve an ambiguous or non-set name.
+  export function lookupShopCostumeSet(name) {
+    if (typeof name !== 'string' || !name.endsWith('・コスチュームセット')) return null;
+    const direct = resolveAllByName(name);
+    const canonical = name.slice(0, -'コスチュームセット'.length) + 'アタイア';
+    const values = direct.length ? direct : resolveAllByName(canonical);
+    return values.length === 1 && /(?:套装|装束|服装组合)$/u.test(values[0]) ? values[0] : null;
+  }
 
   // 日文 → 中文 单条查找（物品总表统一索引；日文名 → 国服中文名）
   function lookupJp2Zh(jp) {

@@ -1,0 +1,31 @@
+name: Offline ixion official text evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/ixion-offline.py'
+      - '.github/workflows/ixion-offline-audit.yml'
+permissions:
+  contents: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Fetch and verify the pinned strings-v2 upstream archive
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 600 \
+            'https://github.com/thewakingsands/ixion/releases/download/untagged-78bcdca76d0ecf459d95/strings.zip' \
+            --output "$RUNNER_TEMP/ixion-strings.zip"
+          printf '%s  %s\n' '326d42097a943e10318d5398ee0ebb1cb01ddd4cacdba8693365be0c2235b4d1' "$RUNNER_TEMP/ixion-strings.zip" | sha256sum --check
+      - name: Export multilingual rows and compare repository Item names
+        run: python3 tools/ixion-offline.py "$RUNNER_TEMP/ixion-strings.zip" tests/.cache/ixion-offline
+      - name: Preserve offline evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ixion-offline-official-text
+          path: tests/.cache/ixion-offline/
+          retention-days: 14
+          if-no-files-found: error

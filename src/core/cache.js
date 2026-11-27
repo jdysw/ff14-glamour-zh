@@ -1,5 +1,5 @@
 import { CACHE_CAP_LOOKUP, _cacheReg, _en2zhCache, _lcs90, cacheGuard, cacheRegister } from './cache-primitives.js';
-import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName } from './data/data-manager.js';
+import { DATA_TEXT, DATA_VER, dataGetIndex, resolveByName, resolveAllByName, findItemsByName, hasItemIdentities } from './data/data-manager.js';
 import { DICT_FC, dictGetRevision } from './data/dictionary.js';
 // 无本地调用方的基础层符号直接转发，保留旧模块的导出接口。
 export { DAY_MS, _countIncludes, _shortestStr, cacheReset } from './cache-primitives.js';
@@ -139,24 +139,81 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     return sets;
   }
 
+  // Recover missing role-specific series from canonical armor records. Only
+  // several independent, unambiguous armor slots agreeing on one Chinese
+  // prefix may establish a family; do not infer it from a single item or
+  // combine upgraded (RE) and unupgraded versions.
+  const FC_ARMOR_PARTS = [
+    /^(?:ヘルム|ハット|サークレット|マスク|キャップ|フード|バイザー|ゴーグル|クラウン|ターバン|ベレー|ヘッドギア|ヘッドバンド|バンダナ|コイフ)$/u,
+    /^(?:コート|アーマー|メイル|ローブ|ジャケット|チュニック|シャツ|ベスト|ダブレット|タバード|サーコート|シクラス)$/u,
+    /^(?:ガントレット|グローブ|アームガード|ハーフグローブ|ブレーサー|ミトン|アームレット)$/u,
+    /^(?:トラウザー|ブレー|ブリーチ|スロップ|キュロット|タイツ|ホーズ|パンツ|ボトム|スカート|サルエル|レギンス)$/u,
+    /^(?:ブーツ|サバトン|グリーヴ|シューズ|サンダル|ロングブーツ|サイブーツ|クラコー|レッグガード)$/u,
+  ];
+  function fcArmorSlot(native, zh, part) {
+    // Slot 5 also represents missing source slot metadata in V3. For
+    // unclassified rows only, retain the legacy exact armor-suffix whitelist;
+    // conflicting identities or known slot classifications take precedence.
+    if (hasItemIdentities()) {
+      const records = findItemsByName(native, 'ja');
+      const slot = records[0]?.slot;
+      if (slot == null || !records.every(row => row.slot === slot && row.zh === zh)) return -1;
+      if (slot < 5) return slot;
+    }
+    return FC_ARMOR_PARTS.findIndex(re => re.test(part));
+  }
+
+  function fcBaseRoleSets(nameMap) {
+    const sets = new Map();
+    const roles = Object.entries(FC_ROLE_ZH);
+    for (const [native, zh] of Object.entries(nameMap)) {
+      const separator = native.lastIndexOf('・');
+      if (separator < 2 || /(?:RE|SP)$/u.test(native)) continue;
+      const part = native.slice(separator + 1);
+      const role = roles.find(([ja]) => part.startsWith(ja) && part.length > ja.length);
+      if (!role) continue;
+      const [jaRole, zhRole] = role;
+      // Count anatomical equipment slots, not different spellings of
+      // headgear. Three hats must not establish a full armor family.
+      const slot = fcArmorSlot(native, zh, part.slice(jaRole.length));
+      if (slot < 0) continue;
+      const names = resolveAllByName(native);
+      if (names.length !== 1 || names[0] !== zh) continue;
+      const roleIndex = zh.indexOf(zhRole);
+      if (roleIndex < 2 || roleIndex + zhRole.length >= zh.length) continue;
+      const key = native.slice(0, separator + 1) + jaRole;
+      const localized = zh.slice(0, roleIndex + zhRole.length);
+      const entry = sets.get(key) || { name: localized, slots: new Set() };
+      entry.slots.add(slot);
+      if (entry.name !== localized) entry.name = null;
+      sets.set(key, entry);
+    }
+    return sets;
+  }
+
   function _getItemPfx() {
     if (_itemPfxCache) return _itemPfxCache;
     _itemPfxCache = new Map();
     try {
       const nameMap = dataGetIndex('nameMap');
-      if (!nameMap) return _itemPfxCache;
-      const groups = _itemPfxGroup(nameMap);
-      for (const [key, list] of groups) {
-        if (list.length < 2) continue;
-        const sub = _lcs90(list);
-        if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
-      }
-      for (const [key, {name, count}] of fcAugmentedRoleSets(nameMap)) {
-        if (name && count >= 3 && !DICT_FC[key]) _itemPfxCache.set(key, name);
-      }
+      if (nameMap) populateItemPrefixes(_itemPfxCache, nameMap);
     } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
   }
+  function populateItemPrefixes(cache, nameMap) {
+    for (const [key, list] of _itemPfxGroup(nameMap)) {
+      if (list.length < 2) continue;
+      const prefix = _lcs90(list);
+      if (prefix?.length >= 2 && !DICT_FC[key]) cache.set(key, prefix);
+    }
+    for (const [key, { name, slots }] of fcBaseRoleSets(nameMap)) {
+      if (name && slots.size >= 3 && !Object.hasOwn(DICT_FC, key) && !_getSeriesMap().has(key)) cache.set(key, name);
+    }
+    for (const [key, { name, count }] of fcAugmentedRoleSets(nameMap)) {
+      if (name && count >= 3 && !DICT_FC[key]) cache.set(key, name);
+    }
+  }
+
   let _ronkaCacheN = 0; // NOSONAR — 缓存容量计数器随缓存写入/清理变化
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;

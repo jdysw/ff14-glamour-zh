@@ -56,7 +56,7 @@ export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, transla
     if (!t0 || t0.length > 120) return text;
     const hasKR = RONKA_KR.test(t0);
     // ① 无韩文：仅查词典（GALLERY/GENERATOR/ABOUT/LOGIN/JOIN 等）
-    if (!hasKR) return DICT_RONKA[t0] || text;
+    if (!hasKR) return Object.hasOwn(DICT_RONKA, t0) ? DICT_RONKA[t0] : text;
     let zh = DICT_RONKA[t0] || resolveDyeColor(t0);
     // ② 染剂 "N-名称"（如 "1-하얀눈색"；React 拆分时 "하얀눈색" 单独命中 ①）
     if (zh == null) zh = _trRonkaDye(t0);
@@ -271,7 +271,7 @@ export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, transla
 
   function translateRonkaTitle() {
     const t = document.title;
-    if (!t || !RONKA_KR.test(t)) return;
+    if (!t) return;
     const nt = trRonka(t);
     if (nt && nt !== t && nt.length <= 120) document.title = nt;
   }
@@ -287,7 +287,12 @@ export { _trRonkaDye, _trRonkaPatch, markRonkaItem, startRonka, trRonka, transla
       characterData: true,
       attributes: true,
       attributeFilter: ['alt', 'title', 'aria-label', 'placeholder'],
-      filter: (m) => m.type === 'attributes' || !!(m.target?.nodeValue && RONKA_KR.test(m.target.nodeValue)),
+      filter: (m) => {
+        if (m.type === 'attributes') return true;
+        const text = m.target?.nodeValue?.trim();
+        // The site also uses English navigation labels (GALLERY, GENERATOR).
+        return !!text && (RONKA_KR.test(text) || Object.hasOwn(DICT_RONKA, text));
+      },
       debounce: 120,
       handler: (nodes, textNodes) => {
         for (const n of [...nodes, ...textNodes]) safe(translateRonkaPage, 'Ronka 局部')(n);

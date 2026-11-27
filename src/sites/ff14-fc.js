@@ -4,7 +4,7 @@ import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDye
 import { cacheRegister } from '../core/cache-primitives.js';
 import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
-import { lookupJp2Zh } from '../core/item-resolver.js';
+import { lookupJp2Zh, lookupShopCostumeSet } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_ROLE_ZH, _fcAcceptNode, _fcCanReplaceAt, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
@@ -90,9 +90,45 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['ネオシチズン・コスチュームセット', '新生国民套装'],
     ['カーウェン', '卡文套装'],
     ['ゼロルミナリー・コスチュームセット', '零点套装'],
+    // The shop title differs from the in-game attire name. These pairs
+    // are confirmed by the Chinese store and Item 50721/50722/45522.
+    ['バトルフィールドローズ・コスチュームセット', '战场玫瑰套装'],
+    ['ハンブル・コスチュームセット', '平民套装'],
+    ['セイニャー・コスチュームセット', '领主装备套装'],
+    // The official outfit combination name (Item 45109) already expresses a set.
+    ['ブルーサマーセット（女性用）', '蔚蓝女式夏装组合'],
+    // Full set labels observed in the live recommendation cards. Game item
+    // records 50585, 8111, 14855, 28606, 15481 and 32332–32333 establish
+    // the set identity or the localized shop/gear family name.
+    ['アイディアル・スースセイヤー', '理想化的预占套装'],
+    ['スウィートドリームアタイア', '美梦套装'],
+    ['東方殿方衣装セット', '东方公子装束'],
+    ['東方美玉衣装セット', '东方美玉装束'],
+    ['風雅衣装セット', '风雅装束'],
+    ['エデンモーン・キャスター', '伊甸之晨咏咒套装'],
+    // JP store titles differ from CN store / item names; use whole-label matches.
+    // Gear stems verified against Item 46032 and Item 11338/11352.
+    ['クワイヤーセット', '唱诗班套装'],
+    ['アイメリク・コスチュームセット', '总骑士长套装'],
+    ['クルル・コスチュームセット', '血盟聆听者套装'],
+    ['スターライトセット', '星芒套装'],
+    ['セレモニアル・ディフェンダー', '仪仗御敌套装'],
+    ['シャーレアン・パンクラティアスト', '萨雷安混斗者套装'],
   ]);
   function fcVerifiedSetName(name) {
-    return FC_VERIFIED_SET_ALIASES.get(name) || null;
+    if (typeof name !== 'string') return null;
+    const verified = FC_VERIFIED_SET_ALIASES.get(name);
+    if (verified) return verified;
+    // Seasonal shop bundles use gendered titles, while the actual item
+    // record names the corresponding top + bottom combination.
+    const summer = /^(レッド|グリーン|ブルー|ソーラー|ルナ|パールブラック|パールホワイト|ストライプ)サマーセット[（(]([男女])性用[）)]$/u.exec(name);
+    if (summer) {
+      const prefix = summer[1].startsWith('パール') ? summer[1] + '・' : summer[1];
+      const part = summer[2] === '女' ? 'ホルター' : 'トップ';
+      const values = resolveAllByName(prefix + 'サマー' + part + '・セット');
+      return values.length === 1 && values[0].endsWith('夏装组合') ? values[0] : null;
+    }
+    return lookupShopCostumeSet(name);
   }
 
   function fcVerifiedSetText(text, label) {
@@ -208,16 +244,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return { out, changed };
   }
   function translateBracketedDuties(text) {
-    const chunks = text.split('】');
-    for (let index = 0; index < chunks.length - 1; index++) {
-      const chunk = chunks[index];
-      const opening = chunk.indexOf('【');
-      if (opening < 0) continue;
-      const names = chunk.slice(opening + 1);
-      chunks[index] = chunk.slice(0, opening + 1)
-        + names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
-    }
-    return chunks.join('】');
+    // Both title variants occur on the native equipment catalogue, including
+    // the source badges appended to titles and thumbnail alt labels.
+    return text.replace(/【([^【】]{1,160})】|〖([^〖〗]{1,160})〗/gu,
+      (whole, black, white) => {
+        const names = black ?? white;
+        const localized = names.split(/([/／])/u).map(name => lookupDutyName(name) || name).join('');
+        return whole[0] + localized + whole.at(-1);
+      });
   }
 
   function _trFCSubstr(text, t0, core) {
@@ -253,28 +287,139 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return text.replace(label, result);
   }
 
-  function fcArticleTitle(text, label) {
+  // The native AF article starts with a job/AF generation, not the outfit.
+  // Resolve its trailing set label in the same equipment-page context as cards.
+  function fcAFArticleSetName(native, path, element) {
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
+    const linked = fcLinkedPath(element);
+    if (record && (linked === record.path || (linked === undefined && path === record.path))) return record.zh;
+    if (record?.strictLink) return null;
+    const suffix = /(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u;
+    const direct = fcKnownName(native);
+    const series = (suffix.test(direct || '') ? direct : null)
+      || _getSeriesMap().get(native) || fcVerifiedSetName(native)
+      || _getSeriesPfx().get(native) || (!fcItemName(native) && _getItemPfx().get(native));
+    if (!series || (series === native && !suffix.test(series))) return null;
+    return suffix.test(series) ? series : series + '套装';
+  }
+
+  function fcAFArticleTitle(text, label, path, element) {
+    const nativeFrame = '各種族での見た目・入手方法';
+    const split = label.indexOf(nativeFrame);
+    if (split < 0) return null;
+    const header = /^([【〖]FF14[】〗])(.{1,24}?)AF(\d{1,2})?(?:[（(](アネモス|PvP)[）)])?装備(?:[（(]Lv(\d{1,3})[）)])?(👗?)$/u.exec(label.slice(0, split));
+    if (!header || (!header[3] && header[4] !== 'PvP')) return null;
+    const tail = /^([【〖])(.{1,80})([】〗])(?=$|\s*[|｜])/u.exec(label.slice(split + nativeFrame.length));
+    if (!tail) return null;
+    const [, marker, nativeJob, generation = '', variant, level, icon] = header;
+    const [, open, native, close] = tail;
+    const job = fcUIValue(nativeJob === '赤魔導士' ? '赤魔道士' : nativeJob);
+    const name = fcAFArticleSetName(native, path, element);
+    const frame = fcUIValue('各種族での見た目・入手方法');
+    const variantZh = variant === 'アネモス' ? fcUIValue(variant) : variant;
+    // Keep unresolved native labels intact for the data-ready rescan.
+    if (!job || !name || !frame || (variant && !variantZh)) return text;
+    const qualifier = variantZh ? '（' + variantZh + '）' : '';
+    const levelZh = level ? '（' + level + '级）' : '';
+    return text.replace(header[0] + nativeFrame + tail[0], marker + job + ' AF' + generation + qualifier
+      + '装备' + levelZh + icon + frame + open + name + close);
+  }
+
+  // Article source tags are metadata, not item-name fragments. In particular,
+  // the Arcadion division must be translated as a unit instead of producing 中量级級.
+  const FC_ARTICLE_SOURCE_LABELS = new Map([
+    ['メインクエ', '主线任务'],
+    ['種族装束', '种族服装'],
+    ['守護天節', '守护天节'],
+    ['クリスマス', '圣诞节'],
+    ['パンデモニウム天獄', '万魔殿 荒天之狱'],
+    ['パンデモニウム煉獄', '万魔殿 炼净之狱'],
+    ['パンデモニウム辺獄零式', '零式万魔殿 边境之狱'],
+    ['希望の園エデン：覚醒編', '伊甸希望乐园 觉醒之章'],
+    ['希望の園エデン：共鳴編', '伊甸希望乐园 共鸣之章'],
+    ['希望の園エデン：再生編', '伊甸希望乐园 再生之章'],
+    ['至天の座アルカディア：ライトヘビー級', '阿卡狄亚登天斗技场 轻量级'],
+    ['至天の座アルカディア：クルーザー級', '阿卡狄亚登天斗技场 中量级'],
+    ['至天の座アルカディア：ヘビー級', '阿卡狄亚登天斗技场 重量级'],
+    ['宝物庫エキサイトロン', '惊奇百宝城'],
+    ['宝物庫 エルピス・ギュムナシオン祭殿', '厄尔庇斯育体宝殿'],
+    ['宝物庫セノーテ・ジャジャグラル', '加加财富天坑'],
+    ['宝の地図G18 宝物庫 ボルト・オネイロン', 'G18藏宝图 巡梦金库'],
+    ['着ぐるみ', '玩偶服'],
+    ['チャイナドレス', '旗袍'],
+    ['シリーズレベル/PvP', '系列等级/PvP'],
+    ['シリーズレベル/PvP/おしゃれ装備', '系列等级/PvP/时装'],
+    ['7.4クラフタースクリップ', '7.4巧手工票'],
+    ['7.4ギャザラースクリップ', '7.4大地工票'],
+    ['7.2クラフタースクリップ', '7.2巧手工票'],
+    ['7.2ギャザラースクリップ', '7.2大地工票'],
+    ['クラフタースクリップ紫貨', '巧手紫票'],
+    ['守護天節2022', '守护天节2022'],
+    ['ヘッドホン装備', '耳机装备'],
+    ['学ラン/制服', '立领校服/制服'],
+    ['牙狼〈GARO〉コラボ', '牙狼〈GARO〉联动'],
+    ['九尾の妖狐', '九尾妖狐'],
+    ['郵便屋さん', '邮差'],
+    ['お姫様', '公主'],
+    ['執事服', '管家服'],
+    ['チマチョゴリ', '朝鲜族传统服装'],
+    ['雪だるま', '雪人'],
+    ['トナカイ着ぐるみ', '驯鹿玩偶服'],
+    ['トナカイ服', '驯鹿服'],
+    ['サスペンダー付きネクタイシャツ', '带背带的领带衬衫'],
+    ['6.0髪飾り', '6.0发饰'],
+    ['エッグハント/着ぐるみ', '彩蛋狩猎/玩偶服'],
+    ['ウサギの着ぐるみ', '兔子玩偶服'],
+    ['フォールガイズコラボ/Fall Guys', '糖豆人联动/Fall Guys'],
+    ['モンハンワイルズ コラボ/MHW', '怪物猎人：荒野联动/MHW'],
+    ['FFタクティクス/FFT', '最终幻想战略版/FFT'],
+  ]);
+
+  function fcArticleSourceLabel(original, translated) {
+    if (!/^[【〖]FF14[】〗]/u.test(original.trim()) || translated === original) return translated;
+    // AF titles end in an outfit name rather than an acquisition-source tag.
+    if (/^[【〖]FF14[】〗].{1,24}?AF(?:\d{1,2}|[（(]PvP[）)])/u.test(original.trim())) return translated;
+    const source = /(?:各種族での)?見た目・入手方法([【〖])([^】〗]{1,100})([】〗])/u.exec(original);
+    if (!source) return translated;
+    const zh = FC_ARTICLE_SOURCE_LABELS.get(source[2]) || lookupDutyName(source[2]);
+    if (!zh) return translated;
+    const frame = source[0].startsWith('各種族での') ? '各种族外观·获取方式' : '外观·获取方式';
+    return translated.replace(/(?:各種族での見た目・入手方法|見た目・入手方法|各种族外观·获取方式|外观·获取方式)[【〖][^】〗]{1,100}[】〗]/u,
+      () => frame + source[1] + zh + source[3]);
+  }
+
+  function fcArticleTitle(text, label, path, element) {
     // 站点使用【FF14】和〖FF14〗两种文章标题括号；已是套装名时不再追加“装备”。
     // 较新文章可能省略 👗，直接使用「装備各種族での見た目・入手方法」。
     const match = /^([【〖]FF14[】〗])(.{1,80}?)(装備)?(?=([👗💍✂⚔])|各種族での見た目・入手方法)/u.exec(label);
     if (!match) return null;
     const scoped = FC_VERIFIED_SHORT_SET_PATHS.get(match[2]);
-    const path = globalThis.location?.pathname || '';
-    // 详情页标题与 document.title 并非 DOM 套装标题，需单独恢复已核实的短称。
-    const scopedName = scoped?.path === path ? scoped.zh : null;
-    const name = fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
-    if (!name || name === match[2]) return null;
+    const linked = fcLinkedPath(element);
+    const target = linked === undefined ? path : linked;
+    // Match a full outfit only in an equipment-page or linked catalogue context.
+    const scopedName = scoped?.path === target ? scoped.zh : null;
+    const isOutfit = match[4] === '👗' || !match[4];
+    const setName = isOutfit && /^\/equipment\/[^/]+\/?$/u.test(target || '')
+      ? fcAFArticleSetName(match[2], path, element) : null;
+    const name = setName || fcVerifiedSetName(match[2]) || scopedName || fcKnownName(match[2]);
+    if (!name || (name === match[2] && !setName)) return null;
     // 仅完整系列名且确有「装備」的文章标题加“套装”；
     // 单件物品与武器继续保留“装备”，未核实系列不猜译。
     const mappedSeries = _getSeriesMap().get(match[2]);
     const outfitArticle = match[4] === '👗' || !match[4];
     const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
     let suffix = '';
-    if (!/(?:套装|装束)(?:·[阴阳])?$/u.test(name)) {
+    if (!/(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(name)) {
       if (isKnownOutfit) suffix = '套装';
       else if (match[3]) suffix = '装备';
     }
-    const translated = text.replace(match[0], match[1] + name + suffix);
+    let translated = text.replace(match[0], match[1] + name + suffix);
+    // The article frame is known UI, even before the item tables are ready.
+    // Preserve unknown source labels rather than guessing their game names.
+    const template = '各種族での見た目・入手方法';
+    const frame = fcUIValue(template);
+    if (frame) translated = translated.replace(template, frame);
+    translated = translateBracketedDuties(translated);
     return _trFCSubstr(translated, translated.trim(), '') || translated;
   }
 
@@ -347,6 +492,16 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (set && duty)
         return text.replace(label, '可直观查看“' + set + '”在团队任务“' + duty + '”的哪些宝箱中掉落。');
     }
+    const unlock = /^「([^「」]{2,90})」の開放条件$/u.exec(label);
+    if (unlock) {
+      const duty = lookupDutyName(unlock[1]);
+      if (duty) return text.replace(label, '“' + duty + '”的开放条件');
+    }
+    const introduction = /^(.{2,90})とは$/u.exec(label);
+    if (introduction) {
+      const duty = lookupDutyName(introduction[1]);
+      if (duty) return text.replace(label, duty + '介绍');
+    }
     return trFCDutyDetail(text, label);
   }
 
@@ -385,18 +540,65 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return trFCRelated(text, t0) || trFCAcquisition(text, t0);
   }
 
-  function trFC(text, path = globalThis.location?.pathname || '') {
+  // A reviewed complete article title must win before scoped short-name
+  // rewriting removes its native prefix. Accept both native bracket styles.
+  function fcExactArticleText(text, label) {
+    if (!/^[【〖]FF14[】〗]/u.test(label)) return null;
+    const brand = /[|｜]\s*ミラプリライフ$/u.exec(label);
+    const title = brand ? label.slice(0, brand.index).trimEnd() : label;
+    const key = title.replace(/^〖FF14〗/u, '【FF14】').replace(/〖([^〖〗]+)〗$/u, '【$1】');
+    let zh = fcUIValue(key);
+    if (!zh) return null;
+    if (title.startsWith('〖FF14〗')) zh = zh.replace(/^【FF14】/u, '〖FF14〗');
+    if (title.endsWith('〗')) zh = zh.replace(/【([^【】]+)】$/u, '〖$1〗');
+    if (brand) zh += label.slice(title.length, -'ミラプリライフ'.length) + (fcUIValue('ミラプリライフ') || 'Mirapri Life');
+    return text.replace(label, () => zh);
+  }
+
+  const FC_ARTICLE_ROLE_LABELS = new Map([
+    ['タンク', '防护职业'], ['竜騎士・リーパー', '龙骑士、钐镰客'],
+    ['モンク・侍', '武僧、武士'], ['忍者', '忍者'],
+    ['レンジ', '远程物理职业'], ['キャスター', '远程魔法职业'],
+    ['ヒーラー', '治疗职业'],
+  ]);
+
+  // The NieR catalogue abbreviates set names before the role qualifier.
+  // Resolve the same linked detail identity in cards and document.title,
+  // never translate the Japanese role suffix as an isolated fragment.
+  function fcScopedArticleText(text, label, path, element) {
+    const match = /^([【〖]FF14[】〗])([^()（）]{1,80})[（(]([^()（）]{1,60})[）)]装備(👗?)各種族での見た目・入手方法/u.exec(label);
+    if (!match) return null;
+    const [, marker, native, role, icon] = match;
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
+    const roleZh = FC_ARTICLE_ROLE_LABELS.get(role);
+    const target = fcLinkedPath(element);
+    if (!record || record.path !== (target === undefined ? path : target) || !roleZh) return null;
+    const frame = fcUIValue('各種族での見た目・入手方法');
+    const result = text.replace(match[0], () => marker + record.zh + '（' + roleZh + '）' + icon + frame);
+    return fcArticleSourceLabel(text, translateBracketedDuties(result))
+      .replace(/([|｜]\s*)ミラプリライフ$/u, (_, separator) => separator + fcUIValue('ミラプリライフ'));
+  }
+
+  function trFC(text, path = globalThis.location?.pathname || '', element = null) {
     if (!text) return text;
+    const label = text.trim();
+    return fcExactArticleText(text, label) ?? fcScopedArticleText(text, label, path, element)
+      ?? fcArticleSourceLabel(text, trFCText(text, path, element));
+  }
+
+  function trFCText(text, path, element) {
     const t0 = text.trim();
     if (!t0) return text;
     const exact = _trFCExact(text, t0, path);
     if (exact !== null) return exact;
+    const afArticle = fcAFArticleTitle(text, t0, path, element);
+    if (afArticle !== null) return afArticle;
     const dynamic = trFCDynamic(text, t0);
     if (dynamic !== null) return dynamic;
     if (t0.length > 120) return text;
     const equipment = fcJobEquipment(text, t0);
     if (equipment !== null) return equipment;
-    const article = fcArticleTitle(text, t0);
+    const article = fcArticleTitle(text, t0, path, element);
     if (article !== null) return article;
     const core = t0.replace(FC_DECOR_HEAD, '').replace(FC_DECOR_TAIL, '').trim();
     const s2 = _trFCDecor(text, t0, core);
@@ -571,19 +773,516 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true, crystal: true }],
     ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true, crystal: true }],
     ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true, crystal: true }],
-    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
+    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱装束' }], // Item 52597
     ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
+    // Full native catalogue audit (1,580 distinct equipment URLs). These are
+    // site display names derived from verified localized item families, not
+    // global item aliases; ambiguous short names must retain their URL scope.
+    ['キングダムブラス・レンジャー', { path: '/equipment/bygone_brass_jerkin_of_aiming/', zh: '王国黄铜精准套装', strictLink: true }],
+    ['ガラテア', { path: '/equipment/galatea/', zh: '伽拉忒亚装备套装', strictLink: true }], // Item 47715
+    ['ピーコック・クラフター', { path: '/equipment/crested_of_crafting/', zh: '雀翎巧匠套装', strictLink: true }],
+    ['ピーコック・ギャザラー', { path: '/equipment/crested_of_gathering/', zh: '雀翎大地套装', strictLink: true }],
+    ['プリッシュ・ストライカー', { path: '/equipment/prishes_of_striking/', zh: '普利修强袭套装', strictLink: true }],
+    ['バウンサー', { path: '/equipment/bouncers/', zh: '保镖套装', strictLink: true }],
+    ['セレモニアル・スレイヤー', { path: '/equipment/ceremonial_of_maiming/', zh: '仪仗制敌套装', strictLink: true }],
+    ['アークエンジェル・レンジャー', { path: '/equipment/ark_angels_of_aiming/', zh: '方舟天使精准套装', strictLink: true }],
+    ['オールドキングダム・ディフェンダー', { path: '/equipment/archeo_kingdom_of_fending/', zh: '旧日王国御敌套装', strictLink: true }],
+    ['オールドキングダム・スレイヤー', { path: '/equipment/archeo_kingdom_of_maiming/', zh: '旧日王国制敌套装', strictLink: true }],
+    ['カザナル・スカウト', { path: '/equipment/rakaznar_of_scouting/', zh: '卡扎纳尔游击套装', strictLink: true }],
+    ['カザナル・レンジャー', { path: '/equipment/rakaznar_of_aiming/', zh: '卡扎纳尔精准套装', strictLink: true }],
+    ['クァールレギナ', { path: '/equipment/spotted/', zh: '女王豹纹套装', strictLink: true }],
+    ['インダガトル・クラフター', { path: '/equipment/indagators_of_crafting/', zh: '研究者巧匠套装', strictLink: true }],
+    ['ルナエンヴォイ・レンジャー', { path: '/equipment/augmented_lunar_envoys_of_aiming/', zh: '月使精准套装', strictLink: true }],
+    ['ルナエンヴォイ・キャスター', { path: '/equipment/augmented_lunar_envoys_of_casting/', zh: '月使咏咒套装', strictLink: true }],
+    ['ルナエンヴォイ・ヒーラー', { path: '/equipment/augmented_lunar_envoys_of_healing/', zh: '月使治愈套装', strictLink: true }],
+    ['ボズヤン・スカウト', { path: '/equipment/bozjan_of_scouting/', zh: '博兹雅游击套装', strictLink: true }],
+    ['リナシータ・ディフェンダー', { path: '/equipment/rinascita_of_fending/', zh: '复兴御敌套装', strictLink: true }],
+    ['リナシータ・スレイヤー', { path: '/equipment/rinascita_of_maiming/', zh: '复兴制敌套装', strictLink: true }],
+    ['イヴァリース・ミスティック', { path: '/equipment/ivalician_mystics/', zh: '伊瓦利斯神秘人套装', strictLink: true }],
+    ['イシュガルディアン・モナスティック', { path: '/equipment/ishgardian_monastics/', zh: '伊修加德僧侣套装', strictLink: true }],
+    ['イシュガルディアン・アウトライダー', { path: '/equipment/ishgardian_outriders/', zh: '伊修加德先驱套装', strictLink: true }],
+    ['イシュガルディアン・ヒストリアン', { path: '/equipment/ishgardian_historians/', zh: '伊修加德史学家套装', strictLink: true }],
+    ['フライヤー', { path: '/equipment/halonic_friars/', zh: '战女神修士套装', strictLink: true }],
+    ['エクソシスト', { path: '/equipment/halonic_exorcists/', zh: '战女神驱魔套装', strictLink: true }],
+    ['プリースト', { path: '/equipment/halonic_priests/', zh: '战女神祭司套装', strictLink: true }],
+    ['シャーレアン・エージェント', { path: '/equipment/sharlayan_emissarys/', zh: '萨雷安出使者套装', strictLink: true }],
+    ['ディファイアント', { path: '/equipment/the_defiant_duelist/', zh: '狂妄套装', strictLink: true }],
+    ['バーサーカー', { path: '/equipment/berserkers/', zh: '狂战套装', strictLink: true }],
+    ['バイキング', { path: '/equipment/viking/', zh: '维京套装', strictLink: true }],
+    ['サブジュゲーター', { path: '/equipment/subjugators/', zh: '克服套装', strictLink: true }],
+    ['パネジリスト', { path: '/equipment/panegyrists/', zh: '颂赞套装', strictLink: true }],
+    ['プロフェット', { path: '/equipment/prophets/', zh: '预言套装', strictLink: true }],
+    ['ワーデン', { path: '/equipment/wardens/', zh: '狱卒套装', strictLink: true }],
+    ['アセティック', { path: '/equipment/ascetics/', zh: '苦行者套装', strictLink: true }],
+    ['シパーヒ', { path: '/equipment/sipahi/', zh: '西帕希套装', strictLink: true }],
+    ['マーシナリー', { path: '/equipment/mercenarys/', zh: '佣兵套装', strictLink: true }],
+    ['ホプリタイ', { path: '/equipment/hoplite/', zh: '重步兵套装', strictLink: true }],
+    ['ロード', { path: '/equipment/lords/', zh: '领主套装', strictLink: true }],
+    ['シック', { path: '/equipment/thick/', zh: '厚重套装', strictLink: true }],
+    ['ヘタイロス', { path: '/equipment/hetairos/', zh: '伙友骑兵套装', strictLink: true }],
+    ['ペルタスト', { path: '/equipment/peltast/', zh: '轻步兵套装', strictLink: true }],
+    ['トクソテス', { path: '/equipment/toxotes/', zh: '射兵套装', strictLink: true }],
+    ['ストラテゴス', { path: '/equipment/strategos/', zh: '将领套装', strictLink: true }],
+    ['デマゴーグ', { path: '/equipment/demagogue/', zh: '煽动者套装', strictLink: true }],
+    ['ユサール', { path: '/equipment/hussars/', zh: '轻骑兵套装', strictLink: true }],
+    ['ダークライト・ストライカー', { path: '/equipment/darklight_of_striking/', zh: '暗耀强袭套装', strictLink: true }],
+    ['ダークライト・レンジャー', { path: '/equipment/darklight_of_aiming/', zh: '暗耀精准套装', strictLink: true }],
+    ['ダークライト・キャスター', { path: '/equipment/darklight_of_casting/', zh: '暗耀咏咒套装', strictLink: true }],
+    ['アレス', { path: '/equipment/divine_war/', zh: '阿瑞斯套装', strictLink: true }],
+    ['アポロン', { path: '/equipment/divine_light/', zh: '阿波罗套装', strictLink: true }],
+    ['ハデス', { path: '/equipment/divine_death/', zh: '哈德斯套装', strictLink: true }],
+    ['デメテル', { path: '/equipment/divine_harvest/', zh: '德墨忒尔套装', strictLink: true }],
+    ['ヴァリット', { path: '/equipment/varlets/', zh: '恶棍套装', strictLink: true }],
+    ['エデンコーラス・ストライカー', { path: '/equipment/edenchoir_of_striking/', zh: '伊甸之律强袭套装', strictLink: true }],
+    ['エデンコーラス・スカウト', { path: '/equipment/edenchoir_of_scouting/', zh: '伊甸之律游击套装', strictLink: true }],
+    ['エデンコーラス・レンジャー', { path: '/equipment/edenchoir_of_aiming/', zh: '伊甸之律精准套装', strictLink: true }],
+    ['エデンモーン・ヒーラー', { path: '/equipment/edenmorn_of_healing/', zh: '伊甸之晨治愈套装', strictLink: true }],
+    ['ゴルディオン・ディフェンダー', { path: '/equipment/gordian_of_fending/', zh: '戈耳狄御敌套装', strictLink: true }],
+    ['ゴルディオン・キャスター', { path: '/equipment/gordian_of_casting/', zh: '戈耳狄咏咒套装', strictLink: true }],
+    ['ゴルディオン・ヒーラー', { path: '/equipment/gordian_of_healing/', zh: '戈耳狄治愈套装', strictLink: true }],
+    ['アイディアル・ボディガード', { path: '/equipment/idealized_bodyguards/', zh: '理想化的护卫套装', strictLink: true }],
+    ['アイディアル・プテロスレイバー', { path: '/equipment/idealized_pteroslaver/', zh: '理想化的驭龙套装', strictLink: true }],
+    ['アイディアル・フィリ', { path: '/equipment/idealized_fili/', zh: '理想化的诗彩套装', strictLink: true }],
+    ['アイディアル・ガンスリンガー', { path: '/equipment/idealized_gunslingers/', zh: '理想化的枪徒套装', strictLink: true }],
+    ['アイディアル・ダンサー', { path: '/equipment/idealized_dancers/', zh: '理想化的起舞套装', strictLink: true }],
+    ['アイディアル・エーベル', { path: '/equipment/idealized_ebers/', zh: '理想化的旧医套装', strictLink: true }],
+    ['アイディアル・アルバテル', { path: '/equipment/idealized_arbatel/', zh: '理想化的古术套装', strictLink: true }],
+    ['ヴァートゥ・アエド', { path: '/equipment/virtu_aoidos/', zh: '美德叙诗套装', strictLink: true }],
+    ['ヴァートゥ・マシーナリー', { path: '/equipment/virtu_machinists/', zh: '美德机工套装', strictLink: true }],
+    ['ヴァートゥ・オリゾン', { path: '/equipment/virtu_orison/', zh: '美德白祈套装', strictLink: true }],
+    ['ヴァートゥ・ウェルキン', { path: '/equipment/virtu_welkin/', zh: '美德司天套装', strictLink: true }],
+    ['フォレスト', { path: '/equipment/glade/', zh: '丛林套装', strictLink: true }],
+    ['バニー', { path: '/equipment/bunny/', zh: '兔女郎套装', strictLink: true }],
+    ['カジュアル', { path: '/equipment/casual/', zh: '休闲套装', strictLink: true }],
+    ['クポクポ', { path: '/equipment/kupo/', zh: '库啵套装', strictLink: true }],
+    ['アーバン', { path: '/equipment/urban/', zh: '都市外套组合', strictLink: true }], // Item 45371; verified equipment detail group
+    ['サバイバー', { path: '/equipment/survival/', zh: '幸存者套装', strictLink: true }],
+    ['アスフォデロース・キャスター', { path: '/equipment/asphodelos_of_casting/', zh: '日影兰咏咒套装', strictLink: true }],
+    ['アスフォデロース・ヒーラー', { path: '/equipment/asphodelos_of_healing/', zh: '日影兰治愈套装', strictLink: true }],
+    ['イディル・パスファインダーRE', { path: '/equipment/augmented_shire_pathfinders/', zh: '改良型田园探索者套装', strictLink: true }],
+    ['イディル・パンクラティアストRE', { path: '/equipment/augmented_shire_pankratiasts/', zh: '改良型田园混斗者套装', strictLink: true }],
+    ['イディル・エージェントRE', { path: '/equipment/augmented_shire_emissarys/', zh: '改良型田园出使者套装', strictLink: true }],
+    ['カエアンビロード・クラフター', { path: '/equipment/ar-caean_velvet_of_crafting/', zh: '迷彩绒巧匠套装', strictLink: true }],
+    ['ルシス王子', { path: '/equipment/lucian_princes/', zh: '路西斯王子装束', strictLink: true }], // Item 45336
+    ['ヴァイパー', { path: '/equipment/vipers/', zh: '蝰蛇套装', strictLink: true }],
+    ['ブラックサマー（女性用）', { path: '/equipment/womens_black_summer/', zh: '纯黑女式夏装组合', strictLink: true }],
+    ['ブラックサマー（男性用）', { path: '/equipment/mens_black_summer/', zh: '纯黑男式夏装组合', strictLink: true }],
+    // Full catalogue audit round 2: official bundle IDs or member/coffer IDs
+    // identify these display labels. Mixed-role/material groups are editorial
+    // labels composed from the corresponding official localized terminology.
+    ['ベルトレザー・コスチュームセット（トラウザータイプ）', { path: '/equipment/belt-leather/', zh: '皮带软甲裤套装', strictLink: true }], // Item 45571
+    ['ベルトレザー・コスチュームセット（クロップドパンツタイプ）', { path: '/equipment/cropped_belt-leather/', zh: '皮带七分裤套装', strictLink: true }], // Item 45572
+    ['東方旅芸人衣装セット', { path: '/equipment/far_eastern_performers_attire/', zh: '东方旅行艺人装束', strictLink: true }], // Item 45528
+    ['ゼロ・コスチュームセット', { path: '/equipment/zeros_attire/', zh: '零风套装', strictLink: true }], // Item 45574
+    ['グ・ラハ・ティア・コスチュームセット', { path: '/equipment/graha_tias_attire/', zh: '血盟公爵套装', strictLink: true }], // Item 45573
+    ['マシュリー・コスチュームセット', { path: '/equipment/queen_of_hourne_attire/', zh: '霍伦女王套装', strictLink: true }], // Item 45576
+    ['マイカ・ザ・ムー', { path: '/equipment/mica/', zh: '亩鼠米卡套装', strictLink: true }], // Item 45559
+    ['エデュカント・コスチュームセット（スカートタイプ）', { path: '/equipment/educands_attire_skirt/', zh: '就学短裙装备套装', strictLink: true }], // Item 45504
+    ['エデュカント・コスチュームセット（スラックスタイプ）', { path: '/equipment/educands_attire_slacks/', zh: '就学长裤装备套装', strictLink: true }], // Item 45503
+    ['ビギナー(タンク)', { path: '/equipment/brand-new_tank/', zh: '初学者守护套装', strictLink: true }], // Item 51383
+    ['ビギナー(ファイター)', { path: '/equipment/brand-new_dow/', zh: '初学者进攻套装', strictLink: true }], // Item 51384
+    ['ビギナー(ソーサラー)', { path: '/equipment/brand-new_dom/', zh: '初学者魔法套装', strictLink: true }], // Item 51385
+    ['シヴァルラス・アネモス', { path: '/equipment/anemos_chivalrous/', zh: '常风侠义套装', strictLink: true }], // Item 50558
+    ['パシフィスト・アネモス', { path: '/equipment/anemos_pacifists/', zh: '常风和平套装', strictLink: true }], // Item 50559
+    ['トゥルーブラッド・アネモス', { path: '/equipment/anemos_trueblood/', zh: '常风真血套装', strictLink: true }], // Item 50561
+    ['ストーリーテラー・アネモス', { path: '/equipment/anemos_storytellers/', zh: '常风述事套装', strictLink: true }], // Item 50562
+    ['セブンスヘブン・アネモス', { path: '/equipment/anemos_seventh_heaven/', zh: '常风七天套装', strictLink: true }], // Item 50563
+    ['セブンスヘル・アネモス', { path: '/equipment/anemos_seventh_hell/', zh: '常风七狱套装', strictLink: true }], // Item 50564
+    ['チャンネリング・アネモス', { path: '/equipment/anemos_channelers/', zh: '常风通灵套装', strictLink: true }], // Item 50565
+    ['オラター・アネモス', { path: '/equipment/anemos_orators/', zh: '常风雄辩套装', strictLink: true }], // Item 50566
+    ['アビス・アネモス', { path: '/equipment/anemos_abyss/', zh: '常风深渊套装', strictLink: true }], // Item 50568
+    ['ガンナー・アネモス', { path: '/equipment/anemos_gunners/', zh: '常风炮手套装', strictLink: true }], // Item 50569
+    ['コンステレーション・アネモス', { path: '/equipment/anemos_constellation/', zh: '常风星座套装', strictLink: true }], // Item 50570
+    ['デュエル・アネモス', { path: '/equipment/anemos_duelists/', zh: '常风斗剑套装', strictLink: true }], // Item 50572
+    ['サザンシー・タリスマン', { path: '/equipment/south_seas_talisman/', zh: '南海护身符组合', strictLink: true, itemConflict: true }], // Item 45131
+    ['ティ・リーフ・レイ', { path: '/equipment/ti_leaf_lei/', zh: '花草环组合', strictLink: true, itemConflict: true }], // Item 45130
+    ['アオザイ', { path: '/equipment/ao_dai/', zh: '奥黛套装', strictLink: true, itemConflict: true }], // Item 45282
+    ['サザンシーワンピース', { path: '/equipment/southern_seas_swimsuit/', zh: '南海女式连衣裙组合', strictLink: true, itemConflict: true }], // Item 45160
+    ['サザンシーベスト', { path: '/equipment/southern_seas_vest/', zh: '南海男式坎肩组合', strictLink: true, itemConflict: true }], // Item 45159
+    ['ファースト・ヤ・シュトラ・コスチュームセット', { path: '/equipment/brave_new_yshtola_attire/', zh: '血盟魔女套装', strictLink: true }], // Item 45399
+    ['リーン・コスチュームセット', { path: '/equipment/oracle/', zh: '巫女套装', strictLink: true }], // Item 45430
+    ['烈士衣装セット', { path: '/equipment/resshi/', zh: '志士装束', strictLink: true }], // Item 45428
+    ['東方粋人衣装セット', { path: '/equipment/eastern_lord_errants_attire/', zh: '东方雅士装束', strictLink: true }], // Item 45376
+    ['東方武官衣装セット', { path: '/equipment/far_eastern_officers_uniform/', zh: '东方武官装束', strictLink: true }], // Item 45327
+    ['東方美姫衣装セット', { path: '/equipment/far_eastern_maidens_attire/', zh: '东方美姬装束', strictLink: true }], // Item 45328
+    ['門客衣装セット', { path: '/equipment/mungaek_attire/', zh: '门客装束', strictLink: true }], // Item 45316
+    ['辨天衣装セット', { path: '/equipment/eastern_socialites_attire/', zh: '辨天装束', strictLink: true }], // Item 45317
+    ['東方書生衣装セット', { path: '/equipment/far_eastern_schoolboys_uniform/', zh: '东方书生装束', strictLink: true }], // Item 45333
+    ['東方女学生衣装セット', { path: '/equipment/far_eastern_schoolgirls_uniform/', zh: '东方女生装束', strictLink: true }], // Item 45334
+    ['孔雀・コスチュームセット', { path: '/equipment/peacock_attire/', zh: '孔雀装束', strictLink: true }], // Item 45375
+    ['ニュー・ミンフィリア・コスチュームセット', { path: '/equipment/minfilias_modish_attir/', zh: '纯白礼服套装', strictLink: true }], // Item 45337
+    ['ティーダ・コスチュームセット', { path: '/equipment/abes_attire/', zh: '艾普装备套装', strictLink: true }], // Item 45239
+    ['ユウナ・コスチュームセット', { path: '/equipment/high_summoners_attire/', zh: '大召唤士套装', strictLink: true }], // Item 45240
+    ['ナタ殿方衣装セット', { path: '/equipment/nezha_lords_attire/', zh: '哪吒赤莲装备装束', strictLink: true }], // Item 45283
+    ['ナタ姫君衣装セット', { path: '/equipment/nezha_ladys_attire/', zh: '哪吒白莲装备装束', strictLink: true }], // Item 45284
+    ['カーバンクル・エメラルド・コスチュームセット', { path: '/equipment/emerald_carbuncle_attire/', zh: '绿宝石兽装备套装', strictLink: true }], // Item 45293
+    ['カーバンクル・トパーズ・コスチュームセット', { path: '/equipment/topaz_carbuncle_attire/', zh: '黄宝石兽装备套装', strictLink: true }], // Item 45294
+    ['カーバンクル・ルビー・コスチュームセット', { path: '/equipment/ruby_carbuncle_attire/', zh: '红宝石兽装备套装', strictLink: true }], // Item 45400
+    ['メイドアタイアEX', { path: '/equipment/loyal_housemaids/', zh: '特制女仆装备套装', strictLink: true }], // Item 45285
+    ['バトラーアタイアEX', { path: '/equipment/loyal_butlers_uniform/', zh: '特制管家装备套装', strictLink: true }], // Item 45286
+    ['東方雅人衣装セット', { path: '/equipment/far_eastern_gentlemans_attire/', zh: '东方雅人装束', strictLink: true }], // Item 45243
+    ['東方麗人衣装セット', { path: '/equipment/far_eastern_beautys_attire/', zh: '东方丽人装束', strictLink: true }], // Item 45244
+    ['東方貴人衣装セット', { path: '/equipment/far_eastern_nobles_attire/', zh: '东方贵人装束', strictLink: true }], // Item 45232
+    ['エッダ・コスチュームセット', { path: '/equipment/blackbosom_attire/', zh: '漆黑的礼服套装', strictLink: true }], // Item 45288
+    ['東方姫君衣装セット', { path: '/equipment/far_eastern_garb_for_women/', zh: '东方秀女装束', strictLink: true }], // Item 50507
+    ['蒼天騎士団ファイター・コスチュームセット', { path: '/equipment/ward_knights_attire/', zh: '苍穹骑士装备套装', strictLink: true }], // Item 45271
+    ['蒼天騎士団ソーサラー・コスチュームセット', { path: '/equipment/ward_mages_attire/', zh: '苍穹法师装备套装', strictLink: true }], // Item 45272
+    ['東方警邏衣装セット', { path: '/equipment/far_eastern_patriarchs_attire/', zh: '东方警卫装束', strictLink: true }], // Item 50508
+    ['東方女官衣装セット', { path: '/equipment/far_eastern_matriarchs_attire/', zh: '东方女官装束', strictLink: true }], // Item 50509
+    ['ゴウセツ・コスチュームセット', { path: '/equipment/gosetsus_attire/', zh: '豪雪装束', strictLink: true }], // Item 45329
+    ['ヒエン・コスチュームセット', { path: '/equipment/lord_hiens_attire/', zh: '飞燕装束', strictLink: true }], // Item 45318
+    ['リセ・コスチュームセット', { path: '/equipment/scion_liberators_attire/', zh: '血盟解放者套装', strictLink: true }], // Item 45297
+    ['ニュー・ヤ・シュトラ・コスチュームセット', { path: '/equipment/yshtolas_modish_attire/', zh: '血盟治疗师套装', strictLink: true }], // Item 45238
+    ['ニュー・サンクレッド・コスチュームセット', { path: '/equipment/thancreds_modish_attire/', zh: '血盟双剑师套装', strictLink: true }], // Item 45237
+    ['シド・コスチュームセット', { path: '/equipment/cids_attire/', zh: '首席机械师装备套装', strictLink: true }], // Item 45192
+    ['ヤ・シュトラ・コスチュームセット', { path: '/equipment/yshtolas_attire/', zh: '血盟幻术师套装', strictLink: true }], // Item 45175
+    ['サンクレッド・コスチュームセット', { path: '/equipment/thancreds_attire/', zh: '血盟盗贼套装', strictLink: true }], // Item 45176
+    ['イダ・コスチュームセット', { path: '/equipment/ydas_attire/', zh: '血盟拳手装备套装', strictLink: true }], // Item 45177
+    ['パパリモ・コスチュームセット', { path: '/equipment/papalymos_attire/', zh: '血盟咒术师套装', strictLink: true }], // Item 45178
+    ['ウリエンジェ・コスチュームセット', { path: '/equipment/uriangers_attire/', zh: '血盟记录者套装', strictLink: true }], // Item 45179
+    ['ライトニング・コスチュームセット', { path: '/equipment/lightnings_attire/', zh: '圣府军装束', strictLink: true }], // Item 50486
+    ['スノウ・コスチュームセット', { path: '/equipment/snows_attire/', zh: '诺拉套装', strictLink: true }], // Item 50487
+    ['ミュオソティス・ヴァレンティオン・コスチュームセット（男性用）', { path: '/equipment/mens_valentione_forget-me-not_attire/', zh: '勿忘草恋人坎肩套装', strictLink: true }], // Item 45366
+    ['アカシア・ヴァレンティオン・コスチュームセット（男性用）', { path: '/equipment/mens_valentione_acacia_attire/', zh: '相思树恋人坎肩套装', strictLink: true }], // Item 45367
+    ['ローズ・ヴァレンティオン・コスチュームセット（男性用）', { path: '/equipment/mens_valentione_rose_attire/', zh: '玫瑰花恋人坎肩套装', strictLink: true }], // Item 45365
+    ['ミュオソティス・ヴァレンティオン・コスチュームセット（女性用）', { path: '/equipment/womens_valentione_forget-me-not_attire/', zh: '勿忘草恋人礼服套装', strictLink: true }], // Item 45369
+    ['アカシア・ヴァレンティオン・コスチュームセット（女性用）', { path: '/equipment/womens_valentione_acacia_attire/', zh: '相思树恋人礼服套装', strictLink: true }], // Item 45370
+    ['ローズ・ヴァレンティオン・コスチュームセット（女性用）', { path: '/equipment/womens_valentione_rose_attire/', zh: '玫瑰花恋人礼服套装', strictLink: true }], // Item 45368
+    ['ヴァレンティオンエプロンドレスアタイア', { path: '/equipment/valentione_apron_dress_attire/', zh: '恋人围裙装套装', strictLink: true }], // Item 45122
+    ['殿方水干衣装セット', { path: '/equipment/lords_suikan_set/', zh: '君子水干装束', strictLink: true }], // Item 45174
+    ['姫君水干衣装セット', { path: '/equipment/ladys_suikan_set/', zh: '淑女水干装束', strictLink: true }], // Item 45181
+    ['紅蓮祭・コスチュームセット', { path: '/equipment/eastern_faire-goers_attire/', zh: '红莲节装束', strictLink: true }], // Item 45287
+    ['レインディアセット', { path: '/equipment/reindeer_attire/', zh: '2016驯鹿套装', strictLink: true }], // CN store; items 13290–13292, not the older Item 45095 outfit
+    ['ウッドランドウォーデン・コスチュームセット', { path: '/equipment/woodland_wardens/', zh: '林地守护者套装', strictLink: true }], // Item 45539, 45540
+    ['ファットキャット・コスチュームセット', { path: '/equipment/fat_cat_attire/', zh: '猫小胖套装', strictLink: true }], // Item 45486, 45487
+    ['ヒップストリート・コスチュームセット', { path: '/equipment/hip_street_attire/', zh: '街头套装', strictLink: true }], // Item 45438, 45439
+    ['ウェアウルフ・コスチュームセット（女性用）', { path: '/equipment/werewolf_for_women/', zh: '人狼脚爪套装', strictLink: true }], // Item 45292
+    ['ハウリングスピリット・ウェイリングスピリット', { path: '/equipment/the_howling_wailing_spirit/', zh: '尖啸幽灵套装、哭泣幽灵套装', strictLink: true }], // Item 6107, 6108
+    ['ウォー', { path: '/equipment/war/', zh: '战争套装', strictLink: true }], // Item 6706, 6711, 6717, 6723, 6729
+    ['レッド', { path: '/equipment/red/', zh: '赤红套装', strictLink: true }], // Item 20465, 20466, 20467, 20468, 20469
+    ['カシミヤ', { path: '/equipment/cashmere/', zh: '羊绒斗篷套装', strictLink: true }], // Item 45246
+    ['サマーフォーマル・ドレス', { path: '/equipment/summertide_formal_dress/', zh: '夏令礼裙套装', strictLink: true, itemConflict: true }], // Item 47261
+    ['スプリングドレス', { path: '/equipment/spring_dress/', zh: '春意套装', strictLink: true, itemConflict: true }], // Item 45126; single dress 7540
+    ['グラスレザー', { path: '/equipment/glass_leather/', zh: '玻璃革组合', strictLink: true, itemConflict: true }], // Item 45343; material 27976
+    ['アカシア・ディフェンダー', { path: '/equipment/acacia_chromite_of_fending/', zh: '相思木御敌套装', strictLink: true }], // Item 44022
+    ['アカシア・スレイヤー', { path: '/equipment/acacia_chromite_of_maiming/', zh: '相思木制敌套装', strictLink: true }], // Item 44022
+    ['アカシア・ストライカー', { path: '/equipment/acacia_chromite_of_striking/', zh: '相思木强袭套装', strictLink: true }], // Item 44022
+    ['アカシア・スカウト', { path: '/equipment/acacia_chromite_of_scouting/', zh: '相思木游击套装', strictLink: true }], // Item 44022
+    ['アカシア・レンジャー', { path: '/equipment/acacia_chromite_of_aiming/', zh: '相思木精准套装', strictLink: true }], // Item 44022
+    ['アカシア・キャスター', { path: '/equipment/acacia_chromite_of_casting/', zh: '相思木咏咒套装', strictLink: true }], // Item 44022
+    ['アカシア・ヒーラー', { path: '/equipment/acacia_chromite_of_healing/', zh: '相思木治愈套装', strictLink: true }], // Item 44022
+    ['ダークマホガニー・ディフェンダー', { path: '/equipment/dark_mahogany_chromite_of_fending/', zh: '深红木御敌套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・スレイヤー', { path: '/equipment/dark_mahogany_chromite_of_maiming/', zh: '深红木制敌套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・ストライカー', { path: '/equipment/dark_mahogany_chromite_of_striking/', zh: '深红木强袭套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・スカウト', { path: '/equipment/dark_mahogany_chromite_of_scouting/', zh: '深红木游击套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・レンジャー', { path: '/equipment/dark_mahogany_chromite_of_aiming/', zh: '深红木精准套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・キャスター', { path: '/equipment/dark_mahogany_chromite_of_casting/', zh: '深红木咏咒套装', strictLink: true }], // Item 43497, 43498
+    ['ダークマホガニー・ヒーラー', { path: '/equipment/dark_mahogany_chromite_of_healing/', zh: '深红木治愈套装', strictLink: true }], // Item 43497, 43498
+    ['ルテニウム・ストライカー', { path: '/equipment/ruthenium_chromite_of_striking/', zh: '钌金强袭套装', strictLink: true }], // Item 43487, 43488
+    ['ルテニウム・スカウト', { path: '/equipment/ruthenium_chromite_of_scouting/', zh: '钌金游击套装', strictLink: true }], // Item 43487, 43488
+    ['ルテニウム・レンジャー', { path: '/equipment/ruthenium_chromite_of_aiming/', zh: '钌金精准套装', strictLink: true }], // Item 43487, 43488
+    ['ルテニウム・キャスター', { path: '/equipment/ruthenium_chromite_of_casting/', zh: '钌金咏咒套装', strictLink: true }], // Item 43487, 43488
+    ['ルテニウム・ヒーラー', { path: '/equipment/ruthenium_chromite_of_healing/', zh: '钌金治愈套装', strictLink: true }], // Item 43487, 43488
+    ['オルコクロマイト・ディフェンダー', { path: '/equipment/mountain_chromite_of_fending/', zh: '奥阔铬铁御敌套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・スレイヤー', { path: '/equipment/mountain_chromite_of_maiming/', zh: '奥阔铬铁制敌套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・ストライカー', { path: '/equipment/mountain_chromite_of_striking/', zh: '奥阔铬铁强袭套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・スカウト', { path: '/equipment/mountain_chromite_of_scouting/', zh: '奥阔铬铁游击套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・レンジャー', { path: '/equipment/mountain_chromite_of_aiming/', zh: '奥阔铬铁精准套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・キャスター', { path: '/equipment/mountain_chromite_of_casting/', zh: '奥阔铬铁咏咒套装', strictLink: true }], // Item 43203
+    ['オルコクロマイト・ヒーラー', { path: '/equipment/mountain_chromite_of_healing/', zh: '奥阔铬铁治愈套装', strictLink: true }], // Item 43203
+    ['カザナル・キャスター', { path: '/equipment/rakaznar_of_casting/', zh: '卡扎纳尔咏咒套装', strictLink: true }], // Item 44001
+    ['カザナル・ヒーラー', { path: '/equipment/rakaznar_of_healing/', zh: '卡扎纳尔治愈套装', strictLink: true }], // Item 44001
+    ['グリダニアンエリート(タンク)', { path: '/equipment/serpent_elites_tank/', zh: '牙蛇精英套装（防护）', strictLink: true }],
+    ['グリダニアンエリート(ファイター)', { path: '/equipment/serpent_elites_dow/', zh: '牙蛇精英套装（战斗精英）', strictLink: true }],
+    ['グリダニアンエリート(ソーサラー)', { path: '/equipment/serpent_elites_dom/', zh: '牙蛇精英套装（魔法导师）', strictLink: true }],
+    ['ロミンサンエリート(タンク)', { path: '/equipment/storm_elites_tank/', zh: '漩涡精英套装（防护）', strictLink: true }],
+    ['ロミンサンエリート(ファイター)', { path: '/equipment/storm_elites_dow/', zh: '漩涡精英套装（战斗精英）', strictLink: true }],
+    ['ロミンサンエリート(ソーサラー)', { path: '/equipment/storm_elites_dom/', zh: '漩涡精英套装（魔法导师）', strictLink: true }],
+    ['ウルダハンエリート(タンク)', { path: '/equipment/flame_elites_tank/', zh: '耀辉精英套装（防护）', strictLink: true }],
+    ['ウルダハンエリート(ファイター)', { path: '/equipment/flame_elites_dow/', zh: '耀辉精英套装（战斗精英）', strictLink: true }],
+    ['ウルダハンエリート(ソーサラー)', { path: '/equipment/flame_elites_dom/', zh: '耀辉精英套装（魔法导师）', strictLink: true }],
+    ['プランダード(タンク)', { path: '/equipment/plundered_tank/', zh: '掠夺套装（防护）', strictLink: true }], // Item 3030, 3031, 3032, 3033
+    ['プランダード(ファイター)', { path: '/equipment/plundered_dow/', zh: '掠夺套装（战斗精英）', strictLink: true }], // Item 3030, 3031, 3032, 3033
+    ['プランダード(ソーサラー)', { path: '/equipment/plundered_dom/', zh: '掠夺套装（魔法导师）', strictLink: true }], // Item 3030, 3031, 3032, 3033
+    ['ドクトル(タンク・スレイヤー)', { path: '/equipment/doctores_tank/', zh: '教练套装（防护、制敌）', strictLink: true }], // Item 3054, 3055, 3056
+    ['ドクトル(ファイター)', { path: '/equipment/doctores_dow/', zh: '教练套装（战斗精英）', strictLink: true }], // Item 3054, 3055, 3056
+    ['ドクトル(ソーサラー)', { path: '/equipment/doctores_dom/', zh: '教练套装（魔法导师）', strictLink: true }], // Item 3054, 3055, 3056
+    ['マナー(タンク・スレイヤー)', { path: '/equipment/manor_tank/', zh: '庄园套装（防护、制敌）', strictLink: true }], // Item 31450, 31456, 31462
+    ['マナー(ファイター)', { path: '/equipment/manor_dow/', zh: '庄园套装（战斗精英）', strictLink: true }], // Item 31450, 31456, 31462
+    ['マナー(ソーサラー)', { path: '/equipment/manor_dom/', zh: '庄园套装（魔法导师）', strictLink: true }], // Item 31450, 31456, 31462
+    ['カルン(タンク・スレイヤー)', { path: '/equipment/qarn_tank/', zh: '喀恩套装（防护、制敌）', strictLink: true }], // Item 31481, 31487
+    ['カルン(ファイター)', { path: '/equipment/qarn_dow/', zh: '喀恩套装（战斗精英）', strictLink: true }], // Item 31481, 31487
+    ['カルン(ソーサラー)', { path: '/equipment/qarn_dom/', zh: '喀恩套装（魔法导师）', strictLink: true }], // Item 31481, 31487
+    ['カッターズクライ(タンク・スレイヤー)', { path: '/equipment/cutters_cry_tank/', zh: '流沙迷宫樵鸣洞套装（防护、制敌）', strictLink: true }],
+    ['カッターズクライ(ファイター)', { path: '/equipment/cutters_cry_dow/', zh: '流沙迷宫樵鸣洞套装（战斗精英）', strictLink: true }],
+    ['カッターズクライ(ソーサラー)', { path: '/equipment/cutters_cry_dom/', zh: '流沙迷宫樵鸣洞套装（魔法导师）', strictLink: true }],
+    ['ヴィジル(タンク・スレイヤー)', { path: '/equipment/vigil_tank/', zh: '城塞套装（防护、制敌）', strictLink: true }], // Item 31518, 31524
+    ['ヴィジル(ファイター)', { path: '/equipment/vigil_dow/', zh: '城塞套装（战斗精英）', strictLink: true }], // Item 31518, 31524
+    ['ヴィジル(ソーサラー)', { path: '/equipment/vigil_dom/', zh: '城塞套装（魔法导师）', strictLink: true }], // Item 31518, 31524
+    ['コロセウム(ファイター)', { path: '/equipment/coliseum_dow/', zh: '斗技场套装（战斗精英）', strictLink: true }], // Item 3189, 3190
+    ['コロセウム(ソーサラー)', { path: '/equipment/coliseum_dom/', zh: '斗技场套装（魔法导师）', strictLink: true }], // Item 3189, 3190
+    ['オーラム(タンク・スレイヤー)', { path: '/equipment/aurum_tank/', zh: '皇金套装（防护、制敌）', strictLink: true }], // Item 31555, 31561, 31567
+    ['オーラム(ファイター)', { path: '/equipment/aurum_dow/', zh: '皇金套装（战斗精英）', strictLink: true }], // Item 31555, 31561, 31567
+    ['オーラム(ソーサラー)', { path: '/equipment/aurum_dom/', zh: '皇金套装（魔法导师）', strictLink: true }], // Item 31555, 31561, 31567
+    // Replica gear retains the official Chinese item-name qualifier in every set title.
+    ['レプリカ・バハムート・ディフェンダー', { path: '/equipment/replica_dreadwyrm_of_fending/', zh: '龙神御敌套装（复制品）', strictLink: true }], // Item 13892–13896
+    ['レプリカ・バハムート・スレイヤー', { path: '/equipment/replica_dreadwyrm_of_maiming/', zh: '龙神制敌套装（复制品）', strictLink: true }], // Item 13897–13901
+    ['レプリカ・バハムート・ストライカー', { path: '/equipment/replica_dreadwyrm_of_striking/', zh: '龙神强袭套装（复制品）', strictLink: true }], // Item 13902–13906
+    ['レプリカ・バハムート・スカウト', { path: '/equipment/replica_dreadwyrm_of_scouting/', zh: '龙神游击套装（复制品）', strictLink: true }], // Item 13922–13926
+    ['レプリカ・バハムート・レンジャー', { path: '/equipment/replica_dreadwyrm_of_aiming/', zh: '龙神精准套装（复制品）', strictLink: true }], // Item 13907–13911
+    ['レプリカ・バハムート・キャスター', { path: '/equipment/replica_dreadwyrm_of_casting/', zh: '龙神咏咒套装（复制品）', strictLink: true }], // Item 13917–13921
+    ['レプリカ・バハムート・ヒーラー', { path: '/equipment/replica_dreadwyrm_of_healing/', zh: '龙神治愈套装（复制品）', strictLink: true }], // Item 13912–13916
+    ['レプリカ・ハイアラガン・ディフェンダー', { path: '/equipment/replica_high_allagan_of_fending/', zh: '亚拉戈高位御敌套装（复制品）', strictLink: true }], // Item 13848–13852
+    ['レプリカ・ハイアラガン・スレイヤー', { path: '/equipment/replica_high_allagan_of_maiming/', zh: '亚拉戈高位制敌套装（复制品）', strictLink: true }], // Item 13853–13857
+    ['レプリカ・ハイアラガン・ストライカー', { path: '/equipment/replica_high_allagan_of_striking/', zh: '亚拉戈高位强袭套装（复制品）', strictLink: true }], // Item 13858–13862
+    ['レプリカ・ハイアラガン・レンジャー', { path: '/equipment/replica_high_allagan_of_aiming/', zh: '亚拉戈高位精准套装（复制品）', strictLink: true }], // Item 13863–13867
+    ['レプリカ・ハイアラガン・キャスター', { path: '/equipment/replica_high_allagan_of_casting/', zh: '亚拉戈高位咏咒套装（复制品）', strictLink: true }], // Item 13873–13877
+    ['レプリカ・ハイアラガン・ヒーラー', { path: '/equipment/replica_high_allagan_of_healing/', zh: '亚拉戈高位治愈套装（复制品）', strictLink: true }], // Item 13868–13872
+    ['レプリカ・ヘヴィアラガン', { path: '/equipment/replica_allagan_of_fending/', zh: '亚拉戈重套装（复制品）', strictLink: true }], // Item 13805–13808
+    // The native short labels omit RE, but the actual acquisition/summary lists contain upgraded armor.
+    ['ロストアラガン・ディフェンダー', { path: '/equipment/augmented_lost_allagan_of_fending/', zh: '改良型亚拉戈失传御敌套装', strictLink: true }], // Items 19297–19301
+    ['ロストアラガン・スレイヤー', { path: '/equipment/augmented_lost_allagan_of_maiming/', zh: '改良型亚拉戈失传制敌套装', strictLink: true }], // Items 19303–19307
+    ['ロストアラガン・ストライカー', { path: '/equipment/augmented_lost_allagan_of_striking/', zh: '改良型亚拉戈失传强袭套装', strictLink: true }], // Items 19309–19313
+    ['ロストアラガン・スカウト', { path: '/equipment/augmented_lost_allagan_of_scouting/', zh: '改良型亚拉戈失传游击套装', strictLink: true }], // Items 19321–19325
+    ['ロストアラガン・レンジャー', { path: '/equipment/augmented_lost_allagan_of_aiming/', zh: '改良型亚拉戈失传精准套装', strictLink: true }], // Items 19315–19319
+    ['ロストアラガン・キャスター', { path: '/equipment/augmented_lost_allagan_of_casting/', zh: '改良型亚拉戈失传咏咒套装', strictLink: true }], // Items 19333–19337
+    ['ロストアラガン・ヒーラー', { path: '/equipment/augmented_lost_allagan_of_healing/', zh: '改良型亚拉戈失传治愈套装', strictLink: true }], // Items 19327–19331
+    ['レプリカ・アラガンスレイヤー', { path: '/equipment/replica_allagan_of_maiming/', zh: '亚拉戈制敌套装（复制品）', strictLink: true }], // Item 13809, 13810, 13811, 13812, 13813
+    ['レプリカ・アラガンストライカー', { path: '/equipment/replica_allagan_of_striking/', zh: '亚拉戈强袭套装（复制品）', strictLink: true }], // Item 13814, 13815, 13816, 13817, 13818
+    ['レプリカ・アラガンレンジャー', { path: '/equipment/replica_allagan_of_aiming/', zh: '亚拉戈精准套装（复制品）', strictLink: true }], // Item 13819, 13820, 13821, 13822, 13823
+    ['レプリカ・アラガンキャスター', { path: '/equipment/replica_allagan_of_casting/', zh: '亚拉戈咏咒套装（复制品）', strictLink: true }], // Item 13797, 13829, 13830, 13831, 13832, 13833
+    ['レプリカ・アラガンヒーラー', { path: '/equipment/replica_allagan_of_healing/', zh: '亚拉戈治愈套装（复制品）', strictLink: true }], // Item 13798, 13824, 13825, 13826, 13827, 13828
+    // Full catalogue semantic review: page identity beats generic UI/job names.
+    // Use official item stems for display groups; preserve historical role and gender terms.
+    ['コートリーラヴァー・キャスター', { path: '/equipment/courtly_lovers_of_casting/', zh: '宫廷爱人咏咒套装', strictLink: true }], // Item 49301–49305
+    ['カーペンター', { path: '/equipment/carpenters/', zh: '木匠套装', strictLink: true }], // Item 2920, 3229, 3481
+    ['ゴールドスミス', { path: '/equipment/goldsmiths/', zh: '金匠套装', strictLink: true }], // Item 2923, 3232, 3484
+    ['ディガー', { path: '/equipment/diggers/', zh: '矿工套装', strictLink: true }], // Item 2928, 3237, 3489
+    ['カッター', { path: '/equipment/cutters/', zh: '樵夫套装', strictLink: true }], // Item 2929, 3238, 3490
+    ['フィッシャー', { path: '/equipment/pullers/', zh: '渔人套装', strictLink: true }], // Item 2930, 3239, 3491
+    ['グリフ', { path: '/equipment/glyphic/', zh: '塑形套装', strictLink: true }], // Item 42630
+    ['ヴィカー', { path: '/equipment/halonic_vicars/', zh: '战女神牧师套装', strictLink: true }], // Item 11270, 11277
+    ['インクイジター', { path: '/equipment/halonic_inquisitors/', zh: '战女神判官套装', strictLink: true }], // Item 11266, 11273, 51355
+    ['ストライカー', { path: '/equipment/foestrikers/', zh: '强打套装', strictLink: true }], // Item 3034, 3329, 3554, 3786
+    ['オステア', { path: '/equipment/austere/', zh: '苦行套装', strictLink: true }], // Item 6713, 6719, 6725
+    ['スカリー', { path: '/equipment/shikarees/', zh: '狩猎者套装', strictLink: true }], // Item 7462–7464
+    ['アテナ', { path: '/equipment/divine_wisdom/', zh: '雅典娜套装', strictLink: true }], // Item 8230–8232
+    ['アモン', { path: '/equipment/amons/', zh: '亚蒙套装', strictLink: true }], // Item 8322–8324
+    ['ウェザード・ボイイ', { path: '/equipment/weathered_boii/', zh: '旧化的波伊套装', strictLink: true }], // Item 25246–25248
+    ['ウェザード・フィリ', { path: '/equipment/weathered_fili/', zh: '旧化的诗彩套装', strictLink: true }], // Item 25256–25258
+    ['ウェザード・ガンスリンガー', { path: '/equipment/weathered_gunslingers/', zh: '旧化的枪徒套装', strictLink: true }], // Item 25291–25293
+    ['ウェザード・アルバテル', { path: '/equipment/weathered_arbatel/', zh: '旧化的古术套装', strictLink: true }], // Item 25276–25278
+    ['ウェザード・シヴァルラス', { path: '/equipment/antiquated_chivalrous/', zh: '旧化的侠义套装', strictLink: true }], // Item 17742–17744
+    ['ウェザード・セブンスヘブン', { path: '/equipment/antiquated_seventh_heaven/', zh: '旧化的七天套装', strictLink: true }], // Item 17767–17769
+    ['ウェザード・オラター', { path: '/equipment/antiquated_orators/', zh: '旧化的雄辩套装', strictLink: true }], // Item 17782–17784
+    ['クリード', { path: '/equipment/creed/', zh: '忠骑套装', strictLink: true }], // Item 11779–11781
+    ['ラベジャー', { path: '/equipment/ravagers/', zh: '凶战套装', strictLink: true }], // Item 11789–11791
+    ['カオス', { path: '/equipment/chaos/', zh: '混沌套装', strictLink: true }], // Item 11809–11811
+    ['タントラ', { path: '/equipment/tantra/', zh: '秘武套装', strictLink: true }], // Item 11784–11786
+    ['アエド', { path: '/equipment/aoidos/', zh: '叙诗套装', strictLink: true }], // Item 11799–11801
+    ['マシーナリー', { path: '/equipment/machinists/', zh: '机工套装', strictLink: true }], // Item 11814–11816
+    ['コーラー', { path: '/equipment/callers/', zh: '唤魂套装', strictLink: true }], // Item 11829–11831
+    ['オリゾン', { path: '/equipment/orison/', zh: '白祈套装', strictLink: true }], // Item 11819–11821
+    ['サバント', { path: '/equipment/savants/', zh: '学术套装', strictLink: true }], // Item 11834–11836
+    ['ウェルキン', { path: '/equipment/welkin/', zh: '司天套装', strictLink: true }], // Item 11839–11841
+    ['フレースヴェルグ', { path: '/equipment/hraesvelgr/', zh: '圣龙套装', strictLink: true }], // Item 30762–30764
+    ['レベル', { path: '/equipment/rebel/', zh: '叛逆外套组合', strictLink: true }], // Item 45372; verified equipment detail group
+    ['クレセント', { path: '/equipment/crescent/', zh: '弦月套装', strictLink: true }], // Item 8557–8561
+    ['セーラー', { path: '/equipment/sailor/', zh: '水手套装', strictLink: true }], // Item 7535, 7537, 7538
+    ['イディル・ガーディアンRE', { path: '/equipment/augmented_shire_custodians/', zh: '改良型田园管理者套装', strictLink: true }], // Item 16341–16343
+    ['イディル・ハンターRE', { path: '/equipment/augmented_shire_conservators/', zh: '改良型田园监督者套装', strictLink: true }], // Item 16359–16361
+    ['イディル・フィロソファーRE', { path: '/equipment/augmented_shire_philosophers/', zh: '改良型田园哲学者套装', strictLink: true }], // Item 16377–16379
+    ['イディル・プロフェッサーRE', { path: '/equipment/augmented_shire_preceptors/', zh: '改良型田园训导者套装', strictLink: true }], // Item 16371–16373
+    ['クラウン', { path: '/equipment/clowns/', zh: '小丑套装', strictLink: true }], // Item 35863–35867
+    ['パメラー', { path: '/equipment/pummelers/', zh: '殴击套装', strictLink: true }], // Item 33957–33959
+    ['アレジアンス', { path: '/equipment/allegiance/', zh: '忠卫套装', strictLink: true }], // Item 34022–34024
+    ['ティアマット', { path: '/equipment/tiamat/', zh: '暗龙套装', strictLink: true }], // Item 33962–33964
+    ['リーパー', { path: '/equipment/reapers/', zh: '丰获套装', strictLink: true }], // Item 34037–34041
+    ['ブリオソ', { path: '/equipment/brioso/', zh: '蓬勃套装', strictLink: true }], // Item 33967–33969
+    ['スピコナ', { path: '/equipment/spaekonas/', zh: '命巫套装', strictLink: true }], // Item 33977–33979
+    ['シアファニー', { path: '/equipment/theophany/', zh: '显灵套装', strictLink: true }], // Item 33972–33974
+    ['アストロノミア', { path: '/equipment/astronomia/', zh: '天文套装', strictLink: true }], // Item 34007–34009
+    ['ホープ【M】', { path: '/equipment/hope_m/', zh: '希望套装〖男〗', strictLink: true }], // gender-specific Hope gear
+    ['ホープ【F】', { path: '/equipment/hope_f/', zh: '希望套装〖女〗', strictLink: true }], // gender-specific Hope gear
+    ['リオレウスRE【M】', { path: '/equipment/augmented_rathalos_m/', zh: '改良型火龙套装〖男〗', strictLink: true }], // Augmented Rathalos gear
+    ['リオレウスRE【F】', { path: '/equipment/augmented_rathalos_f/', zh: '改良型火龙套装〖女〗', strictLink: true }], // Augmented Rathalos gear
+    ['夜鶴', { path: '/equipment/yakaku/', zh: '夜鹤套装', strictLink: true }], // Item 45509, 45510; combined site group
+    ['ミルキングRE', { path: '/equipment/augmented_millkings/', zh: '改良型仙木套装', strictLink: true }], // Item 21219
+    ['ミルキープRE', { path: '/equipment/augmented_millkeeps/', zh: '改良型珍木套装', strictLink: true }], // Item 15665
+    ['フォージキングRE', { path: '/equipment/augmented_forgekings/', zh: '改良型圣铁套装', strictLink: true }], // Item 21224
+    ['フォージキープRE', { path: '/equipment/augmented_forgekeeps/', zh: '改良型镔铁套装', strictLink: true }], // Item 15670
+    ['ハンマーキングRE', { path: '/equipment/augmented_hammerkings/', zh: '改良型玄甲套装', strictLink: true }], // Item 21229
+    ['ハンマーキープRE', { path: '/equipment/augmented_hammerkeeps/', zh: '改良型戎甲套装', strictLink: true }], // Item 15675
+    ['ジェムキングRE', { path: '/equipment/augmented_gemkings/', zh: '改良型鎏金套装', strictLink: true }], // Item 21234
+    ['ジェムキープRE', { path: '/equipment/augmented_gemkeeps/', zh: '改良型镂金套装', strictLink: true }], // Item 15680
+    ['ハイドキングRE', { path: '/equipment/augmented_hidekings/', zh: '改良型韦革套装', strictLink: true }], // Item 21239
+    ['ハイドキープRE', { path: '/equipment/augmented_hidekeeps/', zh: '改良型精革套装', strictLink: true }], // Item 15685
+    ['ボルトキングRE', { path: '/equipment/augmented_boltkings/', zh: '改良型绮衣套装', strictLink: true }], // Item 21244
+    ['ボルトキープRE', { path: '/equipment/augmented_boltkeeps/', zh: '改良型锦衣套装', strictLink: true }], // Item 15690
+    ['コルドロンキングRE', { path: '/equipment/augmented_cauldronkings/', zh: '改良型炼师套装', strictLink: true }], // Item 21249
+    ['コルドロンキープRE', { path: '/equipment/augmented_cauldronkeeps/', zh: '改良型炼真套装', strictLink: true }], // Item 15695
+    ['ガリーキングRE', { path: '/equipment/augmented_galleykings/', zh: '改良型烹炙套装', strictLink: true }], // Item 21254
+    ['ガリーキープRE', { path: '/equipment/augmented_galleykeeps/', zh: '改良型烹饪套装', strictLink: true }], // Item 15700
+    ['マインキングRE', { path: '/equipment/augmented_minekings/', zh: '改良型精矿套装', strictLink: true }], // Item 21259
+    ['マインキープRE', { path: '/equipment/augmented_minekeeps/', zh: '改良型富矿套装', strictLink: true }], // Item 15705
+    ['フィールドキングRE', { path: '/equipment/augmented_fieldkings/', zh: '改良型百草套装', strictLink: true }], // Item 21264
+    ['フィールドキープRE', { path: '/equipment/augmented_fieldkeeps/', zh: '改良型园野套装', strictLink: true }], // Item 15710
+    ['タックルキングRE', { path: '/equipment/augmented_tacklekings/', zh: '改良型渔采套装', strictLink: true }], // Item 21269
+    ['タックルキープRE', { path: '/equipment/augmented_tacklekeeps/', zh: '改良型渔灯套装', strictLink: true }], // Item 15715
+    ['羅刹【武士】', { path: '/equipment/rakshasa_of_fending/', zh: '罗刹豪士套装', strictLink: true }], // member-name stem
+    ['羅刹【槍士】', { path: '/equipment/rakshasa_of_maiming/', zh: '罗刹枪士套装', strictLink: true }], // member-name stem
+    ['羅刹【拳士】', { path: '/equipment/rakshasa_of_striking/', zh: '罗刹拳士套装', strictLink: true }], // member-name stem
+    ['羅刹【間士】', { path: '/equipment/rakshasa_of_scouting/', zh: '罗刹间士套装', strictLink: true }], // member-name stem
+    ['羅刹【弓士】', { path: '/equipment/rakshasa_of_aiming/', zh: '罗刹弓士套装', strictLink: true }], // member-name stem
+    ['羅刹【術士】', { path: '/equipment/rakshasa_of_casting/', zh: '罗刹术士套装', strictLink: true }], // member-name stem
+    ['羅刹【学士】', { path: '/equipment/rakshasa_of_healing/', zh: '罗刹学士套装', strictLink: true }], // member-name stem
+    ['紫水【武士】', { path: '/equipment/shisui_of_fending/', zh: '紫水豪士装束', strictLink: true }], // member-name stem
+    ['紫水【槍士】', { path: '/equipment/shisui_of_maiming/', zh: '紫水枪士装束', strictLink: true }], // member-name stem
+    ['紫水【拳士】', { path: '/equipment/shisui_of_striking/', zh: '紫水拳士装束', strictLink: true }], // member-name stem
+    ['紫水【間士】', { path: '/equipment/shisui_of_scouting/', zh: '紫水间士装束', strictLink: true }], // member-name stem
+    ['紫水【弓士】', { path: '/equipment/shisui_of_aiming/', zh: '紫水弓士装束', strictLink: true }], // member-name stem
+    ['紫水【術士】', { path: '/equipment/shisui_of_casting/', zh: '紫水术士装束', strictLink: true }], // member-name stem
+    ['紫水【学士】', { path: '/equipment/shisui_of_healing/', zh: '紫水学士装束', strictLink: true }], // member-name stem
+    ['延夏【武士】', { path: '/equipment/yanxian_of_fending/', zh: '延夏豪士装束', strictLink: true }], // member-name stem
+    ['延夏【槍士】', { path: '/equipment/yanxian_of_maiming/', zh: '延夏枪士装束', strictLink: true }], // member-name stem
+    ['延夏【拳士】', { path: '/equipment/yanxian_of_striking/', zh: '延夏拳士装束', strictLink: true }], // member-name stem
+    ['延夏【間士】', { path: '/equipment/yanxian_of_scouting/', zh: '延夏间士装束', strictLink: true }], // member-name stem
+    ['延夏【弓士】', { path: '/equipment/yanxian_of_aiming/', zh: '延夏弓士装束', strictLink: true }], // member-name stem
+    ['延夏【術士】', { path: '/equipment/yanxian_of_casting/', zh: '延夏术士装束', strictLink: true }], // member-name stem
+    ['延夏【学士】', { path: '/equipment/yanxian_of_healing/', zh: '延夏学士装束', strictLink: true }], // member-name stem
+    ['羅漢【武士】', { path: '/equipment/arhat_of_fending/', zh: '罗汉豪士装束', strictLink: true }], // Item 51449
+    ['羅漢【槍士】', { path: '/equipment/arhat_of_maiming/', zh: '罗汉枪士装束', strictLink: true }], // Item 51450
+    ['羅漢【拳士】', { path: '/equipment/arhat_of_striking/', zh: '罗汉拳士装束', strictLink: true }], // Item 51451
+    ['羅漢【間士】', { path: '/equipment/arhat_of_scouting/', zh: '罗汉间士装束', strictLink: true }], // Item 51453
+    ['羅漢【弓士】', { path: '/equipment/arhat_of_aiming/', zh: '罗汉弓士装束', strictLink: true }], // Item 51452
+    ['羅漢【術士】', { path: '/equipment/arhat_of_casting/', zh: '罗汉术士装束', strictLink: true }], // Item 51455
+    ['羅漢【学士】', { path: '/equipment/arhat_of_healing/', zh: '罗汉学士装束', strictLink: true }], // Item 51454
+    ['源氏【武士】', { path: '/equipment/genji_of_fending/', zh: '源氏之豪士套装', strictLink: true }], // member-name stem
+    ['源氏【槍士】', { path: '/equipment/genji_of_maiming/', zh: '源氏之枪士套装', strictLink: true }], // member-name stem
+    ['源氏【拳士】', { path: '/equipment/genji_of_striking/', zh: '源氏之拳士套装', strictLink: true }], // member-name stem
+    ['源氏【間士】', { path: '/equipment/genji_of_scouting/', zh: '源氏之间士套装', strictLink: true }], // member-name stem
+    ['源氏【弓士】', { path: '/equipment/genji_of_aiming/', zh: '源氏之弓士套装', strictLink: true }], // member-name stem
+    ['源氏【術士】', { path: '/equipment/genji_of_casting/', zh: '源氏之术士套装', strictLink: true }], // member-name stem
+    ['源氏【学士】', { path: '/equipment/genji_of_healing/', zh: '源氏之学士套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:重', { path: '/equipment/yorha_type-51_of_fending/', zh: '寄叶五一式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:攻', { path: '/equipment/yorha_type-51_of_maiming/', zh: '寄叶五一式制敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:格', { path: '/equipment/yorha_type-51_of_striking/', zh: '寄叶五一式强袭套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:軽', { path: '/equipment/yorha_type-51_of_scouting/', zh: '寄叶五一式游击套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:射', { path: '/equipment/yorha_type-51_of_aiming/', zh: '寄叶五一式精准套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:術', { path: '/equipment/yorha_type-51_of_casting/', zh: '寄叶五一式咏咒套装', strictLink: true }], // member-name stem
+    ['ヨルハ五一式:医', { path: '/equipment/yorha_type-51_of_healing/', zh: '寄叶五一式治愈套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:重', { path: '/equipment/yorha_type-53_of_fending/', zh: '寄叶五三式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:攻', { path: '/equipment/yorha_type-53_of_maiming/', zh: '寄叶五三式制敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:格', { path: '/equipment/yorha_type-53_of_striking/', zh: '寄叶五三式强袭套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:軽', { path: '/equipment/yorha_type-53_of_scouting/', zh: '寄叶五三式游击套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:射', { path: '/equipment/yorha_type-53_of_aiming/', zh: '寄叶五三式精准套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:術', { path: '/equipment/yorha_type-53_of_casting/', zh: '寄叶五三式咏咒套装', strictLink: true }], // member-name stem
+    ['ヨルハ五三式:医', { path: '/equipment/yorha_type-53_of_healing/', zh: '寄叶五三式治愈套装', strictLink: true }], // member-name stem
+    ['ヨルハ五五式:重', { path: '/equipment/yorha_type-55_of_fending/', zh: '寄叶五五式御敌套装', strictLink: true }], // member-name stem
+    ['ヨルハ五五式:攻', { path: '/equipment/yorha_type-55_of_maiming/', zh: '寄叶五五式制敌套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:格', { path: '/equipment/obsolete_androids_of_striking/', zh: '人造人旧式强袭套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:軽', { path: '/equipment/obsolete_androids_of_scouting/', zh: '人造人旧式游击套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:射', { path: '/equipment/obsolete_androids_of_aiming/', zh: '人造人旧式精准套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:術', { path: '/equipment/obsolete_androids_of_casting/', zh: '人造人旧式咏咒套装', strictLink: true }], // member-name stem
+    ['アンドロイド旧式:医', { path: '/equipment/obsolete_androids_of_healing/', zh: '人造人旧式治愈套装', strictLink: true }], // member-name stem
+    // Semantic review: exact bundle names and localized member-name display groups.
+    ['コスモスーツ', { path: '/equipment/cosmosuit/', zh: '宇航服套装', strictLink: true }], // Item 48744
+    ['モント・コスチュームセット', { path: '/equipment/king_of_leonis_attire/', zh: '雷欧尼斯国王套装', strictLink: true }], // Item 45575
+    ['左近士', { path: '/equipment/sakonji/', zh: '左近士装束', strictLink: true }], // Item 50622
+    ['百地', { path: '/equipment/momochi/', zh: '百地装束', strictLink: true }], // Item 50618
+    ['紫洲武人', { path: '/equipment/shishu_bujin/', zh: '紫州武人装束', strictLink: true }], // Item 45525
+    ['紫洲御前', { path: '/equipment/shishu_gozen/', zh: '紫州御前装束', strictLink: true }], // Item 45526
+    ['春日【劣】', { path: '/equipment/weathered_kasuga/', zh: '旧化的春日装束', strictLink: true }], // localized member-name stem; display group
+    ['服部【劣】', { path: '/equipment/weathered_hattori/', zh: '旧化的服部装束', strictLink: true }], // localized member-name stem; display group
+    ['春日【想】', { path: '/equipment/idealized_kasuga/', zh: '理想化的春日装束', strictLink: true }], // localized member-name stem; display group
+    ['服部【想】', { path: '/equipment/idealized_hattori/', zh: '理想化的服部装束', strictLink: true }], // localized member-name stem; display group
+    ['明珍【劣】', { path: '/equipment/antiquated_myochin/', zh: '旧化的明珍装束', strictLink: true }], // localized member-name stem; display group
+    ['影隠【劣】', { path: '/equipment/antiquated_kage-kakushi/', zh: '旧化的影隐装束', strictLink: true }], // localized member-name stem; display group
+    ['明珍【風】', { path: '/equipment/anemos_myochin/', zh: '常风明珍装束', strictLink: true }], // localized member-name stem; display group
+    ['影隠【風】', { path: '/equipment/anemos_kage-kakushi/', zh: '常风影隐装束', strictLink: true }], // Item 50567
+    ['明珍【徳】', { path: '/equipment/virtu_myochin/', zh: '美德明珍装束', strictLink: true }], // Item 45457
+    ['伊賀【徳】', { path: '/equipment/virtu_iga/', zh: '美德伊贺装束', strictLink: true }], // localized set name
+    ['伊賀', { path: '/equipment/iga/', zh: '伊贺装束', strictLink: true }], // Item 50539
+    ['早乙女', { path: '/equipment/saotome/', zh: '早乙女装束', strictLink: true }], // Item 50603
+    ['蜂屋', { path: '/equipment/hachiya/', zh: '蜂屋装束', strictLink: true }], // Item 50599
+    ['無銘', { path: '/equipment/nameless/', zh: '无名套装', strictLink: true }], // localized coffer name; display group
+    ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
+    // Exact multilingual Item bundle names from the pinned ixion offline export.
+    ['ラムザ', { path: '/equipment/ramzas/', zh: '拉姆萨装备套装', strictLink: true }], // Item 47725
+    ['オヴェリア', { path: '/equipment/ovelias/', zh: '奥薇莉亚装备套装', strictLink: true }], // Item 47726
+    ['ガフガリオン', { path: '/equipment/gaffgarions/', zh: '加夫加利昂装备套装', strictLink: true }], // Item 47727
+    ['アルタナティヴ', { path: '/equipment/alternative/', zh: '另类装备套装', strictLink: true }], // Item 47714
+    ['クリスタリウムプロディジー', { path: '/equipment/crystarium_prodigys/', zh: '水晶都神童装备套装', strictLink: true }], // Item 45541
+    ['リペアド・インペリアル', { path: '/equipment/mended_imperial/', zh: '修好的帝国装备套装', strictLink: true }], // Item 45119
+    ['降神荒武者', { path: '/equipment/heavensturn/', zh: '降神猛士装束', strictLink: true }], // Item 45431
+    ['サマーインディゴ', { path: '/equipment/summer_indigo/', zh: '夏季靛蓝组合', strictLink: true }], // Item 45344
+    ['天つ水影流', { path: '/equipment/amatsu/', zh: '天水影流装束', strictLink: true }], // Item 45180
+    ['クウェインチュレル', { path: '/equipment/quaintrelles/', zh: '风尚褶边套装', strictLink: true }], // Item 45315
+    ['アーマーガッパ', { path: '/equipment/imp/', zh: '河童蓑衣装备套装', strictLink: true }], // Item 45538; verified equipment detail group
+    ['オメガM・コスチュームセット', { path: '/equipment/omega-m_attire/', zh: '欧米茄M服装装备套装', strictLink: true, itemConflict: true }], // Item 45434; verified equipment detail group
+    ['オメガF・コスチュームセット', { path: '/equipment/omega-f_attire/', zh: '欧米茄F服装装备套装', strictLink: true, itemConflict: true }], // Item 45435; verified equipment detail group
+    // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
+    // Native whole-outfit headings may share their source label with an individual item.
+    ['グリムグリズリー・スーツ', { path: '/equipment/grisly_bear_suit/', zh: '狰狞熊套装', strictLink: true, itemConflict: true }], // Item 52402, 52403; in-game combination name
+    ['ガジャスーツ', { path: '/equipment/gaja_suit/', zh: '小象套装', strictLink: true, itemConflict: true }], // Item 45436
+    ['トードスーツ', { path: '/equipment/toad_suit/', zh: '蟾蜍套装', strictLink: true, itemConflict: true }], // Item 27937 and matching head; in-game set
+    ['ポーキースーツ', { path: '/equipment/swine_body/', zh: '波奇套装', strictLink: true, itemConflict: true }], // Item 45230
+    ['チキンスーツ', { path: '/equipment/chicken_suit/', zh: '小鸡套装', strictLink: true, itemConflict: true }], // Item 45425
+    ['ラビットスーツ', { path: '/equipment/rabbit_suit/', zh: '兔子套装', strictLink: true, itemConflict: true }], // Item 30045 and matching head; in-game combination name
+    ['レインコート', { path: '/equipment/raincoat/', zh: '雨衣套装', strictLink: true, itemConflict: true }], // Item 24592; hood, coat and boots
+    ['コンカラー', { path: '/equipment/conquerors/', zh: '征服套装', strictLink: true, itemConflict: true }], // Item 51395; same bare JP label can name a weapon (Item 7353)
+    ['アウトサイダー', { path: '/equipment/outsiders/', zh: '外来者套装', strictLink: true, itemConflict: true }], // Item 27256–27260, 27266; five armor pieces, not a gunblade
+    ['フランネル', { path: '/equipment/flannel/', zh: '法兰绒背带衬衫套装', strictLink: true, itemConflict: true }], // Item 45263; distinguish from crafting material
+    ['ヴァーシティ・ジャケット', { path: '/equipment/varsity_jacket/', zh: '校园外套套装', strictLink: true, itemConflict: true }], // Item 45441
+    ['ボタンド・ヴァーシティジャケット', { path: '/equipment/buttoned_varsity_jacket/', zh: '系扣校园外套套装', strictLink: true, itemConflict: true }], // Item 45442
+    ['ウラエウスボディアーマー', { path: '/equipment/uraeus_body_armor/', zh: '圣蜥蜴革组合', strictLink: true, itemConflict: true }], // Item 45190
+    ['クァールビーチホルター', { path: '/equipment/coeurl_beach_halter/', zh: '豹纹夏衣套装', strictLink: true, itemConflict: true }], // display group; both skirt and shorts variants, see Item 45136 and the corresponding coffer
+    ['クァールタリスマン', { path: '/equipment/coeurl_talisman/', zh: '豹纹护身符套装', strictLink: true, itemConflict: true }], // display group; Item 36120 contains both bottom variants
+    ['LV式', { path: '/equipment/lv55/', zh: '河畔堡驻军装束', strictLink: true }], // Item 50483
+    ['碧甲羅之', { path: '/equipment/the_blue/', zh: '碧甲装束', strictLink: true }], // Item 45290
+    ['アルマ・コスチュームセット', { path: '/equipment/almas_attire/', zh: '威风凛凛套装', strictLink: true }], // Item 45364
+    ['コロナルサマー', { path: '/equipment/coronal_summer/', zh: '盛花夏衣套装', strictLink: true }], // Display group; items 8549, 45133
+    ['サザンシー', { path: '/equipment/southern_seas/', zh: '南洋海滨套装', strictLink: true }], // Display group; items 30755, 30756, 30757, 30758, 45402, 45403
+    ['ガーディアン・オブ・スレイ', { path: '/equipment/the_guardians_of_maiming/', zh: '制敌守护者套装', strictLink: true }], // Display group; items 8310, 8311, 8312, 8313, 8314
+    ['ガーディアン・オブ・ストライク', { path: '/equipment/the_guardians_of_striking/', zh: '强袭守护者套装', strictLink: true }], // Display group; items 8316, 8317, 8318, 8319, 8320
   ]);
 
-  // 无链接时可按页面判断；站外或无法解析的链接不得借用页面上下文。
-  function fcLinkedPath(element) {
-    const link = element?.closest?.('a[href]');
-    if (!link) return undefined;
+  // The catalogue uses 【】 while native article headings also use 〖〗.
+  // Register only whole-label variants of existing scoped entries. Newly
+  // appended variants normalize to the same two keys, so iteration terminates.
+  for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
+    const alternate = native.replaceAll('【', '〖').replaceAll('】', '〗');
+    const catalogue = native.replaceAll('〖', '【').replaceAll('〗', '】');
+    for (const variant of [alternate, catalogue]) {
+      if (!FC_VERIFIED_SHORT_SET_PATHS.has(variant)) FC_VERIFIED_SHORT_SET_PATHS.set(variant, record);
+    }
+  }
+
+  function fcAnchorPath(link) {
     try {
       const url = new URL(link.getAttribute('href'), globalThis.location?.href || 'https://ff14-fc.com/');
       return /^(?:www\.)?ff14-fc\.com$/iu.test(url.hostname) ? url.pathname : null;
     } catch { return null; }
+  }
+
+  // Native catalogue cards have dd/h4 labels outside the image/article
+  // anchor. Only a single distinct equipment URL within the actual card
+  // can establish the identity; never use a neighbour or a foreign link.
+  function fcCatalogueCardPath(element) {
+    const heading = element?.closest?.('h4,h3,img');
+    const card = heading?.closest('#search-filter-results-8722 .equipment-search-results-content > dl');
+    if (!card) return undefined;
+    const paths = new Set([...card.querySelectorAll('a[href]')]
+      .map(fcAnchorPath).filter(path => /^\/equipment\/[^/]+\/?$/u.test(path || ''))
+      .map(path => path.replace(/\/?$/u, '/')));
+    return paths.size === 1 ? [...paths][0] : null;
+  }
+
+  // 无链接时可按页面判断；站外或无法解析的链接不得借用页面上下文。
+  function fcLinkedPath(element) {
+    const link = element?.closest?.('a[href]');
+    return link ? fcAnchorPath(link) : fcCatalogueCardPath(element);
   }
 
   function fcMatchingSetLink(element, targetPath) {
@@ -642,7 +1341,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // 必须有正式系列对照；数据尚未就绪时保持原文，避免「漆黒」
     // 被通用 UI 词典先替换成资料片名而无法在数据加载后纠正。
     const official = verified?.zh || _getSeriesMap().get(short + 'の装束');
-    if (!/(?:套装|装束)$/u.test(official || '')) return label;
+    if (!verified && !/(?:套装|装束)$/u.test(official || '')) return label;
     if (isArticle) {
       const replaced = label.replace(short, official);
       // “夜樱套装装备”不是自然中文标题；保留后续说明与原链接。
@@ -655,7 +1354,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const path = globalThis.location?.pathname || '';
     let result = value;
     for (const [native, record] of FC_VERIFIED_SHORT_SET_PATHS) {
-      if (path !== record.path && !fcMatchingSetLink(node, record.path)) continue;
+      const linked = fcMatchingSetLink(node, record.path);
+      if (!linked && (path !== record.path || record.itemConflict)) continue;
       // A related-image alt can be a bare series label rather than a sentence.
       if (result === native) return record.zh;
       result = result.replaceAll('「' + native + '」', '「' + record.zh + '」');
@@ -696,8 +1396,11 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const allRaces = /^ミラプリ「([^「」]{1,80})」装備の見た目を各種族で紹介(\d{1,3})$/u.exec(value);
     const native = racePhoto?.[1] || allRaces?.[1];
     if (!native) return null;
-    const name = fcScopedSetName(native, node) || fcVerifiedSetName(native)
-      || fcGaroSetName(native) || fcItemName(native);
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
+    // Both gallery formats can depict an individual piece, not just the
+    // whole outfit. A shared native label must retain its individual item name.
+    const scoped = !record?.itemConflict ? fcScopedSetName(native, node) : null;
+    const name = scoped || fcVerifiedSetName(native) || fcGaroSetName(native) || fcItemName(native);
     if (!name) return null;
     if (racePhoto) {
       const race = fcUIValue(racePhoto[2]);
@@ -738,38 +1441,98 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束)(?:·[阴阳])?$/u.test(officialName)) {
+    if (/(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
     return translated.replace(localized, officialName + '套装' + fullBody);
   }
 
+  function fcRecommendationText(node, raw, label) {
+    const exact = fcVerifiedSetName(label) || fcGaroSetName(label) || _getSeriesMap().get(label);
+    if (exact) return fcSetDisplayText(node, raw, raw.replace(label, () => exact));
+    const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
+    if (!group) return null;
+    const base = group[1].trim();
+    const family = _getSeriesMap().get(base) || fcVerifiedSetName(base)
+      || _getItemPfx().get(base) || _getSeriesPfx().get(base) || lookupDutyName(base);
+    const roles = group[2].split('・').map(role => fcUIValue(role.trim()));
+    if (family && roles.every(Boolean)) {
+      return raw.replace(label, () => family + '（' + roles.join('、') + '）');
+    }
+    // A complete item identity still takes precedence over an unknown group.
+    const candidates = resolveAllByName(label);
+    return candidates.length === 1 ? raw.replace(label, () => candidates[0]) : raw;
+  }
+
+  // Native dungeon drop lists append the equipment slot to the exact item
+  // name. Resolve the complete game identity before translating the suffix.
+  // Unknown/ambiguous names must remain intact for the next data-ready pass.
+  function fcDropItemText(raw, label) {
+    const match = /^(.{1,100}?)[（(](頭防具|胴防具|手防具|脚防具|足防具)[）)]$/u.exec(label);
+    if (!match) return null;
+    const names = resolveAllByName(match[1].trim());
+    const slot = fcUIValue(match[2]);
+    return names.length === 1 && slot
+      ? raw.replace(label, () => names[0] + '（' + slot + '）') : raw;
+  }
+
+  function fcContextText(node, raw, label) {
+    const p = node.parentElement;
+    if (p?.closest?.('#info-drop .eorzeadb_link')) {
+      const drop = fcDropItemText(raw, label);
+      if (drop !== null) return drop;
+    }
+    const article = fcExactArticleText(raw, label)
+      ?? fcScopedArticleText(raw, label, globalThis.location?.pathname || '', p);
+    if (article !== null) return article;
+    // A verified page identity wins over generic recommendation/group
+    // parsing (which may otherwise hide a URL-specific name).
+    const garoBare = fcGaroBareHeading(node, label);
+    if (garoBare !== null) return raw.replace(label, () => garoBare);
+    if (p?.closest?.('#scrollad h5,.related_post__equipment .article_list__ttl')) {
+      const next = fcRecommendationText(node, raw, label);
+      if (next !== null) return next;
+    }
+    return fcCardText(node, raw, label);
+  }
+
   function trimFCNode(node) {
     const raw = node.nodeValue;
-    if (!raw?.trim()) return;
+    const label = raw?.trim();
+    if (!label || node.parentElement?.closest?.(FC_SKIP_SEL)) return;
+    const next = fcContextText(node, raw, label);
+    if (next !== raw) node.nodeValue = next;
+  }
+
+  function fcCardText(node, raw, label) {
     const p = node.parentElement;
-    if (p?.closest?.(FC_SKIP_SEL)) return;
-    const label = raw.trim();
-    const garoBare = fcGaroBareHeading(node, label);
-    if (garoBare !== null) {
-      if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
-      return;
-    }
-    // 未取得可靠系列对应时宁可保留日文，不能用同名前缀套用单件装备译名。
     const path = globalThis.location?.pathname || '';
-    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
-    const name = fullBody ? label.slice(0, -fullBody.length) : label;
-    if (fcSetTitleContext(p, label, path)
-      && /^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
-      && !(fcUIValue(name) || _getSeriesMap().get(name) || fcVerifiedSetName(name)
-        || _getSeriesPfx().get(name) || fcScopedSetName(name, p)
-        || (!fcItemName(name) && _getItemPfx().get(name)))) return;
+    if (fcSetTitleContext(p, label, path)) {
+      const next = fcSetCardOverride(p, raw, label);
+      if (next !== null) return next;
+    }
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
-    const resolved = translated ? raw.replace(label, translated) : trFC(raw);
-    const next = fcSetDisplayText(node, raw, resolved);
-    if (next !== raw) node.nodeValue = next;
+    const resolved = translated ? raw.replace(label, translated) : trFC(raw, path, p);
+    return fcSetDisplayText(node, raw, resolved);
+  }
+
+  function fcSetCardOverride(element, raw, label) {
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const name = fullBody ? label.slice(0, -fullBody.length) : label;
+    const series = _getSeriesMap().get(name) || fcVerifiedSetName(name)
+      || fcGaroSetName(name) || fcScopedSetName(name, element) || _getSeriesPfx().get(name);
+    // Sidebar cards also contain individual clothing and accessories.
+    const candidates = resolveAllByName(name);
+    if (!series && !fullBody && candidates.length === 1 && candidates[0] !== name) {
+      return raw.replace(label, () => candidates[0]);
+    }
+    const prefix = !candidates.length && _getItemPfx().get(name);
+    if (/^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
+        && !(fcUIValue(name) || series || prefix)) return raw;
+    if (!series && !prefix && candidates.length > 1) return raw;
+    return null;
   }
 
   // v1.2.8：节点分派拆为子步骤（降认知复杂度）
@@ -782,8 +1545,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function _wowFCInput(n) {
-    const ph = n.getAttribute('placeholder');
-    if (ph) { const nn = trFC(ph); if (nn !== ph) n.setAttribute('placeholder', nn); }
+    // Search & Filter stores its accessible field name in title, even
+    // when the visible placeholder was already localized.
+    for (const attr of ['placeholder', 'title', 'aria-label']) {
+      const label = n.getAttribute(attr);
+      if (label) {
+        const zh = trFC(label);
+        if (zh !== label) n.setAttribute(attr, zh);
+      }
+    }
     // v1.2.1：合并原被 2882 分支遮蔽的 input[value] 处理（v1.12.7 起从未生效；仅 submit/button/reset 防误伤）
     const v0 = n.getAttribute('value');
     if (v0 && v0.length <= 24 && /^(submit|button|reset)$/i.test(n.getAttribute('type') || '')) {
@@ -792,9 +1562,43 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     }
   }
 
+  // Recommendation thumbnails often repeat the visible title. Use the same
+  // context-sensitive resolver for both, but leave distinct captions alone.
+  function fcLinkedArticleAlt(image, value) {
+    const label = value.trim();
+    const linked = fcLinkedPath(image);
+    if (!/^[【〖]FF14[】〗]/u.test(label)
+        || !/^\/equipment\/[^/]+\/?$/u.test(linked || '')) return null;
+    // Use the thumbnail's own target, not the unrelated page containing
+    // the recommendation. Resolve the untouched native article title
+    // before applying quoted set-name substitutions.
+    const translated = trFC(value, linked, image);
+    return translated !== value ? translated : null;
+  }
+
+  function fcRecommendationAlt(image, value) {
+    const article = fcLinkedArticleAlt(image, value);
+    if (article !== null) return article;
+    const exact = fcExactArticleText(value, value.trim());
+    if (exact !== null) return exact;
+    const heading = image.closest?.('#scrollad dl')?.querySelector('h5');
+    if (!heading) return null;
+    const label = value.trim();
+    const next = fcContextText({ parentElement: heading }, value, label);
+    const title = heading.textContent.trim();
+    return title === label || title === next.trim() ? next : null;
+  }
+
   function _trFCAttr(n, key) {
     const value = n.getAttribute(key);
     if (!value || value.length > 160) return;
+    if (key === 'alt') {
+      const card = fcRecommendationAlt(n, value);
+      if (card !== null) {
+        if (card !== value) n.setAttribute(key, card);
+        return;
+      }
+    }
     const match = key === 'title' && value.match(/^View all posts in (.+)$/);
     const group = match && DICT_FC[match[1]];
     const scoped = fcShortSetQuotedAttribute(value, n);
@@ -805,7 +1609,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
   function _procFCImg(n) {
     const alt = n.getAttribute('alt');
-    if (alt && alt.length >= 2 && alt.length <= 90) _trFCAttr(n, 'alt');
+    const linkedArticle = alt && /^[【〖]FF14[】〗]/u.test(alt.trim())
+      && /^\/equipment\/[^/]+\/?$/u.test(fcLinkedPath(n) || '');
+    if (alt && alt.length >= 2 && alt.length <= (linkedArticle ? 160 : 90)) _trFCAttr(n, 'alt');
     if (n.hasAttribute('title')) _trFCAttr(n, 'title');
     if (n.hasAttribute('aria-label')) _trFCAttr(n, 'aria-label');
   }

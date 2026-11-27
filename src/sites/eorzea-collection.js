@@ -754,7 +754,14 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
     const translated = ecEditorialImageLabel(el, old) || trEC(old);
     if (!old.endsWith(' image')) return translated;
     const name = old.slice(0, -6);
-    const localized = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
+    // Both catalogues can share a native series name. Determine the
+    // thumbnail's own destination before resolving a display title.
+    const href = el.closest?.('a[href]')?.getAttribute?.('href') || '';
+    const path = href.replace(/^https:\/\/ffxiv\.eorzeacollection\.com(?=\/)/iu, '');
+    let localized;
+    if (/^\/accessories\/[^/?#]+(?:[/?#]|$)/u.test(path)) localized = ecAccessoryDisplayName(name);
+    else if (/^\/gearset\/[^/?#]+(?:[/?#]|$)/u.test(path)) localized = ecGearsetDisplayName(name);
+    else localized = ecGearsetDisplayName(name) || ecAccessoryDisplayName(name);
     return localized ? localized + '图片' : translated;
   }
 
@@ -780,6 +787,11 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
     for (const attr of ['title', 'alt', 'aria-label', 'placeholder']) {
       for (const el of queryIn(scope, '[' + attr + ']')) _translateECAttr(el, attr);
     }
+    // Native select group headings are label attributes, not text nodes.
+    // Server/data-centre group names use translateECServers instead.
+    for (const group of ecHomeCandidates(rootArg, '#filter_form select:not(#filter_server) optgroup[label]')) {
+      _translateECAttr(group, 'label');
+    }
   }
 
   // Translate only recognized UI title segments. Preserve creator names and site branding.
@@ -800,9 +812,15 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
       return;
     }
     const isInterview = ecIsInterviewDetail();
+    const path = globalThis.location?.pathname || '';
+    const seriesName = part => {
+      if (/^\/gearset\/[^/]+\/?$/u.test(path)) return ecGearsetDisplayName(part);
+      if (/^\/accessories\/[^/]+\/?$/u.test(path)) return ecAccessoryDisplayName(part);
+      return ecAccessoryDisplayName(part) || ecGearsetDisplayName(part);
+    };
     const translated = parts.map((part) => EC_UI_LABELS.get(part)
       || (isInterview && ecInterviewTitle(part)) || ecChallengeTabTitle(part)
-      || ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
+      || seriesName(part)
       || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }

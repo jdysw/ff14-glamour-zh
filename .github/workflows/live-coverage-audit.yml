@@ -1,16 +1,44 @@
-name: Live localization coverage audit (8 sites)
-# 外站审计按需执行；WAF/网络故障不充当代码 PR 的测试结果。
-# 手动运行仍严格要求完整证据，受阻站点不能计为“零漏翻”。
+name: Live localization coverage audit (10 sites)
+# 手动审计严格；涉及审计基础设施的 PR 自动执行诊断，但外站故障不阻塞普通代码测试。
 on:
   workflow_dispatch:
+    inputs:
+      browser_use_probe:
+        description: 'Optional single Browser Use session (EC only with site authorization)'
+        type: choice
+        options:
+          - 'off'
+          - provider
+          - ec-authorized
+        default: 'off'
+  pull_request:
+    paths:
+      - 'tools/coverage-audit/**'
+      - 'tools/manual-coverage-audit/audit-core.js'
+      - '.github/workflows/live-coverage-audit.yml'
 concurrency:
   group: live-localization-audit-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Preserve active evidence collection; newer audit runs queue instead.
+  cancel-in-progress: false
 
 permissions:
   contents: read
 jobs:
+  browser-use-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.browser_use_probe != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install remote CDP client
+        run: python3 -m pip install 'playwright==1.55.0'
+      - name: Check authorized browser connectivity
+        env:
+          BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
+          BROWSER_USE_PROBE_MODE: ${{ inputs.browser_use_probe }}
+        run: python3 tools/coverage-audit/browser-use-probe.py
   scan:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.browser_use_probe == 'off' }}
     name: Scan ${{ matrix.site }}
     runs-on: ubuntu-latest
     timeout-minutes: 58
@@ -18,7 +46,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden]
+        site: [mirapri, ec, fc, ronka, collection, endcloset, wiki, miramiru, eden, attire]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
@@ -40,6 +68,11 @@ jobs:
           max_pages=24
           max_depth=2
           per_template=2
+          if [ "${{ matrix.site }}" = attire ]; then
+            max_pages=60
+            max_depth=3
+            per_template=15
+          fi
           node tools/coverage-audit/run-scan.mjs --site "${{ matrix.site }}" --channel local --discover --max-pages "$max_pages" --max-depth "$max_depth" --per-template "$per_template" --wait 1500 2>&1 | tee "tests/.cache/coverage-audit/scan-log-${{ matrix.site }}.txt"
           exit ${PIPESTATUS[0]}
         continue-on-error: true
@@ -57,7 +90,7 @@ jobs:
   report:
     name: Aggregate and enforce truthful audit status
     needs: scan
-    if: always()
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.browser_use_probe == 'off') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -82,6 +115,7 @@ jobs:
           path: tests/.cache/coverage-report/
           retention-days: 14
           if-no-files-found: warn
-      - name: Fail if any required site is missing or blocked
+      - name: Record incomplete coverage (strict only for manual runs)
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           node -e "const fs=require('node:fs');const x=JSON.parse(fs.readFileSync('tests/.cache/coverage-report/coverage-audit-live.json'));if(x.status!=='scan-complete'){console.error('Incomplete localization audit: '+x.status);process.exit(1)}"

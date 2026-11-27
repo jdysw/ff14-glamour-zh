@@ -7,7 +7,7 @@ import { readRuntimeV3 } from '../helpers/v3-cache.mjs';
 import { isAuthoredContent } from '../../src/core/content-scope.js';
 import { translateECPage } from '../../src/sites/eorzea-collection.js';
 import { createChineseSearchController } from '../../src/core/chinese-search.js';
-import { translateAttirePage } from '../../src/sites/attire.js';
+import { startAttire, translateAttirePage } from '../../src/sites/attire.js';
 import { translateACLPage, translateACLTitle } from '../../src/sites/ffxiv-collection.js';
 import { bindZhxItemClick, ensureZhxItemStyle } from '../../src/core/item-links.js';
 import { _scanStats } from '../../src/core/dom.js';
@@ -45,6 +45,29 @@ test('实站回归：候选原名、指南空白与概念卡片标题保持正�
     assert.equal(decodeURIComponent(weapon.querySelector('a').href),'https://ff14.huijiwiki.com/wiki/物品:女王之荣光');
     assert.ok(dom.document.title.startsWith('女王之荣光'));
     assert.ok(dom.document.querySelector('.item-panel:last-child a').href.includes('lodestone'),'未知武器保留原链接');
+    dom.document.title = 'FFXIV 装備図鑑 | FFXIV ARMOURY COLLECTION';
+    translateACLTitle();
+    assert.ok(dom.document.title.startsWith('FFXIV 装备图鉴'), '纯汉字词条也要翻译浏览器标题');
+    const filter = dom.document.createElement('div');
+    filter.id = 'search-menu';
+    filter.innerHTML = '<button title="yes"></button><input placeholder="調べたいキーワードを入力">';
+    dom.document.body.append(filter);
+    const button = filter.querySelector('button');
+    const search = filter.querySelector('input');
+    translateACLPage(button);
+    translateACLPage(search);
+    assert.equal(button.title, '是', '局部扫描必须处理根元素本身的属性');
+    assert.equal(search.placeholder, '输入想查询的关键词');
+    button.title = 'no';
+    translateACLPage(button);
+    assert.equal(button.title, '否');
+    globalThis.location = new URL('https://www.ffxivcollection.com/policy/');
+    dom.document.body.innerHTML = '<div id="contents"><p>お客様は下記の<a href="https://adssettings.google.com/">Googleアカウントの広告設定ページ</a>で、インタレストベースでの広告掲載に使用されるDoubleClickCookieを無効にできます。また</p></div><aside>お客様は下記の</aside>';
+    translateACLPage();
+    const policy = dom.document.querySelector('#contents p');
+    assert.equal(policy.textContent,'您可以通过下方的Google 账号广告设置页面停用用于个性化广告投放的 DoubleClick Cookie。此外，访问');
+    assert.equal(policy.querySelector('a').href,'https://adssettings.google.com/');
+    assert.equal(dom.document.querySelector('aside').textContent,'お客様は下記の');
   } finally {
     for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
     dom.happyDOM.abort();
@@ -70,6 +93,11 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(resolveByZh('测试装备'),null,'names 缺省时仍可清空上一版名称索引');
     _applyV3({candidatePolicy:1,names:'English Test Gear\t测试装备\t1\t0\nテスト装備\t测试装备\t1\t0',hash:'abcdef\t测试装备'});
     assert.equal(trEden('Equipment Ranking'),'装备排行榜');
+    assert.equal(trEden('Arms'),'武器');
+    assert.equal(trEden('Tools'),'工具');
+    assert.equal(trEden('Armor'),'防具');
+    assert.equal(trEden('Accessories'),'饰品');
+    assert.equal(trEden('IL:795'),'品级：795');
     assert.equal(trEden('3個のオブジェクトを揃えました。'),'已对齐 3 个对象。');
     assert.equal(trEden('1-50 of 27418'),'第 1–50 项，共 27418 项');
     assert.equal(trEden('画像をダウンサンプリング→ΔEベースのクラスタリングで同系色を統合。ほぼ白（L>95）／ほぼ黒（L<5）は除外。 出力数は最大6色。'),
@@ -113,6 +141,17 @@ test('Eden 真实适配器：界面、装备、Vue 节点复用和用户内容�
     assert.equal(input.dataset.zhxEdenSearch,'1');assert.equal(authored.textContent,'装備ランキング');
     assert.equal(icon.textContent,'mdi-home');assert.equal(document.title,'装备排行榜 | FFXIV Mirapri Eden');
     assert.equal(typeof observer,'function');
+    globalThis.location = {hash:'#/components/contest'};
+    const prize = doc.createElement('div');
+    prize.innerHTML = '<div class="prize-card"><p class="prize-name">テスト装備</p><div class="prize-image" aria-label="テスト装備"></div><p class="sponsor">テスト装備</p><p class="prize-name">未確認の賞品</p></div>';
+    doc.body.append(prize);
+    translateEdenPage(prize,false);
+    assert.equal(prize.querySelector('.prize-name').textContent,'测试装备');
+    assert.equal(prize.querySelector('.prize-image').getAttribute('aria-label'),'测试装备');
+    assert.equal(prize.querySelector('.sponsor').textContent,'テスト装備');
+    assert.equal(prize.querySelector('.prize-name:last-child').textContent,'未確認の賞品');
+    prize.remove();
+    globalThis.location = {hash:'#/components/popular-equipment'};
     const added=doc.createElement('div'),child=doc.createElement('div'),dynamicInput=doc.createElement('input'),dynamicEditor=doc.createElement('div');child.className='v-list-item__title';child.textContent='placeholder';
     dynamicInput.value='編集中のタイトル';dynamicEditor.className='tui-image-editor-container tui-image-editor-menu-shape';dynamicEditor.setAttribute('tooltip-content','Shape');dynamicEditor.innerHTML='<ul class="tui-image-editor-submenu-item"><li class="tie-shape-button"><label>Circle</label></li></ul><input type="button" value="Detail">';
     added.append(child,dynamicInput,dynamicEditor);doc.body.appendChild(added);child.firstChild.nodeValue='テスト装備';
@@ -282,6 +321,61 @@ test('Miramiru 三语真实词条：界面、染剂、数量及标题', () => {
     translateMiramiruPage(input);
     assert.equal(input.dataset.zhxMiramiruSlot, undefined);
 
+    globalThis.location = new URL('https://miramiru.co/en/sponsors/');
+    document.body.innerHTML = '<main><h1>Host your own contest on Miramiru</h1><h2>Judging Neutrality</h2></main><aside id="other">Judging Neutrality</aside>';
+    translateMiramiruPage();
+    translateMiramiruPage();
+    assert.equal(document.querySelector('h1').textContent,'在 Miramiru 举办自己的比赛');
+    assert.equal(document.querySelector('h2').textContent,'评审公正性');
+    assert.equal(document.querySelector('#other').textContent,'Judging Neutrality');
+    globalThis.location = new URL('https://miramiru.co/ko/sponsors/');
+    document.title = 'Miramiru에서 직접 콘테스트를 주최해 보세요 | Miramiru';
+    document.body.innerHTML = '<main><h1>Miramiru에서 직접 콘테스트를 주최해 보세요</h1><h2>개최까지의 흐름</h2><h2>상품 규모 가이드</h2><h2>심사 중립성에 대하여</h2><h3>콘테스트 네이밍 권리</h3><h3>테마 결정권</h3><p>구체적 PV·DAU 등의 사이트 통계는 문의 시 개별 제공합니다.</p></main><aside>개최까지의 흐름</aside>';
+    translateMiramiruPage();
+    assert.equal(document.title,'在 Miramiru 举办自己的比赛 | Miramiru');
+    assert.deepEqual([...document.querySelectorAll('main h1,main h2,main h3')].map(e=>e.textContent),['在 Miramiru 举办自己的比赛','举办流程','奖品规模（参考）','评审公正性','比赛冠名权','自定比赛主题']);
+    assert.equal(document.querySelector('main p').textContent,'如需了解页面浏览量、日活跃用户数等具体数据，可联系获取。');
+    assert.equal(document.querySelector('aside').textContent,'개최까지의 흐름');
+    globalThis.location = new URL('https://miramiru.co/en/sponsors/');
+    document.body.innerHTML = '<main><h3>1. Reach out</h3><h3>2. Shape the plan</h3><h3>3. Launch &amp; promote</h3></main>';
+    translateMiramiruPage();
+    assert.deepEqual([...document.querySelectorAll('h3')].map(e=>e.textContent),['1. 联系咨询','2. 完善策划','3. 举办与宣传']);
+    globalThis.location = new URL('https://miramiru.co/ko/terms/');
+    document.body.innerHTML = '<main class="legal-content"><p>다음 행위를 금지합니다.</p><p>이 문서는 비공식 한국어 번역본입니다. 법적 구속력이 있는 문서는 <a href="/ja/terms">일본어 원문</a>입니다.</p><li>계정은 언제든지 직접 삭제할 수 있습니다. 삭제 시 관련 데이터도 삭제됩니다.</li></main><aside>다음 행위를 금지합니다.</aside>';
+    translateMiramiruPage();
+    translateMiramiruPage();
+    assert.equal(document.querySelector('main p').textContent,'禁止下列行为。');
+    assert.equal(document.querySelector('main a').textContent,'日文原文');
+    assert.equal(document.querySelector('main a').getAttribute('href'),'/ja/terms');
+    assert.equal(document.querySelector('main li').textContent,'用户可随时自行删除账号。删除账号时，相关数据也会被删除。');
+    assert.equal(document.querySelector('aside').textContent,'다음 행위를 금지합니다.');
+    document.body.innerHTML = '<main><p>본 약관은 운영자의 판단에 따라 변경될 수 있습니다.\n   중요한 변경이 있는 경우 서비스 내에서 안내합니다.\n변경된 약관은 본 페이지에 게시한 시점에서 효력이 발생합니다.</p></main>';
+    translateMiramiruPage();
+    assert.equal(document.querySelector('p').textContent,'运营方可自行决定修改本条款。如有重要变更，将在服务内通知。修订后的条款自发布于本页面之时起生效。');
+    _applyV3({candidatePolicy:1,names:'テスト旧装備\t测试旧装备\t1\t0\nテスト新装備\t测试新装备\t1\t0',hash:'aaaaaa\t测试旧装备\nbbbbbb\t测试新装备'});
+    globalThis.location = new URL('https://miramiru.co/en/mirapuri/test');
+    document.body.innerHTML = '<main><a class="eorzeadb_link" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/aaaaaa/"><img alt="テスト旧装備"><span>テスト旧装備</span></a></main>';
+    const itemLink = document.querySelector('a');
+    translateMiramiruPage();
+    assert.equal(itemLink.dataset.zhxMiramiruZh,'测试旧装备');
+    assert.equal(itemLink.querySelector('span').textContent,'测试旧装备');
+    itemLink.setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/cccccc/');
+    itemLink.querySelector('img').setAttribute('alt','テスト旧装備');
+    itemLink.querySelector('span').textContent='テスト新装備';
+    translateMiramiruPage(itemLink.querySelector('span').firstChild);
+    assert.equal(itemLink.getAttribute('href'),'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/cccccc/');
+    assert.equal(itemLink.dataset.zhxMiramiruZh,undefined);
+    assert.equal(itemLink.querySelector('span').textContent,'测试新装备');
+    itemLink.setAttribute('href','https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/bbbbbb/');
+    translateMiramiruPage(itemLink);
+    assert.equal(itemLink.dataset.zhxMiramiruZh,'测试新装备');
+    itemLink.setAttribute('href','/items/test');
+    itemLink.setAttribute('title','Original title');
+    translateMiramiruPage(itemLink);
+    assert.equal(itemLink.getAttribute('href'),'/items/test');
+    assert.equal(itemLink.getAttribute('title'),'Original title');
+    assert.equal(itemLink.dataset.zhxMiramiruZh,undefined);
+    _applyV3({candidatePolicy:1});
     globalThis.location = new URL('https://miramiru.co/ja/collection');
     document.title = 'コレクション — Miramiru | Miramiru';
     translateMiramiruTitle();
@@ -361,7 +455,7 @@ import {
   tr, trNode, trEl, translateMirapriTitle,
 } from '../../src/sites/mirapri.js';
 import {
-  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage,
+  _trRonkaPatch, _trRonkaDye, trRonka, trimRonkaNode, markRonkaItem, translateRonkaPage, translateRonkaTitle,
 } from '../../src/sites/ronka.js';
 import {
   _trEndClosetDye, _trEndClosetItem, trEndCloset,
@@ -378,14 +472,14 @@ import {
 } from '../../src/sites/ff14-fc.js';
 import { DICT_FC } from '../../src/core/data/dictionary.js';
 import { cacheReset } from '../../src/core/cache-primitives.js';
-import { _getSeriesMap } from '../../src/core/cache.js';
+import { _getSeriesMap, _getItemPfx } from '../../src/core/cache.js';
 
 import { DICT_ACL } from '../../src/core/data/dictionary.js';
 import {
   m_last, _slotHit, _slotFromList, getSlot, getItemZhName,
   blockByTitle, wikiReverseItems, _buildReverseBlock, injectWikiButton,
 } from '../../src/sites/huiji-wiki.js';
-import { _applyV3, _fireTablesReady, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
+import { _applyV3, _fireTablesReady, _tablesReady, dataInvalidate, resolveByName, resolveByZh, itemById, findItemsByName, suggestByZh } from '../../src/core/data/data-manager.js';
 import { parseItemIds } from '../../src/core/data/item-identity.js';
 import { itemNames } from '../../src/core/item-languages.js';
 
@@ -539,6 +633,10 @@ test('Ronka 实体翻译：韩文补丁前缀和装备标记', () => {
     const icon = chip.firstElementChild;
     translateRonkaPage(doc.body);
     assert.equal(shortcut.textContent, '查看包含“유저”的全部作品');
+    doc.title = 'GALLERY';
+    translateRonkaTitle();
+    assert.equal(doc.title, '作品集');
+    assert.equal(trRonka('constructor'), 'constructor');
     assert.equal(chip.textContent, '搜索： 유저');
     assert.equal(chip.firstElementChild, icon);
     assert.equal(doc.querySelector('.filter-title').textContent, '关键词');
@@ -598,6 +696,12 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
     cacheReset('derived');
     cacheReset('lookup');
     assert.equal(aclStandaloneSetName('フリースピリッツ・アタイア'), '自由之魂套装');
+    assert.equal(aclStandaloneSetName('フリースピリッツアタイア'), '自由之魂套装');
+    assert.equal(aclStandaloneSetName('見本アタイア'), '正式示例装束');
+    assert.equal(aclStandaloneSetName('イースタンアタイア'), '上仙套装');
+    assert.equal(aclStandaloneSetName('スウィートドリームアタイア'), '美梦套装');
+    assert.equal(aclStandaloneSetName('ダメージド・マンダヴィルアタイア'), '破损的绅士套装');
+    assert.equal(trACL('イースタンアタイア'), 'イースタンアタイア');
     assert.equal(aclStandaloneSetName('ヘヴンスナイト・アーマー'), '苍穹骑士套装');
     assert.equal(aclStandaloneSetName('見本・アタイア'), '正式示例装束',
       '官方套装道具名优先于系列的通用后缀');
@@ -626,6 +730,8 @@ test('FFXIV Collection：只在套装标题补后缀，物品名称与系列词�
       '单件装备描述区域不得被套装标题规则污染');
     assert.equal(_trACLGearsetAlt("フリースピリッツ・アタイア's gearset image."),
       '自由之魂套装的装备展示图');
+    assert.equal(_trACLGearsetAlt("ダメージド・マンダヴィルアタイア's gearset image male."),
+      '破损的绅士套装的装备展示图（男性角色）');
     globalThis.document = { title: 'フリースピリッツ・アタイア ｜ FFXIV ARMOURY COLLECTION' };
     translateACLTitle();
     assert.equal(globalThis.document.title, '自由之魂套装 ｜ FFXIV ARMOURY COLLECTION');
@@ -925,7 +1031,91 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     assert.ok(trFC('〖FF14〗ファントムヴィジョン・ディフェンダー装備👗各種族での見た目・入手方法')
       .startsWith('〖FF14〗幻境意象御敌套装'));
     assert.equal(trFC('ファントムヴィジョン・ディフェンダー'), '幻境意象御敌');
+    const title = '〖FF14〗ファントムヴィジョン・ディフェンダー装備👗各種族での見た目・入手方法';
+    assert.equal(trFC(title+'〖ウィンダス：ザ・サードウォーク〗'), '〖FF14〗幻境意象御敌套装👗各种族外观·获取方式〖温达斯：第三巡行〗');
+    assert.ok(trFC(title+'【ウィンダス：ザ・サードウォーク】').endsWith('【温达斯：第三巡行】'));
+    assert.ok(trFC(title+'〖未確認の入手先〗').endsWith('〖未確認の入手先〗'));
     assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'));
+    const oracle = '【FF14】リーン・コスチュームセット装備👗各種族での見た目・入手方法【オラクル】';
+    const snow = '〖FF14〗スノウ・コスチュームセット装備👗各種族での見た目・入手方法〖ノラ/FF13〗';
+    const oracleZh = '【FF14】巫女套装👗各种族外观·获取方式【光之巫女】';
+    const snowZh = '〖FF14〗诺拉套装👗各种族外观·获取方式〖诺拉/FF13〗';
+    dom.document.body.innerHTML = '<a href="/equipment/oracle/"><h3>' + oracle + '</h3></a>'
+      + '<a href="/equipment/snows_attire/"><h3>' + snow + '</h3></a>';
+    const cards = [...dom.document.querySelectorAll('h3')];
+    cards.forEach(card => trimFCNode(card.firstChild));
+    assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
+    assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
+    assert.equal(trFC("イゼル・コスチュームセット"), "冰心装备套装");
+    assert.equal(trFC("【FF14】イゼル・コスチュームセット装備👗各種族での見た目・入手方法【氷の巫女イゼル】"), "【FF14】冰心装备套装👗各种族外观·获取方式【冰之巫女伊塞勒】");
+    // Exact Item bundle names verified against the offline multilingual data.
+    for (const [native, path, zh, title, localized] of [
+      ["アーマーガッパ","/equipment/imp/","河童蓑衣装备套装","【FF14】アーマーガッパ装備👗各種族での見た目・入手方法【着ぐるみ】","【FF14】河童蓑衣装备套装👗各种族外观·获取方式【玩偶服】"],
+      ["アーバン","/equipment/urban/","都市外套组合","【FF14】アーバン装備👗各種族での見た目・入手方法","【FF14】都市外套组合👗各种族外观·获取方式"],
+      ["レベル","/equipment/rebel/","叛逆外套组合","【FF14】レベル装備👗各種族での見た目・入手方法","【FF14】叛逆外套组合👗各种族外观·获取方式"],
+      ["オメガM・コスチュームセット","/equipment/omega-m_attire/","欧米茄M服装装备套装","【FF14】オメガM・コスチュームセット👗各種族での見た目・入手方法【オメガ装備】","【FF14】欧米茄M服装装备套装👗各种族外观·获取方式【欧米茄装备】"],
+      ["オメガF・コスチュームセット","/equipment/omega-f_attire/","欧米茄F服装装备套装","【FF14】オメガF・コスチュームセット👗各種族での見た目・入手方法【オメガ装備】","【FF14】欧米茄F服装装备套装👗各种族外观·获取方式【欧米茄装备】"],
+      ["ラムザ","/equipment/ramzas/","拉姆萨装备套装","【FF14】ラムザ装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】拉姆萨装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["オヴェリア","/equipment/ovelias/","奥薇莉亚装备套装","【FF14】オヴェリア装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】奥薇莉亚装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["ガフガリオン","/equipment/gaffgarions/","加夫加利昂装备套装","【FF14】ガフガリオン装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】加夫加利昂装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["アルタナティヴ","/equipment/alternative/","另类装备套装","【FF14】アルタナティヴ装備👗各種族での見た目・入手方法","【FF14】另类装备套装👗各种族外观·获取方式"],
+      ["クリスタリウムプロディジー","/equipment/crystarium_prodigys/","水晶都神童装备套装","【FF14】クリスタリウムプロディジー装備👗各種族での見た目・入手方法【漆黒アルフィノ】","【FF14】水晶都神童装备套装👗各种族外观·获取方式【暗影之逆焰时期的阿尔菲诺】"],
+      ["リペアド・インペリアル","/equipment/mended_imperial/","修好的帝国装备套装","【FF14】リペアド・インペリアル装備👗各種族での見た目・入手方法【メインクエ】","【FF14】修好的帝国装备套装👗各种族外观·获取方式【主线任务】"],
+      ["降神荒武者","/equipment/heavensturn/","降神猛士装束","【FF14】降神荒武者装備👗各種族での見た目・入手方法【降神祭2022】","【FF14】降神猛士装束👗各种族外观·获取方式【降神祭2022】"],
+      ["サマーインディゴ","/equipment/summer_indigo/","夏季靛蓝组合","【FF14】サマーインディゴ装備👗各種族での見た目・入手方法","【FF14】夏季靛蓝组合👗各种族外观·获取方式"],
+      ["天つ水影流","/equipment/amatsu/","天水影流装束","【FF14】FF11コラボ装備(星唄異聞)👗各種族での見た目・入手方法【天つ水影流】","【FF14】FF11联动装备（星歌异闻）👗各种族外观·获取方式【天水影流装束】"],
+      ["クウェインチュレル","/equipment/quaintrelles/","风尚褶边套装","【FF14】クウェインチュレル装備👗各種族での見た目・入手方法","【FF14】风尚褶边套装👗各种族外观·获取方式"],
+      ["東方美玉衣装セット","/equipment/eastern_lady_errants/","东方美玉装束","【FF14】東方美玉衣装セット装備👗各種族での見た目・入手方法【東方風】","【FF14】东方美玉装束👗各种族外观·获取方式【东方风】"],
+      ["東方殿方衣装セット","/equipment/far_eastern_garb_for_men/","东方公子装束","【FF14】東方殿方衣装セット👗各種族での見た目・入手方法【東方風】","【FF14】东方公子装束👗各种族外观·获取方式【东方风】"],
+    ]) {
+      dom.document.body.innerHTML = '<a href="' + path + '"><h4>' + native + '</h4><h3>' + title + '</h3></a>';
+      const [name, article] = dom.document.querySelectorAll('h4,h3');
+      trimFCNode(name.firstChild);
+      trimFCNode(article.firstChild);
+      assert.equal(name.textContent, zh, path);
+      assert.equal(article.textContent, localized, path);
+      assert.equal(trFC(title + ' | ミラプリライフ', path), localized + ' | 幻化生活', path);
+      const img = dom.document.createElement('img');
+      img.alt = title;
+      article.parentElement.append(img);
+      _trFCAttr(img, 'alt');
+      assert.equal(img.alt, localized, path);
+    }
+    for (const [nativeTitle, translatedTitle, path] of [
+      ["【FF14】星芒祭⛄スノーマンセット装備👗各種族での見た目・入手方法【雪だるま】","【FF14】星芒节⛄雪人套装👗各种族外观·获取方式【雪人】","/equipment/snowman_attire/"],
+      ["【FF14】星芒祭🦌レインディアコスチュームセット装備👗各種族での見た目・入手方法【トナカイ着ぐるみ】","【FF14】星芒节🦌驯鹿套装👗各种族外观·获取方式【驯鹿玩偶服】","/equipment/reindeer_attire_set/"],
+    ]) {
+      dom.document.body.innerHTML = '<a href="' + path + '"><h3>' + nativeTitle + '</h3></a>';
+      const eventCard = dom.document.querySelector('h3');
+      trimFCNode(eventCard.firstChild);
+      assert.equal(eventCard.textContent, translatedTitle);
+      assert.equal(trFC(nativeTitle + '  ｜  ミラプリライフ', path), translatedTitle + '  ｜  幻化生活');
+    }
+    const yorha = '【FF14】ヨルハ五一式:格(モンク・侍)装備👗各種族での見た目・入手方法【複製サレタ工場廃墟】';
+    const yorhaPath = '/equipment/yorha_type-51_of_striking/';
+    const yorhaZh = '【FF14】寄叶五一式强袭套装（武僧、武士）👗各种族外观·获取方式【复制工厂废墟】';
+    dom.document.body.innerHTML = '<a href="' + yorhaPath + '"><h3>' + yorha + '</h3></a>';
+    const yorhaCard = dom.document.querySelector('h3');
+    trimFCNode(yorhaCard.firstChild);
+    assert.equal(yorhaCard.textContent, yorhaZh);
+    assert.equal(trFC(yorha, yorhaPath), yorhaZh);
+    assert.equal(trFC(yorha + ' | ミラプリライフ', yorhaPath), yorhaZh + ' | 幻化生活');
+    assert.notEqual(trFC(yorha, '/equipment/unrelated/'), yorhaZh);
+    // Native article thumbnails can be longer than the general 90-character
+    // alt limit; they must resolve using the linked equipment identity.
+    const longAlt = yorha + ' '.repeat(60) + '| ミラプリライフ';
+    const longZh = yorhaZh + ' '.repeat(60) + '| 幻化生活';
+    assert.ok(longAlt.length > 90 && longAlt.length <= 160);
+    dom.document.body.innerHTML = '<div id="scrollad"><dl><a href="' + yorhaPath + '"><dt><img></dt><dd><h5>ヨルハ五一式:格</h5></dd></a></dl></div>';
+    const thumbnail = dom.document.querySelector('img');
+    thumbnail.alt = longAlt;
+    _procFCNode(thumbnail);
+    assert.equal(thumbnail.alt, longZh);
+    thumbnail.alt = '未確認の画像説明' + '長い説明'.repeat(24);
+    const unknownAlt = thumbnail.alt;
+    _procFCNode(thumbnail);
+    assert.equal(thumbnail.alt, unknownAlt);
+
     assert.equal(trFC('アライアンスレイド'), '团队任务');
     assert.equal(trFC('ノーマルレイド'), '普通大型任务');
   } finally {
@@ -1008,6 +1198,9 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.equal(trFC('アライアンスレイド「' + duty + '」の宝箱からランダムでドロップする。'),
       '从团队任务“水晶塔 古代人迷宫”的宝箱中随机掉落。');
     assert.equal(trFC('▷ ' + duty + ' の詳細情報'), '▷ 水晶塔 古代人迷宫的详细信息');
+    assert.equal(trFC('「' + duty + '」の開放条件'), '“水晶塔 古代人迷宫”的开放条件');
+    assert.equal(trFC(duty + 'とは'), '水晶塔 古代人迷宫介绍');
+    assert.equal(trFC('装備の2ヵ所染色対応！'), '装备支持双色染色！');
     assert.ok(trFC('「オブ・ライト」装備が「' + duty
       + '」のどの宝箱からドロップするか、ひと目でわかるツールです').includes('光之套装'));
     assert.equal(trFC('レイド'), '团队任务');
@@ -1058,6 +1251,128 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       assert.equal(link.querySelector('img.bare-alt').getAttribute('alt'), chinese);
       assert.equal(link.getAttribute('href'), href);
     }
+    // The live series directory has unlinked dd/h4 labels and a sibling
+    // equipment anchor. Verified URL-specific names must beat generic names.
+    globalThis.location = new URL('https://ff14-fc.com/equipment_series_search/');
+    const catalogue = doc.createElement('div');
+    catalogue.id = 'search-filter-results-8722';
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/crimson/"><img></a></dt><dd><h4>クリムゾン</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/vipers/"></a></dt><dd><h4>ヴァイパー</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/asphodelos_of_casting/"></a></dt><dd><h4>アスフォデロース・キャスター</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/unrelated/"></a></dt><dd><h4>アスフォデロース・キャスター</h4></dd></dl>'
+      + '</div>';
+    doc.body.append(catalogue);
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].slice(0,3).map(h=>h.textContent),
+      ['深红套装','蝰蛇套装','日影兰咏咒套装']);
+    assert.notEqual(catalogue.querySelectorAll('h4')[3].textContent,'日影兰咏咒套装');
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/mens_black_summer/"></a></dt><dd><h4>ブラックサマー（男性用）</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/ao_dai/"></a></dt><dd><h4>アオザイ</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/doctores_tank/"></a></dt><dd><h4>ドクトル(タンク・スレイヤー)</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/anemos_chivalrous/"></a></dt><dd><h4>シヴァルラス・アネモス</h4></dd></dl></div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h=>h.textContent),
+      ['纯黑男式夏装组合','奥黛套装','教练套装（防护、制敌）','常风侠义套装']);
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/rakshasa_of_fending/"></a></dt><dd><h4>羅刹【武士】</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/rakshasa_of_fending/"></a></dt><dd><h4>羅刹〖武士〗</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/shishu_gozen/"></a></dt><dd><h4>紫洲御前</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/cosmosuit/"></a></dt><dd><h4>コスモスーツ</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/king_of_leonis_attire/"></a></dt><dd><h4>モント・コスチュームセット</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/other/"></a></dt><dd><h4>羅刹〖武士〗</h4></dd></dl></div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    const reviewed = [...catalogue.querySelectorAll('h4')].map(h => h.textContent);
+    assert.deepEqual(reviewed.slice(0, 5),
+      ['罗刹豪士套装','罗刹豪士套装','紫州御前装束','宇航服套装','雷欧尼斯国王套装']);
+    assert.notEqual(reviewed[5], '罗刹豪士套装', '括号变体仍须匹配对应装备路径');
+    const remaining = [
+      ['lv55', 'LV式', '河畔堡驻军装束'],
+      ['the_blue', '碧甲羅之', '碧甲装束'],
+      ['almas_attire', 'アルマ・コスチュームセット', '威风凛凛套装'],
+      ['coronal_summer', 'コロナルサマー', '盛花夏衣套装'],
+      ['southern_seas', 'サザンシー', '南洋海滨套装'],
+      ['arhat_of_fending', '羅漢〖武士〗', '罗汉豪士装束'],
+      ['werewolf_for_women', 'ウェアウルフ・コスチュームセット（女性用）', '人狼脚爪套装'],
+      ['the_guardians_of_maiming', 'ガーディアン・オブ・スレイ', '制敌守护者套装'],
+      ['augmented_lost_allagan_of_fending', 'ロストアラガン・ディフェンダー', '改良型亚拉戈失传御敌套装'],
+      ['augmented_lost_allagan_of_maiming', 'ロストアラガン・スレイヤー', '改良型亚拉戈失传制敌套装'],
+      ['augmented_lost_allagan_of_striking', 'ロストアラガン・ストライカー', '改良型亚拉戈失传强袭套装'],
+      ['augmented_lost_allagan_of_scouting', 'ロストアラガン・スカウト', '改良型亚拉戈失传游击套装'],
+      ['augmented_lost_allagan_of_aiming', 'ロストアラガン・レンジャー', '改良型亚拉戈失传精准套装'],
+      ['augmented_lost_allagan_of_casting', 'ロストアラガン・キャスター', '改良型亚拉戈失传咏咒套装'],
+      ['augmented_lost_allagan_of_healing', 'ロストアラガン・ヒーラー', '改良型亚拉戈失传治愈套装'],
+      ['grisly_bear_suit', 'グリムグリズリー・スーツ', '狰狞熊套装'],
+      ['gaja_suit', 'ガジャスーツ', '小象套装'],
+      ['toad_suit', 'トードスーツ', '蟾蜍套装'],
+      ['swine_body', 'ポーキースーツ', '波奇套装'],
+      ['chicken_suit', 'チキンスーツ', '小鸡套装'],
+      ['rabbit_suit', 'ラビットスーツ', '兔子套装'],
+      ['raincoat', 'レインコート', '雨衣套装'],
+      ['conquerors', 'コンカラー', '征服套装'],
+      ['outsiders', 'アウトサイダー', '外来者套装'],
+      ['flannel', 'フランネル', '法兰绒背带衬衫套装'],
+      ['varsity_jacket', 'ヴァーシティ・ジャケット', '校园外套套装'],
+      ['buttoned_varsity_jacket', 'ボタンド・ヴァーシティジャケット', '系扣校园外套套装'],
+      ['uraeus_body_armor', 'ウラエウスボディアーマー', '圣蜥蜴革组合'],
+      ['coeurl_beach_halter', 'クァールビーチホルター', '豹纹夏衣套装'],
+      ['coeurl_talisman', 'クァールタリスマン', '豹纹护身符套装'],
+      ['replica_dreadwyrm_of_fending', 'レプリカ・バハムート・ディフェンダー', '龙神御敌套装（复制品）'],
+      ['replica_high_allagan_of_fending', 'レプリカ・ハイアラガン・ディフェンダー', '亚拉戈高位御敌套装（复制品）'],
+      ['replica_allagan_of_fending', 'レプリカ・ヘヴィアラガン', '亚拉戈重套装（复制品）'],
+    ];
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + remaining.map(([slug, native]) => '<dl><dt><a href="/equipment/' + slug
+        + '/"></a></dt><dd><h4>' + native + '</h4></dd></dl>').join('') + '</div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h => h.textContent), remaining.map(row => row[2]));
+    // Actual AF article titles use a job heading and a trailing set name.
+    const redArticle = '〖FF14〗赤魔道士AF1装備👗各種族での見た目・入手方法〖レッド〗';
+    catalogue.innerHTML = '<div class="equipment-search-results-content"><dl><dt><a href="/equipment/red/"></a></dt>'
+      + '<dd><h3>' + redArticle + '</h3></dd></dl></div>';
+    trimFCNode(catalogue.querySelector('h3').firstChild);
+    assert.equal(catalogue.querySelector('h3').textContent,
+      '〖FF14〗赤魔法师 AF1装备👗各种族外观·获取方式〖赤红套装〗');
+    assert.equal(trFC(redArticle, '/equipment/red/'),
+      '〖FF14〗赤魔法师 AF1装备👗各种族外观·获取方式〖赤红套装〗');
+    assert.equal(trFC(redArticle, '/equipment/unrelated/'), redArticle, '未确认的路径不得把套装名称误译成颜色');
+    assert.equal(trFC('【FF14】リーパーAF5装備(Lv90)👗各種族での見た目・入手方法【リーパー】', '/equipment/reapers/'),
+      '【FF14】钐镰客 AF5装备（90级）👗各种族外观·获取方式【丰获套装】');
+    assert.equal(trFC('【FF14】侍AF3(アネモス)装備👗各種族での見た目・入手方法【明珍【風】】', '/equipment/anemos_myochin/'),
+      '【FF14】武士 AF3（常风）装备👗各种族外观·获取方式【常风明珍装束】');
+    const previousNinja = DICT_FC['乱波装束'];
+    try {
+      // Identical Japanese/Chinese canonical names are valid resolved names.
+      DICT_FC['乱波装束'] = '乱波装束';
+      assert.equal(trFC('【FF14】忍者AF1装備👗各種族での見た目・入手方法【乱波装束】', '/equipment/augmented_ninja/'),
+        '【FF14】忍者 AF1装备👗各种族外观·获取方式【乱波装束】');
+    } finally {
+      if (previousNinja === undefined) delete DICT_FC['乱波装束'];
+      else DICT_FC['乱波装束'] = previousNinja;
+    }
+    assert.equal(trFC('【FF14】アスフォデロース・キャスター装備👗各種族での見た目・入手方法【パンデモニウム辺獄零式】',
+      '/equipment/asphodelos_of_casting/'),
+      '【FF14】日影兰咏咒套装👗各种族外观·获取方式【零式万魔殿 边境之狱】');
+    assert.equal(trFC('【FF14】LV式装備👗各種族での見た目・入手方法【メインクエ】', '/equipment/lv55/'),
+      '【FF14】河畔堡驻军装束👗各种族外观·获取方式【主线任务】');
+    assert.equal(trFC('【FF14】ミコッテ女性♀初期服装備👗見た目・入手方法【種族装束】'),
+      '【FF14】猫魅族女性初始服装👗外观·获取方式【种族服装】');
+    assert.equal(trFC('【FF14】オブ・ライト装備👗各種族での見た目・入手方法【至天の座アルカディア：クルーザー級】',
+      '/equipment/of_light/'),
+      '【FF14】光之套装👗各种族外观·获取方式【阿卡狄亚登天斗技场 中量级】');
+    catalogue.remove();
+    // The crafted South Seas clothes are not the earlier swimwear series.
+    globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas/');
+    assert.equal(trFC('サザンシー'), '南洋海滨套装');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas_swimsuit/');
+    assert.notEqual(trFC('サザンシーワンピース'), '南洋海滨套装');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/idealized_hattori/');
+    const reviewedHeading = doc.createElement('h5');
+    reviewedHeading.textContent = '服部〖想〗';
+    trimFCNode(reviewedHeading.firstChild);
+    assert.equal(reviewedHeading.textContent, '理想化的服部装束', '详情页也识别括号变体');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/of_light/');
     assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
     const summary = doc.createElement('section');
     summary.innerHTML = '<span>Point</span><h2>まとめ</h2>';
@@ -1107,7 +1422,8 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
 });
 
 test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => {
-  const before = globalThis.location;
+  const previous = { location: globalThis.location, window: globalThis.window };
+  const wasReady = _tablesReady;
   const dom = new TestWindow({url:'https://ff14-fc.com/equipment_series_search/'});
   const source = dom.document;
   source.body.innerHTML = [
@@ -1117,13 +1433,16 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     '<h4 id="item">試験の腕輪</h4>',
     '<a href="/equipment/example/"><span id="home">ビーストハーダー</span></a>',
     '<a href="/equipment/example/"><span id="individual">試験の腕輪</span></a>',
+    '<div id="scrollad"><a href="/equipment/test-cap/"><h5 id="cap">テストキャップ</h5></a><a href="/equipment/test-set/"><h5 id="role-set">テストシリーズ・キャスター</h5></a><a href="/equipment/unknown/"><h5 id="unverified">未知のセット(タンク)</h5></a><dl><a href="/equipment/garo/"><dt><img id="rec-alt" alt="魔戒法師・陽"></dt><dd><h5 id="rec-title">魔戒法師・陽</h5></dd></a></dl></div>',
+    '<div id="info-drop"><div class="eorzeadb_link" id="drop-item">テストキャップ（頭防具）</div><div class="eorzeadb_link" id="drop-unknown">未知の装備（頭防具）</div></div>',
   ].join('');
   try {
+    globalThis.window = dom;
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      names: '試験の腕輪\t试验手镯\t1\t0',
-      series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧',
+      names: 'レインコート\t雨衣\t1\t0\n試験の腕輪\t试验手镯\t1\t0\nテストキャップ\t测试帽\t1\t0\nテストシリーズ・キャスターハット\t测试系列咏咒帽\t1\t0\nテストシリーズ・キャスターローブ\t测试系列咏咒长袍\t1\t0\nテストシリーズ・キャスターグローブ\t测试系列咏咒手套\t1\t0',
+      series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧\n魔戒法師の装束・陽|魔戒法师装束·阳',
     }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
     const label = id => source.querySelector('#' + id).firstChild;
@@ -1135,16 +1454,84 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(fcSetDisplayText(label('item'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('individual'), '試験の腕輪', '试验手镯'), '试验手镯');
     assert.equal(fcSetDisplayText(label('home'), 'ビーストハーダー', '兽牧'), '兽牧套装');
+    // _applyV3 alone publishes names but does not mark the tables ready.
+    // The derived item index is available only after the real ready signal.
+    _fireTablesReady();
+    cacheReset('derived');
+    trimFCNode(label('cap'));
+    trimFCNode(label('role-set'));
+    trimFCNode(label('unverified'));
+    trimFCNode(label('drop-item'));
+    trimFCNode(label('drop-unknown'));
+    trimFCNode(label('rec-title'));
+    _trFCAttr(source.querySelector('#rec-alt'), 'alt');
+    assert.equal(label('drop-item').nodeValue,'测试帽（头部防具）');
+    assert.equal(label('drop-unknown').nodeValue,'未知の装備（頭防具）','未解析物品保留完整原文');
+    assert.equal(label('rec-title').nodeValue,'魔戒法师装束·阳');
+    assert.equal(source.querySelector('#rec-alt').getAttribute('alt'),'魔戒法师装束·阳');
+    assert.equal(label('cap').nodeValue,'测试帽','推荐栏单件装备不能被套装保护拦截');
+    assert.equal(label('role-set').nodeValue,'测试系列咏咒套装','至少三个一致部件才生成套装展示名称');
+    assert.equal(label('unverified').nodeValue,'未知のセット(タンク)','未知套装不产生半译名');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/raincoat/');
+    const rain = source.createElement('section');
+    rain.innerHTML = '<h5>レインコート</h5><h3>レインコート（全身）</h3><h3>レインコート</h3>'
+      + '<img alt="ミラプリ「レインコート」装備ミコッテでの見た目紹介1">'
+      + '<img alt="ミラプリ「レインコート」装備の見た目を各種族で紹介1">';
+    source.body.append(rain);
+    for (const h of rain.querySelectorAll('h5,h3')) trimFCNode(h.firstChild);
+    for (const img of rain.querySelectorAll('img')) _trFCAttr(img, 'alt');
+    assert.deepEqual([...rain.querySelectorAll('h5,h3')].map(h => h.textContent),
+      ['雨衣套装','雨衣套装（全身）','雨衣']);
+    assert.deepEqual([...rain.querySelectorAll('img')].map(img => img.getAttribute('alt')),
+      ['猫魅族「雨衣」外观展示图 1','「雨衣」各种族外观展示图 1']);
+    rain.remove();
     globalThis.location = new URL('https://ff14-fc.com/equipment/example/');
     assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
     const detail = source.createElement('h3');
     detail.textContent = 'アバランチブロウラー（全身）';
     assert.equal(fcSetDisplayText(detail.firstChild, 'アバランチブロウラー（全身）', '雪崩斗手（全身）'), '雪崩斗手套装（全身）');
+    assert.equal(fcVerifiedSetName('バトルフィールドローズ・コスチュームセット'),'战场玫瑰套装');
+    assert.equal(fcVerifiedSetName('ハンブル・コスチュームセット'),'平民套装');
+    assert.equal(fcVerifiedSetName('セイニャー・コスチュームセット'),'领主装备套装');
+    assert.equal(fcVerifiedSetName('ブルーサマーセット（女性用）'),'蔚蓝女式夏装组合');
+    const summer = source.createElement('a');
+    summer.href = '/equipment/summer/';
+    summer.textContent = 'ブルーサマーセット（女性用）';
+    assert.equal(fcSetDisplayText(summer.firstChild, summer.textContent, '蔚蓝女式夏装组合'),'蔚蓝女式夏装组合');
+    assert.equal(fcVerifiedSetName(null),null);
+    _applyV3({candidatePolicy:1,names:'テスト・アタイア\t测试套装\t1\t0'});
+    assert.equal(fcVerifiedSetName('テスト・コスチュームセット'),'测试套装');
+    assert.equal(fcVerifiedSetName('未確認・コスチュームセット'),null);
+    // Real V3 item-slot metadata covers suffixes outside the legacy
+    // lexical whitelist. Different rows in the same slot do not count.
+    const identity = parseItemIds([
+      'ja',
+      '1001\t实测咏咒护耳帽\t実測・キャスターフラップキャップ\t1\t0',
+      '1002\t实测咏咒长外衣\t実測・キャスターガウン\t1\t1',
+      '1003\t实测咏咒套袖\t実測・キャスタードレススリーヴ\t1\t2',
+      '1004\t华美型实测咏咒长外衣\t実測・キャスターガウンSP\t1\t1',
+      '1005\t重复咏咒礼帽\t重複・キャスターハット\t1\t0',
+      '1006\t重复咏咒帽\t重複・キャスターキャップ\t1\t0',
+      '1007\t重复咏咒头饰\t重複・キャスタークラウン\t1\t0',
+      '1008\t重复咏咒戒指\t重複・キャスターリング\t1\t5',
+      '1009\t旧数据咏咒帽\t旧資料・キャスターハット\t1\t5',
+      '1010\t旧数据咏咒长袍\t旧資料・キャスターローブ\t1\t5',
+      '1011\t旧数据咏咒手套\t旧資料・キャスターグローブ\t1\t5',
+    ].join('\n'));
+    assert.ok(identity);
+    assert.ok(_applyV3({candidatePolicy:1,identity}));
+    cacheReset('derived');
+    assert.equal(_getItemPfx().get('実測・キャスター'),'实测咏咒');
+    assert.equal(_getItemPfx().get('旧資料・キャスター'),'旧数据咏咒','部位元数据缺失时仍允许严格的传统部位匹配');
+    assert.equal(_getItemPfx().has('重複・キャスター'),false,'同一部位和非防具不得作为三件套装证据');
   } finally {
+    if (!wasReady) dataInvalidate();
     _applyV3({candidatePolicy:1});
     cacheReset('derived');
-    if (before === undefined) delete globalThis.location;
-    else globalThis.location = before;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
     dom.close();
   }
 });
@@ -1188,11 +1575,13 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
     assert.equal(trFC('≪' + key + '»'), '≪模拟译文»');
     assert.equal(trFC(key), '模拟译文');
     const input = element('INPUT', {
-      type: 'submit', placeholder: key, value: key,
+      type: 'submit', placeholder: key, value: key, title: '装備検索', 'aria-label': 'ヘアカタログ検索',
     });
     _wowFCInput(input);
     assert.equal(input.getAttribute('placeholder'), '模拟译文');
     assert.equal(input.getAttribute('value'), '模拟译文');
+    assert.equal(input.getAttribute('title'), '装备搜索');
+    assert.equal(input.getAttribute('aria-label'), '发型图鉴搜索');
     const title = element('A', { title: 'View all posts in ' + key });
     _trFCAttr(title, 'title');
     assert.equal(title.getAttribute('title'), '查看“模拟译文”分类下的全部文章');
@@ -1237,7 +1626,7 @@ test('FF14-FC 真正源码路径：复合职能、装饰符、字典和链接重
 });
 
 test('装備手帳：保留站内分类入口与正文，仅以确切物品身份改 Wiki 跳转', async () => {
-  const names = ['document','location','window','NodeFilter'];
+  const names = ['document','location','window','NodeFilter','MutationObserver'];
   const prior = Object.fromEntries(names.map(name => [name,globalThis[name]]));
   const dom = new TestWindow({url:'https://attire.jp/field-commanders-coat/'});
   try {
@@ -1277,10 +1666,238 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('#custom').textContent,'作者的文字');
     assert.equal(d.querySelector('#unknown').textContent,'未収録の装備');
     assert.equal(d.querySelector('#unknown').href,official+'00000000001/');
+    // Already redirected links must also be rechecked after a data refresh.
+    const updatedZh = '野战指挥官外套（更正）';
+    d.title = zh+'〖FF14 装备手帐〗｜幻化装备外观汇总';
+    d.body.insertAdjacentHTML('beforeend', `<ol id="breadCrumb"><li><a href="/">HOME</a></li><li>＞${zh}</li></ol>`);
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+updatedZh+'\t1\t1',hash:hash+'\t'+updatedZh}));
+    translateAttirePage();
+    assert.equal(d.querySelector('#item strong').textContent,updatedZh);
+    assert.equal(decodeURI(d.querySelector('#item').href),wiki+updatedZh);
+    assert.equal(d.querySelector('h1').textContent,updatedZh);
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'＞'+updatedZh);
+    assert.ok(d.title.startsWith(updatedZh));
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+updatedZh+'\t1\t1\n別の装備\t另一件装备\t1\t1',hash:hash+'\t另一件装备'}));
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#item strong').textContent,jp);
+    assert.equal(d.querySelector('#item').href,official+hash+'/');
+    assert.equal(d.querySelector('h1').textContent,jp);
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'＞'+jp);
+    assert.ok(d.title.startsWith(jp));
+    // A name-only label must revert if the canonical identity contradicts it.
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a id="conflict" href="${official}${hash}/">${jp}</a></section>`;
+    d.title = jp+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1'}));
+    translateAttirePage();
+    assert.equal(d.querySelector('#conflict').textContent,zh);
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n別の装備\t另一件装备\t1\t1',hash:hash+'\t另一件装备'}));
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#conflict').textContent,jp);
+    assert.equal(d.querySelector('#conflict').href,official+hash+'/');
+    assert.equal(d.querySelector('h1').textContent,jp);
+    assert.ok(d.title.startsWith(jp));
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
       <h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}${hash}/">${jp}</a></section>`;
     translateAttirePage();
     assert.equal(d.querySelector('h1').textContent,jp,'幻化文章标题即使等于装备原名也不改');
+    d.body.className = 'page';
+    d.body.innerHTML = `<nav><a href="/viper/">ヴァイパー</a></nav>
+      <form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索">
+      <button type="submit">検索</button><input type="submit" value="検索"><input type="submit" name="action" value="検索"></form>
+      <section id="postContent"><div class="wp-block-columns"><a href="/field-commanders-coat/">${jp}</a></div>
+      <article class="o--postlist-item"><a class="c--post-link" href="/field-commanders-coat/"><img alt="${jp}"><div class="a--post-title d--bold c--post-contents">${jp}</div><div class="a--post-category c--post-meta">アチーブメント報酬</div></a></article>
+      <article class="o--postlist-item"><a class="c--post-link" href="/glamour-post/"><img alt="${jp}"><div class="a--post-title">${jp}</div><div class="a--post-category c--post-meta">ミラプリ</div></a></article>
+      <p>${jp}</p></section><div class="widget_nav_menu"><ul class="menu"><li><a href="/category/af/">歴代ジョブAF</a></li><li><a href="/category/eureka/anemos/">アネモス（染色可能紅蓮AF）</a></li><li><a href="/category/trials/memoria-misera-extreme/">極シタデル・ボズヤ追憶戦</a></li></ul></div><a class="tag-cloud-link" href="/tag/boots/" aria-label="眼鏡 (12件の項目)">眼鏡 (12)</a><a class="tag-cloud-link" href="/tag/other/" aria-label="未知のタグ (3 items)">未知のタグ</a>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('nav a').textContent,'蝰蛇剑士');
+    assert.equal(d.querySelector('input').placeholder,'输入关键词搜索');
+    assert.equal(d.querySelector('button').textContent,'搜索');
+    assert.equal(d.querySelector('input[type="submit"]:not([name])').value,'搜索');
+    assert.equal(d.querySelector('input[name="action"]').value,'検索');
+    assert.equal(d.querySelector('.wp-block-columns a').textContent,zh);
+    assert.equal(d.querySelector('.wp-block-columns a').pathname,'/field-commanders-coat/');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(h=>h.textContent),[zh,jp]);
+    assert.deepEqual([...d.querySelectorAll('.c--post-link img')].map(img=>img.alt),[zh,jp]);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
+    assert.equal(d.querySelector('.tag-cloud-link').textContent,'眼镜 (12)');
+    assert.equal(d.querySelector('.tag-cloud-link').getAttribute('aria-label'),'眼镜（12 项）');
+    assert.equal(d.querySelector('a[href="/tag/other/"]').getAttribute('aria-label'),'未知のタグ（3 项）');
+    assert.deepEqual([...d.querySelectorAll('.widget_nav_menu a')].map(a=>a.textContent),['历代职业专属装备','常风（可染色的红莲职业专属装备）','博兹雅堡垒追忆战']);
+    d.body.className = 'single';
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <section id="postContent"><figure class="wp-block-table"><table><tbody><tr><td>${jp}</td><td>染色不可</td></tr></tbody></table></figure><p>${jp}</p></section>`;
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('td')].map(td=>td.textContent),[zh,'不可染色']);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
+    // The live recipe is a rich link card, not just a table.
+    _applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\nカララント:スノウホワイト\t雪白染剂\t1\t1\nカララント:ジェットブラック\t煤黑染剂\t1\t1',hash:hash+'\t'+zh});
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/glamour/">ミラプリ</a></div></div>
+      <h1 id="jinrPostTitle">ミラプリ：Rose du Désert</h1>
+      <nav id="breadCrumb"><ul><li><a href="/">HOME</a></li><li>ミラプリ：Rose du Désert</li></ul></nav>
+      <section id="postContent">
+        <div><h2 class="a--h2rich-maincopy">ミラプリ</h2><span class="a--h2rich-subcopy">Glamour</span></div>
+        <a id="recipe" href="/field-commanders-coat/"><span>スノウホワイト・ジェットブラック</span><strong>${jp}</strong></a>
+        <a id="single" href="/field-commanders-coat/">無染色${jp}</a>
+        <a id="unverified" href="/other/">未収録色${jp}</a>
+        <a id="author-link" href="/field-commanders-coat/">${jp}</a>
+        <figure class="wp-block-table"><table><tbody><tr><td><a id="recipe-official" href="${official}${hash}/">${jp}</a></td></tr></tbody></table></figure>
+      </section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#recipe span').textContent,'雪白／煤黑');
+    assert.equal(d.querySelector('#recipe strong').textContent,zh);
+    assert.equal(d.querySelector('#recipe').pathname,'/field-commanders-coat/');
+    assert.equal(d.querySelector('#single').textContent,'未染色 '+zh);
+    assert.equal(d.querySelector('#unverified').textContent,'未収録色'+jp);
+    assert.equal(d.querySelector('#author-link').textContent,jp);
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'ミラプリ：Rose du Désert');
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'幻化：Rose du Désert');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'幻化');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(decodeURI(d.querySelector('#recipe-official').href),wiki+zh);
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <section id="postContent"><a id="weapon" href="/field-commanders-coat/"><span>ナイト</span><strong>${jp}</strong></a>
+      <a id="duty" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/duty/841d3f69efd/">廃砦捜索 ダスクヴィジル</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('#weapon span').textContent,'骑士');
+    assert.equal(d.querySelector('#weapon strong').textContent,zh);
+    assert.equal(d.querySelector('#duty').textContent,'冰雪废堡暮卫塔');
+    d.body.innerHTML = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div><h1 id="jinrPostTitle">廃砦捜索 ダスクヴィジル マーシャル武器一覧</h1>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'冰雪废堡暮卫塔 军用武器一览');
+    const coffer = 'ダークマホガニー・ウェポンチェスト〖ILv663〗 武器一覧';
+    const cofferZh = '深红木武器箱（品级663） 武器一览';
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <h1 id="jinrPostTitle">${coffer}</h1><section id="postContent"><a class="c--post-link" rel="bookmark" href="/dark-mahogany-weapon-coffer-il-663/"><h2 class="a--post-title">${coffer}</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>
+      <aside class="widget_recent_entries"><a href="/dark-mahogany-weapon-coffer-il-663/">${coffer}</a></aside>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,cofferZh);
+    assert.equal(d.querySelector('.a--post-title').textContent,cofferZh);
+    assert.equal(d.querySelector('.widget_recent_entries a').textContent,cofferZh);
+    assert.equal(d.querySelector('.c--post-link').pathname,'/dark-mahogany-weapon-coffer-il-663/');
+    // Verify the same catalogue title in its actual card, article and alt
+    // variants, without translating an unverified weapon family.
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <h1 id="jinrPostTitle">ヴァンガード 武器一覧</h1><section id="postContent">
+      <a class="c--post-link" rel="bookmark" href="/vanguard-buki/"><img alt="ヴァンガード　武器一覧"><h2 class="a--post-title">ヴァンガード武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a>
+      <a class="c--post-link" rel="bookmark" href="/unknown/"><h2 class="a--post-title">未知の武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'先锋武器一览');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['先锋武器一览','未知の武器一覧']);
+    assert.equal(d.querySelector('.c--post-link img').alt,'先锋武器一览');
+    // Native shop display labels differ from canonical item names.
+    assert.ok(_applyV3({candidatePolicy:1,
+      names:'アーゼマ・アタイア\t阿泽玛套装\t1\t1\nアーゼマ・ドレス\t阿泽玛纱裙\t1\t1\n別の・アタイア\t其他部件\t1\t1',
+      hash:'7e2981a2b09\t阿泽玛纱裙'}));
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/online-shop/">課金装備</a></div></div>
+      <h1 id="jinrPostTitle">アーゼマ・コスチュームセット</h1><section id="postContent">
+      <a href="${official}7e2981a2b09/">アーゼマ・ドレス</a>
+      <a class="c--post-link" rel="bookmark" href="/the-wardens-dress/"><img alt="アーゼマ・コスチュームセット"><h2 class="a--post-title">アーゼマ・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/unknown/"><h2 class="a--post-title">未知・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/not-set/"><h2 class="a--post-title">別の・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/glamour/"><h2 class="a--post-title">アーゼマ・コスチュームセット</h2><span class="a--post-category">ミラプリ</span></a></section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'阿泽玛套装');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['阿泽玛套装','未知・コスチュームセット','別の・コスチュームセット','アーゼマ・コスチュームセット']);
+    assert.equal(d.querySelector('.c--post-link img').alt,'阿泽玛套装');
+    const ponchos = 'カシミヤポンチョ・ラミーポンチョ';
+    _applyV3({candidatePolicy:1,names:'カシミヤポンチョ\t羊绒斗篷\t1\t1\nラミーポンチョ\t青麻斗篷\t1\t1',hash:'7d89571f76f\t羊绒斗篷'});
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/vanity/">Lv63ID 海底宮殿 紫水宮</a></div></div>
+      <h1 id="jinrPostTitle">${ponchos}</h1><section id="postContent"><p>Lv1 All Job</p><p>Lv63 モンク 侍</p><p>Lv50 魔獣使い</p><span>染色✕</span>
+      <p>これは作者の文章です。</p><a id="poncho" href="${official}7d89571f76f/">カシミヤポンチョ</a>
+      <a id="group" href="/cashmere-poncho/">${ponchos}</a></section>`;
+    d.title = ponchos+'〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'羊绒斗篷、青麻斗篷');
+    assert.equal(d.querySelector('#jinrPostMeta a').textContent,'63级副本 海底宫殿紫水宫');
+    assert.deepEqual([...d.querySelectorAll('#postContent p')].map(p=>p.textContent),['1级 全职业','63级 武僧／武士','50级 驯兽师','これは作者の文章です。']);
+    assert.equal(d.querySelector('#postContent span').textContent,'不可染色');
+    assert.equal(d.querySelector('#group').textContent,'羊绒斗篷、青麻斗篷');
+    assert.equal(d.querySelector('#group').pathname,'/cashmere-poncho/');
+    assert.equal(decodeURI(d.querySelector('#poncho').href),wiki+'羊绒斗篷');
+    assert.equal(d.title,'羊绒斗篷、青麻斗篷〖FF14 装备手帐〗｜幻化装备外观汇总');
+    d.body.insertAdjacentHTML('beforeend', `<ol id="breadCrumb"><li><a href="/">HOME</a></li>
+      <li><a href="/category/dungeons/">ダンジョン</a></li><li>＞${ponchos}</li></ol>
+      <label for="archive-select">アーカイブ</label><select id="archive-select">
+      <option value="">週を選択</option><option value="/2026/06/08/">2026年6月8日–2026年6月14日 (1)</option></select>`);
+    const archiveSelect = d.querySelector('#archive-select');
+    archiveSelect.selectedIndex = 1;
+    translateAttirePage();
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('#breadCrumb li')].map(el=>el.textContent),['首页','副本装备','＞羊绒斗篷、青麻斗篷']);
+    assert.deepEqual([...d.querySelectorAll('#breadCrumb a')].map(el=>el.pathname),['/','/category/dungeons/']);
+    assert.equal(d.querySelector('label[for="archive-select"]').textContent,'归档');
+    assert.equal(archiveSelect.options[0].textContent,'选择周');
+    assert.equal(archiveSelect.options[0].value,'');
+    assert.equal(archiveSelect.value,'/2026/06/08/');
+    assert.equal(archiveSelect.selectedIndex,1);
+
+    d.body.innerHTML = `<h1 id="jinrPostTitle">トリテレイアイヤリング</h1><section id="postContent"><a href="${official}00000000001/">トリテレイアイヤリング:ブラック</a></section>`;
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'紫灯花耳环');
+    assert.equal(d.querySelector('#postContent a').href,official+'00000000001/');
+    // Flower summaries omit colour, while the actual items retain it.
+    const flower = 'スイートピーネックレス';
+    assert.ok(_applyV3({candidatePolicy:1,names:flower+':レッド\t红色香豌豆花项链\t1\t1\n'+flower+':ブルー\t蓝色香豌豆花项链\t1\t1\n別の花:レッド\t红色未知花\t1\t1\n別の花:ブルー\t蓝色另一种花\t1\t1',hash:'00000000002\t红色香豌豆花项链'}));
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${flower}</h1><section id="postContent">
+      <p>マーケット取引可能</p><a href="${official}00000000002/">${flower}:レッド</a>
+      <a class="c--post-link" rel="bookmark" href="/sweet-pea-necklace/"><h2 class="a--post-title">${flower}</h2><span class="a--post-category category-flower">フラワーオーナメント</span></a>
+      <a class="c--post-link" rel="bookmark" href="/other/"><h2 class="a--post-title">別の花</h2><span class="a--post-category category-flower">フラワーオーナメント</span></a></section>
+      <nav><a href="/viper/">ヴァイパー</a><a href="/search/">検索</a></nav>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'香豌豆花项链');
+    assert.equal(d.querySelector('#postContent p').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#postContent > a').textContent,'红色香豌豆花项链');
+    assert.equal(decodeURI(d.querySelector('#postContent > a').href),wiki+'红色香豌豆花项链');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['香豌豆花项链','別の花']);
+    assert.deepEqual([...d.querySelectorAll('nav a')].map(el=>el.textContent),['蝰蛇剑士','搜索']);
+    d.body.className = 'archive category';
+    d.body.innerHTML = '<h1 id="jinrPostTitle">おしゃれ装備：黄金編</h1>';
+    d.title = 'おしゃれ装備：黄金編〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'外观装备：金曦之遗辉');
+    assert.equal(d.title,'外观装备：金曦之遗辉〖FF14 装备手帐〗｜幻化装备外观汇总');
+    d.body.className = 'home';
+    d.body.innerHTML = `<section id="postContent"><div class="a--richmenu-text"><span>Market</span><span>マーケット</span></div>
+      <div class="a--richmenu-text"><span>Wolf Marks</span><span>PvP装備</span></div>
+      <div class="calendar"><div><span class="a--h2rich-maincopy">月間FLカレンダー</span><h2 class="a--h2rich-subcopy">FRONTLINE CALENDAR</h2></div>
+        <div><button id="prev-month">‹</button><button id="next-month">›</button></div>
+        <div id="weekdays"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>1</span></div></div>
+      <p id="outside-calendar">月</p>
+      <p id="split-series">シ<a href="/category/seriesb/">リーズ武器一覧</a></p>
+      <p id="other-split">シ<a href="/other/">リーズ武器一覧</a></p>
+      <div><span class="a--h2rich-maincopy">メニュー</span><h2 class="a--h2rich-subcopy">MENU</h2></div>
+      <a class="c--post-link" rel="bookmark" href="/neo-kingdom/"><h2 class="a--post-title">ネオキングダム武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>
+      <aside class="widget_recent_entries"><ul><li><a href="/lost-allagan/">アラガントームストーン:万物 ロストアラガン武器一覧</a></li><li><a href="/rose-du-desert/">ミラプリ：Rose du Désert</a></li></ul></aside>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('.a--richmenu-text')].map(el=>el.textContent),['市场','PvP 装备']);
+    assert.deepEqual([...d.querySelectorAll('#weekdays > span')].map(el=>el.textContent),['日','一','二','三','四','五','六','1']);
+    assert.equal(d.querySelector('#outside-calendar').textContent,'月');
+    assert.equal(d.querySelector('#prev-month').textContent,'‹');
+    assert.equal(d.querySelector('#next-month').textContent,'›');
+    d.querySelector('#weekdays').innerHTML = '<span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>2</span>';
+    translateAttirePage();
+    assert.deepEqual([...d.querySelectorAll('#weekdays > span')].map(el=>el.textContent),['日','一','二','三','四','五','六','2']);
+    assert.equal(d.querySelector('#split-series').textContent,'系列武器一览');
+    assert.equal(d.querySelector('#split-series a').pathname,'/category/seriesb/');
+    assert.equal(d.querySelector('#other-split').textContent,'シリーズ武器一覧');
+    assert.ok([...d.querySelectorAll('.a--h2rich-subcopy')].every(el=>el.hidden));
+    assert.equal(d.querySelector('.a--post-title').textContent,'新生王国武器一览');
+    assert.deepEqual([...d.querySelectorAll('aside a')].map(el=>el.textContent),['亚拉戈万物神典石 亚拉戈失传武器一览','ミラプリ：Rose du Désert']);
+    const menuSub = [...d.querySelectorAll('.a--h2rich-subcopy')].find(el=>!el.closest('.calendar'));
+    menuSub.textContent = '別の見出し';
+    translateAttirePage();
+    assert.equal(menuSub.hidden,false);
     d.body.className = 'archive tag tag-mf';
     d.body.innerHTML = '<nav><a href="/tag/mf/">男女別デザイン</a></nav><h1 id="jinrPostTitle">男女別デザイン</h1>';
     translateAttirePage();
@@ -1301,9 +1918,549 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('h1').textContent,`「${zh}」的搜索结果：2 条`);
     assert.deepEqual([...d.querySelectorAll('h2')].map(h=>h.textContent),[zh,jp]);
     assert.deepEqual([...d.querySelectorAll('.c--post-link')].map(a=>a.pathname),['/field-commanders-coat/','/glamour-post/']);
+    // The search header and a menu/form may be inserted outside postContent.
+    let notify;
+    globalThis.MutationObserver = class {
+      constructor(callback) { notify = callback; }
+      observe() {}
+    };
+    d.body.innerHTML = '';
+    startAttire();
+    const late = d.createElement('div');
+    late.innerHTML = '<header id="postHeader"><h1 id="jinrPostTitle">「未知」の検索結果は0件です</h1></header>'
+      + '<nav><a href="/market/">マーケット</a></nav>'
+      + '<form role="search" method="get" action="/"><input type="search" name="s" placeholder="キーワードを入力して検索"></form>';
+    d.body.append(late);
+    notify([{type:'childList',addedNodes:[late]}]);
+    await new Promise(resolve=>setTimeout(resolve,60));
+    assert.equal(d.querySelector('h1').textContent,'「未知」的搜索结果：0 条');
+    assert.equal(d.querySelector('nav a').textContent,'市场');
+    assert.equal(d.querySelector('input').placeholder,'输入关键词搜索');
   } finally {
     for (const [name,value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
+test('装備手帳武器汇总：职业标题、等级分段、图注及标签', async () => {
+  const keys = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(keys.map(key => [key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/vpr/'});
+  try {
+    const d = dom.document;
+    Object.assign(globalThis,{document:d,location:dom.location,window:dom,NodeFilter:dom.NodeFilter});
+    const jp = 'テスト用の双剣', zh = '测试用对剑';
+    const hash = '00000000003';
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/'+hash+'/';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1',hash:hash+'\t'+zh}));
+    d.body.className = 'single';
+    d.title = '〖ヴァイパー〗二刀流武器 一覧〖FF14 装備手帳〗｜ミラプリ用装備見た目まとめ';
+    d.body.innerHTML = '<h1 id="jinrPostTitle">〖ヴァイパー〗二刀流武器 一覧</h1>'
+      + '<section id="postContent"><h2>Lv100～Lv91</h2><h3>Lv80～Lv1</h3><h3>Lv70</h3><h3>Lv60</h3><h3>Lv1</h3>'
+      + '<a href="/test-weapon/">'+jp+'</a><figure><figcaption>'+jp+'</figcaption></figure>'
+      + '<figure><figcaption><a id="official-caption" href="'+official+'">'+jp+'</a></figcaption></figure>'
+      + '<p>'+jp+'</p><h3>作者の文章</h3></section>'
+      + '<a rel="tag" href="/tag/vpr/">#ヴァイパー</a><a href="/tag/eyes/">#眼鏡</a>'
+      + '<a rel="tag" href="/tag/unknown/">#未知のタグ</a>';
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'【蝰蛇剑士】蝰蛇对剑一览');
+    assert.ok(d.title.startsWith('【蝰蛇剑士】蝰蛇对剑一览'));
+    assert.deepEqual([...d.querySelectorAll('#postContent :is(h2,h3)')].map(el=>el.textContent),['91～100级','1～80级','70级','60级','1级','作者の文章']);
+    assert.equal(d.querySelector('#postContent a').textContent,zh);
+    assert.equal(d.querySelector('#postContent a').pathname,'/test-weapon/');
+    assert.equal(d.querySelector('figcaption').textContent,zh);
+    assert.equal(d.querySelector('#official-caption').textContent,zh);
+    assert.equal(decodeURI(d.querySelector('#official-caption').href),'https://ff14.huijiwiki.com/wiki/物品:'+zh);
+    assert.equal(d.querySelector('#postContent p').textContent,jp);
+    assert.deepEqual([...d.querySelectorAll('a[href^="/tag/"]')].map(el=>el.textContent),['#蝰蛇剑士','#眼镜','#未知のタグ']);
+    // The real /arms/ layout has a separate metadata and catalogue-navigation section.
+    globalThis.location = new URL('https://attire.jp/arms/white-gold-foil/');
+    d.body.innerHTML = `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent">
+      <p id="level">Lv96 IL669</p><dl><dt>抜刀ギミック</dt><dd>発光</dd><dt>種類</dt><dd>未確認の分類</dd></dl>
+      <p id="effects">発光<br>変形</p><p id="none">無し</p>
+      <p id="vendor">カ・インタナ<br>モードゥナ</p><p id="token">未知蛮神のトーテム像〖剛〗<br>10</p>
+      <p id="mixed">発光<br>作者の説明</p><p id="type">ナックル</p>
+      <p id="coffer">ダイヤ・ウェポンチェスト〖ILv525〗</p>
+      <a id="duty-name" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/duty/00000000001/">極ダイヤウェポン捕獲作戦</a>
+      <a id="foreign-vendor" href="https://example.test/">カ・インタナ</a>
+      <div><span class="a--h2rich-subcopy">Weapons of the same design</span><h2 class="a--h2rich-maincopy">同デザイン武器</h2></div>
+      <h2 class="wp-block-heading">セット防具</h2>
+      <a id="catalogue" href="/arcanist_s_grimoire/">〖召喚士〗魔道書一覧</a>
+      <a id="unrelated" href="/other/">〖召喚士〗魔道書一覧</a>
+      <p id="author">種類についての作者の文章</p>
+      <a href="${official}">${jp}</a></section>
+      <a rel="tag" href="/tag/north/">#クレセントアイル：北征編</a>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#level').textContent,'等级 96／品级 669');
+    assert.equal(d.querySelector('dd').textContent,'发光');
+    assert.equal(d.querySelector('#effects').innerHTML,'发光<br>变形');
+    assert.equal(d.querySelector('#none').textContent,'无');
+    assert.equal(d.querySelector('#vendor').innerHTML,'卡·因塔娜<br>摩杜纳');
+    assert.equal(d.querySelector('#token').innerHTML,'白色未知蛮神图腾<br>10');
+    assert.equal(d.querySelector('#mixed').innerHTML,'発光<br>作者の説明');
+    assert.equal(d.querySelector('#type').textContent,'指虎');
+    assert.equal(d.querySelector('#coffer').textContent,'钻石神兵武器箱（品级525）');
+    assert.equal(d.querySelector('#duty-name').textContent,'钻石神兵狂想作战');
+    assert.equal(d.querySelector('#foreign-vendor').textContent,'カ・インタナ');
+    // Treasure sources and a coffer have exact display names, not inferred
+    // weapon identities. An inconsistent map/area combination stays native.
+    const dream = d.createElement('p');
+    dream.id = 'dream-source';
+    dream.innerHTML = 'マーケット取引可能<br>ドリーム・オブ・ウェポンチェスト<br>「宝物庫セノーテ・ジャジャグラル」';
+    d.querySelector('#postContent').append(dream);
+    translateAttirePage();
+    assert.equal(dream.textContent,'可在市场交易幻梦武器箱加加财富天坑');
+    assert.deepEqual([...d.querySelectorAll('dt')].map(el=>el.textContent),['拔刀效果','种类']);
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'同外观武器');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('.wp-block-heading').textContent,'配套防具');
+    assert.equal(d.querySelector('#catalogue').textContent,'【召唤师】魔导书一览');
+    assert.equal(d.querySelector('#catalogue').pathname,'/arcanist_s_grimoire/');
+    assert.equal(d.querySelector('#unrelated').textContent,'〖召喚士〗魔道書一覧');
+    assert.equal(d.querySelector('#author').textContent,'種類についての作者の文章');
+    assert.equal(d.querySelector('a[rel="tag"]').textContent,'#新月岛：北征之章');
+    // Native military-seal exchange metadata is identical on weapon and
+    // armor detail pages. Faction, quantity, and unknown author text stay distinct.
+    const gcMarkup = (currency, rank, place) => `<h1 id="jinrPostTitle">${jp}</h1>
+      <section id="postContent"><a href="${official}">${jp}</a>
+      <p id="range">Lv39～44 All Job</p><h3>交換に必要な軍票・階級</h3>
+      <p id="currency">${currency}</p><p id="rank"><img>4,200<br>${rank}</p>
+      <p id="gc-vendor">補給担当官<br>${place}</p><p id="gc-author">補給担当官についての説明</p>
+      <a id="gc-foreign" href="https://example.test/">補給担当官</a></section>`;
+    for (const [path,currency,rank,place,currencyZh,rankZh,vendorZh,placeZh] of [
+      ['/arms/lominsan-staff/','黒渦団軍票','甲軍曹','リムサ・ロミンサ：上甲板層','黑涡团军票','副漩士','黑涡团补给负责人','利姆萨·罗敏萨上层甲板'],
+      ['/arms/serpent-sergeants-cudgel/','双蛇党軍票','准牙士','グリダニア：新市街','双蛇党军票','牙士长','双蛇党补给负责人','格里达尼亚新街'],
+      ['/?p=119594','不滅隊軍票','准闘士','ウルダハ：ナル回廊','恒辉队军票','耀士长','恒辉队补给负责人','乌尔达哈现世回廊'],
+    ]) {
+      globalThis.location = new URL('https://attire.jp'+path);
+      d.body.innerHTML = gcMarkup(currency,rank,place);
+      translateAttirePage();
+      translateAttirePage();
+      assert.equal(d.querySelector('h3').textContent,'兑换所需军票及军衔');
+      assert.equal(d.querySelector('#currency').textContent,currencyZh);
+      assert.equal(d.querySelector('#rank').textContent,'4,200'+rankZh);
+      assert.equal(d.querySelector('#rank img').tagName,'IMG');
+      assert.equal(d.querySelector('#gc-vendor').innerHTML,vendorZh+'<br>'+placeZh);
+      assert.equal(d.querySelector('#gc-author').textContent,'補給担当官についての説明');
+      assert.equal(d.querySelector('#gc-foreign').textContent,'補給担当官');
+      assert.equal(d.querySelector('#range').textContent,'39～44级 全职业');
+    }
+    d.body.innerHTML = gcMarkup('不滅隊軍票','准闘士','ウルダハ：ナル回廊')
+      .replace('</section>','<p>黒渦団軍票</p></section>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#rank').textContent,'4,200准闘士');
+    assert.equal(d.querySelector('#gc-vendor').innerHTML,'補給担当官<br>ウルダハ：ナル回廊');
+    // Equipment exchange sections: historical tomestones, deep dungeons
+    // and Occult Crescent. Keep quantities, unknown content and shop links.
+    const exchangeMarkup = body => `<h1 id="jinrPostTitle">${jp}</h1><section id="postContent"><a href="${official}">${jp}</a>
+      <div class="c--accordion-contents"><p>入手方法</p>${body}</div></section>`;
+    globalThis.location = new URL('https://attire.jp/arms/quick-silver/');
+    d.body.innerHTML = exchangeMarkup('<p id="tome">アラガントームストーン：詩学<br>（旧 アラガントームストーン：戦記）</p>'
+      + '<p>取引に必要なアイテム</p><p id="cost">アラガントームストーン:詩学<br>600</p><p>販売ショップNPC</p>'
+      + '<p id="npc">エリナ<br>モードゥナ</p><p id="rowena">ロウェナ商会の商人<br>リムサ・ロミンサ：下甲板層</p>'
+      + '<p id="unknown-tome">アラガントームストーン:未確認</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#tome').innerHTML,'亚拉戈诗学神典石<br>（旧：亚拉戈战记神典石）');
+    assert.equal(d.querySelector('#cost').innerHTML,'亚拉戈诗学神典石<br>600');
+    assert.equal(d.querySelector('#npc').innerHTML,'艾里娜<br>摩杜纳');
+    assert.equal(d.querySelector('#rowena').innerHTML,'罗薇娜商会的商人<br>利姆萨·罗敏萨下层甲板');
+    assert.equal(d.querySelector('#unknown-tome').textContent,'アラガントームストーン:未確認');
+    globalThis.location = new URL('https://attire.jp/arms/the-book-of-first-light/');
+    d.body.innerHTML = exchangeMarkup('<p id="dungeon">ピルグリム・トラバース</p><p>取引に必要なアイテム</p><p id="grip">光耀魔器柄<br>3</p>'
+      + '<p>販売ショップNPC</p><p id="deep-npc">オセ＝ウィド<br>イル・メグ</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#dungeon').textContent,'朝圣交错路');
+    assert.equal(d.querySelector('#grip').innerHTML,'光耀聚魔柄<br>3');
+    assert.equal(d.querySelector('#deep-npc').innerHTML,'奥瑟·卫德<br>伊尔美格');
+    globalThis.location = new URL('https://attire.jp/arcanauts-vest-of-fending/');
+    const shop = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/shop/94679ec7652/';
+    d.body.innerHTML = exchangeMarkup('<p id="crescent">クレセントアイル：南征編</p><p>取引に必要なアイテム</p>'
+      + '<p id="silver">十二都市銀貨<br>4,000</p><p>販売ショップNPC</p>'
+      + '<p id="assayer"><a href="'+shop+'">探査隊の古銭鑑定士</a><br>三日月島南部</p>'
+      + '<a id="foreign-assayer" href="https://example.test/">探査隊の古銭鑑定士</a>')
+      .replace('</section>','<p id="author-note">十二都市銀貨</p></section>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#crescent').textContent,'新月岛：南征之章');
+    assert.equal(d.querySelector('#silver').innerHTML,'十二城邦银币<br>4,000');
+    assert.equal(d.querySelector('#assayer a').textContent,'调查队的古钱鉴定师');
+    assert.equal(d.querySelector('#assayer a').href,shop);
+    assert.equal(d.querySelector('#assayer').textContent,'调查队的古钱鉴定师新月岛南部');
+    assert.equal(d.querySelector('#foreign-assayer').textContent,'探査隊の古銭鑑定士');
+    assert.equal(d.querySelector('#author-note').textContent,'十二都市銀貨');
+    // Resistance weapons use a different vendor heading and include replicas.
+    globalThis.location = new URL('https://attire.jp/arms/augmented-laws-order-revolver/');
+    d.body.innerHTML = exchangeMarkup('<p>武器強化コンテンツ<br>レジスタンスウェポン</p><p>取引に必要なアイテム</p>'
+      + '<p id="rw-count">15</p><p>取引NPC</p><p id="rw-vendor">ズラタン<br>ガンゴッシュ</p>'
+      + '<div><span class="a--h2rich-subcopy">Replica</span><h2 class="a--h2rich-maincopy">レプリカ</h2></div>'
+      + '<p>販売ショップNPC</p><p id="rw-replica">レガナ<br>ガンゴッシュ</p>'
+      + '<p id="rw-author">レジスタンスウェポンについての説明</p>');
+    // Remove the original vendor heading to ensure the alternative is sufficient.
+    d.querySelectorAll('#postContent p').forEach(e => { if (e.textContent==='販売ショップNPC') e.remove(); });
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#rw-vendor').innerHTML,'兹拉坦<br>甘戈斯');
+    assert.equal(d.querySelector('#rw-replica').innerHTML,'雷佳娜<br>甘戈斯');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'复制品');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#rw-count').textContent,'15');
+    assert.equal(d.querySelector('#rw-author').textContent,'レジスタンスウェポンについての説明');
+    globalThis.location = new URL('https://attire.jp/arms/mandervillous-knives/');
+    d.body.innerHTML = exchangeMarkup('<p>武器強化コンテンツ<br>マンダヴィルウェポン</p><p>取引に必要なアイテム</p>'
+      + '<p id="mw-material">前段階の武器<br>1<br>クリスタライト<br>3</p><p>販売ショップNPC</p>'
+      + '<p id="mw-vendor">ジュブルンナ<br>ラザハン</p><p id="shield-note">(片手剣&盾セット)<br>（片手剣＆盾セット）</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#mw-material').innerHTML,'上一阶段的武器<br>1<br>雏晶<br>3');
+    assert.equal(d.querySelector('#mw-vendor').innerHTML,'玖布伦娜<br>拉札罕');
+    assert.equal(d.querySelector('#shield-note').innerHTML,'（单手剑与盾牌套装）<br>（单手剑与盾牌套装）');
+    // Material-name lookup is restricted to a complete exchange block.
+    const material = 'テスト用の交換素材';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n'+material+'\t测试兑换素材\t1\t1',hash:hash+'\t'+zh}));
+    globalThis.location = new URL('https://attire.jp/torna-tunic/');
+    d.body.innerHTML = exchangeMarkup('<p>取引に必要なアイテム</p><p id="batch-cost">十二都市白金貨<br>一部位1,600<br>'+material+'</p>'
+      + '<p>販売ショップNPC</p><p id="batch-vendor">探査隊の古銭鑑定士<br>三日月島北部</p>'
+      + '<p id="batch-note">'+material+'</p><p id="slot">脚装備不可</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#batch-cost').innerHTML,'十二城邦白金币<br>每个部位 1,600<br>测试兑换素材');
+    assert.equal(d.querySelector('#batch-vendor').innerHTML,'调查队的古钱鉴定师<br>新月岛北部');
+    assert.equal(d.querySelector('#batch-note').textContent,material);
+    assert.equal(d.querySelector('#slot').textContent,'不可装备腿部防具');
+    // Actual acquisition layouts include a linked coffer and exchange
+    // tables that omit the standard cost/vendor headings.
+    const cofferJp = 'テスト・チェスト';
+    const cofferZh = '测试装备箱';
+    const cofferHash = '00000000009';
+    const cofferUrl = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/'+cofferHash+'/';
+    assert.ok(_applyV3({candidatePolicy:1,names:jp+'\t'+zh+'\t1\t1\n'+cofferJp+'\t'+cofferZh+'\t1\t1',hash:hash+'\t'+zh+'\n'+cofferHash+'\t'+cofferZh}));
+    globalThis.location = new URL('https://attire.jp/fieldfiends-costume-shirt/');
+    d.body.innerHTML = exchangeMarkup('<p id="coffer-note"><a href="'+cofferUrl+'">'+cofferJp+'</a>を開けることで装備一式入手できます。</p>'
+      + '<p id="rest-vendor">エニー<br>蒼天街</p><p id="rest-cost">フェトゥ参加証<br>50</p>'
+      + '<p id="rest-prize">イシュガルド復興『クポフォーチュン』の景品</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#coffer-note').textContent,'测试装备箱开启后即可获得整套装备。');
+    assert.equal(decodeURI(d.querySelector('#coffer-note a').href),'https://ff14.huijiwiki.com/wiki/物品:'+cofferZh);
+    assert.equal(d.querySelector('#rest-vendor').innerHTML,'艾妮<br>天穹街');
+    assert.equal(d.querySelector('#rest-cost').innerHTML,'庆典参加证书<br>50');
+    assert.equal(d.querySelector('#rest-prize').textContent,'重建伊修加德“库啵好运道”奖品');
+    globalThis.location = new URL('https://attire.jp/rule-breakers-vest/');
+    d.body.innerHTML = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/pvp/series-malmstones/">シリーズマルムストーン</a></div></div>'
+      + exchangeMarkup('<p id="series">シリーズ3 シリーズレベル25報酬</p><p id="old-series">シーズンが終了したため現在は入手できません</p>'
+      + '<p id="series-cost">トロフィークリスタル 1,500</p><p id="series-vendor">トロフィークリスタル取引窓口<br>ウルヴズジェイル係船場</p>');
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('#series').textContent,'第3轮系列赛 等级25报酬');
+    assert.equal(d.querySelector('#old-series').textContent,'本轮已结束，目前无法获取。');
+    assert.equal(d.querySelector('#series-cost').textContent,'战利水晶 1,500');
+    assert.equal(d.querySelector('#series-vendor').innerHTML,'战利水晶交易员<br>狼狱停船场');
+    globalThis.location = new URL('https://attire.jp/arms/moonward-longsword/');
+    d.body.innerHTML = exchangeMarkup('<p id="old-currency">(旧:アラガントームストーン:経典)</p><p>取引に必要なアイテム</p><p>モブハントの戦利品</p>'
+      + '<p>販売ショップNPC</p><p id="hunt-vendor">ジャ・ラクシャイ<br>オールド・シャーレアン</p>');
+    translateAttirePage();
+    assert.equal(d.querySelector('#old-currency').textContent,'（旧：亚拉戈经典神典石）');
+    assert.equal(d.querySelector('#hunt-vendor').innerHTML,'嘉·拉克莎<br>旧萨雷安');
+    const figure = d.createElement('figure');
+    const photo = d.createElement('img');
+    photo.alt = "ムーンワード・ロングソード（Moonward Longsword）— FF14 IL570 Lv90 ナイト用片手剣、モブハントの戦利品で交換できるMoonward武器の見た目・外観画像 / Appearance of the FF14 IL570 Paladin sword “Moonward Longsword”, obtainable via Hunt currency.";
+    figure.append(photo);
+    d.querySelector('#postContent').append(figure);
+    translateAttirePage();
+    assert.equal(photo.alt, "月卫长剑（Moonward Longsword）—— FF14 品级570、90级骑士用单手剑，可使用怪物狩猎的战利品兑换的月卫武器外观展示图。");
+    globalThis.location = new URL('https://attire.jp/market/');
+    d.body.innerHTML = '<h1 id="jinrPostTitle">マーケット取引可能装備</h1><section id="postContent"><p>種類</p></section>';
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'可在市场交易的装备');
+    assert.equal(d.querySelector('#postContent p').textContent,'種類');
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    await dom.happyDOM.close();
+  }
+});
+
+test('装備手帳来源汇总：制作采集、AF、PvP 和季节活动', async () => {
+  const keys = ['document','location','window','NodeFilter'];
+  const prior = Object.fromEntries(keys.map(key => [key,globalThis[key]]));
+  const dom = new TestWindow({url:'https://attire.jp/hand-land/'});
+  try {
+    const d = dom.document;
+    Object.assign(globalThis,{document:d,window:dom,NodeFilter:dom.NodeFilter});
+    const render = (path, markup) => {
+      globalThis.location = new URL('https://attire.jp'+path);
+      d.body.className = 'page';
+      d.body.innerHTML = markup;
+      translateAttirePage();
+      translateAttirePage();
+    };
+    assert.ok(_applyV3({candidatePolicy:1,names:'テスト装備・アタイア\t测试套装\t1\t1\n曖昧・アタイア\t测试甲套装\t1\t1\n曖昧アタイア\t测试乙套装\t1\t1\nマインキープ・アタイア\t富矿套装\t0\t0\nファイターアーマー\t勇战套装\t0\t0\nドラゴンランサーアーマー\t枪龙套装\t0\t0\n早乙女装束\t早乙女装束\t0\t0'}));
+    const brand = '【FF14 装備手帳】｜ミラプリ用装備見た目まとめ';
+    const brandZh = '【FF14 装备手帐】｜幻化装备外观汇总';
+    d.title = brand;
+    render('/gladiator_s_arm/', '<header><a id="headerLogoLink" title="'+brand+'"><img id="headerLogoImage" alt="'+brand+'"></a></header>'
+      + '<footer id="copyright">2021–2026 '+brand+'</footer><div class="jinr-widget-area"><h2 class="wp-block-heading">Recent Posts</h2></div>'
+      + '<span id="snsShareLabel">SHARE</span><div id="snsShareBottomInner"><span class="a--sns-label">URL copy</span></div>'
+      + '<form class="wp-block-search" action="/"><button class="wp-block-search__button" aria-label="検索">検索</button></form>'
+      + '<h1 id="jinrPostTitle">【ナイト】片手剣 一覧</h1><section id="postContent">'
+      + '<div class="asr"><details class="asr-group"><summary>種類</summary></details><button class="asr-reset">絞り込み解除</button><button class="asr-more">さらに24件表示</button>'
+      + '<button class="asr-card-trigger" aria-label="テスト装備・アタイアの詳細を表示"><img alt="テスト装備・アタイア"></button></div>'
+      + '<dl><dt class="a--accordion-title">入手方法などはこちら</dt><dd class="c--accordion-contents"><p>マーケット取引可能</p><p id="native-author">未確認の説明文</p></dd></dl></section>'
+      + '<nav><a href="/test/">マーケット購入可能：Lv91～Lv100 ギャザラー＆クラフター装備</a></nav>');
+    assert.equal(d.title,brandZh);
+    assert.equal(d.querySelector('#headerLogoLink').title,brandZh);
+    assert.equal(d.querySelector('#headerLogoImage').alt,brandZh);
+    assert.equal(d.querySelector('#copyright').textContent,'2021–2026 '+brandZh);
+    assert.equal(d.querySelector('.wp-block-search__button').getAttribute('aria-label'),'搜索');
+    assert.equal(d.querySelector('.jinr-widget-area h2').textContent,'最新文章');
+    assert.equal(d.querySelector('#snsShareLabel').textContent,'分享');
+    assert.equal(d.querySelector('.asr-reset').textContent,'清除筛选');
+    assert.equal(d.querySelector('.asr-more').textContent,'再显示 24 项');
+    assert.equal(d.querySelector('.asr-card-trigger').getAttribute('aria-label'),'查看测试套装的详细信息');
+    assert.equal(d.querySelector('.asr-card-trigger img').alt,'测试套装');
+    assert.equal(d.querySelector('.c--accordion-contents p').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#native-author').textContent,'未確認の説明文');
+    assert.equal(d.querySelector('nav a').textContent,'可在市场购买：91～100级采集与制作职业装备');
+    render('/vanity-2/', '<h1 id="jinrPostTitle">外观装备</h1><nav id="breadCrumb"><ol><li><a href="/">HOME</a></li><li>おしゃれ装備</li></ol></nav>'
+      + '<section id="postContent"><span class="a--post-category">Lv50 IL70 ダークスチール・ヒッポグリフ・ヴァンヤ</span>'
+      + '<span class="a--post-category">lv98 IL675 カザナル・ガルガンチュア・サンダーシルク</span>'
+      + '<span class="a--post-category">Lv100 IL770 コートリーラヴァー</span>'
+      + '<span class="a--post-category">Lv96 IL669 ゴールドチタン・未確認の素材</span></section>');
+    assert.equal(d.querySelector('#breadCrumb li:last-child').textContent,'外观装备');
+    assert.deepEqual([...d.querySelectorAll('.a--post-category')].map(e=>e.textContent),[
+      '50级（品级70）玄钢、骏鹰革、绢布装备','98级（品级675）卡扎纳尔、卡冈图亚革、落雷绢装备','100级（品级770）宫廷爱人装备','Lv96 IL669 ゴールドチタン・未確認の素材']);
+    render('/field-commanders-coat/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/achievement/">アチーブメント報酬</a></div></div>'
+      + '<section id="postContent"><dl><dt class="a--accordion-title">入手方法などはこちら</dt><dd class="c--accordion-contents"><p id="wins">初勝利で頭装備：<a href="/field-commanders-helm/">兜</a><br>100回勝利で胴装備</p><p id="comment">当サイトでは武器の撮影等で着用中です</p></dd></dl></section>');
+    assert.equal(d.querySelector('#wins').innerHTML,'首次获胜可获得头部防具：<a href="/field-commanders-helm/">兜</a><br>累计获胜100次可获得身体防具');
+    assert.equal(d.querySelector('#comment').textContent,'当サイトでは武器の撮影等で着用中です');
+    render('/hand-land/', '<h1 id="jinrPostTitle">ギャザラー＆クラフター</h1><section id="postContent">'
+      + '<div class="c--tab-title">AF クラス別</div><h2>ギャザラーAF</h2><h3>採掘師</h3>'
+      + '<a href="/minerise-work-shirt/">マインライズ</a><a href="/minesophs-work-shirt/">マインソフォス</a>'
+      + '<a href="/augmented-minekings-work-shirt/">マインキング</a><a href="/augmented-fieldkeeps-shirt/">フィールドキープ</a>'
+      + '<a href="/augmented-minekeeps-overalls/">マインキープ</a><a href="/test/">テスト装備</a><a href="/ambiguous/">曖昧</a>'
+      + '<p id="author">マインライズ</p><a href="/unknown/">未知のセット</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'采集与制作职业');
+    assert.equal(d.querySelector('.c--tab-title').textContent,'按职业汇总');
+    assert.deepEqual([...d.querySelectorAll('h2,h3')].map(e=>e.textContent),['采集职业专属装备','采矿工']);
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晗矿套装','地质专业套装','精矿套装','园野套装','富矿套装','测试套装','曖昧','未知のセット']);
+    assert.equal(d.querySelector('#postContent a').pathname,'/minerise-work-shirt/');
+    assert.equal(d.querySelector('#author').textContent,'マインライズ');
+    render('/shadowbringers/', '<section id="postContent"><figure><img alt="極ダイヤウェポン捕獲作戦 武器一覧"><img alt="未確認の説明"></figure></section>');
+    assert.deepEqual([...d.querySelectorAll('figure img')].map(img=>img.alt),['钻石神兵狂想作战 武器一览','未確認の説明']);
+    // All expansion catalogues share level-aware Japanese/English headings.
+    for (const [path,level] of [['a-realm-reborn',50],['heavensward',60],['stormblood',70],['shadowbringers',80],['endwalker',90],['dawntrail',100]]) {
+      const markup = '<section id="postContent"><div><span class="a--h2rich-subcopy">Lv'+level+' Dungeons</span><h2 class="a--h2rich-maincopy">レベル'+level+'ID装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Dungeons</span><h2 class="a--h2rich-maincopy">レベリングID装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Trials</span><h2 class="a--h2rich-maincopy">討伐・討滅戦武器'+(level===50?'＆装備':'')+'</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">Allagan Tomestone</span><h2 class="a--h2rich-maincopy">トークン装備</h2></div>'
+        + '<div><span class="a--h2rich-subcopy">F.A.T.E &amp; Quest</span><h2 class="a--h2rich-maincopy">F.A.T.E.＆クエスト報酬など</h2></div>'
+        + '<a class="c--post-link" rel="bookmark" href="/test/"><span class="a--post-category">アラガントームストーン：数理</span><h2 class="a--post-title">未確認のタイトル</h2></a>'
+        + '<a id="more" href="/page/2/">もっと見る</a><p id="author">レベル'+level+'ID装備</p></section>';
+      render('/'+path+'/',markup);
+      assert.deepEqual([...d.querySelectorAll('.a--h2rich-maincopy')].map(e=>e.textContent),[level+'级副本装备','练级副本装备','讨伐歼灭战武器'+(level===50?'及防具':''),'神典石装备','危命任务及任务等奖励']);
+      assert.ok([...d.querySelectorAll('.a--h2rich-subcopy')].every(e=>e.hidden));
+      assert.equal(d.querySelector('.a--post-category').textContent,'亚拉戈数理神典石');
+      assert.equal(d.querySelector('#more').textContent,'查看更多');
+      assert.equal(d.querySelector('#author').textContent,'レベル'+level+'ID装備');
+    }
+    render('/af-pld/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/af-nyuusyu/">入手方法：歴代ジョブAF</a></div></div>'
+      + '<h1 id="jinrPostTitle">ナイト 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/gallant-surcoat/">新生AFガラント/Gallant</a><a href="/caballarius-cuirass/">黄金AFカバラリアス/Caballarius</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'骑士历代职业专属装备试穿图汇总');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['重生之境 英骑套装','金曦之遗辉 迅骑套装']);
+    render('/af-war/', '<h1 id="jinrPostTitle">戦士 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/fighters-cuirass/">新生AF ファイター/Fighter’s</a><a href="/unknown/">黄金AF 未確認/Unknown</a></section>');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['重生之境 勇战套装','黄金AF 未確認/Unknown']);
+    render('/af-drg/', '<h1 id="jinrPostTitle">竜騎士 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/dragonlancers-plackart/">蒼天AF ドラゴンランサー/</a></section>');
+    assert.equal(d.querySelector('#postContent a').textContent,'苍穹之禁城 枪龙套装');
+    render('/af-sam/', '<h1 id="jinrPostTitle">侍 歴代AF 男女着用SSまとめ</h1><section id="postContent">'
+      + '<a href="/saotome-jinbaori/">暁月AF 早乙女/Saotome</a><a href="/sakonji-haori/">黄金AF 左近士羽織/Sakonji</a>'
+      + '<a href="/nameless-togi/">ジョブ取得時にもらえる装備品 無銘闘着/Nameless</a></section>');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['晓月之终途 早乙女装束','金曦之遗辉 左近士装束','解锁职业时获得的装备 无名套装']);
+    render('/pvp/', '<h1 id="jinrPostTitle">PvP装備</h1><section id="postContent"><h3>ヴァートゥ</h3>'
+      + '<a href="/virtus-creed/">ヴァートゥ・クリード</a><h3>プレスティージ・ハイアラガン</h3></section>');
+    assert.deepEqual([...d.querySelectorAll('h3')].map(e=>e.textContent),['美德','威望亚拉戈高位']);
+    assert.equal(d.querySelector('#postContent a').textContent,'美德忠骑套装');
+    render('/s-g/', '<h1 id="jinrPostTitle">シーズナル</h1><section id="postContent"><h2>定期開催</h2>'
+      + '<a href="/heavensturn/"><span>Heavensturn</span><span>降神祭</span></a>'
+      + '<a href="/little-ladies-day/">Little Ladies Day プリンセスデー</a>'
+      + '<p id="mog">哲学（Philosophy）</p><p id="reward">鯰尾耳飾</p><p id="mog-note">作者の文章</p>'
+      + '<a id="mog-pair" href="/mameshiba-earring/">神話（Mythology） 豆柴耳飾</a></section>');
+    assert.equal(d.querySelector('h1').textContent,'季节活动');
+    assert.equal(d.querySelector('h2').textContent,'定期活动');
+    assert.deepEqual([...d.querySelectorAll('#postContent a')].map(e=>e.textContent),['降神节','女儿节','稀少神话神典石 豆柴耳饰']);
+    assert.equal(d.querySelector('#postContent a').pathname,'/heavensturn/');
+    assert.equal(d.querySelector('#mog').textContent,'稀少哲学神典石');
+    assert.equal(d.querySelector('#reward').textContent,'鲶鱼耳饰');
+    assert.equal(d.querySelector('#mog-note').textContent,'作者の文章');
+    assert.equal(d.querySelector('#mog-pair').pathname,'/mameshiba-earring/');
+    render('/all-saints-wake/', '<h1 id="jinrPostTitle">守護天節 / All Saints’ Wake</h1>');
+    assert.equal(d.querySelector('h1').textContent,'守护天节');
+    // Seasonal links and official store acquisition labels must not lose
+    // their dates, native copy, nested nodes, or original destinations.
+    const cardigan = 'ヴァレンティオンコージー・カーディガン';
+    const gaia = 'ガイア・コスチュームセット';
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1'}));
+    render('/valentiones-day/', '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seasonal-event-all/">シーズナルイベント一覧</a></div></div>'
+      + '<h1 id="jinrPostTitle">ヴァレンティオンデー / Valentiones Day</h1><section id="postContent">'
+      + '<a id="reward-split" href="/cozy-valentione-cardigan/"><span>2026年</span><span>大きなケーキに宿る愛</span><strong>'+cardigan+'</strong></a>'
+      + '<a id="reward-combined" href="/cozy-valentione-cardigan/">2026年 大きなケーキに宿る愛 '+cardigan+'</a>'
+      + '<a id="reward-unknown" href="/unknown/">2026年 未確認の装備</a><p id="reward-copy">'+cardigan+'</p></section>');
+    assert.equal(d.querySelector('h1').textContent,'恋人节');
+    assert.equal(d.querySelector('#reward-split strong').textContent,'温暖恋人开襟毛衫');
+    assert.equal(d.querySelector('#reward-split span:nth-child(2)').textContent,'大きなケーキに宿る愛');
+    assert.equal(d.querySelector('#reward-combined').textContent,'2026年 大きなケーキに宿る愛 温暖恋人开襟毛衫');
+    assert.equal(d.querySelector('#reward-combined').pathname,'/cozy-valentione-cardigan/');
+    assert.equal(d.querySelector('#reward-unknown').textContent,'2026年 未確認の装備');
+    assert.equal(d.querySelector('#reward-copy').textContent,cardigan);
+    const store = 'https://store.finalfantasyxiv.com/ffxivstore/ja-jp/product/901';
+    const official = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/00000000003/';
+    const storeMarkup = '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent">'
+      + '<a href="'+official+'">'+gaia+'</a><p>女性専用装備</p><p>課金装備『<a id="store" href="'+store+'">'+gaia+'</a>』</p>'
+      + '<a id="foreign-store" href="https://example.test/ffxivstore/ja-jp/product/901">'+gaia+'</a>'
+      + '<div><span class="a--h2rich-subcopy">Moogle Treasure Trove</span><h2 class="a--h2rich-maincopy">モグモグ★コレクション</h2></div>'
+      + '<a id="event" href="https://jp.finalfantasyxiv.com/lodestone/special/2026/Valentiones_Day/example">ヴァレンティオンデー</a></section>';
+    render('/gaias-attire/',storeMarkup);
+    assert.equal(d.querySelector('h1').textContent,'盖娅服装套装');
+    assert.equal(d.querySelector('#postContent p').textContent,'女性专用装备');
+    // Exact repeated AF instructions, not arbitrary prose or player posts.
+    const eAf = 'Lv89のメインクエストをクリアするとオールドシャーレアンにいるヴァルサルードから受け取ることができるようになります。';
+    const dAf = 'Lv99のメインクエストをクリアするとトライヨラにいるメワズンテから受け取ることができるようになります。';
+    const afMarkup = (category, text) => '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/'+category+'/">AF</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+gaia+'</h1><section id="postContent"><a href="'+official+'">'+gaia+'</a>'
+      + '<p id="conditional">染色◯（条件あり）</p><div class="c--accordion-title">染色可能にする方法</div>'
+      + '<p id="instructions">'+text+'</p><p id="other">作者：'+eAf+'</p></section>';
+    render('/academics-coat/',afMarkup('af/artefact5','暁月のフィナーレのアーティファクト(AF)です<br>'+eAf+'<br>染色するためにはLv90のロールクエストのクリアが必要です。'));
+    assert.equal(d.querySelector('#conditional').textContent,'满足条件后可染色');
+    assert.equal(d.querySelector('.c--accordion-title').textContent,'染色解锁方式');
+    assert.equal(d.querySelector('#instructions').innerHTML,'晓月之终途的职业专属装备（AF）。<br>完成89级主线任务后，可在旧萨雷安的瓦尔萨如德处领取。<br>完成90级职能任务后方可染色。');
+    assert.equal(d.querySelector('#other').textContent,'作者：'+eAf);
+    render('/heavensbound-mail/',afMarkup('af/artefact6','黄金のレガシーのアーティファクト(AF)です\n'+dAf+'<br>〖近接物理DPSロールクエスト 黄金編〗をすべてクリアする<br>※別ジョブでコンプリート済みであれば染色機能は自動的に有効化されます'));
+    assert.equal(d.querySelector('#instructions').innerHTML,'金曦之遗辉的职业专属装备（AF）。\n完成99级主线任务后，可在图莱尤拉的梅瓦祖恩特处领取。<br>完成全部近战物理进攻职业的职能任务（金曦之章）<br>※若已使用其他职业完成对应的职能任务，则自动解锁染色功能。');
+    render('/glamour-post/',afMarkup('glamour',eAf));
+    assert.equal(d.querySelector('#conditional').textContent,'染色◯（条件あり）');
+    assert.equal(d.querySelector('#instructions').textContent,eAf);
+    const face = 'スタイルカタログ:テスト用眼鏡';
+    const faceZh = '测试用眼镜样式';
+    assert.ok(_applyV3({candidatePolicy:1,names:face+'\t'+faceZh+'\t1\t1',hash:'123456789ab\t'+faceZh}));
+    render('/?p=125414','<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/faceaccessory/">フェイスアクセサリー</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+face+'（フェイスアクセサリー）</h1><section id="postContent">'
+      + '<div><h2 class="a--h2rich-maincopy">カラーバリエーション</h2><span class="a--h2rich-subcopy">Color variations</span></div>'
+      + '<a id="face-item" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/123456789ab/">'+face+'</a>'
+      + '<p id="face-market">マーケット取引：◯</p><p id="face-source">宝の地図G18 「宝物庫 ボルト・オネイロン」</p>'
+      + '<p id="wrong-map">宝の地図G17 「宝物庫 ボルト・オネイロン」</p><p id="source-prose">宝物庫 ボルト・オネイロンについての説明</p>'
+      + '<div class="c--accordion-contents"><a id="allied" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/?category2=4&amp;category3=45&amp;category4=62">友好部族エクストラストーリー</a>'
+      + '<a id="friends" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/b10022ed563/">集うは我ら、信頼の絆</a>'
+      + '<a id="wrong-friends" href="https://example.test/lodestone/playguide/db/quest/b10022ed563/">集うは我ら、信頼の絆</a></div></section>');
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,faceZh+'（面部配饰）');
+    assert.equal(d.querySelector('#face-item').textContent,faceZh);
+    assert.ok(decodeURIComponent(d.querySelector('#face-item').href).endsWith(faceZh));
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'颜色一览');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#face-market').textContent,'可在市场交易');
+    assert.equal(d.querySelector('#face-source').textContent,'G18藏宝图：巡梦金库');
+    assert.equal(d.querySelector('#wrong-map').textContent,'宝の地図G17 「宝物庫 ボルト・オネイロン」');
+    assert.equal(d.querySelector('#source-prose').textContent,'宝物庫 ボルト・オネイロンについての説明');
+    assert.equal(d.querySelector('#allied').textContent,'各族盟友任务');
+    assert.equal(d.querySelector('#friends').textContent,'友谊地久天长');
+    assert.equal(d.querySelector('#wrong-friends').textContent,'集うは我ら、信頼の絆');
+    // Retain the AF fixture's original game-data entries for the subsequent tests.
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1'}));
+    const basicAf = '各ジョブのジョブクエストをコンプリートする';
+    const repurchase = '各エリア遺失物管理人から再購入（1,000ギル）';
+    render('/scholars-gown/', afMarkup('af/artefact',basicAf+'<br>Lv45：頭 手 脚 足<br>Lv50：胴<br>'+repurchase)
+      .replace('</section>','<div><h2 class="a--h2rich-maincopy">学者AF</h2><span class="a--h2rich-subcopy">Scholar artefact</span></div><p id="unknown-af">不明AF</p></section>'));
+    assert.equal(d.querySelector('#instructions').innerHTML,'完成对应职业的职业任务<br>45级：头部、手部、腿部、脚部<br>50级：身体<br>可在各地的失物管理人处重新购买（1,000 金币）');
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'学者职业专属装备');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#unknown-af').textContent,'不明AF');
+    const kakalanShop = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/shop/124bcb85185/';
+    assert.ok(_applyV3({candidatePolicy:1,names:cardigan+'\t温暖恋人开襟毛衫\t1\t1\n'+gaia+'\t盖娅服装套装\t1\t1\nスカラーアタイアの補材\t学士装备的改良材料\t1\t1\nカララント:スートブラック\t煤黑染剂\t1\t1'}));
+    render('/augmented-scholars-gown/',afMarkup('af/afre','モードゥナ<br>工房「ダイヤモンドフォージ」<br>( 22.2 , 5.5 ) Z:0.5<br>欲しい部位のAF<br>(遺失物管理人より再購入可能)<br>部位別必要個数<br>頭：手：足…1<br>胴：脚…2')
+      .replace('>AF</a>','>新生アーティファクトRE</a>')
+      .replace('</section>','<a id="kakalan" href="'+kakalanShop+'">カカラン</a><a id="unknown-shop" href="https://example.test/lodestone/playguide/db/shop/124bcb85185/">カカラン</a><a id="augmentation" href="https://jp.finalfantasyxiv.com/lodestone/playguide/db/item/1b3f836d461/">スカラーアタイアの補材</a><p id="dye-caption">スートブラック染色</p></section>'));
+    assert.equal(d.querySelector('.a--post-cat a').textContent,'重生之境 改良型职业专属装备');
+    assert.equal(d.querySelector('#instructions').innerHTML,'摩杜纳<br>钻石工房<br>( 22.2 , 5.5 ) Z:0.5<br>所需部位的职业专属装备<br>（可在失物管理人处重新购买）<br>各部位所需数量<br>头部、手部、脚部：1<br>身体、腿部：2');
+    assert.equal(d.querySelector('#kakalan').textContent,'卡卡拉恩');
+    assert.equal(d.querySelector('#kakalan').href,kakalanShop);
+    assert.equal(d.querySelector('#unknown-shop').textContent,'カカラン');
+    assert.equal(d.querySelector('#augmentation').textContent,'学士装备的改良材料');
+    assert.equal(d.querySelector('#dye-caption').textContent,'煤黑染色');
+    const guide = '〖暁月版〗禁書：新生古典装備の入手方法〖過去トークン装備〗';
+    render('/creed-cuirass/',afMarkup('af/artefact2','Lv60忍者')
+      .replace('</section>','<a id="guide" href="/al06/">'+guide+'</a><a id="other-guide" href="https://example.test/al06/">'+guide+'</a></section>'));
+    assert.equal(d.querySelector('#instructions').textContent,'60级 忍者');
+    assert.equal(d.querySelector('#guide').textContent,'【晓月版】禁书神典石：新生古典装备获取方式（旧神典石装备）');
+    assert.equal(d.querySelector('#other-guide').textContent,guide);
+    // The historical guide is an article, not an item-detail page.
+    const tomeTitle = '〖暁月版〗法典：ドマ様式装備の入手方法〖過去トークン装備〗';
+    const tomeMarkup = '<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/nyuusyuhouhou/tomestone/">入手方法：過去トークン装備</a></div></div>'
+      + '<h1 id="jinrPostTitle">'+tomeTitle+'</h1><section id="postContent">'
+      + '<h2>アラガントームストーン:法典<br>ドマ様式装備</h2><table><tr><th>セントリオ記章</th><td>頭手足</td><td>35</td></tr></table>'
+      + '<p id="guide-copy">セントリオ記章</p><p id="guide-prose">セントリオ記章についての説明</p></section>';
+    render('/al05/', tomeMarkup);
+    assert.equal(d.querySelector('#jinrPostTitle').textContent,'【晓月版】法典神典石：多玛风格装备获取方式（旧神典石装备）');
+    assert.equal(d.querySelector('#postContent h2').innerHTML,'亚拉戈法典神典石<br>多玛风格装备');
+    assert.equal(d.querySelector('th').textContent,'兵团徽章');
+    assert.deepEqual([...d.querySelectorAll('td')].map(e=>e.textContent),['头部、手部、脚部','35']);
+    assert.equal(d.querySelector('#guide-copy').textContent,'セントリオ記章');
+    assert.equal(d.querySelector('#guide-prose').textContent,'セントリオ記章についての説明');
+    render('/other/',tomeMarkup.replace('/category/nyuusyuhouhou/tomestone/','/category/glamour/'));
+    assert.equal(d.querySelector('th').textContent,'セントリオ記章');
+    const mythTitle = '〖暁月版〗神話：復古調装備の入手方法〖過去トークン装備〗';
+    const mythZh = '【晓月版】神话神典石：仿古装备获取方式（旧神典石装备）';
+    render('/al02/', tomeMarkup.replace(tomeTitle,mythTitle).replace('</section>',
+      '<h2>アンティーク素材 対応部位</h2><p>Allagan tomestone of Mythology</p>'
+      + '<h3>セントリオ記章入手方法（2024年パッチ6.x現在）</h3>'
+      + '<p>強化方法</p><p>強化したいアイテム＋対応する強化用アイテム</p>'
+      + '<p id="guide-unchanged">強化方法についての説明</p></section>'));
+    assert.equal(d.querySelector('h1').textContent,mythZh);
+    assert.equal(d.querySelector('#postContent h2:nth-of-type(2)').textContent,'古董道具对应部位');
+    assert.equal(d.querySelector('h3').textContent,'兵团徽章获取方式（截至2024年6.x版本）');
+    assert.ok([...d.querySelectorAll('#postContent p')].some(e=>e.textContent==='强化方式'));
+    assert.ok([...d.querySelectorAll('#postContent p')].some(e=>e.textContent==='亚拉戈神话神典石'));
+    assert.equal(d.querySelector('#guide-unchanged').textContent,'強化方法についての説明');
+    const questBase = 'https://jp.finalfantasyxiv.com/lodestone/playguide/db/quest/';
+    const bardQuest = questBase+'4c5e96e09d0/';
+    render('/antiquated-storytellers-coat/',afMarkup('af/artefact3','吟遊詩人クエスト<br>『<a href="'+bardQuest+'">想い込められし歌</a>』<br>クエスト終了後にチェストを開けることで入手できます<br>再取得は遺失物管理人から再購入可能です<br>染色可能にするためには『禁断の地 エウレカ アネモス編』でアイテムを揃える必要があります'));
+    assert.equal(d.querySelector('#instructions').textContent,'吟游诗人职业任务『和平颂歌』完成任务后，打开获得的装备箱即可领取装备。可在失物管理人处重新购买。若要获得可染色装备，需在禁地优雷卡 常风之地收集所需道具。');
+    assert.equal(d.querySelector('#instructions a').href,bardQuest);
+    const mainQuest = questBase+'34a689b3630/';
+    const roleQuest = questBase+'5fec56883e2/';
+    render('/weathered-wicce-coat/',afMarkup('af/artefact4','漆黒のヴィランズ 黒魔道士のアーティファクト(AF)です。<br>1:メインクエスト Lv79『<a href="'+mainQuest+'">輝きは不滅なりて</a>』をクリア<br>2:Lv80に到達<br>3:ソーサラー系DPSロールクエスト『<a href="'+roleQuest+'">やっと、また会えたね</a>』をクリア<br>染色可能装備は極シタデルボズヤ追憶戦で入手できます。')
+      .replace('</section>','<a id="wrong-quest" href="'+roleQuest+'">輝きは不滅なりて</a><a id="foreign-quest" href="https://example.test/lodestone/playguide/db/quest/34a689b3630/">輝きは不滅なりて</a><p id="plain-quest">TANKロールクエスト『いつか君が言った言葉』をクリア</p></section>'));
+    assert.equal(d.querySelector('#instructions').textContent,'暗影之逆焰的黑魔法师职业专属装备（AF）。1. 完成79级主线任务《光辉不灭》2. 达到80级3. 完成魔法进攻职业职能任务《终于又能见到你了》可染色装备可通过博兹雅堡垒追忆战获取。');
+    assert.equal(d.querySelector('#plain-quest').textContent,'完成防护职业职能任务《你曾说过的话》');
+    assert.equal(d.querySelector('#wrong-quest').textContent,'輝きは不滅なりて');
+    assert.equal(d.querySelector('#foreign-quest').textContent,'輝きは不滅なりて');
+    assert.equal(d.querySelector('#instructions a').href,mainQuest);
+    render('/glamour-post/',afMarkup('glamour',basicAf));
+    assert.equal(d.querySelector('#instructions').textContent,basicAf);
+    render('/gaias-attire/',storeMarkup);
+    assert.equal(d.querySelector('#store').textContent,'盖娅服装套装');
+    assert.equal(d.querySelector('#store').href,store);
+    assert.equal(d.querySelector('#foreign-store').textContent,gaia);
+    assert.equal(d.querySelector('.a--h2rich-maincopy').textContent,'莫古莫古★大收集');
+    assert.equal(d.querySelector('.a--h2rich-subcopy').hidden,true);
+    assert.equal(d.querySelector('#event').textContent,'恋人节');
+    render('/crafter-macro-generat/', '<h1 id="jinrPostTitle">クラフターマクロ生成ツール</h1><section id="postContent">'
+      + '<h2>Crafter Macro Generat</h2><a id="launch" href="/wp-content/plugins/ff14-macro-tool/assets/tool.html?v=1785835485">FF14 制作マクロ自動生成ツール</a>'
+      + '<a id="other" href="/other/">FF14 制作マクロ自動生成ツール</a><p>テスト中～！手作業でデータ登録しているので抜けが多いです</p></section>');
+    assert.equal(d.querySelector('h1').textContent,'制作宏生成工具');
+    assert.equal(d.querySelector('h2').textContent,'制作宏生成工具');
+    assert.equal(d.querySelector('#launch').textContent,'FF14 制作宏自动生成工具');
+    assert.equal(d.querySelector('#launch').search,'?v=1785835485');
+    assert.equal(d.querySelector('#other').textContent,'FF14 制作マクロ自動生成ツール');
+    assert.equal(d.querySelector('#postContent p').textContent,'テスト中～！手作業でデータ登録しているので抜けが多いです');
+  } finally {
+    for (const [key,value] of Object.entries(prior)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
     }
     await dom.happyDOM.close();
   }

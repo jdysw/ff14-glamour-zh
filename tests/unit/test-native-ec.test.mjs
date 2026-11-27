@@ -72,7 +72,12 @@ test('EC 文本与属性：保留玩家创作，规范翻译界面文本和动�
     trimECNode(text);
     assert.equal(text.nodeValue, '共 1,234 条结果');
     assert.equal(contentParent.dataset.zhixiaSourceText, '1,234 results');
-    for(const [source,want] of [['Oct 2nd, 2026','2026年10月2日'],['January 15, 2025','2025年1月15日'],['Test 12, 2024','Test 12, 2024']]){
+    for (const [source, want] of [['Melee DPS','近战物理职业'],['Melee','近战物理职业'],['Ranged DPS','远程物理职业'],['Ranged','远程物理职业'],['Caster DPS','远程魔法职业'],['Caster','远程魔法职业'],['Tanks','防护职业'],['Healers','治疗职业']]) {
+      const role = { nodeType: 3, nodeValue: source, parentElement: contentParent };
+      trimECNode(role);
+      assert.equal(role.nodeValue, want);
+    }
+    for(const [source,want] of [['Weapon Pieces','武器'],['Notes','备注'],['Same model as','相同外观的装备'],['Dyes:','染色：'],['Dyeable','可染色'],['Undyeable','不可染色'],['Oct 2nd, 2026','2026年10月2日'],['January 15, 2025','2025年1月15日'],['Test 12, 2024','Test 12, 2024']]){
       const date={nodeType:3,nodeValue:source,parentElement:contentParent};trimECNode(date);assert.equal(date.nodeValue,want);
     }
 
@@ -315,20 +320,34 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/accessories') }, () => {
         d.body.innerHTML = '<select id="patch"><option value="5.0">ShadowBringers</option><option value="6.0">Endwalker</option>' +
           '<option value="7.0">Dawntrail</option></select><button id="piece">Wrists</button>' +
+          '<form id="filter_form"><select id="filter_job"><optgroup id="jobs" label="Tanks"><option value="19">Paladin</option></optgroup><optgroup id="unknown-group" label="Unrecognized group"><option>Unknown</option></optgroup></select></form>' +
+          '<select><optgroup id="outside-form" label="Tanks"><option>Paladin</option></optgroup></select>' +
           '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>' +
           '<a href="/accessories/avalanche-leaders">Avalanche Leader\'s <span>Token Exchange</span></a>' +
           '<a href="/accessories/avalanche-brawlers">Avalanche Brawler\'s Accessories <span>Token Exchange</span></a>' +
-          '<a href="/gearset/festival-neotunic">Festival Neotunic <span>Mogstation Set</span></a>';
+          '<a href="/gearset/festival-neotunic">Festival Neotunic <span>Mogstation Set</span></a>' +
+          '<a href="/gearset/avalanche-leaders"><img id="leader-set" alt="Avalanche Leader\'s image">Avalanche Leader\'s</a>' +
+          '<a href="/gearset/avalanche-brawlers"><img id="brawler-set" alt="Avalanche Brawler\'s image">Avalanche Brawler\'s</a>' +
+          '<a href="https://ffxiv.eorzeacollection.com/accessories/avalanche-leaders"><img id="leader-earring" alt="Avalanche Leader\'s image">Avalanche Leader\'s</a>' +
+          '<a href="/gearset/graffiti-neotunic"><img id="graffiti-set" alt="Graffiti Neotunic image">Graffiti Neotunic</a>';
         translateECPage();
         assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
           [['5.0', '暗影之逆焰'], ['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
         assert.equal(d.querySelector('#piece').textContent, '腕部');
+        assert.equal(d.querySelector('#jobs').getAttribute('label'), '防护职业');
+        assert.equal(d.querySelector('#jobs option').value, '19');
+        assert.equal(d.querySelector('#unknown-group').getAttribute('label'), 'Unrecognized group');
+        assert.equal(d.querySelector('#outside-form').getAttribute('label'), 'Tanks');
         assert.equal(d.querySelector('#status').textContent, '不可染色');
         assert.equal(d.querySelector('#source').textContent, '讨伐歼灭战掉落');
         translateECPage();
         assert.equal(d.querySelector('[href="/accessories/avalanche-leaders"]').textContent, '雪崩领导者饰品 代币兑换');
         assert.equal(d.querySelector('[href="/accessories/avalanche-brawlers"]').textContent, '雪崩斗手饰品 代币兑换');
         assert.equal(d.querySelector('[href="/gearset/festival-neotunic"]').textContent, '欢庆新式文化衫套装 商城');
+        assert.deepEqual(['leader-set','brawler-set','leader-earring','graffiti-set'].map(id => d.getElementById(id).alt),
+          ['雪崩领导者套装图片','雪崩斗手套装图片','雪崩领导者饰品图片','涂鸦新式文化衫套装图片']);
+        assert.equal(d.querySelector('[href="/gearset/avalanche-leaders"]').textContent, '雪崩领导者套装');
+        assert.equal(d.querySelector('[href="/gearset/avalanche-brawlers"]').textContent, '雪崩斗手套装');
       });
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/facewear') }, () => {
         d.title = 'Facewear | Eorzea Collection';
@@ -509,7 +528,7 @@ test('EC 阳伞详情：配饰导航、获取方式、图片说明和页面标�
     }
     translateECAttrs();
     assert.equal(icon.getAttribute('alt'), '天蓝阳伞图标');
-    assert.equal(icon.getAttribute('title'), '所有输出职业');
+    assert.equal(icon.getAttribute('title'), '所有进攻职业');
     translateECTitle();
     assert.equal(doc.title, '阳伞 | Eorzea Collection');
   });
@@ -540,6 +559,16 @@ test('EC Gearsets H1 拆分后缀：保留原版式并避免套装重复翻译',
     translateECGearsetNames();
     assert.equal(mainNode.nodeValue + suffixNode.nodeValue, zhName,
       'SPA 再次扫描不能重复添加套装后缀');
+    doc.title = "Avalanche Leader's Set | Eorzea Collection";
+    withGlobals({ location: { pathname: '/gearset/avalanche-leaders' } }, () => {
+      translateECTitle();
+      assert.equal(doc.title, '雪崩领导者套装 | Eorzea Collection');
+    });
+    doc.title = "Avalanche Leader's Accessories | Eorzea Collection";
+    withGlobals({ location: { pathname: '/accessories/avalanche-leaders' } }, () => {
+      translateECTitle();
+      assert.equal(doc.title, '雪崩领导者饰品 | Eorzea Collection');
+    });
     mainNode.nodeValue = 'Blooming Eyeglasses ';
     suffixNode.nodeValue = 'Set';
     withGlobals({ location: { pathname: '/gearset/blooming-eyeglasses' } }, () => {
@@ -547,6 +576,13 @@ test('EC Gearsets H1 拆分后缀：保留原版式并避免套装重复翻译',
       translateECGearsetNames();
       assert.equal(mainNode.nodeValue + suffixNode.nodeValue, '彩花装饰眼镜',
         '仅含一件已核对装备的目录标题不得追加「套装」');
+    });
+    mainNode.nodeValue = 'Rainbow Champa Corsage ';
+    suffixNode.nodeValue = 'Set';
+    withGlobals({ location: { pathname: '/gearset/rainbow-champa-corsage' } }, () => {
+      translateECGearsetNames();
+      translateECGearsetNames();
+      assert.equal(mainNode.nodeValue + suffixNode.nodeValue, '混色大季花花环');
     });
   });
 });

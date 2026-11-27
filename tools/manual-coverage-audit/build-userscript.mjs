@@ -16,6 +16,7 @@ const header = `// ==UserScript==
 // @match        https://ff14.huijiwiki.com/*
 // @match        https://miramiru.co/*
 // @match        https://mirapri.ff14eden.work/*
+// @match        https://attire.jp/*
 // @noframes
 // @run-at       document-start
 // @grant        GM_getValue

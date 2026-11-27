@@ -31,6 +31,50 @@ export const DIST_FILE = path.join(REPO_ROOT, 'dist', 'ff14-glamour-zh.greasyfor
 
 // ---------- 站点配置 ----------
 export const SITES = {
+  attire: { name: 'attire', label: '装備手帳', host: 'attire.jp', channel: 'local', pages: [
+    { id: 'home', url: 'https://attire.jp/', type: 'home' },
+    { id: 'vanity', url: 'https://attire.jp/vanity-2/', type: 'catalogue' },
+    { id: 'pvp', url: 'https://attire.jp/pvp/', type: 'catalogue' },
+    { id: 'gc', url: 'https://attire.jp/gc/', type: 'catalogue' },
+    { id: 'gather-craft', url: 'https://attire.jp/hand-land/', type: 'catalogue' },
+    { id: 'seasonal', url: 'https://attire.jp/s-g/', type: 'catalogue' },
+    { id: 'a-realm-reborn', url: 'https://attire.jp/a-realm-reborn/', type: 'catalogue' },
+    { id: 'heavensward', url: 'https://attire.jp/heavensward/', type: 'catalogue' },
+    { id: 'stormblood', url: 'https://attire.jp/stormblood/', type: 'catalogue' },
+    { id: 'shadowbringers', url: 'https://attire.jp/shadowbringers/', type: 'catalogue' },
+    { id: 'endwalker', url: 'https://attire.jp/endwalker/', type: 'catalogue' },
+    { id: 'dawntrail', url: 'https://attire.jp/dawntrail/', type: 'catalogue' },
+    { id: 'market', url: 'https://attire.jp/market/', type: 'catalogue' },
+    { id: 'store-category', url: 'https://attire.jp/category/online-shop/', type: 'list' },
+    { id: 'face-category', url: 'https://attire.jp/category/faceaccessory/', type: 'list' },
+    { id: 'series-category', url: 'https://attire.jp/category/seriesb/', type: 'list' },
+    { id: 'af-category', url: 'https://attire.jp/category/nyuusyuhouhou/af-nyuusyu/', type: 'list' },
+    { id: 'mgp-category', url: 'https://attire.jp/category/mgp/', type: 'list' },
+    { id: 'glasses-tag', url: 'https://attire.jp/tag/glasses/', type: 'list' },
+    { id: 'search', url: 'https://attire.jp/?s=フィールドコマンダーコート', type: 'search' },
+    { id: 'weapon-pld', url: 'https://attire.jp/gladiator_s_arm/', type: 'weapon-catalogue' },
+    { id: 'weapon-vpr', url: 'https://attire.jp/vpr/', type: 'weapon-catalogue' },
+    { id: 'dungeon-series', url: 'https://attire.jp/the-dusk-vigil-buki/', type: 'series-guide' },
+    { id: 'achievement', url: 'https://attire.jp/field-commanders-coat/', type: 'equipment' },
+    { id: 'crescent', url: 'https://attire.jp/torna-tunic/', type: 'equipment' },
+    { id: 'weapon-vendor', url: 'https://attire.jp/arms/book-of-electrum/', type: 'weapon-detail' },
+    { id: 'face-pvp', url: 'https://attire.jp/?p=125327', type: 'equipment' },
+    { id: 'face-mgp', url: 'https://attire.jp/the-faces-we-wear-rimless-glasses/', type: 'equipment' },
+    { id: 'face-variant', url: 'https://attire.jp/?p=125649', type: 'equipment' },
+    { id: 'restoration', url: 'https://attire.jp/fieldfiends-costume-shirt/', type: 'equipment' },
+    { id: 'starter', url: 'https://attire.jp/hempen-kurta/', type: 'equipment' },
+    { id: 'glamour', url: 'https://attire.jp/rose-du-desert/', type: 'glamour' },
+    { id: 'series-reward', url: 'https://attire.jp/rule-breakers-vest/', type: 'equipment' },
+    { id: 'cosmic', url: 'https://attire.jp/cosmic-operators-coverall-top/', type: 'equipment' },
+    { id: 'series-expired', url: 'https://attire.jp/loose-fit-overshirt/', type: 'equipment' },
+    { id: 'series-redeem', url: 'https://attire.jp/air-cell-jacket/', type: 'equipment' },
+    { id: 'restoration-legacy', url: 'https://attire.jp/craftsmans-singlet/', type: 'equipment' },
+    { id: 'restoration-prize', url: 'https://attire.jp/casual-jacket/', type: 'equipment' },
+    { id: 'restoration-fete', url: 'https://attire.jp/peacelovers-shirt/', type: 'equipment' },
+    { id: 'hunt-tome-guide', url: 'https://attire.jp/al18/', type: 'guide' },
+    { id: 'hunt-weapon', url: 'https://attire.jp/arms/moonward-longsword/', type: 'weapon-detail' },
+    { id: 'hunt-weapon-80', url: 'https://attire.jp/arms/ronkan-partisan/', type: 'weapon-detail' },
+  ] },
   eden: {name:'eden',label:'Mirapri Eden',host:'mirapri.ff14eden.work',channel:'local',pages:[
     {id:'home',url:'https://mirapri.ff14eden.work/#/',type:'home'},
     {id:'ranking',url:'https://mirapri.ff14eden.work/#/components/popular-equipment',type:'list'},
@@ -45,6 +89,9 @@ export const SITES = {
       { id: 'ranking-ja', url: 'https://miramiru.co/ranking', type: 'list' },
       { id: 'ranking-en', url: 'https://miramiru.co/en/ranking', type: 'list' },
       { id: 'ranking-ko', url: 'https://miramiru.co/ko/ranking', type: 'list' },
+      { id: 'sponsors-ja', url: 'https://miramiru.co/sponsors/', type: 'misc' },
+      { id: 'sponsors-en', url: 'https://miramiru.co/en/sponsors/', type: 'misc' },
+      { id: 'sponsors-ko', url: 'https://miramiru.co/ko/sponsors/', type: 'misc' },
     ],
   },
   mirapri: {
@@ -126,6 +173,12 @@ export const SITES = {
   },
 };
 
+// Reuse the configured site IDs across collectors, sanitizers and reports.
+export function isAuditResultFile(name) {
+  const match = /^([a-z]+)-.+\.json$/u.exec(name);
+  return !!match && Object.hasOwn(SITES, match[1]);
+}
+
 // ---------- 残留分类 ----------
 export const CATEGORY = {
   REAL: 'real',           // 真漏译，需修
@@ -182,6 +235,9 @@ const EXEMPT_PATTERNS = [
   /^FF14$/i,
   /^Final Fantasy XIV$/i,
   /^Lodestone$/i,
+  /^NPC$/,
+  /^FANTASIAN$/,
+  /^© SQUARE ENIX © \d{4}, Made by FFXIV Mirapri Eden$/u,
   /^ERIONES$/i,
   /^Garland Data$/i,
   /^Gamer Escape$/i,
@@ -206,14 +262,16 @@ for (const name of ['dict-common', 'dict-main', 'dict-fc', 'dict-acl', 'dict-end
     }
   } catch (e) { throw new Error('无法读取汉化权威词典 ' + name + ': ' + e.message); }
 }
-const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru',eden:'main'})
+const SITE_KANJI_UI = new Map(Object.entries({mirapri:'main',fc:'fc',collection:'acl',endcloset:'endcloset',miramiru:'miramiru',eden:'main',attire:'main'})
   .map(([site,name])=>[site,new Set(Object.entries({...KANJI_DICTIONARIES.get('dict-common'),...KANJI_DICTIONARIES.get('dict-'+name)})
-    .map(([source,zh])=>[site==='eden'&&source.startsWith('eden:')?source.slice(5):source,zh])
+    .map(([source,zh])=>[site==='eden'&&source.startsWith('eden:')?source.slice(5)
+      :site==='attire'&&source.startsWith('attire:')?source.split(':').at(-1):source,zh])
     .filter(([source,zh])=>/^[\u3400-\u9fff]{2,30}$/.test(source)&&source!==zh&&/^[\u3400-\u9fff]/.test(zh)).map(([source])=>source))]));
 
 // ---------- 残留检测 ----------
 // 日文假名（平/片）
-const JA_RE = /[\u3040-\u30ff]/;
+// Common punctuation such as ・ and an isolated ー is not untranslated Japanese.
+const JA_RE = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 // 韩文音节/谚文字母
 const KO_RE = /[\uac00-\ud7af\u1100-\u11ff]/;
 // 全角片假名/平假名以外的日文符号（长音符等）
@@ -225,7 +283,11 @@ const JA_KANA_ONLY_RE = /[\u3040-\u30ff]/;
  * names flood the report). This is intentionally recall-first for UI controls.
  */
 export function isResidual(text, ctx = {}) {
-  const t = String(text || '').trim();
+  const source = String(text || '').trim();
+  // Keep the exact event hashtag usable on Twitter. This exception applies
+  // only to the translated contest instruction, not to arbitrary Japanese UI.
+  const t = ctx.site === 'eden' && /^3\. 带上话题 #ミラプリレシピ 并发布到 Twitter。\s*（可选）$/u.test(source)
+    ? source.replace('#ミラプリレシピ', '') : source;
   if (!t) return false;
   if (JA_RE.test(t) || KO_RE.test(t)) return true;
   if (ctx.ui && (ctx.site ? SITE_KANJI_UI.get(ctx.site)?.has(t) : KNOWN_KANJI_UI.has(t))) return true;
@@ -236,7 +298,17 @@ export function isResidual(text, ctx = {}) {
   const hanCount = (t.match(/[\u4e00-\u9fff]/g) || []).length;
   // Retained names in otherwise translated Chinese do not imply partial UI.
   // Remove only verified names; "关于 Miramiru Settings" remains a candidate.
-  const latinCount = (t.replace(/Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter/g, '').match(/[A-Za-z]/g) || []).length;
+  // Match complete compound brands before their individual components.
+  let remainder = t.replace(/\b(?:FFXIV Fan Kit|Mirapri Eden|Miramiru|MirapriLife|FFXIV|FF14|Ko-fi|Discord|XIVAPI|Twitter|YouTube|The Lodestone|Lodestone|Google Analytics|Cookie|FANTASIAN)\b/g, '')
+    .replace(/@[A-Za-z0-9_]{1,15}\b/g, '');
+  if (ctx.site === 'miramiru' && hanCount) {
+    // These exact names and relative routes are deliberately retained in the
+    // site's translated FAQ. Do not ignore arbitrary Latin phrases.
+    remainder = remainder.replace(/\bSQUARE ENIX CO\., LTD\./g, '')
+      .replace(/\b(?:Google AdSense|Amazon Associates|Moshimo Affiliate|Supabase Auth|Supabase|Vercel|JPEG|PNG|WebP|OGP|Niique Noela|Anima|Mana|PR)\b/g, '')
+      .replace(/\/(?:support|affiliate|commerce)\b/g, '');
+  }
+  const latinCount = (remainder.match(/[A-Za-z]/g) || []).length;
   return !hanCount || latinCount >= 6;
 }
 
@@ -259,8 +331,10 @@ function classifystatechange(t, before) {
 function isUserContent(t, ctx) {
   // Action controls inside a post are UI even if an ancestor is user-authored.
   // Keep text blocks / authored post titles as user content.
+  if (ctx.queryEcho === true || ctx.scope === 'user' && ctx.kind === 'attr:alt') return true;
   if (ctx.control) return false;
   if (ctx.user) return true;
+  if (ctx.site === 'attire' && (ctx.scope === 'ui' || ctx.scope === 'item' && /\ba--post-title\b/u.test(ctx.cls || ''))) return false;
   const cls = [ctx.cls, ctx.id, ctx.ancestors].join(' ');
   if (/(glamour.*(author|title|description)|post[-_](title|author|content)|comment[-_](text|body)|nickname|username|player-name|user-content)/i.test(cls)) return true;
   // Creation / publication timestamps belong to post metadata, not authored UI.
@@ -276,6 +350,8 @@ function isAdContext(ctx) {
   return /(adsbygoogle|google-anno|aswift|google-ads|ad-slot|adunit|ad-container|ad-banner|affiliate|amazon|rakuten|sponsor)/i.test(cls);
 }
 function isExempt(t, ctx) {
+  if (ctx.site === 'attire' && /^(?:Facebook|LINE)$/u.test(t)) return true;
+  if (ctx.site === 'eden' && /^(?:Eden|HousingEden|en|ja|ko)$/u.test(t)) return true;
   if (SERVER_NAMES.has(t)) return true;
   if (/^[A-Z][A-Za-z ]{1,40}$/.test(t) && /(server|world)/i.test(ctx.cls || '')) return true;
   for (const re of EXEMPT_PATTERNS) if (re.test(t)) return true;

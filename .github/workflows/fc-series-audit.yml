@@ -1,0 +1,40 @@
+name: FC full equipment catalogue audit
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/audit-fc-series.mjs'
+      - '.github/workflows/fc-series-audit.yml'
+      - 'src/sites/ff14-fc.js'
+      - 'src/core/cache.js'
+      - 'src/core/item-resolver.js'
+      - 'data/dictionaries/dict-fc.json'
+      - 'data/source/**'
+concurrency:
+  group: fc-series-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Collect all public FC catalogue records and replay source translation
+        env:
+          CI: 'true'
+        run: node tools/audit-fc-series.mjs
+      - name: Preserve full or partial evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: fc-full-series-audit
+          path: tests/.cache/fc-series-audit/
+          retention-days: 14
+          if-no-files-found: error

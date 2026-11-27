@@ -77,7 +77,7 @@ function collect(){
     if(skip(el)||!visible(el))return;
     const raw=String(val??'').replace(/\s+/g,' ').trim();
     if(!raw||raw.length>500)return;
-    const path=C.stablePath(el),ctx=C.classifyContext(el,kind,site,location.href);
+    const path=C.stablePath(el),ctx=C.classifyContext(el,kind,site,location.href,raw);
     const key=kind+'\u0000'+path+'\u0000'+raw;
     if(seen.has(key))return;seen.add(key);
     let before=null,quality='none';

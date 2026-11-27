@@ -2,10 +2,56 @@
 // No telemetry, storage, network calls, or mutation.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { miramiruScope, edenScope } = require('../manual-coverage-audit/audit-core.js');
+const { miramiruScope, edenScope, fcScope, attireScope, ronkaScope, queryEcho } = require('../manual-coverage-audit/audit-core.js');
+// These regions were observed in the successful public EC seed scans.
+// Keep player links and images out of the public catalogue/UI evidence.
+export function ecPublicScope(el,kind,url){
+  const route=new URL(url);
+  if(route.hostname!=='ffxiv.eorzeacollection.com')return null;
+  const href=el.closest?.('a[href]')?.getAttribute?.('href');
+  let linked=null;
+  try{if(href)linked=new URL(href,url)}catch{return null}
+  if(linked?.origin===route.origin){
+    if(/^\/(?:glamour|companion-glamour|creator)\/\d+(?:[/?#]|$)/u.test(linked.pathname))return 'user';
+    if(/^\/(?:gearset|accessories)\/[^/]+\/?$/u.test(linked.pathname)
+      &&el.closest?.('.collection.gearset')&&['text','attr:alt','attr:title'].includes(kind))return 'ui';
+  }
+  // These two card templates use different root classes. Action images
+  // are children of .tooltip-trigger (not necessarily that class themselves).
+  if(/^\/(?:gearsets|accessories)\/?$/u.test(route.pathname)&&kind==='attr:alt'){
+    const card=el.closest?.('.collection.gearset,.collection.accessory');
+    if(card&&el.matches?.('img')&&el.closest?.('.collection-actions .b-tooltip .tooltip-trigger'))return 'ui';
+    if(card&&el.matches?.('img.image.is-16x16')&&el.closest?.('.tag.is-background-dark'))return 'ui';
+  }
+  // Public catalogue detail headings are site-owned even when the visible
+  // title is split into nested spans. Never include glamour/creator titles.
+  if(/^\/(?:gearset|accessories|facewear|fashion-accessory)\/[a-z0-9-]{1,120}\/?$/u.test(route.pathname)){
+    if(kind==='document:title')return 'ui';
+    if(kind==='text'&&el.closest?.('h1.title.has-negative-letter-spacing'))return 'ui';
+    if(kind==='attr:alt'&&el.closest?.('a.eorzeadb_link .gear-icon'))return 'item';
+    if(kind==='text'&&el.closest?.('.list-item-title a.eorzeadb_link'))return 'item';
+    if(kind==='text'&&el.closest?.('.has-text-craft-name.eorzeadb_link'))return 'item';
+    // Explicitly observed detail metadata, not arbitrary sidebar prose.
+    if(kind==='text'&&el.closest?.('.gear-icon-box-slot-name,.divider.is-background.has-text-primary'))return 'ui';
+    if(['attr:alt','attr:title'].includes(kind)&&el.matches?.('img.image.is-32x32')
+      &&el.closest?.('.column.is-3 .box .is-flex'))return 'ui';
+    if(kind==='attr:alt'&&el.matches?.('img.image.is-16x16')
+      &&el.closest?.('.collection-actions .tag.is-background-dark'))return 'ui';
+    if(kind==='text'&&el.closest?.('.c-publicity'))return 'ad';
+  }
+  if(kind==='attr:label'&&el.closest?.('#filter_form select optgroup[label]'))return 'ui';
+  if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'
+    &&el.closest?.('.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'))return 'ui';
+  return null;
+}
 export const COLLECTOR_JS = String.raw`(() => {
+  const ecPublicScope = ${ecPublicScope.toString()};
   const miramiruScope = ${miramiruScope.toString()};
   const edenScope = ${edenScope.toString()};
+  const fcScope = ${fcScope.toString()};
+  const attireScope = ${attireScope.toString()};
+  const ronkaScope = ${ronkaScope.toString()};
+  const queryEcho = ${queryEcho.toString()};
   const out = [];
   const seen = new Set();
   const BAD = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'IFRAME', 'SVG']);
@@ -22,15 +68,27 @@ export const COLLECTOR_JS = String.raw`(() => {
     }
     return parts.join(' > ');
   }
-  function visible(el) {
-    if (!el || !el.isConnected || el.closest('[hidden],[aria-hidden="true"]')) return false;
+  // Native acquisition accordions and tab panels already exist in the DOM.
+  // Read their text without clicking controls or changing the actual page.
+  function visibility(el) {
+    if (!el || !el.isConnected) return null;
+    const panel = globalThis.location?.hostname === 'attire.jp'
+      ? el.closest('#postContent .c--accordion-contents,#postContent .c--tab-contents') : null;
+    let collapsed = false;
     let p = el;
     while (p && p.nodeType === 1) {
       const c = getComputedStyle(p);
-      if (c.display === 'none' || c.visibility === 'hidden' || Number(c.opacity) === 0) return false;
+      const hidden = p.hasAttribute?.('hidden') || p.getAttribute?.('aria-hidden') === 'true'
+        || c.display === 'none' || c.visibility === 'hidden' || Number(c.opacity) === 0;
+      if (hidden) {
+        if (p !== panel) return null;
+        collapsed = true;
+      }
       p = p.parentElement;
     }
-    return el.getClientRects().length > 0 || el.tagName === 'OPTION';
+    const nativeGroup = globalThis.location?.hostname === 'ffxiv.eorzeacollection.com'
+      && el.tagName === 'OPTGROUP' && !!el.closest('#filter_form select');
+    return collapsed ? 'collapsed' : (el.getClientRects().length > 0 || el.tagName === 'OPTION' || nativeGroup ? 'visible' : null);
   }
   function skipped(el) {
     if (!el || el.closest('script,style,noscript,template,iframe,svg,[contenteditable="true"]')) return true;
@@ -38,7 +96,7 @@ export const COLLECTOR_JS = String.raw`(() => {
       if (p.id?.startsWith('zhx-') || /(^|\s)zhx-/.test(String(p.className || '')) || p.hasAttribute('data-zhx-done')) return true;
     return false;
   }
-  function context(el, kind) {
+  function context(el, kind, text) {
     const cls = String(el.className || '') + ' ' + String(el.parentElement?.className || '');
     const id = String(el.id || '');
     let ancestors = '';
@@ -60,14 +118,20 @@ export const COLLECTOR_JS = String.raw`(() => {
     );
     const control = actionLink || /^(BUTTON|INPUT|SELECT|TEXTAREA|OPTION|SUMMARY)$/.test(el.tagName)
       || !!el.closest('button,[role="button"],[role="tab"],[role="switch"],[role="checkbox"]');
-    const siteScope = globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
-      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el) : null;
-    const user = (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
-    const ui = siteScope !== 'item' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
+    const pageUrl = globalThis.location?.href;
+    const echo = !!pageUrl && queryEcho(el,kind,pageUrl,text);
+    const siteScope = echo ? 'user' : globalThis.location?.hostname === 'miramiru.co' ? miramiruScope(el,kind,location.href)
+      : globalThis.location?.hostname === 'mirapri.ff14eden.work' ? edenScope(el,pageUrl)
+      : globalThis.location?.hostname === 'ff14-fc.com' ? fcScope(el,kind,pageUrl)
+      : globalThis.location?.hostname === 'attire.jp' ? attireScope(el,kind,location.href,text)
+      : globalThis.location?.hostname === 'lookbook.ronkacloset.com' ? ronkaScope(el,kind)
+      : globalThis.location?.hostname === 'ffxiv.eorzeacollection.com' ? ecPublicScope(el,kind,pageUrl) : null;
+    const user = echo || siteScope !== 'ui' && siteScope !== 'item' && (authoredContext || siteScope === 'user') && (!control || kind === 'attr:alt');
+    const ui = siteScope === 'ui' || siteScope !== 'item' && siteScope !== 'user' && (control || /^(LABEL|H1|H2|H3|H4|TH|NAV)$/.test(el.tagName)
       || !!el.closest('nav,header,footer,form,[role="navigation"],[role="menu"],[role="tablist"],[role="dialog"]')
       || kind.startsWith('attr:') || kind === 'option');
     return {
-      scope: siteScope || undefined,
+      scope: siteScope || undefined, queryEcho: echo,
       tag: el.tagName.toLowerCase(), cls, id, ancestors, ad, user, ui, control,
       role: el.getAttribute('role') || '',
       name: el.getAttribute('name') || '',
@@ -76,20 +140,21 @@ export const COLLECTOR_JS = String.raw`(() => {
     };
   }
   function push(el, value, kind) {
-    if (!visible(el) || skipped(el)) return;
+    const state = visibility(el);
+    if (!state || skipped(el)) return;
     const t = String(value || '').replace(/\s+/g, ' ').trim();
     if (!t || t.length > 500) return;
     const path = pathFor(el);
     const key = path + '\u0000' + kind + '\u0000' + t;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ kind, text: t, path, ctx: context(el, kind) });
+    out.push({ kind, text: t, path, ctx: { ...context(el, kind, t), collapsed: state === 'collapsed' } });
   }
   if (!document.body) return [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
       const p = n.parentElement;
-      if (!p || BAD.has(p.tagName) || skipped(p) || !visible(p)) return NodeFilter.FILTER_REJECT;
+      if (!p || BAD.has(p.tagName) || skipped(p) || !visibility(p)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -101,7 +166,15 @@ export const COLLECTOR_JS = String.raw`(() => {
     // visible label. Only input buttons render their value as UI text.
     if (el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) push(el, el.value, 'attr:value');
   }
-  if (document.title) out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: false, user: false, ad: false } });
+  if (globalThis.location?.hostname === 'ffxiv.eorzeacollection.com') {
+    for (const el of document.querySelectorAll('#filter_form select optgroup[label]'))
+      push(el, el.getAttribute('label'), 'attr:label');
+  }
+  if (document.title) {
+    const publicTitle = globalThis.location?.hostname === 'ffxiv.eorzeacollection.com'
+      && ecPublicScope(document.documentElement, 'document:title', location.href)==='ui';
+    out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: publicTitle, user: false, ad: false, scope: publicTitle?'ui':undefined } });
+  }
   return out;
 })()`;
 

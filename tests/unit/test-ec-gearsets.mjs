@@ -103,11 +103,35 @@ assert.equal(tr('Vana\u0027dielian Casting'), '瓦纳·迪尔咏咒套装');
 assert.equal(tr('Praemagitek Healing'), '前魔导治愈套装');
 assert.equal(tr('Beastmaster\u0027s'), '兽主套装');
 assert.equal(tr('Yozakura'), '夜樱装束');
-assert.equal(tr('Graffiti Neotunic'), '涂鸦新式上衣套装');
+assert.equal(tr('Graffiti Neotunic'), '涂鸦新式文化衫套装');
+assert.equal(tr("Avalanche Leader's"), '雪崩领导者套装');
+assert.equal(tr("Avalanche Brawler's"), '雪崩斗手套装');
+assert.equal(api.ecAccessoryDisplayName("Avalanche Leader's"), '雪崩领导者饰品');
 // An EC Gearset with one item must not gain the same suffix as a real pack.
 assert.equal(tr('Blooming Eyeglasses Set'), '彩花装饰眼镜');
 assert.equal(tr('Chicken Eyeglasses Seasonal Event Gear'), '彩蛋小鸡眼镜 季节活动装备');
 assert.equal(tr('Masha Neotunic'), '大码马夏文化衫');
+for (const [title, zh] of [["Cosmic Explorer's","宇宙探索者套装"],["Comfy Valentione","舒心恋人套装"],["Cozy Valentione","温暖恋人套装"],["Powersuit","宇宙动力服套装"],["Narumi Neotunic","大码鸣海文化衫"],["Picot Neotunic","大码皮科特文化衫"],["Ulala Neotunic","大码乌拉拉文化衫"]]) {
+  assert.equal(tr(title), zh);
+  assert.equal(tr(title + ' Set'), zh);
+  assert.equal(tr(title + ' Seasonal Event Gear'), zh + ' 季节活动装备');
+}
+assert.equal(tr('Legend'), '神话传令官套装');
+// Seen in actual unfiltered /gearsets or filtered catalogue results.
+for (const [native, zh] of [["Wolfram","钨钢套装"],["Hussar's","轻骑兵套装"],["Fistfighter's","拳法师套装"],["Pilgrim's","朝圣者套装"],["Light","光之套装"],["Fuma","风魔套装"],["Ballad","民谣套装"],["Crimson","深红套装"],["Royal","皇室套装"],["Leisurewear (High-cut Knit Top)","运动休闲短罩衫套装"],["Leisurewear (High-cut Shirt)","运动休闲破烂罩衫套装"],["Cobalt Tungsten Fending","钴钨御敌套装"],["Cobalt Tungsten Maiming","钴钨制敌套装"],["Sarcenet Striking","薄绢强袭套装"],["Sarcenet Scouting","薄绢游击套装"],["Sarcenet Aiming","薄绢精准套装"],["Sarcenet Casting","薄绢咏咒套装"],["Sarcenet Healing","薄绢治愈套装"],["Mountain Linen Striking","高山亚麻强袭套装"],["Mountain Linen Scouting","高山亚麻游击套装"],["Mountain Linen Aiming","高山亚麻精准套装"],["Mountain Linen Casting","高山亚麻咏咒套装"],["Mountain Linen Healing","高山亚麻治愈套装"]]) {
+  assert.equal(tr(native), zh);
+  assert.equal(tr(native + ' Set'), zh);
+}
+assert.equal(tr('Cobalt Tungsten Casting'), null, 'do not manufacture unobserved mixed-material role variants');
+for (const [native, zh] of [["Cosmosuit","宇航服套装"],["Noct","宵光套装"],["Astrum","星光套装"],["Gloam","暮光套装"],["Auroral","曙光套装"],["Evenstar","昏光套装"],["Daystar","晨光套装"],["Heavy Wolfram","钨钢重甲套装"],["Cashmere Healing","羊绒治愈套装"],["Protector's","保护者套装"],["Shikaree's","狩猎者套装"],["Magician's","魔术师套装"],["Manor War","庄园战斗精英套装"],["Manor Magic","庄园魔法导师套装"],["Mica Neotunic","亩鼠米卡文化衫"],["Cactuar Neotunic","仙人刺文化衫"],["Chocobo Neotunic","陆行鸟文化衫"],["Moogle Neotunic","莫古力文化衫"],["Plain Neotunic","纯色文化衫"],["Sharlayan Prodigy's","萨雷安神童装"]]) {
+  assert.equal(tr(native), zh);
+  assert.equal(tr(native + ' Set'), zh);
+}
+for (const [title, zh] of [["Red Champa Corsage","红色大季花花环"],["Blue Champa Corsage","蓝色大季花花环"],["Yellow Champa Corsage","黄色大季花花环"],["Green Champa Corsage","绿色大季花花环"],["Orange Champa Corsage","橙色大季花花环"],["Purple Champa Corsage","紫色大季花花环"],["White Champa Corsage","白色大季花花环"],["Black Champa Corsage","黑色大季花花环"],["Rainbow Champa Corsage","混色大季花花环"]]) {
+  assert.equal(tr(title), zh);
+  assert.equal(tr(title + ' Set'), zh);
+  assert.equal(tr(title + ' Crafted Glamour'), zh + ' 制作幻化');
+}
 assert.equal(tr("Aunt Tii's Neotunic Set"), '缇姨塔可饼新式文化衫套装');
 assert.equal(tr('Unverified Eyeglasses'), null);
 assert.equal(tr('Plain Hooded'), '素色卫衣套装');
@@ -155,13 +179,27 @@ assert.equal(tr('Fuath Battle Content Gear'), '水妖装束 战斗内容装备')
 assert.equal(tr('Hope [F]'), '希望套装【女】');
 assert.equal(tr('Hope [M]'), '希望套装【男】');
 assert.equal(tr('Eagleclaw'), '雕爪套装');
-assert.equal(tr('Legend Crafted Glamour'), null, '无国服核验译名的套装不猜译');
+assert.equal(tr('Legend Crafted Glamour'), '神话传令官套装 制作幻化', '实测且官译核实的系列应翻译');
+assert.equal(tr('Unverified Placeholder Series Crafted Glamour'), null, '无国服核验译名的套装不猜译');
 assert.equal(tr("Prishe's Healing"), null, '未收录的职业变体不能虚构套装');
 
 // 独立从国服物品表核对新增的系列译名，不用维护代码中的映射反向生成预期。
 // Runtime V3 `build/data/make-runtime-data.py` preserves the FIRST valid English
 // entry, not Map(last-write-wins). Mirror production precisely: duplicate
 // names in the canonical TSV can have different Chinese aliases later on.
+const officialById = new Map(fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n').map(line => {
+  const fields = line.split('\t');
+  return [fields[0], fields[1]];
+}));
+for (const [id, zh] of [["47212","红色大季花花环"],["47213","蓝色大季花花环"],["47214","黄色大季花花环"],["47215","绿色大季花花环"],["47216","橙色大季花花环"],["47217","紫色大季花花环"],["47218","白色大季花花环"],["47219","黑色大季花花环"],["47222","混色大季花花环"],["50252","神话传令官战冠"],["50253","神话传令官长衣"],["50254","神话传令官护腕"],["50255","神话传令官腰布裙"],["50256","神话传令官战靴"]]) {
+  assert.equal(officialById.get(id), zh, '国服物品表 ID ' + id);
+}
+for (const [id, expected] of [["48744","宇航服套装"],["7294","宵光头冠"],["7304","星光盔帽"],["7310","暮光兜帽"],["7320","曙光兜帽"],["7340","昏光魔术帽"],["7330","晨光头冠"],["7481","钨钢重胸甲"],["7505","羊绒治愈长袍"],["7444","保护者开面盔"],["7462","狩猎者面具"],["7474","魔术师法帽"],["31457","庄园衬衫"],["31463","庄园短袍"],["48998","亩鼠米卡文化衫"],["48997","仙人刺文化衫"],["48996","陆行鸟文化衫"],["48995","莫古力文化衫"],["48994","纯色文化衫"],["31418","萨雷安神童装"]]) {
+  assert.equal(officialById.get(id), expected, '国服 Item 名称证据 ' + id);
+}
+for (const [id, zh] of [["7486","钨钢面罩"],["7487","钨钢胸甲"],["7488","钨钢手铠"],["7450","轻骑兵护目镜"],["7451","轻骑兵外套"],["7452","轻骑兵手套"],["7456","拳法师护目镜"],["7457","拳法师外套"],["7458","拳法师手套"],["7468","朝圣者眼罩"],["7469","朝圣者长袍"],["7470","朝圣者手套"],["2955","光之王冠"],["3271","光之铠甲"],["3737","光之手铠"],["2952","风魔眼带"],["3268","风魔之衣"],["3509","风魔之袴"],["2953","民谣王冠"],["3269","民谣护甲"],["3510","民谣垮裤"],["2957","深红帽子"],["3273","深红背心"],["3514","深红马裤"],["2954","皇室王冠"],["3270","皇室背心"],["3511","皇室马裤"],["45570","运动休闲短罩衫套装"],["45569","运动休闲破烂罩衫套装"],["42167","钴钨御敌坎肩"],["42172","钴钨制敌坎肩"],["42177","薄绢强袭斗服"],["42187","薄绢游击斗服"],["42182","薄绢精准斗服"],["42197","薄绢咏咒斗服"],["42192","薄绢治愈斗服"],["42023","高山亚麻强袭上装"],["42033","高山亚麻游击上装"],["42028","高山亚麻精准斗篷"],["42043","高山亚麻咏咒斗篷"],["42038","高山亚麻治愈斗篷"]]) {
+  assert.equal(officialById.get(id), zh, 'EC catalogue official Item evidence ' + id);
+}
 const officialRows = new Map();
 for (const line of fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n')) {
   const row = line.split('\t');
@@ -182,9 +220,28 @@ for (const [en, zh] of [
   ['Galatea Attire', '伽拉忒亚装备套装'],
   ['Hope Attire [F]', '希望套装【女】'],
   ['Alpha Wolf Attire', '头狼套装'],
+  ["Comfy Valentione's Attire", '舒心恋人套装'],
+  ["Cozy Valentione's Attire", '温暖恋人套装'],
+  ['Oversized Narumi Neotunic', '大码鸣海文化衫'],
+  ['Oversized Picot Neotunic', '大码皮科特文化衫'],
+  ['Oversized Ulala Neotunic', '大码乌拉拉文化衫'],
 ]) {
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }
+
+// Exhaustively verify the official colored Corsage category (including
+// Tulip wristbands and mixed-color variants) against the actual source TSV.
+const corsages = [...officialRows].filter(([en]) => /^(Red|Blue|Yellow|Green|Orange|Purple|White|Black|Rainbow) .+ Corsage$/u.test(en));
+assert.ok(corsages.length >= 170, '国服彩色花饰分类完整覆盖');
+for (const [en, zh] of corsages) itemIndex[en] = zh;
+for (const [en, zh] of corsages) {
+  assert.equal(tr(en), zh, '花饰采用单件官译：' + en);
+  assert.equal(tr(en + ' Set'), zh, '花饰不得附加套装后缀：' + en);
+}
+assert.equal(tr('Rainbow Unverified Corsage'), null);
+itemIndex['Red Unverified Corsage'] = '蓝色未知头花';
+assert.equal(tr('Red Unverified Corsage'), null, '不能接受不一致颜色');
+delete itemIndex['Red Unverified Corsage'];
 
 // Full-source category audit: do not validate a tiny handpicked set while
 // omitting the hundreds of official outfit packages. The English-to-Chinese

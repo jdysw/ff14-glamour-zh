@@ -60,13 +60,21 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
   // 只供明确的套装标题、相关文章链接和 gearset 图片说明调用，
   // 不参与单件物品通用翻译，避免覆盖国服正式装备名。
   function aclStandaloneSetName(native) {
+    const known = DICT_ACL['set:' + native];
+    if (known) return known;
     if (ACL_SET_RE.test(native)) return null; // 角色系列交给现有职能规则。
-    const match = /^(.+?)・(?:アタイア|アーマー)$/u.exec(native);
+    // Native display titles may omit the separator, e.g. スウィートドリームアタイア.
+    const match = /^(.+?)(・?)(アタイア|アーマー)$/u.exec(native);
     if (!match) return null;
-    const official = lookupJp2Zh(native);
-    if (official && /(?:套装|装束)$/u.test(official)) return official;
-    const series = _getSeriesMap().get(match[1]) || _getSeriesPfx().get(match[1])
-      || _getItemPfx().get(match[1]);
+    const canonical = match[1] + '・' + match[3];
+    const official = new Set([lookupJp2Zh(native), lookupJp2Zh(canonical)]
+      .filter(name => /(?:套装|装束)$/u.test(name || '')));
+    if (official.size > 1) return null;
+    if (official.size === 1) return [...official][0];
+    // Without the separator require the exact verified series stem. Do not
+    // infer a missing costume from a longer, unrelated item prefix.
+    const series = _getSeriesMap().get(match[1]) || (match[2] &&
+      (_getSeriesPfx().get(match[1]) || _getItemPfx().get(match[1])));
     if (!series || /[\u3040-\u30ff]/u.test(series) || !/[\u3400-\u9fff]/u.test(series)) return null;
     return /(?:套装|装束)$/u.test(series) ? series : series + '套装';
   }
@@ -207,8 +215,11 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     const setTitle = pe?.closest?.('h1,h2,h3,.related-equipment a')
       && !pe?.closest?.('.item-name,.item-panel')
       ? aclStandaloneSetName(label) : null;
+    const policy = /^\/policy\/?$/u.test(globalThis.location?.pathname || '')
+      && pe?.closest?.('#contents') && DICT_ACL['policy:' + label];
     let next;
-    if (setTitle) next = raw.replace(label, setTitle);
+    if (policy) next = raw.replace(label, () => policy);
+    else if (setTitle) next = raw.replace(label, setTitle);
     else if (label === 'of' && pe?.closest?.('#navigation')) next = raw.replace('of', '/');
     else next = trACL(raw);
     if (next !== raw) {
@@ -227,7 +238,7 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
   }
 
   function _trACLGearsetAlt(value) {
-    const match = value.match(/^(.+?)'s gearset image(?: (female|male) model)?\.$/i);
+    const match = value.match(/^(.+?)'s gearset image(?: (female|male)(?: model)?)?\.$/i);
     if (!match) return null;
     const setName = aclStandaloneSetName(match[1]) || trACL(match[1]);
     if (setName === match[1] || /[ぁ-んァ-ヶー]/.test(setName)) return null;
@@ -270,6 +281,10 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     if (rootArg?.nodeType === 3) { trimACLNode(rootArg); return; }
     const root = rootArg || document.body || document.documentElement;
     if (!root) return;
+    if (root.nodeType === 1) {
+      if (_aclAcceptNode(root) === NodeFilter.FILTER_REJECT) return;
+      _procACLNode(root);
+    }
     _markScan(localScope(rootArg));   // v1.4.1：扫描计数（区分全页/局部）
     for (const n of snapshotTranslationNodes(root, _aclAcceptNode)) _procACLNode(n);
     safe(replaceACLLodestone, 'ACL lodestone 替换')(rootArg);
@@ -277,9 +292,13 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
 
   function translateACLTitle() {
     const t = document.title;
-    if (!t || !/[\u3040-\u30ff]/.test(t)) return;
-    const parts = t.split(/[|｜]/);
-    const nt = parts.map((x) => aclStandaloneSetName(x.trim()) || trACL(x.trim())).join(' ｜ ');
+    if (!t) return;
+    const parts = t.split(/[|｜]/).map(x => x.trim());
+    const translated = parts.map(x => aclStandaloneSetName(x) || trACL(x));
+    // Exact dictionary and item matches can be entirely kanji. Do not
+    // normalize an unrelated or already-localized title just for its separators.
+    if (!translated.some((x, i) => x !== parts[i])) return;
+    const nt = translated.join(' ｜ ');
     if (nt && nt !== t && nt.length <= 160) document.title = nt;
   }
 
@@ -288,9 +307,15 @@ export { aclStandaloneSetName, ACL_SKIP_SEL, _aclAcceptNode, _trACLLabel, _trACL
     bindZhxItemClick('__zhxAclItemBound');
     safe(translateACLPage, 'ACL 全扫')();
     safe(translateACLTitle, 'ACL 标题')();
-    createTranslationObserver({ debounce: 300, handler(nodes) {
-      for (const n of nodes) safe(translateACLPage, 'ACL 局部')(n);
-      safe(translateACLTitle, 'ACL 标题')();
-    } });
+    createTranslationObserver({
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['title', 'aria-label', 'alt', 'placeholder'],
+      debounce: 300,
+      handler(nodes, texts) {
+        for (const n of [...nodes, ...texts]) safe(translateACLPage, 'ACL 局部')(n);
+        safe(translateACLTitle, 'ACL 标题')();
+      },
+    });
     // 数据就绪补扫由 Site Adapter 统一登记（见 SITE_REGISTRY 的 onDataReady）
   }

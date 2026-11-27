@@ -25,9 +25,21 @@ const EC_GEARSET_ROLE_SERIES = new Map([
   ["Prishe's", ['Striking']],
   ['Mayakov', ['Scouting', 'Aiming']],
   ['Orastery', ['Casting', 'Healing']],
+  // Observed EC sorting results. Mixed-material sets use the name of their
+  // principal body equipment, rather than requiring three matching prefixes.
+  ["Cobalt Tungsten", ["Fending","Maiming"]],
+  ["Sarcenet", ["Striking","Scouting","Aiming","Casting","Healing"]],
+  ["Mountain Linen", ["Striking","Scouting","Aiming","Casting","Healing"]],
 ]);
 const EC_GEARSET_SINGLE_SERIES = new Set([
   "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
+  "Avalanche Leader's", "Avalanche Brawler's",
+  "Cosmic Explorer's", 'Comfy Valentione', 'Cozy Valentione', 'Powersuit', 'Legend',
+  "Cosmosuit", "Noct", "Astrum", "Gloam", "Auroral", "Evenstar", "Daystar",
+  "Heavy Wolfram", "Cashmere Healing", "Protector's", "Shikaree's", "Magician's", "Manor War", "Manor Magic",
+  "Wolfram", "Hussar's", "Fistfighter's", "Pilgrim's",
+  "Light", "Fuma", "Ballad", "Crimson", "Royal",
+  "Leisurewear (High-cut Knit Top)", "Leisurewear (High-cut Shirt)",
   'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
   'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
   'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
@@ -45,7 +57,48 @@ const EC_GEARSET_HOODED_FITS = Object.freeze({
 // 这些译名核对自 data/source/ff14-items.tsv（装备前缀或对应的 Attire/Armor 套装物品）。
 // 仅用于 EC Gearsets 标题，不混入单件装备译名与通用 UI 词典。
 const EC_GEARSET_NAME_EXTRAS = Object.freeze({
-  'Graffiti Neotunic': '涂鸦新式上衣套装',
+  // EC live Gearsets catalogue, distinct from the same-named earring pages.
+  "Avalanche Leader's": '雪崩领导者套装', // Item 52590
+  "Avalanche Brawler's": '雪崩斗手套装', // Item 52589
+  "Cosmic Explorer's": '宇宙探索者套装', // Both gender variants 52599/52603
+  'Comfy Valentione': '舒心恋人套装', // Item 50715
+  'Cozy Valentione': '温暖恋人套装', // Item 50714
+  'Powersuit': '宇宙动力服套装', // Two pieces 50301/50302
+  'Legend': '神话传令官套装', // Items 50252-50256
+  // EC detail equipment lists cross-checked against official Item names.
+  // Titles without a formal package use descriptive equipment-family names.
+  "Cosmosuit": '宇航服套装', // Item 48744
+  "Noct": '宵光套装', // Item 7294
+  "Astrum": '星光套装', // Item 7304
+  "Gloam": '暮光套装', // Item 7310
+  "Auroral": '曙光套装', // Item 7320
+  "Evenstar": '昏光套装', // Item 7340
+  "Daystar": '晨光套装', // Item 7330
+  "Heavy Wolfram": '钨钢重甲套装', // Item 7481
+  "Cashmere Healing": '羊绒治愈套装', // Item 7505
+  "Protector's": '保护者套装', // Item 7444
+  "Shikaree's": '狩猎者套装', // Item 7462
+  "Magician's": '魔术师套装', // Item 7474
+  "Manor War": '庄园战斗精英套装', // Item 31457
+  "Manor Magic": '庄园魔法导师套装', // Item 31463
+  // Actual EC catalogue titles and matching official equipment stems;
+  // individual detail-page membership remains part of the live audit.
+  "Wolfram": '钨钢套装', // Items 7486, 7487, 7488
+  "Hussar's": '轻骑兵套装', // Items 7450, 7451, 7452
+  "Fistfighter's": '拳法师套装', // Items 7456, 7457, 7458
+  "Pilgrim's": '朝圣者套装', // Items 7468, 7469, 7470
+  "Light": '光之套装', // Items 2955, 3271, 3737
+  "Fuma": '风魔套装', // Items 2952, 3268, 3509
+  "Ballad": '民谣套装', // Items 2953, 3269, 3510
+  "Crimson": '深红套装', // Items 2957, 3273, 3514
+  "Royal": '皇室套装', // Items 2954, 3270, 3511
+  // The official packages include the variant in the complete Item name.
+  "Leisurewear (High-cut Knit Top)": '运动休闲短罩衫套装', // Item 45570
+  "Leisurewear (High-cut Shirt)": '运动休闲破烂罩衫套装', // Item 45569
+  "Cobalt Tungsten": '钴钨', // Official body equipment names: 42167, 42172
+  "Sarcenet": '薄绢', // Official body equipment names: 42177, 42187, 42182, 42197, 42192
+  "Mountain Linen": '高山亚麻', // Official body equipment names: 42023, 42033, 42028, 42043, 42038
+  'Graffiti Neotunic': '涂鸦新式文化衫套装', // Items 52433–52435
   'Festival Neotunic': '欢庆新式文化衫套装',
   "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
   'Mistwake': '雾迹',
@@ -75,7 +128,7 @@ const EC_GEARSET_NAME_EXTRAS = Object.freeze({
   'Star Tech Gathering': '星际科技大地套装',
 });
 // EC labels every /gearset page "Set", but these verified pages each
-// link to just one official item (FFXIV item IDs 50285–50290 and 50849).
+// link to just one official item (FFXIV item IDs 50285–50290 and 50848–50851).
 // Use the item's official name even when EC drops its fit from the title.
 const EC_SINGLE_ITEM_GEARSETS = new Map([
   ['Blooming Eyeglasses', '彩花装饰眼镜'],
@@ -85,7 +138,44 @@ const EC_SINGLE_ITEM_GEARSETS = new Map([
   ['Slim Frame Eggy Eyeglasses', '窄框彩蛋眼镜'],
   ['Spriggan Eyeglasses', '魔石精眼镜'],
   ['Masha Neotunic', '大码马夏文化衫'],
+  ['Narumi Neotunic', '大码鸣海文化衫'], // Item 50850
+  ['Picot Neotunic', '大码皮科特文化衫'], // Item 50851
+  ['Ulala Neotunic', '大码乌拉拉文化衫'], // Item 50848
+  // Related Pieces lists the other fits separately; these are ordinary-fit items.
+  ["Mica Neotunic", '亩鼠米卡文化衫'], // Item 48998
+  ["Cactuar Neotunic", '仙人刺文化衫'], // Item 48997
+  ["Chocobo Neotunic", '陆行鸟文化衫'], // Item 48996
+  ["Moogle Neotunic", '莫古力文化衫'], // Item 48995
+  ["Plain Neotunic", '纯色文化衫'], // Item 48994
+  ["Sharlayan Prodigy's", '萨雷安神童装'], // Item 31418
+  ['Red Champa Corsage', '红色大季花花环'], // Item 47212
+  ['Blue Champa Corsage', '蓝色大季花花环'], // Item 47213
+  ['Yellow Champa Corsage', '黄色大季花花环'], // Item 47214
+  ['Green Champa Corsage', '绿色大季花花环'], // Item 47215
+  ['Orange Champa Corsage', '橙色大季花花环'], // Item 47216
+  ['Purple Champa Corsage', '紫色大季花花环'], // Item 47217
+  ['White Champa Corsage', '白色大季花花环'], // Item 47218
+  ['Black Champa Corsage', '黑色大季花花环'], // Item 47219
+  ['Rainbow Champa Corsage', '混色大季花花环'], // Item 47222
 ]);
+// Observed EC flower titles correspond to one actual Item, not an outfit.
+// Do not generate names from flower/color fragments or create speculative EC
+// search entries. Use the full native Item name; preserve official variants
+// such as Tulip Corsage (腕带) and Rainbow (混色).
+const EC_CORSAGE_COLOR_ZH = Object.freeze({
+  Red: '红色', Blue: '蓝色', Yellow: '黄色', Green: '绿色', Orange: '橙色',
+  Purple: '紫色', White: '白色', Black: '黑色', Rainbow: '混色',
+});
+function ecGearsetSingleItemZh(native) {
+  const known = EC_SINGLE_ITEM_GEARSETS.get(native);
+  if (known) return known;
+  const color = /^(Red|Blue|Yellow|Green|Orange|Purple|White|Black|Rainbow) .{1,70} Corsage$/u.exec(native)?.[1];
+  if (!color) return null;
+  const zh = dataGetIndex('nameMap')?.[native];
+  return typeof zh === 'string' && zh.startsWith(EC_CORSAGE_COLOR_ZH[color])
+    && /(?:头花|花环|腕带)$/u.test(zh) ? zh : null;
+}
+
 // 分类后缀仅用于解析卡片同节点文本；不允许把来源名误识别为套装名。
 const EC_GEARSET_SOURCES = [
   'Battle Content Gear', 'Other Content Gear', 'Grand Company Gear',
@@ -312,7 +402,7 @@ function ecGearsetOfficialPackageZh(native, nameIndex) {
 // A visible EC title is evidence that the set exists; official package
 // lookups can translate it without adding speculative search suggestions.
 function ecGearsetObservedTitleZh(native) {
-  const singleItem = EC_SINGLE_ITEM_GEARSETS.get(native);
+  const singleItem = ecGearsetSingleItemZh(native);
   if (singleItem) return singleItem;
   const exact = DICT_EC[native];
   if (exact && /[\u3400-\u9fff]/u.test(exact)) return exact;
@@ -561,7 +651,7 @@ function suggestECGearsetsByZh(query) {
 function ecGearsetApplyTitleSuffix(node, raw, title, zh, suffix, hasInlineSuffix, suffixNodes) {
   const splitSuffix = zh.endsWith(suffix) && !hasInlineSuffix;
   const bareTitle = title.endsWith(' Set') ? title.slice(0, -4) : title;
-  const singleItem = suffix === '套装' && EC_SINGLE_ITEM_GEARSETS.has(bareTitle);
+  const singleItem = suffix === '套装' && !!ecGearsetSingleItemZh(bareTitle);
   const next = raw.replace(title, splitSuffix ? zh.slice(0, -suffix.length) : zh);
   node.nodeValue = splitSuffix || singleItem ? next.trimEnd() : next;
   // Split H1 labels must contribute the suffix exactly once, including when
