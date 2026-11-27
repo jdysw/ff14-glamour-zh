@@ -117,6 +117,10 @@ for (const [title, zh] of [["Cosmic Explorer's","宇宙探索者套装"],["Comfy
   assert.equal(tr(title + ' Seasonal Event Gear'), zh + ' 季节活动装备');
 }
 assert.equal(tr('Legend'), '神话传令官套装');
+for (const [native, zh] of [["Cosmosuit","宇航服套装"],["Noct","宵光套装"],["Astrum","星光套装"],["Gloam","暮光套装"],["Auroral","曙光套装"],["Evenstar","昏光套装"],["Daystar","晨光套装"],["Heavy Wolfram","钨钢重甲套装"],["Cashmere Healing","羊绒治愈套装"],["Protector's","保护者套装"],["Shikaree's","狩猎者套装"],["Magician's","魔术师套装"],["Manor War","庄园战斗精英套装"],["Manor Magic","庄园魔法导师套装"],["Mica Neotunic","亩鼠米卡文化衫"],["Cactuar Neotunic","仙人刺文化衫"],["Chocobo Neotunic","陆行鸟文化衫"],["Moogle Neotunic","莫古力文化衫"],["Plain Neotunic","纯色文化衫"],["Sharlayan Prodigy's","萨雷安神童装"]]) {
+  assert.equal(tr(native), zh);
+  assert.equal(tr(native + ' Set'), zh);
+}
 for (const [title, zh] of [["Red Champa Corsage","红色大季花花环"],["Blue Champa Corsage","蓝色大季花花环"],["Yellow Champa Corsage","黄色大季花花环"],["Green Champa Corsage","绿色大季花花环"],["Orange Champa Corsage","橙色大季花花环"],["Purple Champa Corsage","紫色大季花花环"],["White Champa Corsage","白色大季花花环"],["Black Champa Corsage","黑色大季花花环"],["Rainbow Champa Corsage","混色大季花花环"]]) {
   assert.equal(tr(title), zh);
   assert.equal(tr(title + ' Set'), zh);
@@ -184,6 +188,9 @@ const officialById = new Map(fs.readFileSync(path.join(root, 'data/source/ff14-i
 for (const [id, zh] of [["47212","红色大季花花环"],["47213","蓝色大季花花环"],["47214","黄色大季花花环"],["47215","绿色大季花花环"],["47216","橙色大季花花环"],["47217","紫色大季花花环"],["47218","白色大季花花环"],["47219","黑色大季花花环"],["47222","混色大季花花环"],["50252","神话传令官战冠"],["50253","神话传令官长衣"],["50254","神话传令官护腕"],["50255","神话传令官腰布裙"],["50256","神话传令官战靴"]]) {
   assert.equal(officialById.get(id), zh, '国服物品表 ID ' + id);
 }
+for (const [id, expected] of [["48744","宇航服套装"],["7294","宵光头冠"],["7304","星光盔帽"],["7310","暮光兜帽"],["7320","曙光兜帽"],["7340","昏光魔术帽"],["7330","晨光头冠"],["7481","钨钢重胸甲"],["7505","羊绒治愈长袍"],["7444","保护者开面盔"],["7462","狩猎者面具"],["7474","魔术师法帽"],["31457","庄园衬衫"],["31463","庄园短袍"],["48998","亩鼠米卡文化衫"],["48997","仙人刺文化衫"],["48996","陆行鸟文化衫"],["48995","莫古力文化衫"],["48994","纯色文化衫"],["31418","萨雷安神童装"]]) {
+  assert.equal(officialById.get(id), expected, '国服 Item 名称证据 ' + id);
+}
 const officialRows = new Map();
 for (const line of fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n')) {
   const row = line.split('\t');
@@ -212,6 +219,20 @@ for (const [en, zh] of [
 ]) {
   assert.equal(officialRows.get(en), zh, '国服物品表应支持 Gearsets 译名：' + en);
 }
+
+// Exhaustively verify the official colored Corsage category (including
+// Tulip wristbands and mixed-color variants) against the actual source TSV.
+const corsages = [...officialRows].filter(([en]) => /^(Red|Blue|Yellow|Green|Orange|Purple|White|Black|Rainbow) .+ Corsage$/u.test(en));
+assert.ok(corsages.length >= 170, '国服彩色花饰分类完整覆盖');
+for (const [en, zh] of corsages) itemIndex[en] = zh;
+for (const [en, zh] of corsages) {
+  assert.equal(tr(en), zh, '花饰采用单件官译：' + en);
+  assert.equal(tr(en + ' Set'), zh, '花饰不得附加套装后缀：' + en);
+}
+assert.equal(tr('Rainbow Unverified Corsage'), null);
+itemIndex['Red Unverified Corsage'] = '蓝色未知头花';
+assert.equal(tr('Red Unverified Corsage'), null, '不能接受不一致颜色');
+delete itemIndex['Red Unverified Corsage'];
 
 // Full-source category audit: do not validate a tiny handpicked set while
 // omitting the hundreds of official outfit packages. The English-to-Chinese
