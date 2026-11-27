@@ -1,0 +1,28 @@
+name: Browser Use provider smoke check
+# One-shot diagnostic requested after the repository secret was configured.
+# Restrict to the known same-repository PR transition; never access EC here.
+on:
+  pull_request:
+    types: [synchronize]
+    paths:
+      - '.github/workflows/browser-use-provider-smoke.yml'
+      - 'tools/coverage-audit/browser-use-probe.py'
+permissions:
+  contents: read
+jobs:
+  provider:
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'f4a971dc9220fb0470306282b6064ba3b2586dec' && github.run_attempt == 1 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Install CDP client
+        run: python3 -m pip install 'playwright==1.55.0'
+      - name: Verify provider via a single short browser session
+        env:
+          BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
+          BROWSER_USE_PROBE_MODE: provider
+        run: python3 tools/coverage-audit/browser-use-probe.py

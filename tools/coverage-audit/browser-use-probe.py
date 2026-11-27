@@ -70,6 +70,7 @@ def main():
         "proxyCountryCode": None,
         "timeout": 3,
         "enableRecording": False,
+        "solveCaptchas": False,
     })
     browser_id = session.get("id", "")
     if not isinstance(browser_id, str) or not re.fullmatch(r"[0-9a-fA-F-]{36}", browser_id):
