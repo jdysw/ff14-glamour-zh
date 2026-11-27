@@ -102,8 +102,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // the set identity or the localized shop/gear family name.
     ['アイディアル・スースセイヤー', '理想化的预占套装'],
     ['スウィートドリームアタイア', '美梦套装'],
-    ['東方殿方衣装セット', '东方公子套装'],
-    ['東方美玉衣装セット', '东方美玉套装'],
+    ['東方殿方衣装セット', '东方公子装束'],
+    ['東方美玉衣装セット', '东方美玉装束'],
     ['風雅衣装セット', '风雅装束'],
     ['エデンモーン・キャスター', '伊甸之晨咏咒套装'],
     // JP store titles differ from CN store / item names; use whole-label matches.
@@ -1208,6 +1208,17 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['蜂屋', { path: '/equipment/hachiya/', zh: '蜂屋装束', strictLink: true }], // Item 50599
     ['無銘', { path: '/equipment/nameless/', zh: '无名套装', strictLink: true }], // localized coffer name; display group
     ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
+    // Exact multilingual Item bundle names from the pinned ixion offline export.
+    ['ラムザ', { path: '/equipment/ramzas/', zh: '拉姆萨装备套装', strictLink: true }], // Item 47725
+    ['オヴェリア', { path: '/equipment/ovelias/', zh: '奥薇莉亚装备套装', strictLink: true }], // Item 47726
+    ['ガフガリオン', { path: '/equipment/gaffgarions/', zh: '加夫加利昂装备套装', strictLink: true }], // Item 47727
+    ['アルタナティヴ', { path: '/equipment/alternative/', zh: '另类装备套装', strictLink: true }], // Item 47714
+    ['クリスタリウムプロディジー', { path: '/equipment/crystarium_prodigys/', zh: '水晶都神童装备套装', strictLink: true }], // Item 45541
+    ['リペアド・インペリアル', { path: '/equipment/mended_imperial/', zh: '修好的帝国装备套装', strictLink: true }], // Item 45119
+    ['降神荒武者', { path: '/equipment/heavensturn/', zh: '降神猛士装束', strictLink: true }], // Item 45431
+    ['サマーインディゴ', { path: '/equipment/summer_indigo/', zh: '夏季靛蓝组合', strictLink: true }], // Item 45344
+    ['天つ水影流', { path: '/equipment/amatsu/', zh: '天水影流装束', strictLink: true }], // Item 45180
+    ['クウェインチュレル', { path: '/equipment/quaintrelles/', zh: '风尚褶边套装', strictLink: true }], // Item 45315
     // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
     // Native whole-outfit headings may share their source label with an individual item.
     ['グリムグリズリー・スーツ', { path: '/equipment/grisly_bear_suit/', zh: '狰狞熊套装', strictLink: true, itemConflict: true }], // Item 52402, 52403; in-game combination name

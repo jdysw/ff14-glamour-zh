@@ -1046,6 +1046,29 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     cards.forEach(card => trimFCNode(card.firstChild));
     assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
     assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
+    // Exact Item bundle names verified against the offline multilingual data.
+    for (const [native, path, zh, title, localized] of [
+      ["ラムザ","/equipment/ramzas/","拉姆萨装备套装","【FF14】ラムザ装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】拉姆萨装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["オヴェリア","/equipment/ovelias/","奥薇莉亚装备套装","【FF14】オヴェリア装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】奥薇莉亚装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["ガフガリオン","/equipment/gaffgarions/","加夫加利昂装备套装","【FF14】ガフガリオン装備👗各種族での見た目・入手方法【FFタクティクス/FFT】","【FF14】加夫加利昂装备套装👗各种族外观·获取方式【最终幻想战略版/FFT】"],
+      ["アルタナティヴ","/equipment/alternative/","另类装备套装","【FF14】アルタナティヴ装備👗各種族での見た目・入手方法","【FF14】另类装备套装👗各种族外观·获取方式"],
+      ["クリスタリウムプロディジー","/equipment/crystarium_prodigys/","水晶都神童装备套装","【FF14】クリスタリウムプロディジー装備👗各種族での見た目・入手方法【漆黒アルフィノ】","【FF14】水晶都神童装备套装👗各种族外观·获取方式【暗影之逆焰时期的阿尔菲诺】"],
+      ["リペアド・インペリアル","/equipment/mended_imperial/","修好的帝国装备套装","【FF14】リペアド・インペリアル装備👗各種族での見た目・入手方法【メインクエ】","【FF14】修好的帝国装备套装👗各种族外观·获取方式【主线任务】"],
+      ["降神荒武者","/equipment/heavensturn/","降神猛士装束","【FF14】降神荒武者装備👗各種族での見た目・入手方法【降神祭2022】","【FF14】降神猛士装束👗各种族外观·获取方式【降神祭2022】"],
+      ["サマーインディゴ","/equipment/summer_indigo/","夏季靛蓝组合","【FF14】サマーインディゴ装備👗各種族での見た目・入手方法","【FF14】夏季靛蓝组合👗各种族外观·获取方式"],
+      ["天つ水影流","/equipment/amatsu/","天水影流装束","【FF14】FF11コラボ装備(星唄異聞)👗各種族での見た目・入手方法【天つ水影流】","【FF14】FF11联动装备（星歌异闻）👗各种族外观·获取方式【天水影流装束】"],
+      ["クウェインチュレル","/equipment/quaintrelles/","风尚褶边套装","【FF14】クウェインチュレル装備👗各種族での見た目・入手方法","【FF14】风尚褶边套装👗各种族外观·获取方式"],
+      ["東方美玉衣装セット","/equipment/eastern_lady_errants/","东方美玉装束","【FF14】東方美玉衣装セット装備👗各種族での見た目・入手方法【東方風】","【FF14】东方美玉装束👗各种族外观·获取方式【东方风】"],
+      ["東方殿方衣装セット","/equipment/far_eastern_garb_for_men/","东方公子装束","【FF14】東方殿方衣装セット👗各種族での見た目・入手方法【東方風】","【FF14】东方公子装束👗各种族外观·获取方式【东方风】"],
+    ]) {
+      dom.document.body.innerHTML = '<a href="' + path + '"><h4>' + native + '</h4><h3>' + title + '</h3></a>';
+      const [name, article] = dom.document.querySelectorAll('h4,h3');
+      trimFCNode(name.firstChild);
+      trimFCNode(article.firstChild);
+      assert.equal(name.textContent, zh, path);
+      assert.equal(article.textContent, localized, path);
+      assert.equal(trFC(title + ' | ミラプリライフ', path), localized + ' | 幻化生活', path);
+    }
     for (const [nativeTitle, translatedTitle, path] of [
       ["【FF14】星芒祭⛄スノーマンセット装備👗各種族での見た目・入手方法【雪だるま】","【FF14】星芒节⛄雪人套装👗各种族外观·获取方式【雪人】","/equipment/snowman_attire/"],
       ["【FF14】星芒祭🦌レインディアコスチュームセット装備👗各種族での見た目・入手方法【トナカイ着ぐるみ】","【FF14】星芒节🦌驯鹿套装👗各种族外观·获取方式【驯鹿玩偶服】","/equipment/reindeer_attire_set/"],
