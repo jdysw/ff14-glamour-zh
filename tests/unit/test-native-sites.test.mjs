@@ -1207,7 +1207,27 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     assert.deepEqual(reviewed.slice(0, 5),
       ['罗刹豪士套装','罗刹豪士套装','紫州御前装束','宇航服套装','雷欧尼斯国王套装']);
     assert.notEqual(reviewed[5], '罗刹豪士套装', '括号变体仍须匹配对应装备路径');
+    const remaining = [
+      ['lv55', 'LV式', '河畔堡驻军装束'],
+      ['the_blue', '碧甲羅之', '碧甲装束'],
+      ['almas_attire', 'アルマ・コスチュームセット', '威风凛凛套装'],
+      ['coronal_summer', 'コロナルサマー', '盛花夏衣套装'],
+      ['southern_seas', 'サザンシー', '南洋海滨套装'],
+      ['arhat_of_fending', '羅漢〖武士〗', '罗汉豪士装束'],
+      ['werewolf_for_women', 'ウェアウルフ・コスチュームセット（女性用）', '人狼脚爪套装'],
+      ['the_guardians_of_maiming', 'ガーディアン・オブ・スレイ', '制敌守护者套装'],
+    ];
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + remaining.map(([slug, native]) => '<dl><dt><a href="/equipment/' + slug
+        + '/"></a></dt><dd><h4>' + native + '</h4></dd></dl>').join('') + '</div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h => h.textContent), remaining.map(row => row[2]));
     catalogue.remove();
+    // The crafted South Seas clothes are not the earlier swimwear series.
+    globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas/');
+    assert.equal(trFC('サザンシー'), '南洋海滨套装');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas_swimsuit/');
+    assert.notEqual(trFC('サザンシーワンピース'), '南洋海滨套装');
     globalThis.location = new URL('https://ff14-fc.com/equipment/idealized_hattori/');
     const reviewedHeading = doc.createElement('h5');
     reviewedHeading.textContent = '服部〖想〗';
