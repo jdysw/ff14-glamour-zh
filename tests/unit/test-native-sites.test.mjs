@@ -1046,6 +1046,16 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     cards.forEach(card => trimFCNode(card.firstChild));
     assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
     assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
+    const yorha = '【FF14】ヨルハ五一式:格(モンク・侍)装備👗各種族での見た目・入手方法【複製サレタ工場廃墟】';
+    const yorhaPath = '/equipment/yorha_type-51_of_striking/';
+    const yorhaZh = '【FF14】寄叶五一式强袭套装（武僧、武士）👗各种族外观·获取方式【复制工厂废墟】';
+    dom.document.body.innerHTML = '<a href="' + yorhaPath + '"><h3>' + yorha + '</h3></a>';
+    const yorhaCard = dom.document.querySelector('h3');
+    trimFCNode(yorhaCard.firstChild);
+    assert.equal(yorhaCard.textContent, yorhaZh);
+    assert.equal(trFC(yorha, yorhaPath), yorhaZh);
+    assert.equal(trFC(yorha + ' | ミラプリライフ', yorhaPath), yorhaZh + ' | 幻化生活');
+    assert.notEqual(trFC(yorha, '/equipment/unrelated/'), yorhaZh);
     assert.equal(trFC('アライアンスレイド'), '团队任务');
     assert.equal(trFC('ノーマルレイド'), '普通大型任务');
   } finally {
