@@ -1216,6 +1216,9 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       ['arhat_of_fending', '羅漢〖武士〗', '罗汉豪士装束'],
       ['werewolf_for_women', 'ウェアウルフ・コスチュームセット（女性用）', '人狼脚爪套装'],
       ['the_guardians_of_maiming', 'ガーディアン・オブ・スレイ', '制敌守护者套装'],
+      ['replica_dreadwyrm_of_fending', 'レプリカ・バハムート・ディフェンダー', '龙神御敌套装（复制品）'],
+      ['replica_high_allagan_of_fending', 'レプリカ・ハイアラガン・ディフェンダー', '亚拉戈高位御敌套装（复制品）'],
+      ['replica_allagan_of_fending', 'レプリカ・ヘヴィアラガン', '亚拉戈重套装（复制品）'],
     ];
     catalogue.innerHTML = '<div class="equipment-search-results-content">'
       + remaining.map(([slug, native]) => '<dl><dt><a href="/equipment/' + slug
