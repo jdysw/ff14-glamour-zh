@@ -1195,7 +1195,24 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
     for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
     assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h=>h.textContent),
       ['纯黑男式夏装组合','奥黛套装','教练套装（防护、制敌）','常风侠义套装']);
+    catalogue.innerHTML = '<div class="equipment-search-results-content">'
+      + '<dl><dt><a href="/equipment/rakshasa_of_fending/"></a></dt><dd><h4>羅刹【武士】</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/rakshasa_of_fending/"></a></dt><dd><h4>羅刹〖武士〗</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/shishu_gozen/"></a></dt><dd><h4>紫洲御前</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/cosmosuit/"></a></dt><dd><h4>コスモスーツ</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/king_of_leonis_attire/"></a></dt><dd><h4>モント・コスチュームセット</h4></dd></dl>'
+      + '<dl><dt><a href="/equipment/other/"></a></dt><dd><h4>羅刹〖武士〗</h4></dd></dl></div>';
+    for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
+    const reviewed = [...catalogue.querySelectorAll('h4')].map(h => h.textContent);
+    assert.deepEqual(reviewed.slice(0, 5),
+      ['罗刹豪士套装','罗刹豪士套装','紫州御前装束','宇航服套装','雷欧尼斯国王套装']);
+    assert.notEqual(reviewed[5], '罗刹豪士套装', '括号变体仍须匹配对应装备路径');
     catalogue.remove();
+    globalThis.location = new URL('https://ff14-fc.com/equipment/idealized_hattori/');
+    const reviewedHeading = doc.createElement('h5');
+    reviewedHeading.textContent = '服部〖想〗';
+    trimFCNode(reviewedHeading.firstChild);
+    assert.equal(reviewedHeading.textContent, '理想化的服部装束', '详情页也识别括号变体');
     globalThis.location = new URL('https://ff14-fc.com/equipment/of_light/');
     assert.equal(trFC('Point'), '要点', '普通文案保留原始词义');
     const summary = doc.createElement('section');
