@@ -101,10 +101,24 @@ export function toManualAudit(report){
     source:'ci-live',settings:{evidence:'best-effort paired; not manual verified'},
     baselines:{},pages};
 }
+// Redacted evidence remains useful without recovering or exporting the
+// actual website label. Candidate IDs are public Item table identities.
+export function collectItemReview(pages){
+  return pages.filter(p=>p.status==='ok').flatMap(p=>p.items.flatMap(it=>{
+    if(it.ctx?.scope!=='item')return [];
+    const identity=it.itemIdentityEvidence;
+    if(!it.itemLabelForeign&&!['name-needs-review','ambiguous-source'].includes(identity?.status))return [];
+    return [{site:p.site,pageId:p.pageId,kind:it.kind,path:it.stablePath||it.path,
+      foreign:it.itemLabelForeign===true,identity:identity||{status:'unassessed'}}];
+  }));
+}
 export function writeLiveReports(report,out){
   fs.mkdirSync(out,{recursive:true});
   const {pages,candidates,...summary}=report;
   summary.distinctUiCandidates=candidates.length;
+  const itemReview=collectItemReview(pages);
+  summary.itemReviewOccurrences=itemReview.length;
+  fs.writeFileSync(path.join(out,'coverage-audit-live-item-review.json'),JSON.stringify(itemReview,null,2)+'\n','utf8');
   fs.writeFileSync(path.join(out,'coverage-audit-live-candidates.json'),JSON.stringify(candidates,null,2)+'\n','utf8');
   const header=['# FF14 汉化审计（'+Object.keys(report.bySite).length+' 站）','',
     '本轮扫描状态：**'+summary.status+'**（仅限采集到的页面，不能代表整站汉化率）','',

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {summarizeLive,toManualAudit,writeLiveReports,loadLiveResults} from '../../tools/coverage-audit/live-report.mjs';
+import {summarizeLive,toManualAudit,writeLiveReports,loadLiveResults,collectItemReview} from '../../tools/coverage-audit/live-report.mjs';
 import {SITES} from '../../tools/coverage-audit/audit.mjs';
 import {SITE_POLICIES} from '../../src/core/site-policy.js';
-import {redactItems,sanitizeEvidence} from '../../tools/coverage-audit/sanitize-evidence.mjs';
+import {redactItems,sanitizeEvidence,indexOfficialItems} from '../../tools/coverage-audit/sanitize-evidence.mjs';
 // The report requires every configured site; CI must schedule the same set.
 const workflow=fs.readFileSync(new URL('../../.github/workflows/live-coverage-audit.yml',import.meta.url),'utf8');
 const matrix=workflow.match(/site: \[([^\]]+)\]/)?.[1].split(',').map(s=>s.trim());
@@ -71,6 +71,21 @@ assert.ok(itemEvidence.every(it=>it.text==='[内容已隐藏]'));
 const labelReport=summarizeLive([{...good('attire'),items:itemEvidence}],at);
 assert.deepEqual(labelReport.bySite.attire.itemLabels,{observed:3,assessed:2,foreign:1});
 assert.equal(labelReport.candidates.length,0);
+const official=indexOfficialItems('id\tzh\ten\tja\ta\tb\tc\td\te\n9289\t朴素长裙\tplain long skirt\tロングスカート\t1\t1\t1\t1\t1\n');
+const idEvidence=redactItems([
+  {kind:'text',before:'ロングスカート',text:'长裙',path:'a',ctx:{scope:'item'}},
+  {kind:'text',before:'ロングスカート',text:'朴素长裙',path:'b',ctx:{scope:'item'}},
+  {kind:'text',before:'玩家原创名称',text:'未翻訳',path:'c',ctx:{scope:'item'}},
+  {kind:'text',before:'ロングスカート',text:'玩家私人内容',path:'d',ctx:{scope:'user',user:true}},
+],'fc',official);
+assert.deepEqual(idEvidence[0].itemIdentityEvidence,{status:'name-needs-review',candidateIds:['9289'],candidateCount:1});
+assert.equal(idEvidence[1].itemIdentityEvidence.status,'name-match');
+assert.equal(idEvidence[2].itemIdentityEvidence.status,'unmatched-source');
+assert.equal(idEvidence[3].itemIdentityEvidence,undefined);
+assert.doesNotMatch(JSON.stringify(idEvidence),/玩家原创名称|玩家私人内容|ロングスカート|朴素长裙/);
+const itemReview=collectItemReview(summarizeLive([{...good('fc'),items:idEvidence}],at).pages);
+assert.equal(itemReview.length,2);
+assert.deepEqual(itemReview[0].identity.candidateIds,['9289']);
 const ronkaLabels=redactItems([
   {kind:'text',text:'경비원 권총집 조끼',path:'p',ctx:{scope:'item',ancestors:'post-content post-item-information'}},
   {kind:'text',text:'保镖枪带背心',path:'p',ctx:{scope:'item',ancestors:'post-content post-item-information'}},
