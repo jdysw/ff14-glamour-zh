@@ -106,6 +106,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['東方美玉衣装セット', '东方美玉套装'],
     ['風雅衣装セット', '风雅套装'],
     ['エデンモーン・キャスター', '伊甸之晨咏咒套装'],
+    // JP store titles differ from CN store / item names; use whole-label matches.
+    // Gear stems verified against Item 46032 and Item 11338/11352.
+    ['クワイヤーセット', '唱诗班套装'],
+    ['アイメリク・コスチュームセット', '总骑士长套装'],
+    ['クルル・コスチュームセット', '血盟聆听者套装'],
+    ['スターライトセット', '星芒套装'],
+    ['セレモニアル・ディフェンダー', '仪仗御敌套装'],
+    ['シャーレアン・パンクラティアスト', '萨雷安混斗者套装'],
   ]);
   function fcVerifiedSetName(name) {
     if (typeof name !== 'string') return null;
