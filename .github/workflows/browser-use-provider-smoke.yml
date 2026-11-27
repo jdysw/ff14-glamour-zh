@@ -12,7 +12,7 @@ permissions:
   actions: read
 jobs:
   ec:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == 'cbf0747dcc00c1d095aeb3dde52a9fe71f3ab8fa' && github.run_attempt == 1 }}
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '4983d005c2e6ddc012d8ad811c97dfd1a5493ce7' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -28,7 +28,7 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ec-cloud-smoke-redacted
-          run-id: '45963607215'
+          run-id: '45965878063'
           github-token: ${{ github.token }}
           path: tests/.cache/ec-resume/
       - name: Prepare exact candidate runtime data and shared collector
@@ -36,7 +36,7 @@ jobs:
           npm ci
           npm run build
           mkdir -p tests/.cache/ec-cloud-raw
-          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',priorityPages:['https://ffxiv.eorzeacollection.com/gearsets?page=3','https://ffxiv.eorzeacollection.com/gearsets?page=4','https://ffxiv.eorzeacollection.com/gearsets?page=5','https://ffxiv.eorzeacollection.com/gearsets?page=6'],pageInteractions:{'https://ffxiv.eorzeacollection.com/gearsets?page=5':'patch','https://ffxiv.eorzeacollection.com/gearsets?page=6':'dyes'},priorityDetails:['https://ffxiv.eorzeacollection.com/gearset/legend','https://ffxiv.eorzeacollection.com/gearset/black-champa-corsage','https://ffxiv.eorzeacollection.com/gearset/rainbow-champa-corsage','https://ffxiv.eorzeacollection.com/gearset/blue-champa-corsage','https://ffxiv.eorzeacollection.com/gearset/green-champa-corsage','https://ffxiv.eorzeacollection.com/gearset/red-champa-corsage'],pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
+          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({mode:'catalog',priorityPages:['https://ffxiv.eorzeacollection.com/gearsets?page=5','https://ffxiv.eorzeacollection.com/gearsets?page=7','https://ffxiv.eorzeacollection.com/gearsets?page=8'],pageInteractions:{'https://ffxiv.eorzeacollection.com/gearsets?page=7':'orderBy','https://ffxiv.eorzeacollection.com/gearsets?page=8':'rarity'},priorityDetails:['https://ffxiv.eorzeacollection.com/gearset/mica-neotunic','https://ffxiv.eorzeacollection.com/gearset/cosmosuit','https://ffxiv.eorzeacollection.com/gearset/sharlayan-prodigys','https://ffxiv.eorzeacollection.com/gearset/black-cosmos-corsage','https://ffxiv.eorzeacollection.com/gearset/black-hyacinth-corsage','https://ffxiv.eorzeacollection.com/gearset/black-campanula-corsage','https://ffxiv.eorzeacollection.com/gearset/noct'],pages:[...SITES.ec.pages.filter(p=>p.id==='gearsets'||p.id==='glamours'),...['accessories','facewear','fashion-accessories'].map(id=>({id,url:'https://ffxiv.eorzeacollection.com/'+id,type:'list'}))],collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
           node tests/run.mjs test-coverage-audit test-ec-gearsets unit/test-native-ec.test.mjs
           python3 -m py_compile tools/coverage-audit/ec-cloud-smoke.py tools/coverage-audit/ec-catalog-audit.py
           python3 -m pip install 'playwright==1.55.0'

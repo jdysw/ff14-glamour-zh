@@ -30,6 +30,14 @@ export function ecPublicScope(el,kind,url){
     if(kind==='text'&&el.closest?.('h1.title.has-negative-letter-spacing'))return 'ui';
     if(kind==='attr:alt'&&el.closest?.('a.eorzeadb_link .gear-icon'))return 'item';
     if(kind==='text'&&el.closest?.('.list-item-title a.eorzeadb_link'))return 'item';
+    if(kind==='text'&&el.closest?.('.has-text-craft-name.eorzeadb_link'))return 'item';
+    // Explicitly observed detail metadata, not arbitrary sidebar prose.
+    if(kind==='text'&&el.closest?.('.gear-icon-box-slot-name,.divider.is-background.has-text-primary'))return 'ui';
+    if(['attr:alt','attr:title'].includes(kind)&&el.matches?.('img.image.is-32x32')
+      &&el.closest?.('.column.is-3 .box .is-flex'))return 'ui';
+    if(kind==='attr:alt'&&el.matches?.('img.image.is-16x16')
+      &&el.closest?.('.collection-actions .tag.is-background-dark'))return 'ui';
+    if(kind==='text'&&el.closest?.('.c-publicity'))return 'ad';
   }
   if(kind==='attr:label'&&el.closest?.('#filter_form select optgroup[label]'))return 'ui';
   if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'

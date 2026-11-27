@@ -223,6 +223,14 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                         "inventory": before, "translatedInventory": after})
         for url in before.get("details", []):
             discovered.setdefault(url, key)
+        # Grow the next frontier from newly observed native pagination links.
+        # Filtered page controls are separate states and must not seed the
+        # unfiltered pagination frontier.
+        if row["status"] == "ok" and "-select-" not in key:
+            for url in before.get("pagination", {}).get("observedPageLinks", []):
+                params = parse_qsl(urlsplit(url).query)
+                if public_route(url) in LIST_PATHS and len(params) == 1 and params[0][0] == "page" and re.fullmatch(r"[1-9]\d{0,5}", params[0][1]):
+                    observed_pages.add(url)
         if key in ("gearsets", "accessories", "facewear", "fashion-accessories", "glamours"):
             summaries[key] = before.get("pagination", {})
         denied = status_denied(row)
@@ -234,15 +242,32 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
     def write_manifest():
         done = {row["url"] for row in visited if row["status"] == "ok"}
         pending = [{"url": url, "discoveredOn": source} for url, source in discovered.items() if url not in done]
+        # Do not count a page reached with an active filter as an unfiltered
+        # catalogue page, or infer page totals from a missing pagination widget.
+        verified_pages = {}
+        for row in visited:
+            if row["status"] != "ok" or "-select-" in row["id"]:
+                continue
+            kind = public_route(row["url"])
+            if kind not in LIST_PATHS:
+                continue
+            query = parse_qsl(urlsplit(row["url"]).query)
+            if any(key != "page" for key, _ in query):
+                continue
+            number = row.get("inventory", {}).get("pagination", {}).get("current")
+            if isinstance(number, int) and number > 0:
+                verified_pages.setdefault(kind, set()).add(number)
+        verified_pages = {kind: sorted(numbers) for kind, numbers in verified_pages.items()}
         data = {
             "revision": os.environ.get("ZHX_AUDIT_SHA", ""), "status": "partial",
             "documentBudget": MAX_DOCUMENTS, "documentAttempts": documents,
             "priorVisitRecords": previous_count, "currentBatchVisitRecords": len(visited)-previous_count,
             "priorRevision": previous_revision,
-            "cataloguePagination": summaries, "visited": visited, "interactions": interactions,
+            "cataloguePagination": summaries, "verifiedUnfilteredPageNumbers": verified_pages,
+            "visited": visited, "interactions": interactions,
             "discoveredDetailCount": len(discovered), "pendingDetails": pending,
             "stoppedOnAccessDenial": denied,
-            "scope": "bounded first batch; all pagination, details and filter combinations not certified"
+            "scope": "bounded catalogue batch; historical revisions retained; all pagination, details and filter combinations not certified"
         }
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -351,9 +376,21 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
         # If there is room after explicit priorities, continue along actual
         # previously observed finite catalogue links and pending detail URLs.
         completed = {row["url"] for row in visited if row["status"] == "ok"}
-        for url in sorted(observed_pages - completed, key=lambda x: (public_route(x), int(dict(parse_qsl(urlsplit(x).query))["page"]))):
-            if not budget():
+        # Do not revisit ?page=1 when the plain initial page was already
+        # scanned. Prefer the forward contiguous catalogue frontier.
+        attempted = {row["url"] for row in visited}
+        for row in visited:
+            if row["status"] == "ok" and "-select-" not in row["id"] and not urlsplit(row["url"]).query:
+                path = public_route(row["url"])
+                number = row.get("inventory", {}).get("pagination", {}).get("current")
+                if path in LIST_PATHS and isinstance(number, int) and number > 0:
+                    attempted.add(ORIGIN + path + "?page=" + str(number))
+        while budget():
+            candidates = observed_pages - attempted
+            if not candidates:
                 break
+            url = min(candidates, key=lambda x: (int(dict(parse_qsl(urlsplit(x).query))["page"]), public_route(x)))
+            attempted.add(url)
             kind = public_route(url).strip("/")
             number = dict(parse_qsl(urlsplit(url).query))["page"]
             page = new_scan({"id": kind + "-page-" + number, "url": url})
