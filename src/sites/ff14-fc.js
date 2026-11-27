@@ -549,9 +549,35 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return text.replace(label, () => zh);
   }
 
+  const FC_ARTICLE_ROLE_LABELS = new Map([
+    ['タンク', '防护职业'], ['竜騎士・リーパー', '龙骑士、钐镰客'],
+    ['モンク・侍', '武僧、武士'], ['忍者', '忍者'],
+    ['レンジ', '远程物理职业'], ['キャスター', '远程魔法职业'],
+    ['ヒーラー', '治疗职业'],
+  ]);
+
+  // The NieR catalogue abbreviates set names before the role qualifier.
+  // Resolve the same linked detail identity in cards and document.title,
+  // never translate the Japanese role suffix as an isolated fragment.
+  function fcScopedArticleText(text, label, path, element) {
+    const match = /^([【〖]FF14[】〗])([^()（）]{1,80})[（(]([^()（）]{1,60})[）)]装備(👗?)各種族での見た目・入手方法/u.exec(label);
+    if (!match) return null;
+    const [, marker, native, role, icon] = match;
+    const record = FC_VERIFIED_SHORT_SET_PATHS.get(native);
+    const roleZh = FC_ARTICLE_ROLE_LABELS.get(role);
+    const target = fcLinkedPath(element);
+    if (!record || record.path !== (target === undefined ? path : target) || !roleZh) return null;
+    const frame = fcUIValue('各種族での見た目・入手方法');
+    const result = text.replace(match[0], () => marker + record.zh + '（' + roleZh + '）' + icon + frame);
+    return fcArticleSourceLabel(text, translateBracketedDuties(result))
+      .replace(/([|｜]\s*)ミラプリライフ$/u, (_, separator) => separator + fcUIValue('ミラプリライフ'));
+  }
+
   function trFC(text, path = globalThis.location?.pathname || '', element = null) {
     if (!text) return text;
-    return fcExactArticleText(text, text.trim()) ?? fcArticleSourceLabel(text, trFCText(text, path, element));
+    const label = text.trim();
+    return fcExactArticleText(text, label) ?? fcScopedArticleText(text, label, path, element)
+      ?? fcArticleSourceLabel(text, trFCText(text, path, element));
   }
 
   function trFCText(text, path, element) {
@@ -1436,7 +1462,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       const drop = fcDropItemText(raw, label);
       if (drop !== null) return drop;
     }
-    const article = fcExactArticleText(raw, label);
+    const article = fcExactArticleText(raw, label)
+      ?? fcScopedArticleText(raw, label, globalThis.location?.pathname || '', p);
     if (article !== null) return article;
     // A verified page identity wins over generic recommendation/group
     // parsing (which may otherwise hide a URL-specific name).
