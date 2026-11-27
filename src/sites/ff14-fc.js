@@ -830,32 +830,25 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       ? raw.replace(label, () => names[0] + '（' + slot + '）') : raw;
   }
 
-  function trimFCNode(node) {
-    const raw = node.nodeValue;
-    const label = raw?.trim();
-    if (!label) return;
+  function fcContextText(node, raw, label) {
     const p = node.parentElement;
-    if (p?.closest?.(FC_SKIP_SEL)) return;
     if (p?.closest?.('#info-drop .eorzeadb_link')) {
       const drop = fcDropItemText(raw, label);
-      if (drop !== null) {
-        if (drop !== raw) node.nodeValue = drop;
-        return;
-      }
+      if (drop !== null) return drop;
     }
     if (p?.closest?.('#scrollad h5,.related_post__equipment .article_list__ttl')) {
       const next = fcRecommendationText(node, raw, label);
-      if (next !== null) {
-        if (next !== raw) node.nodeValue = next;
-        return;
-      }
+      if (next !== null) return next;
     }
     const garoBare = fcGaroBareHeading(node, label);
-    if (garoBare !== null) {
-      if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
-      return;
-    }
-    const next = fcCardText(node, raw, label);
+    return garoBare === null ? fcCardText(node, raw, label) : raw.replace(label, () => garoBare);
+  }
+
+  function trimFCNode(node) {
+    const raw = node.nodeValue;
+    const label = raw?.trim();
+    if (!label || node.parentElement?.closest?.(FC_SKIP_SEL)) return;
+    const next = fcContextText(node, raw, label);
     if (next !== raw) node.nodeValue = next;
   }
 
@@ -922,10 +915,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const heading = image.closest?.('#scrollad dl')?.querySelector('h5');
     if (!heading) return null;
     const label = value.trim();
-    const node = { parentElement: heading };
-    const group = fcRecommendationText(node, value, label);
-    const short = group === null ? fcGaroBareHeading(node, label) : null;
-    const next = group ?? (short !== null ? value.replace(label, () => short) : fcCardText(node, value, label));
+    const next = fcContextText({ parentElement: heading }, value, label);
     const title = heading.textContent.trim();
     return title === label || title === next.trim() ? next : null;
   }

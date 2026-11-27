@@ -151,14 +151,16 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     /^(?:ブーツ|サバトン|グリーヴ|シューズ|サンダル|ロングブーツ|サイブーツ|クラコー|レッグガード)$/u,
   ];
   function fcArmorSlot(native, zh, part) {
-    // The identity dataset has canonical equipment slots, including uncommon
-    // Japanese part names. Only use the lexical fallback for legacy data
-    // without identities; unknown/non-armor or conflicting slots are not evidence.
-    if (!hasItemIdentities()) return FC_ARMOR_PARTS.findIndex(re => re.test(part));
-    const records = findItemsByName(native, 'ja');
-    const slot = records[0]?.slot;
-    return slot != null && slot < 5
-      && records.every(row => row.slot === slot && row.zh === zh) ? slot : -1;
+    // Slot 5 also represents missing source slot metadata in V3. For
+    // unclassified rows only, retain the legacy exact armor-suffix whitelist;
+    // conflicting identities or known slot classifications take precedence.
+    if (hasItemIdentities()) {
+      const records = findItemsByName(native, 'ja');
+      const slot = records[0]?.slot;
+      if (slot == null || !records.every(row => row.slot === slot && row.zh === zh)) return -1;
+      if (slot < 5) return slot;
+    }
+    return FC_ARMOR_PARTS.findIndex(re => re.test(part));
   }
 
   function fcBaseRoleSets(nameMap) {

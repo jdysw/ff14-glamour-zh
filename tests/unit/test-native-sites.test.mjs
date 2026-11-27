@@ -1299,11 +1299,15 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
       '1006\t重复咏咒帽\t重複・キャスターキャップ\t1\t0',
       '1007\t重复咏咒头饰\t重複・キャスタークラウン\t1\t0',
       '1008\t重复咏咒戒指\t重複・キャスターリング\t1\t5',
+      '1009\t旧数据咏咒帽\t旧資料・キャスターハット\t1\t5',
+      '1010\t旧数据咏咒长袍\t旧資料・キャスターローブ\t1\t5',
+      '1011\t旧数据咏咒手套\t旧資料・キャスターグローブ\t1\t5',
     ].join('\n'));
     assert.ok(identity);
     assert.ok(_applyV3({candidatePolicy:1,identity}));
     cacheReset('derived');
     assert.equal(_getItemPfx().get('実測・キャスター'),'实测咏咒');
+    assert.equal(_getItemPfx().get('旧資料・キャスター'),'旧数据咏咒','部位元数据缺失时仍允许严格的传统部位匹配');
     assert.equal(_getItemPfx().has('重複・キャスター'),false,'同一部位和非防具不得作为三件套装证据');
   } finally {
     if (!wasReady) dataInvalidate();
