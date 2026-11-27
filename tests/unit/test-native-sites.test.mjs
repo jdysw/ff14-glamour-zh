@@ -1036,6 +1036,16 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     assert.ok(trFC(title+'【ウィンダス：ザ・サードウォーク】').endsWith('【温达斯：第三巡行】'));
     assert.ok(trFC(title+'〖未確認の入手先〗').endsWith('〖未確認の入手先〗'));
     assert.ok(!trFC('〖FF14〗グラフィティ・ネオチュニック装備👗').includes('套装'));
+    const oracle = '【FF14】リーン・コスチュームセット装備👗各種族での見た目・入手方法【オラクル】';
+    const snow = '〖FF14〗スノウ・コスチュームセット装備👗各種族での見た目・入手方法〖ノラ/FF13〗';
+    const oracleZh = '【FF14】巫女套装👗各种族外观·获取方式【光之巫女】';
+    const snowZh = '〖FF14〗诺拉套装👗各种族外观·获取方式〖诺拉/FF13〗';
+    dom.document.body.innerHTML = '<a href="/equipment/oracle/"><h3>' + oracle + '</h3></a>'
+      + '<a href="/equipment/snows_attire/"><h3>' + snow + '</h3></a>';
+    const cards = [...dom.document.querySelectorAll('h3')];
+    cards.forEach(card => trimFCNode(card.firstChild));
+    assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
+    assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
     assert.equal(trFC('アライアンスレイド'), '团队任务');
     assert.equal(trFC('ノーマルレイド'), '普通大型任务');
   } finally {
