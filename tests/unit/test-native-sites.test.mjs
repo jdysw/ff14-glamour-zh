@@ -1101,6 +1101,21 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     assert.equal(trFC(yorha, yorhaPath), yorhaZh);
     assert.equal(trFC(yorha + ' | ミラプリライフ', yorhaPath), yorhaZh + ' | 幻化生活');
     assert.notEqual(trFC(yorha, '/equipment/unrelated/'), yorhaZh);
+    // Native article thumbnails can be longer than the general 90-character
+    // alt limit; they must resolve using the linked equipment identity.
+    const longAlt = yorha + ' '.repeat(60) + '| ミラプリライフ';
+    const longZh = yorhaZh + ' '.repeat(60) + '| 幻化生活';
+    assert.ok(longAlt.length > 90 && longAlt.length <= 160);
+    dom.document.body.innerHTML = '<div id="scrollad"><dl><a href="' + yorhaPath + '"><dt><img></dt><dd><h5>ヨルハ五一式:格</h5></dd></a></dl></div>';
+    const thumbnail = dom.document.querySelector('img');
+    thumbnail.alt = longAlt;
+    _procFCNode(thumbnail);
+    assert.equal(thumbnail.alt, longZh);
+    thumbnail.alt = '未確認の画像説明' + '長い説明'.repeat(24);
+    const unknownAlt = thumbnail.alt;
+    _procFCNode(thumbnail);
+    assert.equal(thumbnail.alt, unknownAlt);
+
     assert.equal(trFC('アライアンスレイド'), '团队任务');
     assert.equal(trFC('ノーマルレイド'), '普通大型任务');
   } finally {

@@ -8,7 +8,7 @@ import { ensureChrome, DEFAULT_PORT } from '../tests/helpers/chrome.mjs';
 import { readRuntimeV3 } from '../tests/helpers/v3-cache.mjs';
 import { parseItemIds } from '../src/core/data/item-identity.js';
 import { _applyV3, _fireTablesReady } from '../src/core/data/data-manager.js';
-import { trimFCNode, _trFCAttr, translateFCTitle } from '../src/sites/ff14-fc.js';
+import { trimFCNode, _trFCAttr, _procFCNode, translateFCTitle } from '../src/sites/ff14-fc.js';
 
 const URL = 'https://ff14-fc.com/equipment_series_search/';
 const OUT = path.resolve('tests/.cache/fc-series-audit');
@@ -206,6 +206,17 @@ function replay(row, doc) {
   rec.parentElement.append(img);
   const recommendationZh = translatedTitle(rec);
   _trFCAttr(img,'alt');
+  // Exercise the production IMG dispatch with the native catalogue article
+  // title as an additional synthetic replay, not an actual live alt sample.
+  // Do not depend on the random recommendation list for title coverage.
+  let articleImage = null;
+  if (row.articleTitle) {
+    const thumbnail = doc.createElement('img');
+    thumbnail.alt = row.articleTitle;
+    rec.parentElement.append(thumbnail);
+    _procFCNode(thumbnail);
+    articleImage = thumbnail.alt;
+  }
   let detailZh = null;
   let documentTitle = null;
   if (row.path) {
@@ -218,7 +229,7 @@ function replay(row, doc) {
     }
   }
   const result = { translated:{ catalogueZh, recommendationZh, imageZh:img.alt, detailZh },
-    articleTitles:{card:articleCard,document:documentTitle} };
+    articleTitles:{card:articleCard,document:documentTitle,thumbnailReplay:articleImage} };
   root.remove();
   return result;
 }
@@ -251,7 +262,10 @@ function review(row, translated, evidence, articleTitles) {
   if (names.some(v => KANA.test(v))) issues.push('kana-residual');
   if (names.some(v => /套装套装|装束套装|夏装组合套装|套装装备/u.test(v))) issues.push('duplicate-set-suffix');
   if (new Set(names).size > 1) issues.push('context-disagreement');
-  const titles = Object.values(articleTitles).filter(Boolean);
+  const titles = [articleTitles.card,articleTitles.document].filter(Boolean);
+  if (articleTitles.thumbnailReplay && KANA.test(articleTitles.thumbnailReplay)) issues.push('article-thumbnail-replay-kana');
+  if (articleTitles.thumbnailReplay && articleTitles.thumbnailReplay !== articleTitles.card)
+    issues.push('article-thumbnail-replay-disagreement');
   if (new Set(titles).size > 1) issues.push('article-title-context-disagreement');
   if (titles.some(title => /套装(?:[（(][^）)]{1,60}[）)])?装备|套装套装|装束套装|组合套装|·刃・刃/u.test(title))) issues.push('article-title-duplicate-set-suffix');
   if (titles.some(title => KANA.test(title))) issues.push('article-title-kana-residual');
@@ -349,6 +363,7 @@ function auditCatalogue(report) {
     report.articleTitleCount = report.results.filter(r => r.articleTitle).length;
     report.articleCardKanaCount = report.results.filter(r => KANA.test(r.articleTitles.card || '')).length;
     report.documentTitleKanaCount = report.results.filter(r => KANA.test(r.articleTitles.document || '')).length;
+    report.articleThumbnailReplayKanaCount = report.results.filter(r => KANA.test(r.articleTitles.thumbnailReplay || '')).length;
   } finally { dom.close(); }
 }
 
@@ -360,5 +375,5 @@ catch(e) { report.errors.push(String(e.message || e)); }
 report.status = report.catalogueComplete && report.checked === report.expected && !report.errors.length ? 'complete' : 'partial';
 report.semanticStatus = report.status !== 'complete' || report.reviewCount ? 'needs-review' : 'no-detected-issues';
 save(report);
-console.log(JSON.stringify({status:report.status,semanticStatus:report.semanticStatus,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,reviewWithOfficialNameMatch:report.reviewWithOfficialNameMatch,articleTitleCount:report.articleTitleCount,articleCardKanaCount:report.articleCardKanaCount,documentTitleKanaCount:report.documentTitleKanaCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
+console.log(JSON.stringify({status:report.status,semanticStatus:report.semanticStatus,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,reviewWithOfficialNameMatch:report.reviewWithOfficialNameMatch,articleTitleCount:report.articleTitleCount,articleCardKanaCount:report.articleCardKanaCount,documentTitleKanaCount:report.documentTitleKanaCount,articleThumbnailReplayKanaCount:report.articleThumbnailReplayKanaCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
 if (report.status !== 'complete') process.exitCode = 1;

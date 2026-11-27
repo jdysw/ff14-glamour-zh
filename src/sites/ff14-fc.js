@@ -1564,7 +1564,21 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
 
   // Recommendation thumbnails often repeat the visible title. Use the same
   // context-sensitive resolver for both, but leave distinct captions alone.
+  function fcLinkedArticleAlt(image, value) {
+    const label = value.trim();
+    const linked = fcLinkedPath(image);
+    if (!/^[【〖]FF14[】〗]/u.test(label)
+        || !/^\/equipment\/[^/]+\/?$/u.test(linked || '')) return null;
+    // Use the thumbnail's own target, not the unrelated page containing
+    // the recommendation. Resolve the untouched native article title
+    // before applying quoted set-name substitutions.
+    const translated = trFC(value, linked, image);
+    return translated !== value ? translated : null;
+  }
+
   function fcRecommendationAlt(image, value) {
+    const article = fcLinkedArticleAlt(image, value);
+    if (article !== null) return article;
     const exact = fcExactArticleText(value, value.trim());
     if (exact !== null) return exact;
     const heading = image.closest?.('#scrollad dl')?.querySelector('h5');
@@ -1595,7 +1609,9 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
   function _procFCImg(n) {
     const alt = n.getAttribute('alt');
-    if (alt && alt.length >= 2 && alt.length <= 90) _trFCAttr(n, 'alt');
+    const linkedArticle = alt && /^[【〖]FF14[】〗]/u.test(alt.trim())
+      && /^\/equipment\/[^/]+\/?$/u.test(fcLinkedPath(n) || '');
+    if (alt && alt.length >= 2 && alt.length <= (linkedArticle ? 160 : 90)) _trFCAttr(n, 'alt');
     if (n.hasAttribute('title')) _trFCAttr(n, 'title');
     if (n.hasAttribute('aria-label')) _trFCAttr(n, 'aria-label');
   }
