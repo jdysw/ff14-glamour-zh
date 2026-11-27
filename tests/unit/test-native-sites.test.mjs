@@ -1240,6 +1240,20 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
         + '/"></a></dt><dd><h4>' + native + '</h4></dd></dl>').join('') + '</div>';
     for (const h of catalogue.querySelectorAll('h4')) trimFCNode(h.firstChild);
     assert.deepEqual([...catalogue.querySelectorAll('h4')].map(h => h.textContent), remaining.map(row => row[2]));
+    // Actual AF article titles use a job heading and a trailing set name.
+    const redArticle = '〖FF14〗赤魔道士AF1装備👗各種族での見た目・入手方法〖レッド〗';
+    catalogue.innerHTML = '<div class="equipment-search-results-content"><dl><dt><a href="/equipment/red/"></a></dt>'
+      + '<dd><h3>' + redArticle + '</h3></dd></dl></div>';
+    trimFCNode(catalogue.querySelector('h3').firstChild);
+    assert.equal(catalogue.querySelector('h3').textContent,
+      '〖FF14〗赤魔法师 AF1装备👗各种族外观·获取方式〖赤红套装〗');
+    assert.equal(trFC(redArticle, '/equipment/red/'),
+      '〖FF14〗赤魔法师 AF1装备👗各种族外观·获取方式〖赤红套装〗');
+    assert.equal(trFC(redArticle, '/equipment/unrelated/'), redArticle, '未确认的路径不得把套装名称误译成颜色');
+    assert.equal(trFC('【FF14】リーパーAF5装備(Lv90)👗各種族での見た目・入手方法【リーパー】', '/equipment/reapers/'),
+      '【FF14】钐镰客 AF5装备（90级）👗各种族外观·获取方式【丰获套装】');
+    assert.equal(trFC('【FF14】侍AF3(アネモス)装備👗各種族での見た目・入手方法【明珍【風】】', '/equipment/anemos_myochin/'),
+      '【FF14】武士 AF3（常风）装备👗各种族外观·获取方式【常风明珍装束】');
     catalogue.remove();
     // The crafted South Seas clothes are not the earlier swimwear series.
     globalThis.location = new URL('https://ff14-fc.com/equipment/southern_seas/');
