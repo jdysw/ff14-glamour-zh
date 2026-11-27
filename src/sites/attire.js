@@ -959,7 +959,7 @@ function linkedCofferNote(node, source) {
   // redirects). Translate its adjacent sentence without guessing its name.
   let previous = node.previousSibling;
   while (previous?.nodeType === 3 && !previous.textContent.trim()) previous = previous.previousSibling;
-  if (!previous || previous.nodeType !== 1) return null;
+  if (previous?.nodeType !== 1) return null;
   const link = previous.matches(ITEM_LINK) ? previous : previous.querySelector('a[href]');
   if (previous.textContent.trim() !== link?.textContent.trim()) return null;
   const item = originalItem(link);
