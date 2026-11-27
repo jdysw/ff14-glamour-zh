@@ -534,9 +534,24 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return trFCRelated(text, t0) || trFCAcquisition(text, t0);
   }
 
+  // A reviewed complete article title must win before scoped short-name
+  // rewriting removes its native prefix. Accept both native bracket styles.
+  function fcExactArticleText(text, label) {
+    if (!/^[【〖]FF14[】〗]/u.test(label)) return null;
+    const brand = /(\s*[|｜]\s*)ミラプリライフ$/u.exec(label);
+    const title = brand ? label.slice(0, brand.index) : label;
+    const key = title.replace(/^〖FF14〗/u, '【FF14】').replace(/〖([^〖〗]+)〗$/u, '【$1】');
+    let zh = fcUIValue(key);
+    if (!zh) return null;
+    if (title.startsWith('〖FF14〗')) zh = zh.replace(/^【FF14】/u, '〖FF14〗');
+    if (title.endsWith('〗')) zh = zh.replace(/【([^【】]+)】$/u, '〖$1〗');
+    if (brand) zh += brand[1] + (fcUIValue('ミラプリライフ') || 'Mirapri Life');
+    return text.replace(label, () => zh);
+  }
+
   function trFC(text, path = globalThis.location?.pathname || '', element = null) {
     if (!text) return text;
-    return fcArticleSourceLabel(text, trFCText(text, path, element));
+    return fcExactArticleText(text, text.trim()) ?? fcArticleSourceLabel(text, trFCText(text, path, element));
   }
 
   function trFCText(text, path, element) {
@@ -1421,6 +1436,8 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       const drop = fcDropItemText(raw, label);
       if (drop !== null) return drop;
     }
+    const article = fcExactArticleText(raw, label);
+    if (article !== null) return article;
     // A verified page identity wins over generic recommendation/group
     // parsing (which may otherwise hide a URL-specific name).
     const garoBare = fcGaroBareHeading(node, label);
