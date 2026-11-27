@@ -4,7 +4,7 @@ import { _tablesReady, dataGetIndex, resolveAllByName, resolveByHash, resolveDye
 import { cacheRegister } from '../core/cache-primitives.js';
 import { DICT_FC, lookupDutyName } from '../core/data/dictionary.js';
 import { SKIP_TAGS, _markScan, localScope, queryIn, snapshotTranslationNodes } from '../core/dom.js';
-import { lookupJp2Zh } from '../core/item-resolver.js';
+import { lookupJp2Zh, lookupShopCostumeSet } from '../core/item-resolver.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { safe } from '../core/runtime.js';
 export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHeadings, fcSetDisplayText, FC_ROLE_ZH, _fcAcceptNode, _fcCanReplaceAt, _procFCNode, _trFCDecor, _trFCExact, _trFCName, _trFCSubstr, _wowFCInput, _trFCAttr, bindFCBanners, fcLinkZhName, fixFCMenu, rewriteFCForeignLink, startFC, trFC, trFCSegments, translateFCPage, translateFCTitle, trimFCNode };
@@ -128,13 +128,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       const values = resolveAllByName(prefix + 'サマー' + part + '・セット');
       return values.length === 1 && values[0].endsWith('夏装组合') ? values[0] : null;
     }
-    if (!name.endsWith('・コスチュームセット')) return null;
-    // The shop commonly uses コスチュームセット where the canonical
-    // game item uses アタイア. Require the entire item name and one
-    // distinct Chinese set name; never translate the suffix by itself.
-    const canonical = name.slice(0, -'コスチュームセット'.length) + 'アタイア';
-    const values = resolveAllByName(canonical);
-    return values.length === 1 && /(?:套装|装束|服装组合)$/u.test(values[0]) ? values[0] : null;
+    return lookupShopCostumeSet(name);
   }
 
   function fcVerifiedSetText(text, label) {

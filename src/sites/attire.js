@@ -1,4 +1,5 @@
 import { WIKI_ITEM } from '../core/constants.js';
+import { lookupShopCostumeSet } from '../core/item-resolver.js';
 import { resolveAllByName, resolveByHash, resolveDyeColor } from '../core/data/data-manager.js';
 import { createTranslationObserver } from '../core/observer.js';
 import { DICT, DICT_COMMON, lookupDutyName } from '../core/data/dictionary.js';
@@ -166,7 +167,10 @@ function weaponSeriesArticleName(source) {
 // These display titles are not individual item identities. Never use them for
 // Wiki redirects or search conversion.
 function groupArticleName(source) {
-  if (!source || resolveAllByName(source).length) return null;
+  if (!source) return null;
+  const set = lookupShopCostumeSet(source);
+  if (set) return set;
+  if (resolveAllByName(source).length) return null;
   const flower = flowerArticleName(source);
   if (flower) return flower;
   if (source.endsWith('武器一覧')) return weaponSeriesArticleName(source);
@@ -799,7 +803,7 @@ function translateAcquisitionLinks() {
     if (link.closest(EXCLUDED)) continue;
     const source = link.textContent.trim();
     if (link.origin === 'https://store.finalfantasyxiv.com' && /^\/ffxivstore\/[^/]+\/product\/\d+\/?$/u.test(link.pathname)) {
-      replaceLabel(link, source, uniqueItemName(source));
+      replaceLabel(link, source, uniqueItemName(source) || lookupShopCostumeSet(source));
     } else if (/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
         && link.pathname.startsWith('/lodestone/special/')) {
       const zh = eventName(source) || (source.startsWith('モグモグ★コレクション') && uiName(source));

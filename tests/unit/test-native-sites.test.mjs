@@ -1576,6 +1576,22 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('h1').textContent,'先锋武器一览');
     assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['先锋武器一览','未知の武器一覧']);
     assert.equal(d.querySelector('.c--post-link img').alt,'先锋武器一览');
+    // Native shop display labels differ from canonical item names.
+    assert.ok(_applyV3({candidatePolicy:1,
+      names:'アーゼマ・アタイア\t阿泽玛套装\t1\t1\nアーゼマ・ドレス\t阿泽玛纱裙\t1\t1\n別の・アタイア\t其他部件\t1\t1',
+      hash:'7e2981a2b09\t阿泽玛纱裙'}));
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/online-shop/">課金装備</a></div></div>
+      <h1 id="jinrPostTitle">アーゼマ・コスチュームセット</h1><section id="postContent">
+      <a href="${official}7e2981a2b09/">アーゼマ・ドレス</a>
+      <a class="c--post-link" rel="bookmark" href="/the-wardens-dress/"><img alt="アーゼマ・コスチュームセット"><h2 class="a--post-title">アーゼマ・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/unknown/"><h2 class="a--post-title">未知・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/not-set/"><h2 class="a--post-title">別の・コスチュームセット</h2><span class="a--post-category">課金装備</span></a>
+      <a class="c--post-link" rel="bookmark" href="/glamour/"><h2 class="a--post-title">アーゼマ・コスチュームセット</h2><span class="a--post-category">ミラプリ</span></a></section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'阿泽玛套装');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['阿泽玛套装','未知・コスチュームセット','別の・コスチュームセット','アーゼマ・コスチュームセット']);
+    assert.equal(d.querySelector('.c--post-link img').alt,'阿泽玛套装');
     const ponchos = 'カシミヤポンチョ・ラミーポンチョ';
     _applyV3({candidatePolicy:1,names:'カシミヤポンチョ\t羊绒斗篷\t1\t1\nラミーポンチョ\t青麻斗篷\t1\t1',hash:'7d89571f76f\t羊绒斗篷'});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/vanity/">Lv63ID 海底宮殿 紫水宮</a></div></div>
