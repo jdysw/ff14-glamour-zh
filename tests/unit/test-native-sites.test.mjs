@@ -1565,6 +1565,17 @@ test('装備手帳：保留站内分类入口与正文，仅以确切物品身�
     assert.equal(d.querySelector('.a--post-title').textContent,cofferZh);
     assert.equal(d.querySelector('.widget_recent_entries a').textContent,cofferZh);
     assert.equal(d.querySelector('.c--post-link').pathname,'/dark-mahogany-weapon-coffer-il-663/');
+    // Verify the same catalogue title in its actual card, article and alt
+    // variants, without translating an unverified weapon family.
+    d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/seriesb/">シリーズ武器一覧</a></div></div>
+      <h1 id="jinrPostTitle">ヴァンガード 武器一覧</h1><section id="postContent">
+      <a class="c--post-link" rel="bookmark" href="/vanguard-buki/"><img alt="ヴァンガード　武器一覧"><h2 class="a--post-title">ヴァンガード武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a>
+      <a class="c--post-link" rel="bookmark" href="/unknown/"><h2 class="a--post-title">未知の武器一覧</h2><span class="a--post-category category-seriesb">シリーズ武器一覧</span></a></section>`;
+    translateAttirePage();
+    translateAttirePage();
+    assert.equal(d.querySelector('h1').textContent,'先锋武器一览');
+    assert.deepEqual([...d.querySelectorAll('.a--post-title')].map(el=>el.textContent),['先锋武器一览','未知の武器一覧']);
+    assert.equal(d.querySelector('.c--post-link img').alt,'先锋武器一览');
     const ponchos = 'カシミヤポンチョ・ラミーポンチョ';
     _applyV3({candidatePolicy:1,names:'カシミヤポンチョ\t羊绒斗篷\t1\t1\nラミーポンチョ\t青麻斗篷\t1\t1',hash:'7d89571f76f\t羊绒斗篷'});
     d.body.innerHTML = `<div id="jinrPostMeta"><div class="a--post-cat"><a href="/category/vanity/">Lv63ID 海底宮殿 紫水宮</a></div></div>

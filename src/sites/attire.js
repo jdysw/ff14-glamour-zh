@@ -155,13 +155,22 @@ function flowerArticleName(source) {
   return base && base === blue.slice(2) ? base : null;
 }
 
+// Match only complete, verified weapon collection labels. Some cards and
+// article headers differ only in whitespace before the collection suffix.
+function weaponSeriesArticleName(source) {
+  const stem = source.slice(0, -'武器一覧'.length).trimEnd().replace(/\s+/gu, ' ');
+  return DICT['attire:' + source] || DICT['attire:' + stem + '武器一覧']
+    || DICT['attire:' + stem + ' 武器一覧'] || null;
+}
+
 // These display titles are not individual item identities. Never use them for
 // Wiki redirects or search conversion.
 function groupArticleName(source) {
   if (!source || resolveAllByName(source).length) return null;
   const flower = flowerArticleName(source);
   if (flower) return flower;
-  if (source === 'トリテレイアイヤリング' || source.endsWith('武器一覧')) return DICT['attire:' + source] || null;
+  if (source.endsWith('武器一覧')) return weaponSeriesArticleName(source);
+  if (source === 'トリテレイアイヤリング') return DICT['attire:' + source] || null;
   const matches = new Set();
   for (let i = source.indexOf('・'); i !== -1; i = source.indexOf('・', i + 1)) {
     const left = uniqueItemName(source.slice(0, i));
