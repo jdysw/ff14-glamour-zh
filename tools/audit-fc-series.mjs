@@ -251,10 +251,18 @@ function review(row, translated, evidence, articleTitles) {
   if (names.some(v => KANA.test(v))) issues.push('kana-residual');
   if (names.some(v => /套装套装|装束套装|夏装组合套装|套装装备/u.test(v))) issues.push('duplicate-set-suffix');
   if (new Set(names).size > 1) issues.push('context-disagreement');
+  const titles = Object.values(articleTitles).filter(Boolean);
+  if (titles.some(title => KANA.test(title))) issues.push('article-title-kana-residual');
+  const expectedHead = ['【FF14】' + row.native, '〖FF14〗' + row.native];
+  const nativeHead = expectedHead.find(head => row.articleTitle?.startsWith(head));
+  if (nativeHead && /^(?:装備)?(?:👗|各種族での見た目・入手方法)/u.test(row.articleTitle.slice(nativeHead.length))) {
+    const expected = ['【FF14】' + translated.catalogueZh, '〖FF14〗' + translated.catalogueZh];
+    if (titles.length !== 2 || titles.some(title => !expected.some(head => title.startsWith(head))))
+      issues.push('article-title-set-disagreement');
+  }
   const afTitle = row.articleTitle && /^[【〖]FF14[】〗].{1,24}?AF(?:\d{1,2}|[（(]PvP[）)])/u.test(row.articleTitle)
     && ['【' + row.native + '】','〖' + row.native + '〗'].some(end => row.articleTitle.endsWith(end));
   if (afTitle) {
-    const titles = Object.values(articleTitles).filter(Boolean);
     const expected = ['【' + translated.catalogueZh + '】','〖' + translated.catalogueZh + '〗'];
     if (titles.length !== 2 || titles.some(title => !expected.some(end => title.endsWith(end))))
       issues.push('af-title-set-disagreement');
@@ -326,6 +334,9 @@ function auditCatalogue(report) {
       for (const issue of row.issues) report.issueCounts[issue] = (report.issueCounts[issue] || 0) + 1;
     report.checked = report.results.length;
     report.reviewCount = report.results.filter(r => r.issues.length).length;
+    report.articleTitleCount = report.results.filter(r => r.articleTitle).length;
+    report.articleCardKanaCount = report.results.filter(r => KANA.test(r.articleTitles.card || '')).length;
+    report.documentTitleKanaCount = report.results.filter(r => KANA.test(r.articleTitles.document || '')).length;
   } finally { dom.close(); }
 }
 
@@ -335,6 +346,7 @@ catch(e) { report.errors.push(String(e.message || e)); }
 try { if (report.catalogue.length) auditCatalogue(report); }
 catch(e) { report.errors.push(String(e.message || e)); }
 report.status = report.catalogueComplete && report.checked === report.expected && !report.errors.length ? 'complete' : 'partial';
+report.semanticStatus = report.status !== 'complete' || report.reviewCount ? 'needs-review' : 'no-detected-issues';
 save(report);
-console.log(JSON.stringify({status:report.status,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
+console.log(JSON.stringify({status:report.status,semanticStatus:report.semanticStatus,expected:report.expected,collected:report.collected,checked:report.checked,linked:report.linked,reviewCount:report.reviewCount,articleTitleCount:report.articleTitleCount,articleCardKanaCount:report.articleCardKanaCount,documentTitleKanaCount:report.documentTitleKanaCount,issueCounts:report.issueCounts,errors:report.errors},null,2));
 if (report.status !== 'complete') process.exitCode = 1;
