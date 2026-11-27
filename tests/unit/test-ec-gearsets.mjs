@@ -117,6 +117,12 @@ for (const [title, zh] of [["Cosmic Explorer's","宇宙探索者套装"],["Comfy
   assert.equal(tr(title + ' Seasonal Event Gear'), zh + ' 季节活动装备');
 }
 assert.equal(tr('Legend'), '神话传令官套装');
+// Seen in actual unfiltered /gearsets or filtered catalogue results.
+for (const [native, zh] of [["Wolfram","钨钢套装"],["Hussar's","轻骑兵套装"],["Fistfighter's","拳法师套装"],["Pilgrim's","朝圣者套装"],["Light","光之套装"],["Fuma","风魔套装"],["Ballad","民谣套装"],["Crimson","深红套装"],["Royal","皇室套装"],["Leisurewear (High-cut Knit Top)","运动休闲短罩衫套装"],["Leisurewear (High-cut Shirt)","运动休闲破烂罩衫套装"],["Cobalt Tungsten Fending","钴钨御敌套装"],["Cobalt Tungsten Maiming","钴钨制敌套装"],["Sarcenet Striking","薄绢强袭套装"],["Sarcenet Scouting","薄绢游击套装"],["Sarcenet Aiming","薄绢精准套装"],["Sarcenet Casting","薄绢咏咒套装"],["Sarcenet Healing","薄绢治愈套装"],["Mountain Linen Striking","高山亚麻强袭套装"],["Mountain Linen Scouting","高山亚麻游击套装"],["Mountain Linen Aiming","高山亚麻精准套装"],["Mountain Linen Casting","高山亚麻咏咒套装"],["Mountain Linen Healing","高山亚麻治愈套装"]]) {
+  assert.equal(tr(native), zh);
+  assert.equal(tr(native + ' Set'), zh);
+}
+assert.equal(tr('Cobalt Tungsten Casting'), null, 'do not manufacture unobserved mixed-material role variants');
 for (const [native, zh] of [["Cosmosuit","宇航服套装"],["Noct","宵光套装"],["Astrum","星光套装"],["Gloam","暮光套装"],["Auroral","曙光套装"],["Evenstar","昏光套装"],["Daystar","晨光套装"],["Heavy Wolfram","钨钢重甲套装"],["Cashmere Healing","羊绒治愈套装"],["Protector's","保护者套装"],["Shikaree's","狩猎者套装"],["Magician's","魔术师套装"],["Manor War","庄园战斗精英套装"],["Manor Magic","庄园魔法导师套装"],["Mica Neotunic","亩鼠米卡文化衫"],["Cactuar Neotunic","仙人刺文化衫"],["Chocobo Neotunic","陆行鸟文化衫"],["Moogle Neotunic","莫古力文化衫"],["Plain Neotunic","纯色文化衫"],["Sharlayan Prodigy's","萨雷安神童装"]]) {
   assert.equal(tr(native), zh);
   assert.equal(tr(native + ' Set'), zh);
@@ -190,6 +196,9 @@ for (const [id, zh] of [["47212","红色大季花花环"],["47213","蓝色大季
 }
 for (const [id, expected] of [["48744","宇航服套装"],["7294","宵光头冠"],["7304","星光盔帽"],["7310","暮光兜帽"],["7320","曙光兜帽"],["7340","昏光魔术帽"],["7330","晨光头冠"],["7481","钨钢重胸甲"],["7505","羊绒治愈长袍"],["7444","保护者开面盔"],["7462","狩猎者面具"],["7474","魔术师法帽"],["31457","庄园衬衫"],["31463","庄园短袍"],["48998","亩鼠米卡文化衫"],["48997","仙人刺文化衫"],["48996","陆行鸟文化衫"],["48995","莫古力文化衫"],["48994","纯色文化衫"],["31418","萨雷安神童装"]]) {
   assert.equal(officialById.get(id), expected, '国服 Item 名称证据 ' + id);
+}
+for (const [id, zh] of [["7486","钨钢面罩"],["7487","钨钢胸甲"],["7488","钨钢手铠"],["7450","轻骑兵护目镜"],["7451","轻骑兵外套"],["7452","轻骑兵手套"],["7456","拳法师护目镜"],["7457","拳法师外套"],["7458","拳法师手套"],["7468","朝圣者眼罩"],["7469","朝圣者长袍"],["7470","朝圣者手套"],["2955","光之王冠"],["3271","光之铠甲"],["3737","光之手铠"],["2952","风魔眼带"],["3268","风魔之衣"],["3509","风魔之袴"],["2953","民谣王冠"],["3269","民谣护甲"],["3510","民谣垮裤"],["2957","深红帽子"],["3273","深红背心"],["3514","深红马裤"],["2954","皇室王冠"],["3270","皇室背心"],["3511","皇室马裤"],["45570","运动休闲短罩衫套装"],["45569","运动休闲破烂罩衫套装"],["42167","钴钨御敌坎肩"],["42172","钴钨制敌坎肩"],["42177","薄绢强袭斗服"],["42187","薄绢游击斗服"],["42182","薄绢精准斗服"],["42197","薄绢咏咒斗服"],["42192","薄绢治愈斗服"],["42023","高山亚麻强袭上装"],["42033","高山亚麻游击上装"],["42028","高山亚麻精准斗篷"],["42043","高山亚麻咏咒斗篷"],["42038","高山亚麻治愈斗篷"]]) {
+  assert.equal(officialById.get(id), zh, 'EC catalogue official Item evidence ' + id);
 }
 const officialRows = new Map();
 for (const line of fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n')) {

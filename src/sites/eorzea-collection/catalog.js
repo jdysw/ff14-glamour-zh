@@ -25,6 +25,11 @@ const EC_GEARSET_ROLE_SERIES = new Map([
   ["Prishe's", ['Striking']],
   ['Mayakov', ['Scouting', 'Aiming']],
   ['Orastery', ['Casting', 'Healing']],
+  // Observed EC sorting results. Mixed-material sets use the name of their
+  // principal body equipment, rather than requiring three matching prefixes.
+  ["Cobalt Tungsten", ["Fending","Maiming"]],
+  ["Sarcenet", ["Striking","Scouting","Aiming","Casting","Healing"]],
+  ["Mountain Linen", ["Striking","Scouting","Aiming","Casting","Healing"]],
 ]);
 const EC_GEARSET_SINGLE_SERIES = new Set([
   "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
@@ -32,6 +37,9 @@ const EC_GEARSET_SINGLE_SERIES = new Set([
   "Cosmic Explorer's", 'Comfy Valentione', 'Cozy Valentione', 'Powersuit', 'Legend',
   "Cosmosuit", "Noct", "Astrum", "Gloam", "Auroral", "Evenstar", "Daystar",
   "Heavy Wolfram", "Cashmere Healing", "Protector's", "Shikaree's", "Magician's", "Manor War", "Manor Magic",
+  "Wolfram", "Hussar's", "Fistfighter's", "Pilgrim's",
+  "Light", "Fuma", "Ballad", "Crimson", "Royal",
+  "Leisurewear (High-cut Knit Top)", "Leisurewear (High-cut Shirt)",
   'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
   'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
   'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
@@ -73,6 +81,23 @@ const EC_GEARSET_NAME_EXTRAS = Object.freeze({
   "Magician's": '魔术师套装', // Item 7474
   "Manor War": '庄园战斗精英套装', // Item 31457
   "Manor Magic": '庄园魔法导师套装', // Item 31463
+  // Actual EC catalogue titles and matching official equipment stems;
+  // individual detail-page membership remains part of the live audit.
+  "Wolfram": '钨钢套装', // Items 7486, 7487, 7488
+  "Hussar's": '轻骑兵套装', // Items 7450, 7451, 7452
+  "Fistfighter's": '拳法师套装', // Items 7456, 7457, 7458
+  "Pilgrim's": '朝圣者套装', // Items 7468, 7469, 7470
+  "Light": '光之套装', // Items 2955, 3271, 3737
+  "Fuma": '风魔套装', // Items 2952, 3268, 3509
+  "Ballad": '民谣套装', // Items 2953, 3269, 3510
+  "Crimson": '深红套装', // Items 2957, 3273, 3514
+  "Royal": '皇室套装', // Items 2954, 3270, 3511
+  // The official packages include the variant in the complete Item name.
+  "Leisurewear (High-cut Knit Top)": '运动休闲短罩衫套装', // Item 45570
+  "Leisurewear (High-cut Shirt)": '运动休闲破烂罩衫套装', // Item 45569
+  "Cobalt Tungsten": '钴钨', // Official body equipment names: 42167, 42172
+  "Sarcenet": '薄绢', // Official body equipment names: 42177, 42187, 42182, 42197, 42192
+  "Mountain Linen": '高山亚麻', // Official body equipment names: 42023, 42033, 42028, 42043, 42038
   'Graffiti Neotunic': '涂鸦新式文化衫套装', // Items 52433–52435
   'Festival Neotunic': '欢庆新式文化衫套装',
   "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
