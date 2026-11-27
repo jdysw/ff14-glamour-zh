@@ -63,7 +63,7 @@ def read_rules(page, pages):
     if delay > 10:
         raise RuntimeError("Required crawl interval exceeds smoke-test budget; stop")
     print("Public seed paths permitted by robots rules; no broad crawl requested", flush=True)
-    return delay
+    return delay, parser, agent
 
 
 def valid_document(page, status, cloud):
@@ -81,7 +81,7 @@ def valid_document(page, status, cloud):
     return None
 
 
-def scan(page, cfg, scripts, dist, cloud):
+def scan(page, cfg, scripts, dist, cloud, loaded_status=None):
     url = cfg["url"]
     row = {"site": "ec", "pageId": cfg["id"], "url": url, "status": "failed",
            "items": [], "error": "not completed", "channel": "browser-use-cloud",
@@ -95,8 +95,11 @@ def scan(page, cfg, scripts, dist, cloud):
                 document_status[0] = response.status
 
         page.on("response", remember_response)
-        response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
-        status = response.status if response else 0
+        if loaded_status is None:
+            response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            status = response.status if response else 0
+        else:
+            status = loaded_status
         document_status[0] = document_status[0] or status
         row["httpStatus"] = status
         reason = valid_document(page, status, cloud)
@@ -104,6 +107,11 @@ def scan(page, cfg, scripts, dist, cloud):
             row["error"] = reason
             return row
         page.wait_for_timeout(1000)
+        if page.evaluate("window.__zhxAuditInjected === true"):
+            row["error"] = "state changed without a fresh untranslated document"
+            return row
+        if scripts.get("catalog_inventory"):
+            row["inventoryBefore"] = page.evaluate(scripts["catalog_inventory"])
         before = page.evaluate(scripts["collector"])
         if not isinstance(before, list) or not before:
             row["error"] = "no baseline collector evidence"
@@ -126,6 +134,8 @@ def scan(page, cfg, scripts, dist, cloud):
         if not isinstance(after, list) or not after:
             row["error"] = "no translated collector evidence"
             return row
+        if scripts.get("catalog_inventory"):
+            row["inventoryAfter"] = page.evaluate(scripts["catalog_inventory"])
         row.update(status="ok", error=None, beforeCount=len(before),
                    httpStatus=document_status[0], items=cloud.pair_snapshots(before, after))
         return row
@@ -136,7 +146,7 @@ def scan(page, cfg, scripts, dist, cloud):
 
 def execute(cdp, scripts, dist, cloud):
     pages = scripts["pages"]
-    fixed_seeds = {"/", "/glamours", "/gearsets", "/accessories", "/about"}
+    fixed_seeds = {"/", "/glamours", "/gearsets", "/accessories", "/about", "/facewear", "/fashion-accessories"}
     if not 1 <= len(pages) <= len(fixed_seeds) or any(
         not allowed_origin(row["url"]) or urlsplit(row["url"]).path.rstrip("/") not in
         {path.rstrip("/") for path in fixed_seeds} or urlsplit(row["url"]).query
@@ -149,13 +159,16 @@ def execute(cdp, scripts, dist, cloud):
             context = browser.contexts[0]
             page = context.pages[0] if context.pages else context.new_page()
             try:
-                delay = read_rules(page, pages)
+                delay, parser, agent = read_rules(page, pages)
             except Exception as error:
                 print("EC rule check stopped: " + type(error).__name__, flush=True)
                 save({"site": "ec", "pageId": pages[0]["id"], "url": pages[0]["url"],
                       "items": [], "status": "failed", "error": "robots policy unavailable or restrictive; no business page requested",
                       "channel": "browser-use-cloud", "revision": os.environ.get("ZHX_AUDIT_SHA", "")})
                 return False
+            if scripts.get("mode") == "catalog":
+                batch = load_module("ec_catalog_audit", "ec-catalog-audit.py")
+                return batch.run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save)
             completed = 0
             for cfg in pages:
                 time.sleep(delay)
