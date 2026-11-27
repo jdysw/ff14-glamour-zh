@@ -304,7 +304,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     const outfitArticle = match[4] === '👗' || !match[4];
     const isKnownOutfit = match[3] && outfitArticle && mappedSeries === name;
     let suffix = '';
-    if (!/(?:套装|装束|夏装组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(name)) {
+    if (!/(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(name)) {
       if (isKnownOutfit) suffix = '套装';
       else if (match[3]) suffix = '装备';
     }
@@ -621,14 +621,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['バラード', { path: '/equipment/ballad/', zh: '民谣套装', plain: true, strictLink: true, crystal: true }],
     ['風魔', { path: '/equipment/fuma/', zh: '风魔套装', plain: true, strictLink: true, crystal: true }],
     ['オニオン', { path: '/equipment/onion/', zh: '洋葱套装', plain: true, strictLink: true, crystal: true }],
-    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱套装' }],
+    ['夜桜', { path: '/equipment/yozakuras/', zh: '夜樱装束' }], // Item 52597
     ['ビーストマスター', { path: '/equipment/beastmasters/', zh: '兽主套装' }],
     ['コスモエクスプローラー', { path: '/equipment/cosmic_explorers/', zh: '宇宙探索者套装' }],
     // Full native catalogue audit (1,580 distinct equipment URLs). These are
     // site display names derived from verified localized item families, not
     // global item aliases; ambiguous short names must retain their URL scope.
     ['キングダムブラス・レンジャー', { path: '/equipment/bygone_brass_jerkin_of_aiming/', zh: '王国黄铜精准套装', strictLink: true }],
-    ['ガラテア', { path: '/equipment/galatea/', zh: '伽拉忒亚套装', strictLink: true }],
+    ['ガラテア', { path: '/equipment/galatea/', zh: '伽拉忒亚装备套装', strictLink: true }], // Item 47715
     ['ピーコック・クラフター', { path: '/equipment/crested_of_crafting/', zh: '雀翎巧匠套装', strictLink: true }],
     ['ピーコック・ギャザラー', { path: '/equipment/crested_of_gathering/', zh: '雀翎大地套装', strictLink: true }],
     ['プリッシュ・ストライカー', { path: '/equipment/prishes_of_striking/', zh: '普利修强袭套装', strictLink: true }],
@@ -712,7 +712,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['イディル・パンクラティアストRE', { path: '/equipment/augmented_shire_pankratiasts/', zh: '改良型田园混斗者套装', strictLink: true }],
     ['イディル・エージェントRE', { path: '/equipment/augmented_shire_emissarys/', zh: '改良型田园出使者套装', strictLink: true }],
     ['カエアンビロード・クラフター', { path: '/equipment/ar-caean_velvet_of_crafting/', zh: '迷彩绒巧匠套装', strictLink: true }],
-    ['ルシス王子', { path: '/equipment/lucian_princes/', zh: '路西斯王子套装', strictLink: true }],
+    ['ルシス王子', { path: '/equipment/lucian_princes/', zh: '路西斯王子装束', strictLink: true }], // Item 45336
     ['ヴァイパー', { path: '/equipment/vipers/', zh: '蝰蛇套装', strictLink: true }],
     ['ブラックサマー（女性用）', { path: '/equipment/womens_black_summer/', zh: '纯黑女式夏装组合', strictLink: true }],
     ['ブラックサマー（男性用）', { path: '/equipment/mens_black_summer/', zh: '纯黑男式夏装组合', strictLink: true }],
@@ -805,7 +805,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['ウッドランドウォーデン・コスチュームセット', { path: '/equipment/woodland_wardens/', zh: '林地守护者套装', strictLink: true }], // Item 45539, 45540
     ['ファットキャット・コスチュームセット', { path: '/equipment/fat_cat_attire/', zh: '猫小胖套装', strictLink: true }], // Item 45486, 45487
     ['ヒップストリート・コスチュームセット', { path: '/equipment/hip_street_attire/', zh: '街头套装', strictLink: true }], // Item 45438, 45439
-    ['ウェアウルフ・コスチュームセット（女性用）', { path: '/equipment/werewolf_for_women/', zh: '女性人狼套装', strictLink: true }], // Item 21105
+    ['ウェアウルフ・コスチュームセット（女性用）', { path: '/equipment/werewolf_for_women/', zh: '人狼脚爪套装', strictLink: true }], // Item 45292
     ['ハウリングスピリット・ウェイリングスピリット', { path: '/equipment/the_howling_wailing_spirit/', zh: '尖啸幽灵套装、哭泣幽灵套装', strictLink: true }], // Item 6107, 6108
     ['ウォー', { path: '/equipment/war/', zh: '战争套装', strictLink: true }], // Item 6706, 6711, 6717, 6723, 6729
     ['レッド', { path: '/equipment/red/', zh: '赤红套装', strictLink: true }], // Item 20465, 20466, 20467, 20468, 20469
@@ -975,13 +975,13 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['延夏【弓士】', { path: '/equipment/yanxian_of_aiming/', zh: '延夏弓士装束', strictLink: true }], // member-name stem
     ['延夏【術士】', { path: '/equipment/yanxian_of_casting/', zh: '延夏术士装束', strictLink: true }], // member-name stem
     ['延夏【学士】', { path: '/equipment/yanxian_of_healing/', zh: '延夏学士装束', strictLink: true }], // member-name stem
-    ['羅漢【武士】', { path: '/equipment/arhat_of_fending/', zh: '罗汉豪士套装', strictLink: true }], // member-name stem
-    ['羅漢【槍士】', { path: '/equipment/arhat_of_maiming/', zh: '罗汉枪士套装', strictLink: true }], // member-name stem
-    ['羅漢【拳士】', { path: '/equipment/arhat_of_striking/', zh: '罗汉拳士套装', strictLink: true }], // member-name stem
-    ['羅漢【間士】', { path: '/equipment/arhat_of_scouting/', zh: '罗汉间士套装', strictLink: true }], // member-name stem
-    ['羅漢【弓士】', { path: '/equipment/arhat_of_aiming/', zh: '罗汉弓士套装', strictLink: true }], // member-name stem
-    ['羅漢【術士】', { path: '/equipment/arhat_of_casting/', zh: '罗汉术士套装', strictLink: true }], // member-name stem
-    ['羅漢【学士】', { path: '/equipment/arhat_of_healing/', zh: '罗汉学士套装', strictLink: true }], // member-name stem
+    ['羅漢【武士】', { path: '/equipment/arhat_of_fending/', zh: '罗汉豪士装束', strictLink: true }], // Item 51449
+    ['羅漢【槍士】', { path: '/equipment/arhat_of_maiming/', zh: '罗汉枪士装束', strictLink: true }], // Item 51450
+    ['羅漢【拳士】', { path: '/equipment/arhat_of_striking/', zh: '罗汉拳士装束', strictLink: true }], // Item 51451
+    ['羅漢【間士】', { path: '/equipment/arhat_of_scouting/', zh: '罗汉间士装束', strictLink: true }], // Item 51453
+    ['羅漢【弓士】', { path: '/equipment/arhat_of_aiming/', zh: '罗汉弓士装束', strictLink: true }], // Item 51452
+    ['羅漢【術士】', { path: '/equipment/arhat_of_casting/', zh: '罗汉术士装束', strictLink: true }], // Item 51455
+    ['羅漢【学士】', { path: '/equipment/arhat_of_healing/', zh: '罗汉学士装束', strictLink: true }], // Item 51454
     ['源氏【武士】', { path: '/equipment/genji_of_fending/', zh: '源氏之豪士套装', strictLink: true }], // member-name stem
     ['源氏【槍士】', { path: '/equipment/genji_of_maiming/', zh: '源氏之枪士套装', strictLink: true }], // member-name stem
     ['源氏【拳士】', { path: '/equipment/genji_of_striking/', zh: '源氏之拳士套装', strictLink: true }], // member-name stem
@@ -1032,6 +1032,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['蜂屋', { path: '/equipment/hachiya/', zh: '蜂屋装束', strictLink: true }], // Item 50599
     ['無銘', { path: '/equipment/nameless/', zh: '无名套装', strictLink: true }], // localized coffer name; display group
     ['紅蓮祭法被', { path: '/equipment/moonfire_happi/', zh: '红莲节法被套装', strictLink: true }], // localized member-name stem; combined color group
+    // Remaining catalogue labels: exact bundle identities or native multi-piece group names.
+    ['LV式', { path: '/equipment/lv55/', zh: '河畔堡驻军装束', strictLink: true }], // Item 50483
+    ['碧甲羅之', { path: '/equipment/the_blue/', zh: '碧甲装束', strictLink: true }], // Item 45290
+    ['アルマ・コスチュームセット', { path: '/equipment/almas_attire/', zh: '威风凛凛套装', strictLink: true }], // Item 45364
+    ['コロナルサマー', { path: '/equipment/coronal_summer/', zh: '盛花夏衣套装', strictLink: true }], // Display group; items 8549, 45133
+    ['サザンシー', { path: '/equipment/southern_seas/', zh: '南洋海滨套装', strictLink: true }], // Display group; items 30755, 30756, 30757, 30758, 45402, 45403
+    ['ガーディアン・オブ・スレイ', { path: '/equipment/the_guardians_of_maiming/', zh: '制敌守护者套装', strictLink: true }], // Display group; items 8310, 8311, 8312, 8313, 8314
+    ['ガーディアン・オブ・ストライク', { path: '/equipment/the_guardians_of_striking/', zh: '强袭守护者套装', strictLink: true }], // Display group; items 8316, 8317, 8318, 8319, 8320
   ]);
 
   // The catalogue uses 【】 while native article headings also use 〖〗.
@@ -1226,7 +1234,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     // 仅处理已能完整对照的独立系列名；不能给句子、部件名或半译词添后缀。
     const localized = translated.trim();
     if (localized !== officialName + fullBody && !(fullBody && localized === source)) return translated;
-    if (/(?:套装|装束|夏装组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(officialName)) {
+    if (/(?:套装|装束|组合)(?:·[阴阳])?(?:〖[^〖〗]+〗|（[^（）]+）)?$/u.test(officialName)) {
       return fullBody && localized === source
         ? original.replace(source, officialName + fullBody) : translated;
     }
