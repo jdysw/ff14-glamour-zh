@@ -1,28 +1,50 @@
-name: Browser Use provider smoke check
-# One-shot diagnostic requested after the repository secret was configured.
-# Restrict to the known same-repository PR transition; never access EC here.
+name: Browser Use EC bounded smoke check
+# Single user-requested public-page diagnostic. No proxy rotation or automatic retry.
 on:
   pull_request:
     types: [synchronize]
     paths:
       - '.github/workflows/browser-use-provider-smoke.yml'
-      - 'tools/coverage-audit/browser-use-probe.py'
+      - 'tools/coverage-audit/ec-cloud-smoke.py'
 permissions:
   contents: read
 jobs:
-  provider:
-    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '9a977ccb78131e63e3b679a918e426a503266320' && github.run_attempt == 1 }}
+  ec:
+    if: ${{ github.event.pull_request.number == 80 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/attire-localization-coverage' && github.event.before == '189afdcf2f3be74f5f563be2c6c660eeeb00c1b6' && github.run_attempt == 1 }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Install CDP client
-        run: python3 -m pip install 'playwright==1.55.0'
-      - name: Verify provider via a single short browser session
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Prepare exact candidate runtime data and shared collector
+        run: |
+          npm ci
+          npm run build
+          mkdir -p tests/.cache/ec-cloud-raw
+          node --input-type=module -e "import {SITES} from './tools/coverage-audit/audit.mjs';import {COLLECTOR_JS,AUDIT_READY_JS} from './tools/coverage-audit/coverage-collector.mjs';import {GM_STUB} from './tools/coverage-audit/run-scan.mjs';import {v3CacheEntries} from './tests/helpers/v3-cache.mjs';process.stdout.write(JSON.stringify({pages:SITES.ec.pages,collector:COLLECTOR_JS,ready:AUDIT_READY_JS,gm:GM_STUB,entries:v3CacheEntries('ec')}))" > tests/.cache/ec-cloud-inputs.json
+          python3 -m py_compile tools/coverage-audit/ec-cloud-smoke.py
+          python3 -m pip install 'playwright==1.55.0'
+      - name: Check public access rules and verify permitted pages
         env:
           BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
-          BROWSER_USE_PROBE_MODE: provider
-        run: python3 -u tools/coverage-audit/browser-use-probe.py
+          ZHX_AUDIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 -u tools/coverage-audit/ec-cloud-smoke.py
+      - name: Sanitize before upload
+        if: always()
+        run: |
+          mkdir -p tests/.cache/ec-cloud-raw
+          node tools/coverage-audit/sanitize-evidence.mjs tests/.cache/ec-cloud-raw tests/.cache/ec-cloud-public
+      - name: Export redacted evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ec-cloud-smoke-redacted
+          path: tests/.cache/ec-cloud-public/
+          retention-days: 14
+          if-no-files-found: warn

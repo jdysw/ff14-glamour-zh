@@ -31,7 +31,7 @@ const BLOCKED_URLS = [
   '*googletagmanager.com*', '*google.com*', '*facebook.net*', '*facebook.com*',
 ];
 
-const GM_STUB = `(() => {
+export const GM_STUB = `(() => {
   if (window.__gmStub) return;
   window.__gmStub = true;
   const P = 'gm:';
