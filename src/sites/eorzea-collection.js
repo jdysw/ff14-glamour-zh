@@ -812,9 +812,15 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
       return;
     }
     const isInterview = ecIsInterviewDetail();
+    const path = globalThis.location?.pathname || '';
+    const seriesName = part => {
+      if (/^\/gearset\/[^/]+\/?$/u.test(path)) return ecGearsetDisplayName(part);
+      if (/^\/accessories\/[^/]+\/?$/u.test(path)) return ecAccessoryDisplayName(part);
+      return ecAccessoryDisplayName(part) || ecGearsetDisplayName(part);
+    };
     const translated = parts.map((part) => EC_UI_LABELS.get(part)
       || (isInterview && ecInterviewTitle(part)) || ecChallengeTabTitle(part)
-      || ecAccessoryDisplayName(part) || ecGearsetDisplayName(part)
+      || seriesName(part)
       || DICT_EC[part] || (part.startsWith('Latest Patch') ? trEC(part) : part)).join(' | ');
     if (translated !== old) document.title = translated;
   }

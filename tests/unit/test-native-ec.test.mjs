@@ -559,6 +559,16 @@ test('EC Gearsets H1 拆分后缀：保留原版式并避免套装重复翻译',
     translateECGearsetNames();
     assert.equal(mainNode.nodeValue + suffixNode.nodeValue, zhName,
       'SPA 再次扫描不能重复添加套装后缀');
+    doc.title = "Avalanche Leader's Set | Eorzea Collection";
+    withGlobals({ location: { pathname: '/gearset/avalanche-leaders' } }, () => {
+      translateECTitle();
+      assert.equal(doc.title, '雪崩领导者套装 | Eorzea Collection');
+    });
+    doc.title = "Avalanche Leader's Accessories | Eorzea Collection";
+    withGlobals({ location: { pathname: '/accessories/avalanche-leaders' } }, () => {
+      translateECTitle();
+      assert.equal(doc.title, '雪崩领导者饰品 | Eorzea Collection');
+    });
     mainNode.nodeValue = 'Blooming Eyeglasses ';
     suffixNode.nodeValue = 'Set';
     withGlobals({ location: { pathname: '/gearset/blooming-eyeglasses' } }, () => {
@@ -566,6 +576,13 @@ test('EC Gearsets H1 拆分后缀：保留原版式并避免套装重复翻译',
       translateECGearsetNames();
       assert.equal(mainNode.nodeValue + suffixNode.nodeValue, '彩花装饰眼镜',
         '仅含一件已核对装备的目录标题不得追加「套装」');
+    });
+    mainNode.nodeValue = 'Rainbow Champa Corsage ';
+    suffixNode.nodeValue = 'Set';
+    withGlobals({ location: { pathname: '/gearset/rainbow-champa-corsage' } }, () => {
+      translateECGearsetNames();
+      translateECGearsetNames();
+      assert.equal(mainNode.nodeValue + suffixNode.nodeValue, '混色大季花花环');
     });
   });
 });

@@ -116,6 +116,12 @@ for (const [title, zh] of [["Cosmic Explorer's","宇宙探索者套装"],["Comfy
   assert.equal(tr(title + ' Set'), zh);
   assert.equal(tr(title + ' Seasonal Event Gear'), zh + ' 季节活动装备');
 }
+assert.equal(tr('Legend'), '神话传令官套装');
+for (const [title, zh] of [["Red Champa Corsage","红色大季花花环"],["Blue Champa Corsage","蓝色大季花花环"],["Yellow Champa Corsage","黄色大季花花环"],["Green Champa Corsage","绿色大季花花环"],["Orange Champa Corsage","橙色大季花花环"],["Purple Champa Corsage","紫色大季花花环"],["White Champa Corsage","白色大季花花环"],["Black Champa Corsage","黑色大季花花环"],["Rainbow Champa Corsage","混色大季花花环"]]) {
+  assert.equal(tr(title), zh);
+  assert.equal(tr(title + ' Set'), zh);
+  assert.equal(tr(title + ' Crafted Glamour'), zh + ' 制作幻化');
+}
 assert.equal(tr("Aunt Tii's Neotunic Set"), '缇姨塔可饼新式文化衫套装');
 assert.equal(tr('Unverified Eyeglasses'), null);
 assert.equal(tr('Plain Hooded'), '素色卫衣套装');
@@ -170,6 +176,13 @@ assert.equal(tr("Prishe's Healing"), null, '未收录的职业变体不能虚构
 // Runtime V3 `build/data/make-runtime-data.py` preserves the FIRST valid English
 // entry, not Map(last-write-wins). Mirror production precisely: duplicate
 // names in the canonical TSV can have different Chinese aliases later on.
+const officialById = new Map(fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n').map(line => {
+  const fields = line.split('\t');
+  return [fields[0], fields[1]];
+}));
+for (const [id, zh] of [["47212","红色大季花花环"],["47213","蓝色大季花花环"],["47214","黄色大季花花环"],["47215","绿色大季花花环"],["47216","橙色大季花花环"],["47217","紫色大季花花环"],["47218","白色大季花花环"],["47219","黑色大季花花环"],["47222","混色大季花花环"],["50252","神话传令官战冠"],["50253","神话传令官长衣"],["50254","神话传令官护腕"],["50255","神话传令官腰布裙"],["50256","神话传令官战靴"]]) {
+  assert.equal(officialById.get(id), zh, '国服物品表 ID ' + id);
+}
 const officialRows = new Map();
 for (const line of fs.readFileSync(path.join(root, 'data/source/ff14-items.tsv'), 'utf8').split('\n')) {
   const row = line.split('\t');

@@ -29,7 +29,7 @@ const EC_GEARSET_ROLE_SERIES = new Map([
 const EC_GEARSET_SINGLE_SERIES = new Set([
   "Beastmaster's", "Beast Herder's", "Successor's", 'Yozakura', "Zero's Luminary",
   "Avalanche Leader's", "Avalanche Brawler's",
-  "Cosmic Explorer's", 'Comfy Valentione', 'Cozy Valentione', 'Powersuit',
+  "Cosmic Explorer's", 'Comfy Valentione', 'Cozy Valentione', 'Powersuit', 'Legend',
   'Tule', 'Torna', 'Carwen', 'Tradewinds', "Neo Citizen's",
   'Plain Hooded', 'Festival Hooded', 'Succubus Hooded', 'Oversized Plain Hooded',
   'Graffiti Neotunic', 'Festival Neotunic', "Aunt Tii's Neotunic",
@@ -54,6 +54,7 @@ const EC_GEARSET_NAME_EXTRAS = Object.freeze({
   'Comfy Valentione': '舒心恋人套装', // Item 50715
   'Cozy Valentione': '温暖恋人套装', // Item 50714
   'Powersuit': '宇宙动力服套装', // Two pieces 50301/50302
+  'Legend': '神话传令官套装', // Items 50252-50256
   'Graffiti Neotunic': '涂鸦新式文化衫套装', // Items 52433–52435
   'Festival Neotunic': '欢庆新式文化衫套装',
   "Aunt Tii's Neotunic": '缇姨塔可饼新式文化衫套装',
@@ -97,6 +98,15 @@ const EC_SINGLE_ITEM_GEARSETS = new Map([
   ['Narumi Neotunic', '大码鸣海文化衫'], // Item 50850
   ['Picot Neotunic', '大码皮科特文化衫'], // Item 50851
   ['Ulala Neotunic', '大码乌拉拉文化衫'], // Item 50848
+  ['Red Champa Corsage', '红色大季花花环'], // Item 47212
+  ['Blue Champa Corsage', '蓝色大季花花环'], // Item 47213
+  ['Yellow Champa Corsage', '黄色大季花花环'], // Item 47214
+  ['Green Champa Corsage', '绿色大季花花环'], // Item 47215
+  ['Orange Champa Corsage', '橙色大季花花环'], // Item 47216
+  ['Purple Champa Corsage', '紫色大季花花环'], // Item 47217
+  ['White Champa Corsage', '白色大季花花环'], // Item 47218
+  ['Black Champa Corsage', '黑色大季花花环'], // Item 47219
+  ['Rainbow Champa Corsage', '混色大季花花环'], // Item 47222
 ]);
 // 分类后缀仅用于解析卡片同节点文本；不允许把来源名误识别为套装名。
 const EC_GEARSET_SOURCES = [
