@@ -801,7 +801,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['殿方水干衣装セット', { path: '/equipment/lords_suikan_set/', zh: '君子水干装束', strictLink: true }], // Item 45174
     ['姫君水干衣装セット', { path: '/equipment/ladys_suikan_set/', zh: '淑女水干装束', strictLink: true }], // Item 45181
     ['紅蓮祭・コスチュームセット', { path: '/equipment/eastern_faire-goers_attire/', zh: '红莲节装束', strictLink: true }], // Item 45287
-    ['レインディアセット', { path: '/equipment/reindeer_attire/', zh: '驯鹿套装', strictLink: true }], // Item 45095
+    ['レインディアセット', { path: '/equipment/reindeer_attire/', zh: '2016驯鹿套装', strictLink: true }], // CN store; items 13290–13292, not the older Item 45095 outfit
     ['ウッドランドウォーデン・コスチュームセット', { path: '/equipment/woodland_wardens/', zh: '林地守护者套装', strictLink: true }], // Item 45539, 45540
     ['ファットキャット・コスチュームセット', { path: '/equipment/fat_cat_attire/', zh: '猫小胖套装', strictLink: true }], // Item 45486, 45487
     ['ヒップストリート・コスチュームセット', { path: '/equipment/hip_street_attire/', zh: '街头套装', strictLink: true }], // Item 45438, 45439
