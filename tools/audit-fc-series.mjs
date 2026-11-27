@@ -242,6 +242,8 @@ function review(row, translated, evidence) {
   if (names.some(v => KANA.test(v))) issues.push('kana-residual');
   if (names.some(v => /套装套装|装束套装|夏装组合套装|套装装备/u.test(v))) issues.push('duplicate-set-suffix');
   if (new Set(names).size > 1) issues.push('context-disagreement');
+  if (row.native.startsWith('レプリカ・') && names.some(v => !v.includes('（复制品）')))
+    issues.push('missing-replica-qualifier');
   const canonical = [...new Set(evidence.items.map(r => r.zh))];
   if (evidence.type === 'exact-item' || evidence.type === 'shop-alias') {
     if (canonical.length > 1) issues.push('ambiguous-official-item');
@@ -289,6 +291,18 @@ function auditCatalogue(report) {
       const englishCandidates = englishIndex.get(normalizeEnglish(slug)) || [];
       return {...row,translated,evidence,englishCandidates,issues:review(row,translated,evidence)};
     });
+    // Identical translated names on different native equipment pages need
+    // semantic review, even if every individual card replay is consistent.
+    const byDisplayName = new Map();
+    for (const row of report.results) {
+      const name = row.translated.catalogueZh;
+      if (!byDisplayName.has(name)) byDisplayName.set(name, []);
+      byDisplayName.get(name).push(row);
+    }
+    for (const group of byDisplayName.values()) {
+      if (new Set(group.map(row => row.path)).size > 1)
+        for (const row of group) row.issues.push('duplicate-display-name');
+    }
     report.issueCounts = {};
     for (const row of report.results)
       for (const issue of row.issues) report.issueCounts[issue] = (report.issueCounts[issue] || 0) + 1;
