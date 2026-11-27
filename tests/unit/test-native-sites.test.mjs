@@ -1216,6 +1216,13 @@ test('FF14-FC 水晶塔光之套装：页面简称、获取方式及图库说明
       ['arhat_of_fending', '羅漢〖武士〗', '罗汉豪士装束'],
       ['werewolf_for_women', 'ウェアウルフ・コスチュームセット（女性用）', '人狼脚爪套装'],
       ['the_guardians_of_maiming', 'ガーディアン・オブ・スレイ', '制敌守护者套装'],
+      ['grisly_bear_suit', 'グリムグリズリー・スーツ', '狰狞熊套装'],
+      ['gaja_suit', 'ガジャスーツ', '小象套装'],
+      ['toad_suit', 'トードスーツ', '蟾蜍套装'],
+      ['swine_body', 'ポーキースーツ', '波奇套装'],
+      ['chicken_suit', 'チキンスーツ', '小鸡套装'],
+      ['rabbit_suit', 'ラビットスーツ', '兔子套装'],
+      ['raincoat', 'レインコート', '雨衣套装'],
       ['conquerors', 'コンカラー', '征服套装'],
       ['outsiders', 'アウトサイダー', '外来者套装'],
       ['flannel', 'フランネル', '法兰绒背带衬衫套装'],
@@ -1313,7 +1320,7 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     globalThis.location = dom.location;
     assert.equal(_applyV3({
       candidatePolicy: 1,
-      names: '試験の腕輪\t试验手镯\t1\t0\nテストキャップ\t测试帽\t1\t0\nテストシリーズ・キャスターハット\t测试系列咏咒帽\t1\t0\nテストシリーズ・キャスターローブ\t测试系列咏咒长袍\t1\t0\nテストシリーズ・キャスターグローブ\t测试系列咏咒手套\t1\t0',
+      names: 'レインコート\t雨衣\t1\t0\n試験の腕輪\t试验手镯\t1\t0\nテストキャップ\t测试帽\t1\t0\nテストシリーズ・キャスターハット\t测试系列咏咒帽\t1\t0\nテストシリーズ・キャスターローブ\t测试系列咏咒长袍\t1\t0\nテストシリーズ・キャスターグローブ\t测试系列咏咒手套\t1\t0',
       series: 'アバランチブロウラー|雪崩斗手\nグリムグリズリー・スーツ|狰狞熊套装\nビーストハーダー|兽牧\n魔戒法師の装束・陽|魔戒法师装束·阳',
     }), true, '测试系列数据必须有效加载');
     cacheReset('derived');
@@ -1344,6 +1351,19 @@ test('FF14-FC 套装卡片只给已核实的系列名添加显示后缀', () => 
     assert.equal(label('cap').nodeValue,'测试帽','推荐栏单件装备不能被套装保护拦截');
     assert.equal(label('role-set').nodeValue,'测试系列咏咒套装','至少三个一致部件才生成套装展示名称');
     assert.equal(label('unverified').nodeValue,'未知のセット(タンク)','未知套装不产生半译名');
+    globalThis.location = new URL('https://ff14-fc.com/equipment/raincoat/');
+    const rain = source.createElement('section');
+    rain.innerHTML = '<h5>レインコート</h5><h3>レインコート（全身）</h3><h3>レインコート</h3>'
+      + '<img alt="ミラプリ「レインコート」装備ミコッテでの見た目紹介1">'
+      + '<img alt="ミラプリ「レインコート」装備の見た目を各種族で紹介1">';
+    source.body.append(rain);
+    for (const h of rain.querySelectorAll('h5,h3')) trimFCNode(h.firstChild);
+    for (const img of rain.querySelectorAll('img')) _trFCAttr(img, 'alt');
+    assert.deepEqual([...rain.querySelectorAll('h5,h3')].map(h => h.textContent),
+      ['雨衣套装','雨衣套装（全身）','雨衣']);
+    assert.deepEqual([...rain.querySelectorAll('img')].map(img => img.getAttribute('alt')),
+      ['猫魅族「雨衣」外观展示图 1','「雨衣」各种族外观展示图 1']);
+    rain.remove();
     globalThis.location = new URL('https://ff14-fc.com/equipment/example/');
     assert.equal(fcSetDisplayText(label('series'), 'アバランチブロウラー', '雪崩斗手'), '雪崩斗手');
     const detail = source.createElement('h3');
