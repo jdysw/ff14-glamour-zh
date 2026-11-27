@@ -18,9 +18,8 @@
     # collection（包括 weapon 子域）
     node tools/coverage-audit/run-scan.mjs --site collection --channel local
 
-    # mirapri / EC 使用云浏览器，须自行配置 BROWSER_USE_API_KEY
-    node tools/coverage-audit/run-scan.mjs --site ec --channel cloud --discover --max-pages 60
-    python3 tools/coverage-audit/cloud-audit.py --site ec
+    # EC：仅在站方允许自动访问的环境执行有界种子页检查
+    node tools/coverage-audit/run-scan.mjs --site ec --channel local --no-sitemap
 
     # 将每 URL 的最新成功或失败结果汇总成 Markdown
     node tools/coverage-audit/run-scan.mjs --report
@@ -33,7 +32,7 @@
 | 通道 | 适用范围 |
 |---|---|
 | local (Chrome CDP) | FC、Ronka、Collection、EndCloset 等可直接访问站点 |
-| cloud (Playwright) | mirapri、Eorzea Collection 等受 WAF/CF 限制站点；自备服务密钥 |
+| cloud (Playwright) | 已获得站方自动访问许可的浏览器服务；自备服务密钥，不作为访问拒绝后的自动回退 |
 | user | 用户浏览器临时收集器，适用于授权的真实页面 |
 | fixture | 灰机 wiki 反查模块的离线集成测试 |
 
@@ -42,6 +41,17 @@ FF14-FC 已收录头、身、手、腿、足五类真实装备搜索入口及足
 本地/云端使用同一份 coverage-collector.mjs；不再维护两套采集正则。采集内容包括可见文本、输入框 placeholder、title、aria-label、alt、option 和按钮 value 等。翻译前后依据元素路径和属性类型匹配，保留未命中的原文证据。
 
 --discover 启用同站链接的有限深度发现。--max-pages 控制最多浏览多少页面，--max-depth 控制发现层级，--per-template 限制同一页面模板的样本数。浏览器通道访问的是公开站内路径，不执行删除、登录或提交表单操作。
+
+## EC 访问受限时的真实浏览器验收
+
+GitHub 托管 Runner 曾对 EC 四个公开种子页（首页、幻化列表、装备套装列表、关于页）收到 HTTP 403。正常网页内容可读取不等于 CI 自动访问已获许可，不能将该情况记为汉化缺陷或已完成。自动扫描遇到明确的 401/403/429 或 WAF 验证页时停止该站，报告保留失败及未扫描的种子；不切换出口或反复尝试其他页面。EC 不预抓 Sitemap。
+
+若需要恢复自动化实测，请先通过站点工作人员确认允许的检查方式（公开接口或获准的 Runner），再使用上述 EC 单站命令；服务密钥不写入仓库。不具备许可时，使用项目已有的手动审计工具在普通浏览器中逐页验证：
+
+1. 在可信本机检出当前待验收提交，运行 `npm ci`、`npm run build`，安装本次构建的 `dist/ff14-glamour-zh.greasyfork.user.js` 和 [手动审计脚本](../manual-coverage-audit/FF14-Coverage-Audit-V1.1.user.js)，关闭其他版本，记下提交 SHA。
+2. 正常浏览 EC 的四个公开种子页、实际装备与幻化详情页，按[手动审计说明](../manual-coverage-audit/README.md)采集原文基线与汉化后状态；如需检查搜索或筛选，在相同交互状态下分别采集。
+3. 默认脱敏导出 JSON，用 `node tools/manual-coverage-audit/generate-report.mjs <导出文件.json>` 生成独立报告。提交 SHA 仅为操作者记录，不能作为工具自动验证过的版本标识。
+4. 保留自动访问失败报告和手动验收报告两个证据来源，不以手动样本覆盖失败记录或冒充全站自动扫描成功。
 
 ## 分类与报告
 

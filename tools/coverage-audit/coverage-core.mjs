@@ -220,6 +220,20 @@ export function nonContentPageReason({ title = '', body = '', httpStatus = 0 } =
   return null;
 }
 
+// A refusal or rate limit is not a failed translation. Stop automated access
+// for this site rather than rotating identities, retrying other paths or
+// treating a challenge as a valid page. A genuine 404 is a page-specific error.
+export function siteAccessDenial(identity, allowedHosts) {
+  if (!identity?.finalUrl) return null;
+  let url;
+  try { url = new URL(identity.finalUrl); } catch { return null; }
+  if (url.protocol !== 'https:' || !allowedHosts.includes(url.hostname)) return null;
+  const status = Number(identity.httpStatus);
+  if ([401, 403, 429].includes(status)) return 'HTTP ' + status + ' access denied or limited';
+  const reason = nonContentPageReason({ ...identity, httpStatus: 0 });
+  return reason?.includes('WAF challenge') ? reason : null;
+}
+
 export function pageIdentityFailure(identity, allowedHosts) {
   const actual = identity?.finalUrl;
   if (!actual) return 'missing final document URL';

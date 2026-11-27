@@ -17,7 +17,7 @@ import { SITES, COLLECTOR_JS, classifyResiduals, buildReport, CACHE_DIR, DIST_FI
 import { SITE_POLICIES } from '../../src/core/site-policy.js';
 import { LINKS_JS, AUDIT_READY_JS } from './coverage-collector.mjs';
 import { discoverSitemapUrls } from './sitemap.mjs';
-import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure } from './coverage-core.mjs';
+import { normalizeSiteUrl, templateKey, pairSnapshots, unmatchedHosts, waitForAuditReady, pageIdentityFailure, siteAccessDenial } from './coverage-core.mjs';
 import { newPage, closePage } from '../../tests/helpers/cdp.mjs';
 import { ensureChrome } from '../../tests/helpers/chrome.mjs';
 import { seedV3Memory } from '../../tests/helpers/v3-cache.mjs';
@@ -46,6 +46,15 @@ const GM_STUB = `(() => {
 })();`;
 
 const WRAP = (src) => `(function(){ try { ${src} } catch (e) { console.error('[AUDIT-INJECT]', e && e.message); } })();`;
+
+function requireSiteAccess(identity, hosts) {
+  const reason = siteAccessDenial(identity, hosts);
+  if (!reason) return;
+  const error = new Error('站点拒绝或限制自动访问：' + reason);
+  error.code = 'SITE_ACCESS_DENIED';
+  error.httpStatus = Number(identity.httpStatus) || 0;
+  throw error;
+}
 
 /**
  * 扫描单个 URL（本地 CDP）。
@@ -78,19 +87,26 @@ export async function scanUrlLocal({ site, pageId, url, port = 9223, waitMs = 15
           ready: document.readyState,
           len: document.body ? document.body.innerText.length : 0,
           host: location.host,
-          url: location.href.slice(0, 120),
+          finalUrl: location.href,
+          title: document.title,
+          body: (document.body?.innerText || '').slice(0, 5000),
           lsOk,
         };
       })()`).catch(() => ({}));
-      if (st && st.lsOk && st.ready === 'complete' && st.len > 50 && expectedHosts.includes(st.host)) {
-        pageOk = true;
-        break;
+      if (st?.ready === 'complete' && expectedHosts.includes(st.host)) {
+        st.httpStatus = documentResponses.findLast((e) => e.url === st.finalUrl)?.httpStatus || 0;
+        requireSiteAccess(st, expectedHosts);
+        if (st.lsOk && st.len > 50) {
+          pageOk = true;
+          break;
+        }
       }
     }
     if (!pageOk) throw new Error('页面未就绪，可能被重定向、反爬拦截或加载失败：' + url);
     const pageIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
     const response = documentResponses.findLast((e) => e.url === pageIdentity.finalUrl);
     pageIdentity.httpStatus = response?.httpStatus || 0;
+    requireSiteAccess(pageIdentity, expectedHosts);
     const rejection = pageIdentityFailure(pageIdentity, expectedHosts);
     if (rejection) throw new Error('非业务页面，扫描无效：' + rejection);
     // Before snapshot includes *English* UI, enabling differential auditing.
@@ -116,6 +132,7 @@ export async function scanUrlLocal({ site, pageId, url, port = 9223, waitMs = 15
     await sleep(waitMs); // allow MutationObserver / DOM work to settle
     const afterIdentity = await c.eval('({title:document.title,body:(document.body?.innerText||"").slice(0,5000),finalUrl:location.href})');
     afterIdentity.httpStatus = documentResponses.findLast((e) => e.url === afterIdentity.finalUrl)?.httpStatus || 0;
+    requireSiteAccess(afterIdentity, expectedHosts);
     const afterRejection = pageIdentityFailure(afterIdentity, expectedHosts);
     if (afterRejection) throw new Error('扫描中被站点阻断：' + afterRejection);
     const raw = await c.eval(COLLECTOR_JS);
@@ -254,7 +271,10 @@ async function main() {
     if (ch === 'local') {
       const hosts = cfg.hosts || [cfg.host];
       const queue = pages.filter((p) => !p.url.startsWith('fixture:')).map((p) => ({ ...p, depth: 0 }));
-      if (discover && !hasFlag('--no-sitemap')) {
+      // EC's hosted-runner requests have been refused. Do not prefetch its
+      // sitemap before a valid page has been observed. The explicit seeds
+      // and same-site links are sufficient for bounded authorized checks.
+      if (discover && site !== 'ec' && !hasFlag('--no-sitemap')) {
         const sitemapUrls = await discoverSitemapUrls({ hosts, maxUrls: Math.min(250, maxPages * 8) });
         const sampledTemplates = new Set();
         for (const url of sitemapUrls) {
@@ -298,8 +318,16 @@ async function main() {
           console.error('  扫描失败 [' + site + '/' + (p.id || norm) + ']:', e.message);
           const failed = { site, pageId: p.id || 'discovered-' + n, url: norm, template, items: [],
             status: 'failed', error: String(e.message || e), scannedAt: new Date().toISOString() };
+          if (e.code === 'SITE_ACCESS_DENIED') {
+            failed.accessDenied = true;
+            failed.httpStatus = e.httpStatus;
+          }
           saveResult(failed);
           results.push(failed);
+          if (failed.accessDenied) {
+            console.error('  已停止该站自动访问；剩余页面未扫描。请使用站方允许的访问方式或普通浏览器手动验收。');
+            break;
+          }
         }
       }
       console.log('  有效扫描样本 ' + results.filter((r) => r.site === site && !r.error).length +

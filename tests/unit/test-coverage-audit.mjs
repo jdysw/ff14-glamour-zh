@@ -6,7 +6,7 @@ import {
 } from '../../tools/coverage-audit/audit.mjs';
 import {
   normalizeSiteUrl, templateKey, selectDiscoveredPages, pairSnapshots,
-  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure,
+  latestResults, coverageStats, classifyChangedText, unmatchedHosts, waitForAuditReady, nonContentPageReason, pageIdentityFailure, siteAccessDenial,
 } from '../../tools/coverage-audit/coverage-core.mjs';
 import { LINKS_JS, AUDIT_READY_JS } from '../../tools/coverage-audit/coverage-collector.mjs';
 import { parseSitemapLocs, discoverSitemapUrls } from '../../tools/coverage-audit/sitemap.mjs';
@@ -317,6 +317,15 @@ console.log('✅ coverage-audit: host contracts, URL crawl, snapshots, JA/KO/EN,
 assert.match(nonContentPageReason({title:'Ronka Closet',body:'This page could not be found.'}),/404/);
 assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:404}),/HTTP 404/);
 assert.match(nonContentPageReason({title:'Friendly title',body:'Regular site layout',httpStatus:403}),/HTTP 403/);
+const ecHost = ['ffxiv.eorzeacollection.com'];
+const ecIdentity = {finalUrl:'https://ffxiv.eorzeacollection.com/',title:'EC',body:'Forbidden'};
+for (const status of [401,403,429]) {
+  assert.match(siteAccessDenial({...ecIdentity,httpStatus:status},ecHost),new RegExp('HTTP '+status));
+}
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:404},ecHost),null);
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:200},ecHost),null);
+assert.equal(siteAccessDenial({...ecIdentity,httpStatus:403,finalUrl:'https://unrelated.example/'},ecHost),null);
+assert.match(siteAccessDenial({...ecIdentity,httpStatus:503,title:'Just a moment...',body:'Performing security verification by Cloudflare'},ecHost),/WAF/);
 assert.equal(nonContentPageReason({title:'News',body:'An article discussing 404 pages in detail'}),null);
 assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'https://other.example/'},['ff14-fc.com']),/cross-origin/);
 assert.match(pageIdentityFailure({title:'Welcome',body:'Hello',finalUrl:'http://ff14-fc.com/'},['ff14-fc.com']),/cross-origin/);
