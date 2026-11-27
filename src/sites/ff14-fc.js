@@ -97,6 +97,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     ['セイニャー・コスチュームセット', '领主装备套装'],
     // The official outfit combination name (Item 45109) already expresses a set.
     ['ブルーサマーセット（女性用）', '蔚蓝女式夏装组合'],
+    // Full set labels observed in the live recommendation cards. Game item
+    // records 50585, 8111, 14855, 28606, 15481 and 32332–32333 establish
+    // the set identity or the localized shop/gear family name.
+    ['アイディアル・スースセイヤー', '理想化的预占套装'],
+    ['スウィートドリームアタイア', '美梦套装'],
+    ['東方殿方衣装セット', '东方公子套装'],
+    ['東方美玉衣装セット', '东方美玉套装'],
+    ['風雅衣装セット', '风雅套装'],
+    ['エデンモーン・キャスター', '伊甸之晨咏咒套装'],
   ]);
   function fcVerifiedSetName(name) {
     if (typeof name !== 'string') return null;
