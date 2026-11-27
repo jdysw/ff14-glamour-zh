@@ -109,7 +109,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       const prefix = summer[1].startsWith('パール') ? summer[1] + '・' : summer[1];
       const part = summer[2] === '女' ? 'ホルター' : 'トップ';
       const values = resolveAllByName(prefix + 'サマー' + part + '・セット');
-      return values.length === 1 && /夏装组合$/u.test(values[0]) ? values[0] : null;
+      return values.length === 1 && values[0].endsWith('夏装组合') ? values[0] : null;
     }
     if (!name.endsWith('・コスチュームセット')) return null;
     // The shop commonly uses コスチュームセット where the canonical
@@ -784,36 +784,33 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     return translated.replace(localized, officialName + '套装' + fullBody);
   }
 
+  function fcRecommendationText(node, raw, label) {
+    const exact = fcVerifiedSetName(label) || _getSeriesMap().get(label);
+    if (exact) return fcSetDisplayText(node, raw, raw.replace(label, () => exact));
+    const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
+    if (!group) return null;
+    const base = group[1].trim();
+    const family = _getSeriesMap().get(base) || fcVerifiedSetName(base)
+      || _getItemPfx().get(base) || _getSeriesPfx().get(base) || lookupDutyName(base);
+    const roles = group[2].split('・').map(role => fcUIValue(role.trim()));
+    if (family && roles.every(Boolean)) {
+      return raw.replace(label, () => family + '（' + roles.join('、') + '）');
+    }
+    // A complete item identity still takes precedence over an unknown group.
+    const candidates = resolveAllByName(label);
+    return candidates.length === 1 ? raw.replace(label, () => candidates[0]) : raw;
+  }
+
   function trimFCNode(node) {
     const raw = node.nodeValue;
-    if (!raw?.trim()) return;
+    const label = raw?.trim();
+    if (!label) return;
     const p = node.parentElement;
     if (p?.closest?.(FC_SKIP_SEL)) return;
-    const label = raw.trim();
-    // Recommendation titles sometimes append a role group to a series.
-    // Translate only if the entire native family and every role are known.
     if (p?.closest?.('#scrollad h5,.related_post__equipment .article_list__ttl')) {
-      // Exact set aliases take precedence over a parenthetical role group.
-      const exact = fcVerifiedSetName(label) || _getSeriesMap().get(label);
-      if (exact) {
-        const next = fcSetDisplayText(node, raw, raw.replace(label, () => exact));
+      const next = fcRecommendationText(node, raw, label);
+      if (next !== null) {
         if (next !== raw) node.nodeValue = next;
-        return;
-      }
-      const group = /^(.{1,60}?)[（(]([^（）()]{1,60})[）)]$/u.exec(label);
-      if (group) {
-        const base = group[1].trim();
-        const family = _getSeriesMap().get(base) || fcVerifiedSetName(base)
-          || _getItemPfx().get(base) || _getSeriesPfx().get(base) || lookupDutyName(base);
-        const roles = group[2].split('・').map(role => fcUIValue(role.trim()));
-        if (family && roles.every(Boolean)) {
-          node.nodeValue = raw.replace(label, () => family + '（' + roles.join('、') + '）');
-          return;
-        }
-        // A known complete item/set must not be lost merely because its
-        // title contains parentheses. Unknown groups remain untouched.
-        const candidates = resolveAllByName(label);
-        if (candidates.length === 1) node.nodeValue = raw.replace(label, () => candidates[0]);
         return;
       }
     }
@@ -822,31 +819,38 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
       if (garoBare !== label) node.nodeValue = raw.replace(label, garoBare);
       return;
     }
-    // 未取得可靠系列对应时宁可保留日文，不能用同名前缀套用单件装备译名。
+    const next = fcCardText(node, raw, label);
+    if (next !== raw) node.nodeValue = next;
+  }
+
+  function fcCardText(node, raw, label) {
+    const p = node.parentElement;
     const path = globalThis.location?.pathname || '';
-    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
-    const name = fullBody ? label.slice(0, -fullBody.length) : label;
     if (fcSetTitleContext(p, label, path)) {
-      const series = _getSeriesMap().get(name) || fcVerifiedSetName(name)
-        || fcScopedSetName(name, p) || _getSeriesPfx().get(name);
-      // /equipment/ also contains individual clothing and accessories, as
-      // seen in the randomly selected sidebar cards. Exact, unique item
-      // identities must not be blocked by the set-only protection.
-      const candidates = resolveAllByName(name);
-      if (!series && !fullBody && candidates.length === 1 && candidates[0] !== name) {
-        node.nodeValue = raw.replace(label, () => candidates[0]);
-        return;
-      }
-      const prefix = !candidates.length && _getItemPfx().get(name);
-      if (/^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
-          && !(fcUIValue(name) || series || prefix)) return;
-      if (!series && !prefix && candidates.length > 1) return;
+      const next = fcSetCardOverride(p, raw, label);
+      if (next !== null) return next;
     }
     const filter = p?.closest?.('label, h4, option') && p.closest('form.searchandfilter');
     const translated = filter && fcUIValue('filter:' + label);
     const resolved = translated ? raw.replace(label, translated) : trFC(raw);
-    const next = fcSetDisplayText(node, raw, resolved);
-    if (next !== raw) node.nodeValue = next;
+    return fcSetDisplayText(node, raw, resolved);
+  }
+
+  function fcSetCardOverride(element, raw, label) {
+    const fullBody = FC_FULL_SET_LABEL.exec(label)?.[0] || '';
+    const name = fullBody ? label.slice(0, -fullBody.length) : label;
+    const series = _getSeriesMap().get(name) || fcVerifiedSetName(name)
+      || fcScopedSetName(name, element) || _getSeriesPfx().get(name);
+    // Sidebar cards also contain individual clothing and accessories.
+    const candidates = resolveAllByName(name);
+    if (!series && !fullBody && candidates.length === 1 && candidates[0] !== name) {
+      return raw.replace(label, () => candidates[0]);
+    }
+    const prefix = !candidates.length && _getItemPfx().get(name);
+    if (/^[\u30a0-\u30ff\u4e00-\u9fff]{2,40}$/u.test(name)
+        && !(fcUIValue(name) || series || prefix)) return raw;
+    if (!series && !prefix && candidates.length > 1) return raw;
+    return null;
   }
 
   // v1.2.8：节点分派拆为子步骤（降认知复杂度）

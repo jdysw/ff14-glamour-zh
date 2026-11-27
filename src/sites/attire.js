@@ -88,48 +88,61 @@ function exactUiName(source) {
     || lookupDutyName(source);
 }
 
-function uiName(source) {
-  const exact = exactUiName(source);
-  if (exact) return exact;
-  const questReward = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)クエスト[＆&]FATE等報酬品$/u.exec(source);
-  if (questReward) return exactUiName(questReward[1] + '編') + '任务及危命任务等奖励';
+function expansionRewardName(source) {
+  const reward = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)クエスト[＆&]FATE等報酬品$/u.exec(source);
+  if (reward) return exactUiName(reward[1] + '編') + '任务及危命任务等奖励';
   const artifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)アーティファクト$/u.exec(source);
   if (artifact) return exactUiName(artifact[1] + '編') + ' 职业专属装备';
-  const craftArtifact = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)(ギャザラー|クラフター)AF$/u.exec(source);
-  if (craftArtifact) return exactUiName(craftArtifact[1] + '編') + ' ' + exactUiName(craftArtifact[2] + 'AF');
-  // AF article headings pair a Japanese job name with its English equivalent.
-  // Only accept jobs present in the shared official job-name dictionary.
-  const jpJobAf = /^(.+?)\s*AF$/u.exec(source);
-  if (jpJobAf && JOBS.has(jpJobAf[1])) {
-    const job = exactUiName(jpJobAf[1]);
-    if (job) return job + '职业专属装备';
+  const craft = /^(新生|蒼天|紅蓮|漆黒|暁月|黄金)(ギャザラー|クラフター)AF$/u.exec(source);
+  return craft ? exactUiName(craft[1] + '編') + ' ' + exactUiName(craft[2] + 'AF') : null;
+}
+
+function jobArtifactName(source) {
+  // An AF heading must identify a job in the official job-name dictionary.
+  if (source?.endsWith('AF')) {
+    const native = source.slice(0, -2).trimEnd();
+    const job = JOBS.has(native) && exactUiName(native);
+    return job ? job + '职业专属装备' : null;
   }
-  const enJobAf = /^(.+?)\s+artefact$/iu.exec(source);
-  if (enJobAf) {
-    const job = exactUiName(enJobAf[1]);
-    if (job && [...JOBS].some(native => exactUiName(native) === job)) return job + '职业专属装备';
-  }
-  const count = /^(.+?)(\s*\([\d,]+\))$/u.exec(source);
-  if (count) {
-    const name = exactUiName(count[1]);
-    return name ? name + count[2] : null;
-  }
-  const duty = /^Lv\s*(\d{1,3})\s*ID\s+(.+)$/iu.exec(source);
+  const parts = /(?<!\s)\s+artefact$/iu.exec(source);
+  if (!parts) return null;
+  const job = exactUiName(source.slice(0, parts.index));
+  return job && [...JOBS].some(native => exactUiName(native) === job) ? job + '职业专属装备' : null;
+}
+
+function countedUiName(source) {
+  const count = /\([\d,]+\)$/u.exec(source);
+  if (!count) return null;
+  const prefix = source.slice(0, count.index);
+  const native = prefix.trimEnd();
+  const name = exactUiName(native);
+  return name ? name + prefix.slice(native.length) + count[0] : null;
+}
+
+function marketCatalogueName(source) {
+  const market = /^マーケット購入可能[:：]\s*Lv\s*(\d{1,3})\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3})\s*ギャザラー[＆&]クラフター装備$/iu.exec(source);
+  if (!market || Number(market[1]) > Number(market[2])) return null;
+  return '可在市场购买：' + market[1] + '～' + market[2] + '级采集与制作职业装备';
+}
+
+function levelCatalogueName(source) {
+  const duty = /^Lv\s*(\d{1,3})\s*ID\s+(\S.*)$/iu.exec(source);
   const name = duty && (DICT['attire:' + duty[2]] || lookupDutyName(duty[2]));
   if (name) return duty[1] + '级副本 ' + name;
-  const market = /^マーケット購入可能[:：]\s*Lv\s*(\d{1,3})\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3})\s*ギャザラー[＆&]クラフター装備$/iu.exec(source);
-  if (market && Number(market[1]) <= Number(market[2]))
-    return '可在市场购买：' + market[1] + '～' + market[2] + '级采集与制作职业装备';
-  // Crafted-equipment categories carry a level, item level, and one or
-  // several family stems. Every stem must be verified; do not partially
-  // translate a category or synthesize a single item's identity.
-  const gear = /^Lv\s*(\d{1,3})\s+IL\s*(\d{1,4})\s+(.+)$/iu.exec(source);
+  // Every family stem must be verified before translating a category.
+  const gear = /^Lv\s*(\d{1,3})\s+IL\s*(\d{1,4})\s+(\S.*)$/iu.exec(source);
   if (gear) {
     const families = gear[3].split('・').map(part => DICT['attire:gear-family:' + part.trim()]);
     if (families.every(Boolean)) return gear[1] + '级（品级' + gear[2] + '）' + families.join('、') + '装备';
   }
   const level = /^Lv\s*(\d{1,3})\s*[～〜~]$/iu.exec(source);
   return level ? level[1] + '级及以上' : null;
+}
+
+function uiName(source) {
+  if (!source) return null;
+  return exactUiName(source) || expansionRewardName(source) || jobArtifactName(source)
+    || countedUiName(source) || marketCatalogueName(source) || levelCatalogueName(source);
 }
 
 // Derive a colour-neutral flower title only when two exact native item
@@ -161,9 +174,10 @@ function groupArticleName(source) {
 }
 
 function afSummaryName(source) {
-  const match = /^(.+?)\s+歴代AF\s+男女着用SSまとめ$/u.exec(source || '');
-  if (!match) return null;
-  const job = jobName(match[1] === '踊り子士' ? '踊り子' : match[1]);
+  const match = /(?<!\s)\s+歴代AF\s+男女着用SSまとめ$/u.exec(source || '');
+  if (!match?.index) return null;
+  const native = source.slice(0, match.index);
+  const job = jobName(native === '踊り子士' ? '踊り子' : native);
   return job ? job + '历代职业专属装备试穿图汇总' : null;
 }
 
@@ -185,7 +199,8 @@ function eventName(source) {
 // Facewear articles append a display category to the actual item name.
 // Keep it separate from canonical item identity (including Wiki redirects).
 function facewearItemSource(source) {
-  return /^(.*?)\s*[（(]フェイスアクセサリー[）)]$/u.exec(source || '')?.[1] || null;
+  const suffix = /[（(]フェイスアクセサリー[）)]$/u.exec(source || '');
+  return suffix ? source.slice(0, suffix.index).trimEnd() || null : null;
 }
 
 function facewearArticleName(source) {
@@ -328,7 +343,7 @@ function translateWeaponCatalogue(title, page) {
 function afSetName(source) {
   // Some AF links omit the English label after '/', and newer jobs
   // have a separate starting-equipment entry rather than an expansion.
-  const match = /^(?:(新生|蒼天|紅蓮|漆黒|暁月|黄金)AF|ジョブ取得時にもらえる装備品)\s*([^/]+)\/.*$/u.exec(source);
+  const match = /^(?:(新生|蒼天|紅蓮|漆黒|暁月|黄金)AF|ジョブ取得時にもらえる装備品)([^/]+)\/.*$/u.exec(source);
   if (!match) return null;
   const set = catalogueSetName(match[2].trim());
   const label = exactUiName(match[1] ? match[1] + '編' : 'ジョブ取得時にもらえる装備品');
@@ -363,7 +378,7 @@ function mogLabel(source) {
   if (exact) return exact;
   const reward = mogRewardName(source);
   if (reward) return reward;
-  const pair = /^(\S+)\s+(.+)$/u.exec(source);
+  const pair = /^(\S+)\s+(\S.*)$/u.exec(source);
   if (!pair) return null;
   const currency = DICT['attire:mog:' + pair[1]];
   const item = mogRewardName(pair[2]);
@@ -427,19 +442,22 @@ function translateTomestoneGuide(title, nativeTitle) {
     if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) continue;
     const source = node.data.trim();
     if (!source) continue;
-    const structural = parent.closest(selector);
-    // In ordinary paragraphs only allow the fixed standalone guide labels
-    // known to occur as separate headings or acquisition metadata.
-    const standalone = parent.closest('p') && (
-      /^(?:Sモブ|Aモブ|リスキーモブ手配書|モブ手配書|指定された対象Bモブ100（週1回 毎週更新）|対象モンスター8\/対象FATE20（毎日更新）|強化方法|強化したいアイテム＋対応する強化用アイテム|ラールガーズリーチ|クガネ|イシュガルド下層 エーテライト付近|Allagan tomestone of [A-Za-z]+)$/u.test(source)
-      || !!huntVendorName(source) || (source.startsWith('「') && !!tomestoneGuideLabel(source))
-    );
-    if (!structural && !standalone) continue;
-    const link = parent.closest('a[href]');
-    if (link && link.origin !== location.origin) continue;
+    if (!isTomestoneGuideNode(parent, selector, source)) continue;
     const zh = tomestoneGuideLabel(source);
     if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
   }
+}
+
+function isTomestoneGuideNode(parent, selector, source) {
+  const link = parent.closest('a[href]');
+  if (link && link.origin !== location.origin) return false;
+  // Ordinary paragraphs only contain a handful of standalone guide labels.
+  return parent.closest(selector) || (parent.closest('p') && isTomestoneGuideLabel(source));
+}
+
+function isTomestoneGuideLabel(source) {
+  return /^(?:Sモブ|Aモブ|リスキーモブ手配書|モブ手配書|指定された対象Bモブ100（週1回 毎週更新）|対象モンスター8\/対象FATE20（毎日更新）|強化方法|強化したいアイテム＋対応する強化用アイテム|ラールガーズリーチ|クガネ|イシュガルド下層 エーテライト付近|Allagan tomestone of [A-Za-z]+)$/u.test(source)
+    || !!huntVendorName(source) || (source.startsWith('「') && !!tomestoneGuideLabel(source));
 }
 
 // The six expansion catalogues share the same rich headings, with English
@@ -468,6 +486,18 @@ function translateExpansionCatalogue() {
 
 // Translate only exact catalogue captions and verified item names, not
 // arbitrary editor-written image descriptions or player glamour artwork.
+function equipmentImageName(img, source, weaponDetail, expansion) {
+  const blogcard = img.closest('a.o--blogcard-link');
+  if (blogcard?.origin === location.origin) return articleName(source);
+  if (!img.closest('figure') || !(weaponDetail || expansion)) return null;
+  const exact = uniqueItemName(source);
+  if (exact || !expansion) return exact;
+  const duty = /(?<!\s)\s+武器一覧$/u.exec(source);
+  const native = duty?.index ? source.slice(0, duty.index) : null;
+  const name = native && (DICT['attire:weapon-meta:' + native] || lookupDutyName(native));
+  return articleName(source) || (name && name + ' 武器一览') || exactUiName(source);
+}
+
 function translateEquipmentImageLabels(weaponDetail) {
   if (hasCategory('glamour')) return;
   const path = location.pathname.replace(/\/$/u, '');
@@ -476,29 +506,21 @@ function translateEquipmentImageLabels(weaponDetail) {
     if (img.closest(EXCLUDED + ',' + CARD + ',' + ITEM_LINK)) continue;
     const source = img.getAttribute('alt').trim();
     if (!source) continue;
-    const blogcard = img.closest('a.o--blogcard-link');
-    let zh;
-    if (blogcard && blogcard.origin === location.origin) {
-      zh = articleName(source);
-    } else if (img.closest('figure') && (weaponDetail || expansion)) {
-      zh = uniqueItemName(source);
-      if (!zh && expansion) {
-        const duty = /^(.+?)\s+武器一覧$/u.exec(source);
-        const name = duty && (DICT['attire:weapon-meta:' + duty[1]] || lookupDutyName(duty[1]));
-        zh = articleName(source) || (name && name + ' 武器一览') || exactUiName(source);
-      }
-    }
+    const zh = equipmentImageName(img, source, weaponDetail, expansion);
     if (zh && zh !== source) img.setAttribute('alt', zh);
   }
 }
 
+const SOURCE_CATALOGUES = new Map([
+  ['/hand-land', 'hand-land'], ['/pvp', 'pvp'], ['/s-g', 'seasonal'], ['/gc', 'gc'],
+]);
+
 function translateSourceCatalogue(title, nativeTitle) {
   const path = location.pathname.replace(/\/$/u, '');
-  const kind = path === '/hand-land' ? 'hand-land'
-    : path === '/pvp' ? 'pvp' : path === '/s-g' ? 'seasonal'
-      : path === '/gc' ? 'gc' : afSummaryName(nativeTitle) || hasCategory('af-nyuusyu') ? 'af' : null;
+  const afTitle = afSummaryName(nativeTitle);
+  const kind = SOURCE_CATALOGUES.get(path) || (afTitle || hasCategory('af-nyuusyu') ? 'af' : null);
   // Event names and AF index titles are display labels, not item identities.
-  const titleZh = afSummaryName(nativeTitle) || eventName(nativeTitle);
+  const titleZh = afTitle || eventName(nativeTitle);
   if (!hasCategory('glamour')) replaceLabel(title, nativeTitle, titleZh);
   if (!kind) return;
   if (kind === 'seasonal') translateMogLabels();
@@ -513,15 +535,25 @@ function translateSourceCatalogue(title, nativeTitle) {
     if (replaceLabel(element, source, zh) || kind !== 'seasonal' || !eventName(source)) continue;
     // Keep the two nested DOM nodes and their links/icons, removing only
     // the repeated translated event label.
-    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    let node;
-    while ((node = walk.nextNode())) if (node.data.trim()) nodes.push(node);
-    if (nodes.length === 2 && nodes.every(n => eventName(n.data.trim()) === zh)) {
-      nodes[0].data = nodes[0].data.replace(nodes[0].data.trim(), () => zh);
-      nodes[1].data = '';
-    }
+    dedupeSeasonalEvent(element, zh);
   }
+}
+
+function labelTextNodes(element, excluded) {
+  const nodes = [];
+  const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    if (node.data.trim() && !(excluded && node.parentElement?.closest(excluded))) nodes.push(node);
+  }
+  return nodes;
+}
+
+function dedupeSeasonalEvent(element, zh) {
+  const nodes = labelTextNodes(element);
+  if (nodes.length !== 2 || !nodes.every(node => eventName(node.data.trim()) === zh)) return;
+  nodes[0].data = nodes[0].data.replace(nodes[0].data.trim(), () => zh);
+  nodes[1].data = '';
 }
 
 // Historical seasonal reward links contain a year, event copy and an item
@@ -532,30 +564,26 @@ function translateSeasonalRewardLinks() {
   for (const link of document.querySelectorAll('#postContent a[href]')) {
     if (link.closest(EXCLUDED + ',' + ITEM_LINK + ',' + CARD) || link.origin !== location.origin) continue;
     if (!/^\d{4}年/u.test(link.textContent.trim())) continue;
-    const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT);
-    let node;
-    let last;
-    while ((node = walker.nextNode())) {
-      if (node.data.trim() && !node.parentElement?.closest(EXCLUDED + ',script,style,svg')) last = node;
-    }
+    const last = labelTextNodes(link, EXCLUDED + ',script,style,svg').at(-1);
     const text = last?.data.trim();
     if (!text || text.length > 300) continue;
-    const exact = uniqueItemName(text);
-    if (exact) {
-      last.data = last.data.replace(text, () => exact);
-      continue;
-    }
-    const matches = new Map();
-    for (const space of text.matchAll(/\s+/gu)) {
-      const suffix = text.slice(space.index + space[0].length);
-      const zh = uniqueItemName(suffix);
-      if (zh) matches.set(suffix, zh);
-    }
-    if (matches.size === 1) {
-      const [suffix, zh] = [...matches][0];
-      last.data = last.data.replace(text, () => text.slice(0, -suffix.length) + zh);
-    }
+    const zh = seasonalRewardName(text);
+    if (zh) last.data = last.data.replace(text, () => zh);
   }
+}
+
+function seasonalRewardName(text) {
+  const exact = uniqueItemName(text);
+  if (exact) return exact;
+  const matches = new Map();
+  for (const space of text.matchAll(/\s+/gu)) {
+    const suffix = text.slice(space.index + space[0].length);
+    const zh = uniqueItemName(suffix);
+    if (zh) matches.set(suffix, zh);
+  }
+  if (matches.size !== 1) return null;
+  const [suffix, zh] = [...matches][0];
+  return text.slice(0, -suffix.length) + zh;
 }
 
 // Only translate verified treasure-map/area combinations. The site sometimes
@@ -569,7 +597,7 @@ function treasureSourceName(source) {
   }
   const mapOnly = /^宝の地図\s*G(17|18)$/u.exec(source);
   if (mapOnly) return 'G' + mapOnly[1] + '藏宝图';
-  const match = /^(?:宝の地図\s*G(17|18)\s*)?「?宝物庫\s*[:：]?\s*(セノーテ・ジャジャグラル|ボルト・オネイロン)」?$/u.exec(source);
+  const match = /^(?:宝の地図\s*G(17|18)\s*)?「?宝物庫\s*(?:[:：]\s*)?(セノーテ・ジャジャグラル|ボルト・オネイロン)」?$/u.exec(source);
   if (!match) return null;
   const grade = match[2] === 'セノーテ・ジャジャグラル' ? '17' : '18';
   if (match[1] && match[1] !== grade) return null;
@@ -609,29 +637,23 @@ function translateWeaponDetailMetadata() {
     // Effects and NPC/location pairs are often separated by a line break.
     // Only translate a block when every nonblank line is independently known
     // (or a numeric quantity); preserve the existing markup and line breaks.
-    if (!element.querySelector('br')) continue;
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    const replacements = [];
-    let node;
-    let valid = true;
-    while ((node = walker.nextNode())) {
-      const part = node.data.trim();
-      if (!part) continue;
-      if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) {
-        valid = false;
-        break;
-      }
-      const zh = weaponDetailName(part);
-      if (!zh && !/^\d+$/u.test(part)) {
-        valid = false;
-        break;
-      }
-      if (zh && zh !== part) replacements.push([node, part, zh]);
-    }
-    if (valid) for (const [text, part, zh] of replacements) {
-      text.data = text.data.replace(part, () => zh);
-    }
+    if (element.querySelector('br')) translateWeaponDetailLines(element);
   }
+}
+
+function translateWeaponDetailLines(element) {
+  const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const replacements = [];
+  let node;
+  while ((node = walk.nextNode())) {
+    const part = node.data.trim();
+    if (!part) continue;
+    if (node.parentElement?.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK)) return;
+    const zh = weaponDetailName(part);
+    if (!zh && !/^\d+$/u.test(part)) return;
+    if (zh && zh !== part) replacements.push([node, part, zh]);
+  }
+  for (const [text, part, zh] of replacements) text.data = text.data.replace(part, () => zh);
 }
 
 function translateStructuredItems(weaponPage, weaponDetail) {
@@ -652,14 +674,20 @@ function translateStructuredItems(weaponPage, weaponDetail) {
     if (zh) replaceLabel(link, source, zh);
     else if (weapons) localizeCompositeLink(link, jobName);
   }
-  // The catalogue's official duty links use the shared duty dictionary.
+  translateOfficialDutyLinks();
+  // Keep Lodestone item links untouched until the identity-aware pass below.
+  if (glamour) translateGlamourTable();
+}
+
+function translateOfficialDutyLinks() {
   for (const link of document.querySelectorAll('#postContent a[href*="/lodestone/playguide/db/duty/"]')) {
     if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     const source = link.textContent.trim();
     replaceLabel(link, source, lookupDutyName(source));
   }
-  // Keep Lodestone item links untouched until the identity-aware pass below.
-  if (!glamour) return;
+}
+
+function translateGlamourTable() {
   for (const cell of document.querySelectorAll('#postContent .wp-block-table :is(td,th)')) {
     if (cell.closest(EXCLUDED)) continue;
     const walk = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
@@ -676,26 +704,37 @@ function translateStructuredItems(weaponPage, weaponDetail) {
 // The same native exchange block is used on weapon and armor pages.
 const GC_SOURCES = ['黒渦団', '双蛇党', '不滅隊'];
 
+function exchangeText(region) {
+  const nodes = [];
+  const labels = new Set();
+  const walk = document.createTreeWalker(region, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walk.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK + ',' + CARD)) continue;
+    if (!isExchangeLink(parent.closest('a[href]'))) continue;
+    const lines = node.data.split(/(\r?\n)/u);
+    for (const line of lines) {
+      const label = line.trim();
+      if (label) labels.add(label);
+    }
+    nodes.push([node, lines]);
+  }
+  return { nodes, labels };
+}
+
+function isExchangeLink(link) {
+  return !link || link.origin === location.origin
+    || (/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+      && /^\/lodestone\/playguide\/db\/shop\/[0-9a-f]{11}\/?$/i.test(link.pathname));
+}
+
 function translateGrandCompanyMetadata() {
   const content = document.querySelector('#postContent');
   if (!content) return;
   const lookup = key => DICT['attire:gc:' + key];
   const heading = '交換に必要な軍票・階級';
-  const nodes = [];
-  const sources = new Set();
-  const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
-  let node;
-  while ((node = walk.nextNode())) {
-    const parent = node.parentElement;
-    if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK + ',' + CARD)) continue;
-    const link = parent.closest('a[href]');
-    if (link && link.origin !== location.origin
-        && !(/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
-          && /^\/lodestone\/playguide\/db\/shop\/[0-9a-f]{11}\/?$/i.test(link.pathname))) continue;
-    const lines = node.data.split(/(\r?\n)/u);
-    for (const line of lines) if (line.trim()) sources.add(line.trim());
-    nodes.push([node, lines]);
-  }
+  const { nodes, labels: sources } = exchangeText(content);
   // Require both the exchange heading and a single identified faction.
   // A currency amount or a rank in an unrelated article is not sufficient.
   if (!sources.has(heading) && !sources.has(lookup(heading))) return;
@@ -719,7 +758,7 @@ function translateGrandCompanyMetadata() {
 }
 
 function equipmentMetadata(source) {
-  const blocked = /^(頭|胴|手|脚|足)装備不可$/u.exec(source);
+  const blocked = /^([頭胴手脚足])装備不可$/u.exec(source);
   if (blocked) {
     const slots = { 頭: '头部', 胴: '身体', 手: '手部', 脚: '腿部', 足: '脚部' };
     return '不可装备' + slots[blocked[1]] + '防具';
@@ -731,7 +770,7 @@ function equipmentMetadata(source) {
       || /^(?:ギャザラー|クラフター)スクリップ:[白紫橙]貨$/u.test(source)
       || ['女性専用装備','男性専用装備','Fall Guys コラボレーションイベント',
         '現在は終了しているイベントのため入手できません'].includes(source)) return uiName(source);
-  const match = /^Lv\s*(\d{1,3})(?:\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3}))?\s*(.+)$/iu.exec(source);
+  const match = /^Lv\s*(\d{1,3})(?:\s*[～〜~]\s*(?:Lv\s*)?(\d{1,3}))?\s*(\S.*)$/iu.exec(source);
   if (!match || (match[2] && Number(match[1]) > Number(match[2]))) return null;
   const jobs = /^(?:All Jobs?|AllJobs)$/i.test(match[3])
     ? ['全职业'] : match[3].split(/\s+/u).map(jobName);
@@ -788,45 +827,70 @@ function translateAfAcquisitionLinks(content) {
       continue;
     }
     if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
-    const hash = /^\/lodestone\/playguide\/db\/quest\/([0-9a-f]{11})\/?$/iu.exec(link.pathname)?.[1].toLowerCase();
-    const quest = hash && AF_QUESTS.get(hash);
-    const zh = quest && DICT['attire:af-quest:' + quest];
-    if (zh && (native === quest || native === zh)) {
-      replaceLabel(link, native, zh);
-      if (link.textContent.trim() === zh) questLinks.add(link);
+    const zh = afQuestLinkName(link.pathname, native);
+    if (!zh) {
+      translateAfRoleQuestLink(link, native);
       continue;
     }
-    // Role quest category links are not individual quest identities.
-    if (AF_ROLE_LABELS.has(native) && link.pathname === '/lodestone/playguide/db/quest/'
-        && new URLSearchParams(link.search).get('category2') === '6'
-        && /^『/u.test(link.nextSibling?.textContent.trim() || '')) {
-      replaceLabel(link, native, '完成' + afDetailLabel(native));
-    }
+    replaceLabel(link, native, zh);
+    if (link.textContent.trim() === zh) questLinks.add(link);
   }
   return questLinks;
 }
 
+function afQuestLinkName(path, native) {
+  const hash = /^\/lodestone\/playguide\/db\/quest\/([0-9a-f]{11})\/?$/iu.exec(path)?.[1].toLowerCase();
+  const quest = hash && AF_QUESTS.get(hash);
+  const zh = quest && DICT['attire:af-quest:' + quest];
+  return native === quest || native === zh ? zh : null;
+}
+
+// Role quest category links do not identify an individual quest.
+function translateAfRoleQuestLink(link, native) {
+  if (AF_ROLE_LABELS.has(native) && link.pathname === '/lodestone/playguide/db/quest/'
+      && new URLSearchParams(link.search).get('category2') === '6'
+      && link.nextSibling?.textContent.trim().startsWith('『')) {
+    replaceLabel(link, native, '完成' + afDetailLabel(native));
+  }
+}
+
+function isAfQuestLabel(source) {
+  return source === AF_MAIN_QUEST_LABEL || AF_ROLE_LABELS.has(source);
+}
+
 function afShadowbringersCondition(source, node, questLinks) {
-  const intro = /^漆黒のヴィランズ\s*(.*?)のアーティファクト\(AF\)です。?$/u.exec(source);
+  const intro = /^漆黒のヴィランズ(.*?)のアーティファクト\(AF\)です。?$/u.exec(source);
   if (intro) {
-    const job = intro[1] && jobName(intro[1]);
-    return !intro[1] || job ? '暗影之逆焰的' + (job || '') + '职业专属装备（AF）。' : null;
+    const native = intro[1].trimStart();
+    const job = native && jobName(native);
+    return !native || job ? '暗影之逆焰的' + (job || '') + '职业专属装备（AF）。' : null;
   }
   // Preserve the original numbering, if present. Match whole known lines
   // or a prefix/suffix adjacent to a verified quest anchor.
-  const step = /^(?:([123])[:：]\s*)?(.*)$/u.exec(source);
-  const number = step[1] ? step[1] + '. ' : '';
-  const line = step[2];
+  const step = /^([123])[:：]\s*/u.exec(source);
+  const number = step ? step[1] + '. ' : '';
+  const line = step ? source.slice(step[0].length) : source;
   if (line === 'Lv80に到達') return number + afDetailLabel(line);
-  const complete = /^(.+?)『([^』]+)』をクリア$/u.exec(line);
-  if (complete && (complete[1] === AF_MAIN_QUEST_LABEL || AF_ROLE_LABELS.has(complete[1]))) {
-    const quest = DICT['attire:af-quest:' + complete[2]];
-    if (quest) return number + '完成' + afDetailLabel(complete[1]) + '《' + quest + '》';
+  const complete = afCompletedQuest(line);
+  if (complete) return number + complete;
+  return afAdjacentQuest(line, number, node, questLinks);
+}
+
+function afCompletedQuest(line) {
+  const separator = line.indexOf('『');
+  const complete = separator > 0 && /^『([^』]+)』をクリア$/u.exec(line.slice(separator));
+  const label = line.slice(0, separator);
+  if (complete && isAfQuestLabel(label)) {
+    const quest = DICT['attire:af-quest:' + complete[1]];
+    if (quest) return '完成' + afDetailLabel(label) + '《' + quest + '》';
   }
+  return null;
+}
+
+function afAdjacentQuest(line, number, node, questLinks) {
   if (questLinks.has(node.nextSibling)) {
-    const prefix = /^(.+?)『$/u.exec(line);
-    if (prefix && (prefix[1] === AF_MAIN_QUEST_LABEL || AF_ROLE_LABELS.has(prefix[1]))) {
-      return number + '完成' + afDetailLabel(prefix[1]) + '《';
+    if (line.endsWith('『') && isAfQuestLabel(line.slice(0, -1))) {
+      return number + '完成' + afDetailLabel(line.slice(0, -1)) + '《';
     }
     if (line === '『') return number + '《';
   }
@@ -836,6 +900,14 @@ function afShadowbringersCondition(source, node, questLinks) {
 
 // AF entries repeat fixed acquisition, augmentation and dye-unlock
 // instructions. Limit exact templates to the verified AF detail categories.
+function translateAfAugmentationVendor(content) {
+  for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/shop/124bcb85185"]')) {
+    if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
+        || !/^\/lodestone\/playguide\/db\/shop\/124bcb85185\/?$/u.test(link.pathname)) continue;
+    replaceLabel(link, 'カカラン', DICT['attire:af-detail:カカラン']);
+  }
+}
+
 function translateAfDetailMetadata() {
   const augmented = hasCategory('afre');
   const shadowbringers = hasCategory('artefact4');
@@ -847,13 +919,7 @@ function translateAfDetailMetadata() {
   if (!content) return;
   const questLinks = shadowbringers || stormblood || heavensward
     ? translateAfAcquisitionLinks(content) : new Set();
-  if (augmented) {
-    for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/shop/124bcb85185"]')) {
-      if (!/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
-          || !/^\/lodestone\/playguide\/db\/shop\/124bcb85185\/?$/u.test(link.pathname)) continue;
-      replaceLabel(link, 'カカラン', DICT['attire:af-detail:カカラン']);
-    }
-  }
+  if (augmented) translateAfAugmentationVendor(content);
   const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walk.nextNode())) {
@@ -878,7 +944,7 @@ function translateAfDetailMetadata() {
 }
 
 function seriesRewardLabel(source) {
-  const combined = /^シリーズ\s*(\d*)\s+シリーズレベル\s*(\d+)報酬$/u.exec(source);
+  const combined = /^シリーズ(?:\s*(\d+))?\s+シリーズレベル\s*(\d+)報酬$/u.exec(source);
   if (combined) return (combined[1] ? '第' + combined[1] + '轮系列赛 ' : '系列赛 ') + '等级' + combined[2] + '报酬';
   const round = /^シリーズ\s*(\d+)$/u.exec(source);
   if (round) return '第' + round[1] + '轮系列赛';
@@ -895,14 +961,12 @@ function linkedCofferNote(node, source) {
   while (previous?.nodeType === 3 && !previous.textContent.trim()) previous = previous.previousSibling;
   if (!previous || previous.nodeType !== 1) return null;
   const link = previous.matches(ITEM_LINK) ? previous : previous.querySelector('a[href]');
-  if (!link || previous.textContent.trim() !== link.textContent.trim()) return null;
+  if (previous.textContent.trim() !== link?.textContent.trim()) return null;
   const item = originalItem(link);
   return item?.native.endsWith('チェスト') ? '开启后即可获得整套装备。' : null;
 }
 
-function translateOtherAcquisitionMetadata() {
-  const content = document.querySelector('#postContent');
-  if (!content) return;
+function translateOtherQuestLinks(content) {
   for (const link of content.querySelectorAll('a[href*="/lodestone/playguide/db/quest/"]')) {
     if (link.closest(EXCLUDED) || !/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)) continue;
     const source = link.textContent.trim();
@@ -916,6 +980,12 @@ function translateOtherAcquisitionMetadata() {
       }
     }
   }
+}
+
+function translateOtherAcquisitionMetadata() {
+  const content = document.querySelector('#postContent');
+  if (!content) return;
+  translateOtherQuestLinks(content);
   const series = hasCategory('series-malmstones');
   // Acquisition details may be a plain text node inside a WordPress accordion
   // or a separate line in a paragraph. Never translate substrings of prose.
@@ -927,18 +997,21 @@ function translateOtherAcquisitionMetadata() {
     if (!parent.closest('.c--accordion-contents,p,span,strong,td,dd')) continue;
     const translated = node.data.split(/(\r?\n)/u).map(line => {
       const source = line.trim();
-      let zh = treasureSourceName(source);
-      if (!zh && parent.closest('.c--accordion-contents')) {
-        zh = DICT['attire:acquisition-note:' + source] || linkedCofferNote(node, source)
-          || (series && seriesRewardLabel(source)) || DICT['attire:exchange:' + source];
-        const coffer = /^(.+?チェスト)を開けることで装備一式入手できます。?$/u.exec(source);
-        const name = coffer && uniqueItemName(coffer[1]);
-        if (name) zh = '打开' + name + '即可获得整套装备。';
-      }
+      const zh = otherAcquisitionName(source, node, parent, series);
       return zh && zh !== source ? line.replace(source, () => zh) : line;
     }).join('');
     if (translated !== node.data) node.data = translated;
   }
+}
+
+function otherAcquisitionName(source, node, parent, series) {
+  const treasure = treasureSourceName(source);
+  if (treasure || !parent.closest('.c--accordion-contents')) return treasure;
+  const known = DICT['attire:acquisition-note:' + source] || linkedCofferNote(node, source)
+    || (series && seriesRewardLabel(source)) || DICT['attire:exchange:' + source];
+  const coffer = /^(.+チェスト)を開けることで装備一式入手できます。?$/u.exec(source);
+  const name = coffer && uniqueItemName(coffer[1]);
+  return name ? '打开' + name + '即可获得整套装备。' : known;
 }
 
 // Native weapon details and armor acquisition accordions share these labels.
@@ -957,11 +1030,8 @@ function exchangeDetailName(source) {
   const perPart = /^一部位\s*([\d,]+)$/u.exec(source);
   if (perPart) return '每个部位 ' + perPart[1];
   // Match the complete native label, never an arbitrary substring of prose.
-  const swordShield = /^(※|[（(])?片手剣[&＆]盾セット([）)])?$/u.exec(source);
-  if (swordShield && (/^[（(]$/u.test(swordShield[1] || '') === !!swordShield[2])) {
-    return swordShield[1] === '※' ? '※单手剑与盾牌套装'
-      : swordShield[1] ? '（单手剑与盾牌套装）' : '单手剑与盾牌套装';
-  }
+  const swordShield = swordShieldSetName(source);
+  if (swordShield) return swordShield;
   // Counts belong to the acquisition description, not the item names.
   const parts = /^(頭手足|胴脚)…(\d+)$/u.exec(source);
   if (parts) return DICT['attire:tomestone-guide:' + parts[1]] + '：' + parts[2];
@@ -979,22 +1049,35 @@ function exchangeDetailName(source) {
   if (['ロウェナ商会の商人', 'モードゥナ', 'イディルシャイア', 'イシュガルド：下層', 'クリスタリウム'].includes(source)) {
     return DICT['attire:weapon-meta:' + source];
   }
-  const gcLocation = {
-    'リムサ・ロミンサ：上甲板層': '黒渦団',
-    'グリダニア：新市街': '双蛇党',
-    'ウルダハ：ナル回廊': '不滅隊',
-  };
-  if (Object.hasOwn(gcLocation, source)) return DICT['attire:gc:' + gcLocation[source] + ':' + source];
-  // Current and historical currencies share the authoritative dictionary;
-  // only a known complete currency name may be substituted.
-  const currency = tomestoneName;
-  if (/^アラガントームストーン[:：][^\s]+$/u.test(source)) return currency(source);
-  const former = /^(?:[（(]旧\s*[:：]?\s*(アラガントームストーン[:：][^\s）)]+)[）)]|旧\s*[:：]?\s*(アラガントームストーン[:：][^\s]+))$/u.exec(source);
-  if (former) {
-    const zh = currency(former[1] || former[2]);
-    if (zh) return former[1] ? '（旧：' + zh + '）' : '旧：' + zh;
-  }
-  return null;
+  const faction = GC_EXCHANGE_LOCATIONS.get(source);
+  return faction ? DICT['attire:gc:' + faction + ':' + source] : exchangeCurrencyName(source);
+}
+
+const GC_EXCHANGE_LOCATIONS = new Map([
+  ['リムサ・ロミンサ：上甲板層', '黒渦団'],
+  ['グリダニア：新市街', '双蛇党'],
+  ['ウルダハ：ナル回廊', '不滅隊'],
+]);
+
+function swordShieldSetName(source) {
+  const match = /^(※|[（(])?片手剣[&＆]盾セット([）)])?$/u.exec(source);
+  if (!match) return null;
+  const open = match[1];
+  if ((open === '（' || open === '(') !== Boolean(match[2])) return null;
+  if (open === '※') return '※单手剑与盾牌套装';
+  return open ? '（单手剑与盾牌套装）' : '单手剑与盾牌套装';
+}
+
+function exchangeCurrencyName(source) {
+  const currency = tomestoneName(source);
+  if (currency) return currency;
+  const wrapped = /^[（(].*[）)]$/u.test(source);
+  const label = wrapped ? source.slice(1, -1) : source;
+  const former = /^旧\s*(?:[:：]\s*)?(アラガントームストーン[:：]\S+)$/u.exec(label);
+  if (!former || (wrapped && /[）)]/u.test(former[1]))) return null;
+  const zh = tomestoneName(former[1]);
+  if (!zh) return null;
+  return wrapped ? '（旧：' + zh + '）' : '旧：' + zh;
 }
 
 function translateExchangeMetadata(weaponDetail) {
@@ -1003,57 +1086,54 @@ function translateExchangeMetadata(weaponDetail) {
   const accordions = [...content.querySelectorAll('.c--accordion-contents')];
   const regions = weaponDetail || !accordions.length ? [content] : accordions;
   for (const region of regions) {
-    const nodes = [];
-    const labels = new Set();
-    const walk = document.createTreeWalker(region, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walk.nextNode())) {
-      const parent = node.parentElement;
-      if (!parent || parent.closest(EXCLUDED + ',script,style,svg,' + ITEM_LINK + ',' + CARD)) continue;
-      const link = parent.closest('a[href]');
-      if (link && link.origin !== location.origin
-          && !(/^https:\/\/(?:jp|na|eu|fr|de)\.finalfantasyxiv\.com$/i.test(link.origin)
-            && /^\/lodestone\/playguide\/db\/shop\/[0-9a-f]{11}\/?$/i.test(link.pathname))) continue;
-      const lines = node.data.split(/(\r?\n)/u);
-      for (const line of lines) if (line.trim()) labels.add(line.trim());
-      nodes.push([node, lines]);
-    }
-    const isHeading = (source, label) => source === label || source === exchangeDetailName(label);
-    const isVendor = source => EXCHANGE_VENDOR_LABELS.some(label => isHeading(source, label));
-    const isCost = source => isHeading(source, EXCHANGE_HEADINGS[0]);
+    const { nodes, labels } = exchangeText(region);
     const hasLabel = label => labels.has(label) || labels.has(exchangeDetailName(label));
     const headed = hasLabel(EXCHANGE_HEADINGS[0]) && EXCHANGE_VENDOR_LABELS.some(hasLabel);
-    // Older Restoration articles list currency and vendor without either
-    // heading. Require both markers in the same acquisition accordion.
+    // Older Restoration articles omit the standard headings. Both markers
+    // must be present in the same acquisition accordion.
     const restoration = region !== content && hasLabel('エニー')
-      && ['蒼天街振興券','フェトゥ参加証'].some(hasLabel);
+      && ['蒼天街振興券', 'フェトゥ参加証'].some(hasLabel);
     const seriesTrade = region !== content && hasCategory('series-malmstones')
       && hasLabel('トロフィークリスタル取引窓口');
-    if (!headed && !restoration && !seriesTrade) continue;
-    // Translate exact canonical material names inside a bounded cost block.
-    // Do not infer item identity or alter links, and do not apply a general
-    // item-name lookup to vendor labels or surrounding author prose.
-    const isToc = text => !!text.parentElement?.closest('.rtoc-item');
-    let vendorsRemaining = nodes.reduce((n, [text, lines]) => n + (isToc(text) ? 0
-      : lines.filter(line => isVendor(line.trim())).length), 0);
-    let inCost = false;
-    for (const [text, lines] of nodes) {
-      const toc = isToc(text);
-      const translated = lines.map(line => {
-        const source = line.trim();
-        if (!toc && isCost(source)) inCost = vendorsRemaining > 0;
-        if (!toc && isVendor(source)) {
-          inCost = false;
-          vendorsRemaining--;
-        }
-        const count = seriesTrade && /^(?:トロフィークリスタル|戦利水晶)\s+([\d,]+)$/u.exec(source);
-        const name = !toc && source && (inCost || restoration && text.parentElement?.closest('td,dd,p')) && uniqueItemName(source);
-        const zh = exchangeDetailName(source) || (count && uiName('トロフィークリスタル') + ' ' + count[1]) || name;
-        return zh && source !== zh ? line.replace(source, () => zh) : line;
-      }).join('');
-      if (translated !== text.data) text.data = translated;
-    }
+    if (headed || restoration || seriesTrade) translateExchangeLines(nodes, restoration, seriesTrade);
   }
+}
+
+function isExchangeHeading(source, label) {
+  return source === label || source === exchangeDetailName(label);
+}
+
+function isExchangeVendor(source) {
+  return EXCHANGE_VENDOR_LABELS.some(label => isExchangeHeading(source, label));
+}
+
+function translateExchangeLines(nodes, restoration, seriesTrade) {
+  // Restrict canonical material names to a cost block ending in a vendor label.
+  const isToc = text => !!text.parentElement?.closest('.rtoc-item');
+  let vendorsRemaining = nodes.reduce((total, [text, lines]) => total + (isToc(text) ? 0
+    : lines.filter(line => isExchangeVendor(line.trim())).length), 0);
+  let inCost = false;
+  for (const [text, lines] of nodes) {
+    const toc = isToc(text);
+    const restorationItem = restoration && text.parentElement?.closest('td,dd,p');
+    const translated = lines.map(line => {
+      const source = line.trim();
+      if (!toc && isExchangeHeading(source, EXCHANGE_HEADINGS[0])) inCost = vendorsRemaining > 0;
+      if (!toc && isExchangeVendor(source)) {
+        inCost = false;
+        vendorsRemaining--;
+      }
+      const zh = exchangeLineName(source, seriesTrade, !toc && (inCost || restorationItem));
+      return zh && source !== zh ? line.replace(source, () => zh) : line;
+    }).join('');
+    if (translated !== text.data) text.data = translated;
+  }
+}
+
+function exchangeLineName(source, seriesTrade, isMaterial) {
+  const count = seriesTrade && /^(?:トロフィークリスタル|戦利水晶)\s+([\d,]+)$/u.exec(source);
+  const material = isMaterial && source && uniqueItemName(source);
+  return exchangeDetailName(source) || (count && uiName('トロフィークリスタル') + ' ' + count[1]) || material;
 }
 
 function translateEquipmentMetadata() {
@@ -1077,13 +1157,7 @@ function translateEquipmentMetadata() {
 function localizeRichMenu() {
   for (const element of document.querySelectorAll('#postContent .a--richmenu-text')) {
     if (element.closest(EXCLUDED) || element.querySelector('a,input,textarea,[contenteditable]')) continue;
-    const nodes = [];
-    const walk = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walk.nextNode())) {
-      if (node.parentElement?.closest('script,style,svg')) continue;
-      if (node.data.trim()) nodes.push(node);
-    }
+    const nodes = labelTextNodes(element, 'script,style,svg');
     if (nodes.length < 2) continue;
     const parts = nodes.map(n => n.data.trim());
     const combined = DICT['attire:' + parts.join('')] || DICT['attire:' + parts.join(' ')];
@@ -1118,12 +1192,16 @@ function translateTagCloudLabels() {
   for (const link of document.querySelectorAll('a.tag-cloud-link[aria-label]')) {
     if (link.closest(EXCLUDED) || link.origin !== location.origin) continue;
     const source = link.getAttribute('aria-label');
-    const match = /^(.+?)\s*[（(]([\d,]+)\s*(?:件(?:の(?:項目|記事|投稿|アイテム))?|個(?:の項目)?|項目|items?|posts?)[）)]$/iu.exec(source);
-    if (!match) continue;
-    const native = match[1].trim();
+    const match = /[（(]([\d,]+)\s*([^\s\d,（）()][^（）()]*)[）)]$/u.exec(source);
+    if (!match?.index || !isTagCloudCountUnit(match[2])) continue;
+    const native = source.slice(0, match.index).trim();
     const zh = uiName(native) || native;
-    link.setAttribute('aria-label', zh + '（' + match[2] + ' 项）');
+    link.setAttribute('aria-label', zh + '（' + match[1] + ' 项）');
   }
+}
+
+function isTagCloudCountUnit(unit) {
+  return /^(?:件(?:の(?:項目|記事|投稿|アイテム))?|個(?:の項目)?|項目|items?|posts?)$/iu.test(unit);
 }
 
 function translateArchiveControls() {
@@ -1132,7 +1210,7 @@ function translateArchiveControls() {
   for (const select of document.querySelectorAll('select')) {
     if (select.closest(EXCLUDED)) continue;
     const option = select.options[0];
-    if (!option || option.textContent.trim() !== '週を選択') continue;
+    if (option?.textContent.trim() !== '週を選択') continue;
     for (const label of document.querySelectorAll('label')) {
       if (label.contains(select) || (select.id && label.htmlFor === select.id)) {
         replaceLabel(label, 'アーカイブ', uiName('アーカイブ'));
@@ -1160,23 +1238,29 @@ function translateBreadcrumb(title, previous, current) {
   const glamour = hasCategory('glamour');
   const staticPage = document.body.matches('.page,.archive.tag,.archive.category');
   const search = document.body.matches('.search');
+  const context = { glamour, search, staticPage, state, current };
   const walk = document.createTreeWalker(crumb, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walk.nextNode())) {
     if (node.parentElement?.closest(EXCLUDED + ',script,style')) continue;
     const source = node.data.trim().replace(/^[＞>]\s*/u, '');
-    let zh;
-    if (glamour) {
-      // The prefix belongs to the site; the title after it belongs to the author.
-      const prefix = /^(ミラプリ[：:])(?=\S|\s)/u.exec(source);
-      if (prefix) zh = source.replace(prefix[1], '幻化：');
-    } else if (state && state.localized === current && (source === state.source || source === state.previous)) zh = current;
-    else if (search) {
-      const query = /^検索結果「(.+)」$/u.exec(source) || /^「(.+)」的搜索结果$/u.exec(source);
-      if (query) zh = '「' + (uniqueItemName(query[1]) || query[1]) + '」的搜索结果';
-    } else if (staticPage) zh = uiName(source);
+    const zh = breadcrumbName(source, context);
     if (zh && zh !== source) node.data = node.data.replace(source, () => zh);
   }
+}
+
+function breadcrumbName(source, { glamour, search, staticPage, state, current }) {
+  if (glamour) {
+    // The prefix belongs to the site; the title belongs to the author.
+    const prefix = /^ミラプリ[：:](?=\S|\s)/u.exec(source);
+    return prefix ? source.replace(prefix[0], '幻化：') : null;
+  }
+  if (state && state.localized === current && (source === state.source || source === state.previous)) return current;
+  if (search) {
+    const query = /^検索結果「(.+)」$/u.exec(source) || /^「(.+)」的搜索结果$/u.exec(source);
+    return query ? '「' + (uniqueItemName(query[1]) || query[1]) + '」的搜索结果' : null;
+  }
+  return staticPage ? uiName(source) : null;
 }
 
 function clearItemLink(link) {
@@ -1208,9 +1292,8 @@ function itemTranslation(hash, native) {
   const byHash = resolveByHash(hash);
   const fallback = DICT['attire:item:' + hash + ':' + native];
   // Even the local fallback must agree with the canonical hash, when known.
-  const confirmed = byHash
-    ? (names.includes(byHash) || fallback === byHash ? byHash : null)
-    : fallback;
+  let confirmed = fallback;
+  if (byHash) confirmed = names.includes(byHash) || fallback === byHash ? byHash : null;
   return { confirmed, zh: confirmed || (!byHash && names.length === 1 ? names[0] : null) };
 }
 
@@ -1238,10 +1321,19 @@ function translateOfficialItems(title) {
   const prior = title && itemTitles.get(title);
   const tracked = prior && displayed === prior.label;
   const native = tracked ? prior.native : displayed;
-  if (prior && !tracked) {
-    itemTitles.delete(title);
-    delete title.dataset.zhxAttireNative;
-  }
+  if (prior && !tracked) clearItemTitle(title);
+  const { hasItems, labels } = translateOfficialItemLinks(title, native);
+  if (title && (tracked || labels.size)) updateItemTitle(title, displayed, native, labels);
+  return hasItems;
+}
+
+function clearItemTitle(title) {
+  itemTitles.delete(title);
+  delete title.dataset.zhxAttireNative;
+}
+
+function translateOfficialItemLinks(title, native) {
+  const facewear = title && facewearItemSource(native);
   let hasItems = false;
   const labels = new Set();
   for (const link of document.querySelectorAll(ITEM)) {
@@ -1249,25 +1341,25 @@ function translateOfficialItems(title) {
     const item = translateOfficialItem(link);
     if (!item) continue;
     hasItems = true;
-    if (title && item.native === native) labels.add(item.label);
-    else if (title && item.native === facewearItemSource(native)) {
+    if (!title) continue;
+    if (item.native === native) labels.add(item.label);
+    else if (item.native === facewear) {
       labels.add(item.label === item.native ? native : item.label + '（' + uiName('フェイスアクセサリー') + '）');
     }
   }
-  if (title && (tracked || labels.size)) {
-    // Do not pick the first of two contradictory exact native names.
-    const desired = labels.size === 1 ? [...labels][0] : native;
-    if (replaceLabel(title, displayed, desired)) {
-      if (desired === native) {
-        itemTitles.delete(title);
-        delete title.dataset.zhxAttireNative;
-      } else {
-        itemTitles.set(title, { native, label: desired });
-        title.dataset.zhxAttireNative = native;
-      }
-    }
+  return { hasItems, labels };
+}
+
+function updateItemTitle(title, displayed, native, labels) {
+  // Do not choose between conflicting translations for the same native name.
+  const desired = labels.size === 1 ? [...labels][0] : native;
+  if (!replaceLabel(title, displayed, desired)) return;
+  if (desired === native) {
+    clearItemTitle(title);
+    return;
   }
-  return hasItems;
+  itemTitles.set(title, { native, label: desired });
+  title.dataset.zhxAttireNative = native;
 }
 
 function translateSiteChrome() {
@@ -1278,7 +1370,7 @@ function translateSiteChrome() {
   }
   const copyright = document.querySelector('#copyright');
   const source = copyright?.textContent.trim();
-  const match = source && /^(\d{4}(?:[–—-]\d{4})?\s+)(.+)$/u.exec(source);
+  const match = source && /^(\d{4}(?:[–—-]\d{4})?\s+)(\S.*)$/u.exec(source);
   if (match && SITE_TITLES.includes(match[2]))
     replaceLabel(copyright, source, match[1] + uiName(match[2]));
 }
@@ -1292,6 +1384,10 @@ function translateWeaponFilter(weaponPage) {
       : DICT['attire:weapon-meta:' + source] || uiName(source);
     if (zh) replaceLabel(label, source, zh);
   }
+  translateWeaponFilterCards();
+}
+
+function translateWeaponFilterCards() {
   for (const button of document.querySelectorAll('#postContent .asr .asr-card-trigger')) {
     const source = button.getAttribute('aria-label');
     const match = source && /^(.+)の詳細を表示$/u.exec(source);
@@ -1308,7 +1404,7 @@ function achievementAcquisitionLabel(source) {
   if (!hasCategory('achievement')) return null;
   const exact = DICT['attire:acquisition-note:' + source];
   if (exact) return exact;
-  const win = /^(初勝利|([1-9]\d{0,5})回勝利)で(頭|胴|手|脚|足)装備([：:]?)$/u.exec(source);
+  const win = /^(初勝利|([1-9]\d{0,5})回勝利)で([頭胴手脚足])装備([：:]?)$/u.exec(source);
   if (!win) return null;
   const slots = { 頭: '头部', 胴: '身体', 手: '手部', 脚: '腿部', 足: '脚部' };
   return (win[2] ? '累计获胜' + win[2] + '次' : '首次获胜') + '可获得' + slots[win[3]] + '防具' + win[4];
@@ -1339,26 +1435,32 @@ function translateSearchControls() {
   // without touching query parameters, input values or form destinations.
   for (const button of document.querySelectorAll('form.wp-block-search .wp-block-search__button')) {
     if (button.closest(EXCLUDED)) continue;
-    replaceLabel(button, '検索', uiName('検索'));
-    for (const attr of ['aria-label', 'title']) {
-      if (button.getAttribute(attr) === '検索') button.setAttribute(attr, uiName('検索'));
-    }
+    translateSearchButton(button);
   }
   for (const input of document.querySelectorAll('form[role="search"][method="get"] input[type="search"][name="s"]')) {
     const form = input.form;
     if (form?.action !== location.origin + '/') continue;
     const zh = uiName(input.placeholder);
     if (zh && zh !== input.placeholder) input.placeholder = zh;
-    for (const button of form.querySelectorAll('button[type="submit"],button:not([type])')) {
-      replaceLabel(button, '検索', uiName('検索'));
-      for (const attr of ['aria-label', 'title']) {
-        if (button.getAttribute(attr) === '検索') button.setAttribute(attr, uiName('検索'));
-      }
-    }
-    // A named submit input contributes its value to the GET request.
-    for (const button of form.querySelectorAll('input[type="submit"]:not([name])')) {
-      if (button.value === '検索') button.value = uiName('検索');
-    }
+    translateSearchSubmitters(form);
+  }
+}
+
+function translateSearchButton(button) {
+  const zh = uiName('検索');
+  replaceLabel(button, '検索', zh);
+  for (const attr of ['aria-label', 'title']) {
+    if (button.getAttribute(attr) === '検索') button.setAttribute(attr, zh);
+  }
+}
+
+function translateSearchSubmitters(form) {
+  for (const button of form.querySelectorAll('button[type="submit"],button:not([type])')) {
+    translateSearchButton(button);
+  }
+  // A named submit input contributes its value to the GET request.
+  for (const button of form.querySelectorAll('input[type="submit"]:not([name])')) {
+    if (button.value === '検索') button.value = uiName('検索');
   }
 }
 

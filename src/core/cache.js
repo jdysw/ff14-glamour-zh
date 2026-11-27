@@ -183,22 +183,24 @@ export { RONKA_ITEM_CACHE, FC_ROLE_ZH, _en2zhCache, _jp2zhCache, CACHE_CAP_LOOKU
     _itemPfxCache = new Map();
     try {
       const nameMap = dataGetIndex('nameMap');
-      if (!nameMap) return _itemPfxCache;
-      const groups = _itemPfxGroup(nameMap);
-      for (const [key, list] of groups) {
-        if (list.length < 2) continue;
-        const sub = _lcs90(list);
-        if (sub && sub.length >= 2 && !DICT_FC[key]) _itemPfxCache.set(key, sub);
-      }
-      for (const [key, {name, slots}] of fcBaseRoleSets(nameMap)) {
-        if (name && slots.size >= 3 && !Object.hasOwn(DICT_FC, key) && !_getSeriesMap().has(key)) _itemPfxCache.set(key, name);
-      }
-      for (const [key, {name, count}] of fcAugmentedRoleSets(nameMap)) {
-        if (name && count >= 3 && !DICT_FC[key]) _itemPfxCache.set(key, name);
-      }
+      if (nameMap) populateItemPrefixes(_itemPfxCache, nameMap);
     } catch (e) { /* 忽略：物品前缀推导 best-effort，失败返回空表 */ }
     return _itemPfxCache;
   }
+  function populateItemPrefixes(cache, nameMap) {
+    for (const [key, list] of _itemPfxGroup(nameMap)) {
+      if (list.length < 2) continue;
+      const prefix = _lcs90(list);
+      if (prefix?.length >= 2 && !DICT_FC[key]) cache.set(key, prefix);
+    }
+    for (const [key, { name, slots }] of fcBaseRoleSets(nameMap)) {
+      if (name && slots.size >= 3 && !Object.hasOwn(DICT_FC, key) && !_getSeriesMap().has(key)) cache.set(key, name);
+    }
+    for (const [key, { name, count }] of fcAugmentedRoleSets(nameMap)) {
+      if (name && count >= 3 && !DICT_FC[key]) cache.set(key, name);
+    }
+  }
+
   let _ronkaCacheN = 0; // NOSONAR — 缓存容量计数器随缓存写入/清理变化
   function ronkaItemLookup(ko) {
     if (!ko || ko.length > 80) return null;
