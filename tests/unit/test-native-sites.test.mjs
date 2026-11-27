@@ -1046,6 +1046,16 @@ test('FF14-FC 套装整名、文章标题与单件装备边界', () => {
     cards.forEach(card => trimFCNode(card.firstChild));
     assert.deepEqual(cards.map(card => card.textContent), [oracleZh, snowZh]);
     assert.equal(trFC(snow + ' | ミラプリライフ'), snowZh + ' | 幻化生活');
+    for (const [nativeTitle, translatedTitle, path] of [
+      ["【FF14】星芒祭⛄スノーマンセット装備👗各種族での見た目・入手方法【雪だるま】","【FF14】星芒节⛄雪人套装👗各种族外观·获取方式【雪人】","/equipment/snowman_attire/"],
+      ["【FF14】星芒祭🦌レインディアコスチュームセット装備👗各種族での見た目・入手方法【トナカイ着ぐるみ】","【FF14】星芒节🦌驯鹿套装👗各种族外观·获取方式【驯鹿玩偶服】","/equipment/reindeer_attire_set/"],
+    ]) {
+      dom.document.body.innerHTML = '<a href="' + path + '"><h3>' + nativeTitle + '</h3></a>';
+      const eventCard = dom.document.querySelector('h3');
+      trimFCNode(eventCard.firstChild);
+      assert.equal(eventCard.textContent, translatedTitle);
+      assert.equal(trFC(nativeTitle + '  ｜  ミラプリライフ', path), translatedTitle + '  ｜  幻化生活');
+    }
     const yorha = '【FF14】ヨルハ五一式:格(モンク・侍)装備👗各種族での見た目・入手方法【複製サレタ工場廃墟】';
     const yorhaPath = '/equipment/yorha_type-51_of_striking/';
     const yorhaZh = '【FF14】寄叶五一式强袭套装（武僧、武士）👗各种族外观·获取方式【复制工厂废墟】';

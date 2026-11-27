@@ -304,9 +304,15 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   }
 
   function fcAFArticleTitle(text, label, path, element) {
-    const match = /^([【〖]FF14[】〗])(.{1,24}?)AF(\d{1,2})?(?:[（(](アネモス|PvP)[）)])?装備(?:[（(]Lv(\d{1,3})[）)])?(👗?)各種族での見た目・入手方法([【〖])(.{1,80})([】〗])(?=$|\s*[|｜])/u.exec(label);
-    if (!match || (!match[3] && match[4] !== 'PvP')) return null;
-    const [, marker, nativeJob, generation = '', variant, level, icon, open, native, close] = match;
+    const nativeFrame = '各種族での見た目・入手方法';
+    const split = label.indexOf(nativeFrame);
+    if (split < 0) return null;
+    const header = /^([【〖]FF14[】〗])(.{1,24}?)AF(\d{1,2})?(?:[（(](アネモス|PvP)[）)])?装備(?:[（(]Lv(\d{1,3})[）)])?(👗?)$/u.exec(label.slice(0, split));
+    if (!header || (!header[3] && header[4] !== 'PvP')) return null;
+    const tail = /^([【〖])(.{1,80})([】〗])(?=$|\s*[|｜])/u.exec(label.slice(split + nativeFrame.length));
+    if (!tail) return null;
+    const [, marker, nativeJob, generation = '', variant, level, icon] = header;
+    const [, open, native, close] = tail;
     const job = fcUIValue(nativeJob === '赤魔導士' ? '赤魔道士' : nativeJob);
     const name = fcAFArticleSetName(native, path, element);
     const frame = fcUIValue('各種族での見た目・入手方法');
@@ -315,7 +321,7 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
     if (!job || !name || !frame || (variant && !variantZh)) return text;
     const qualifier = variantZh ? '（' + variantZh + '）' : '';
     const levelZh = level ? '（' + level + '级）' : '';
-    return text.replace(match[0], marker + job + ' AF' + generation + qualifier
+    return text.replace(header[0] + nativeFrame + tail[0], marker + job + ' AF' + generation + qualifier
       + '装备' + levelZh + icon + frame + open + name + close);
   }
 
@@ -538,14 +544,14 @@ export { fcVerifiedSetName, fcStarterOutfitName, fcGaroSetName, collapseFCHomeHe
   // rewriting removes its native prefix. Accept both native bracket styles.
   function fcExactArticleText(text, label) {
     if (!/^[【〖]FF14[】〗]/u.test(label)) return null;
-    const brand = /(\s*[|｜]\s*)ミラプリライフ$/u.exec(label);
-    const title = brand ? label.slice(0, brand.index) : label;
+    const brand = /[|｜]\s*ミラプリライフ$/u.exec(label);
+    const title = brand ? label.slice(0, brand.index).trimEnd() : label;
     const key = title.replace(/^〖FF14〗/u, '【FF14】').replace(/〖([^〖〗]+)〗$/u, '【$1】');
     let zh = fcUIValue(key);
     if (!zh) return null;
     if (title.startsWith('〖FF14〗')) zh = zh.replace(/^【FF14】/u, '〖FF14〗');
     if (title.endsWith('〗')) zh = zh.replace(/【([^【】]+)】$/u, '〖$1〗');
-    if (brand) zh += brand[1] + (fcUIValue('ミラプリライフ') || 'Mirapri Life');
+    if (brand) zh += label.slice(title.length, -'ミラプリライフ'.length) + (fcUIValue('ミラプリライフ') || 'Mirapri Life');
     return text.replace(label, () => zh);
   }
 
