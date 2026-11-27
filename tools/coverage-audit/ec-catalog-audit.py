@@ -5,7 +5,6 @@ Only follow visible, same-origin native catalogue links. Test ordinary
 read-only GET navigation in a single browser session. Stop on denial, and
 never submit account forms, follow player links, or guess detail URLs.
 """
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -112,7 +111,7 @@ def clean_inventory(inventory, url):
 
 def status_denied(row):
     error = str(row.get("error") or "").lower()
-    return row.get("httpStatus") in (401, 403, 429) or "waf" in error or "challenge" in error
+    return row.get("httpStatus") in (401, 403, 429, 503) or "waf" in error or "challenge" in error
 
 
 def install_read_only_guard(page, parser, agent, route_path):
@@ -154,7 +153,7 @@ def select_piece(page):
     select = page.locator("form#filter_form select#piece")
     if not form.count() or form.evaluate("(f)=>f.method") != "get" or not select.count() or not select.first.is_visible():
         return None, None
-    index = select.evaluate("(el)=>[...el.options].findIndex((o,i)=>i!==el.selectedIndex&&!o.disabled)")
+    index = select.evaluate("(el)=>[...el.options].findIndex((o,i)=>i!==el.selectedIndex&&!o.disabled&&!o.parentElement.disabled)")
     if index < 0:
         return None, None
     before = select.evaluate("(el)=>el.selectedIndex")
@@ -236,7 +235,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
     def interact(page, seed, action):
         nonlocal documents, denied
         if not budget() or not page:
-            return
+            return False
         route_path = public_route(seed["url"])
         cfg = {"id": seed["id"] + "-" + action, "url": seed["url"]}
         state = {"id": cfg["id"], "kind": action, "status": "not-verified"}
@@ -254,7 +253,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                 return
             status = response.status
             state["httpStatus"] = status
-            if status in (401, 403, 429):
+            if status in (401, 403, 429, 503):
                 denied = True
                 state["reason"] = "access refused"
                 return
@@ -275,6 +274,7 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
             interactions.append(state)
             write_manifest()
             print("EC interaction", state["id"], state["status"], flush=True)
+        return state["status"] == "verified"
 
     try:
         # Discover every catalogue's first page, even if a template lacks
@@ -285,7 +285,11 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                 continue
             try:
                 if seed["id"] in ("gearsets", "glamours") and visited[-1]["status"] == "ok":
-                    interact(page, seed, "next-page")
+                    paged = interact(page, seed, "next-page")
+                    # Reuse the verified translated second page for an actual
+                    # piece filter, rather than spending another two visits.
+                    if paged and seed["id"] == "gearsets":
+                        interact(page, seed, "select-piece")
             finally:
                 page.close()
             if denied:
@@ -301,7 +305,8 @@ def run_batch(context, scripts, dist, cloud, parser, agent, delay, scan, save):
                     page.close()
         # Test an actual translated filter control rather than synthesizing
         # a query URL. A fresh document is required for baseline pairing.
-        if budget() and documents + 2 <= MAX_DOCUMENTS:
+        if (not any(state["kind"] == "select-piece" for state in interactions)
+                and budget() and documents + 2 <= MAX_DOCUMENTS):
             seed = {"id": "gearsets-filter-baseline", "url": ORIGIN + "/gearsets"}
             page = new_scan(seed)
             if page:

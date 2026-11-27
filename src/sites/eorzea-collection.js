@@ -787,6 +787,11 @@ export { EC_SKIP_SEL, PATTERNS_EC, bindECPieceTiles, bindECResetFilters, startEC
     for (const attr of ['title', 'alt', 'aria-label', 'placeholder']) {
       for (const el of queryIn(scope, '[' + attr + ']')) _translateECAttr(el, attr);
     }
+    // Native select group headings are label attributes, not text nodes.
+    // Server/data-centre group names use translateECServers instead.
+    for (const group of ecHomeCandidates(rootArg, '#filter_form select:not(#filter_server) optgroup[label]')) {
+      _translateECAttr(group, 'label');
+    }
   }
 
   // Translate only recognized UI title segments. Preserve creator names and site branding.

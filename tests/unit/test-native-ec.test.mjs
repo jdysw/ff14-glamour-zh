@@ -320,6 +320,8 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
       withGlobals({ location: new URL('https://ffxiv.eorzeacollection.com/accessories') }, () => {
         d.body.innerHTML = '<select id="patch"><option value="5.0">ShadowBringers</option><option value="6.0">Endwalker</option>' +
           '<option value="7.0">Dawntrail</option></select><button id="piece">Wrists</button>' +
+          '<form id="filter_form"><select id="filter_job"><optgroup id="jobs" label="Tanks"><option value="19">Paladin</option></optgroup><optgroup id="unknown-group" label="Unrecognized group"><option>Unknown</option></optgroup></select></form>' +
+          '<select><optgroup id="outside-form" label="Tanks"><option>Paladin</option></optgroup></select>' +
           '<span id="status">Non Dyeable</span><span id="source">Trial Drop</span>' +
           '<a href="/accessories/avalanche-leaders">Avalanche Leader\'s <span>Token Exchange</span></a>' +
           '<a href="/accessories/avalanche-brawlers">Avalanche Brawler\'s Accessories <span>Token Exchange</span></a>' +
@@ -332,6 +334,10 @@ test('EC 子页：资料片筛选、饰品部位、染色预览和玩家标题�
         assert.deepEqual([...d.querySelector('#patch').options].map(o => [o.value, o.textContent]),
           [['5.0', '暗影之逆焰'], ['6.0', '晓月之终途'], ['7.0', '金曦之遗辉']]);
         assert.equal(d.querySelector('#piece').textContent, '腕部');
+        assert.equal(d.querySelector('#jobs').getAttribute('label'), '防护职业');
+        assert.equal(d.querySelector('#jobs option').value, '19');
+        assert.equal(d.querySelector('#unknown-group').getAttribute('label'), 'Unrecognized group');
+        assert.equal(d.querySelector('#outside-form').getAttribute('label'), 'Tanks');
         assert.equal(d.querySelector('#status').textContent, '不可染色');
         assert.equal(d.querySelector('#source').textContent, '讨伐歼灭战掉落');
         translateECPage();

@@ -324,6 +324,9 @@ assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.collection-actions .b-toolt
 assert.equal(ecPublicScope(ecNode(null,[ecCardRoot,'.tag.is-background-dark'],true),'attr:alt','https://ffxiv.eorzeacollection.com/accessories'),'ui');
 assert.equal(ecPublicScope(ecNode('/glamour/123/player-look',[ecCardRoot,'.collection-actions .b-tooltip .tooltip-trigger'],true),'attr:alt',ecUrl),'user');
 assert.equal(ecPublicScope(ecNode(null,[ecCardRoot],true),'attr:alt',ecUrl),null);
+assert.equal(ecPublicScope(ecNode(null,['#filter_form select optgroup[label]']),'attr:label',ecUrl),'ui');
+assert.equal(ecPublicScope(ecNode('/creator/123',['#filter_form select optgroup[label]']),'attr:label',ecUrl),'user');
+assert.equal(ecPublicScope(ecNode(null,[]),'attr:label',ecUrl),null);
 const aboutClasses=['.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'];
 assert.equal(ecPublicScope(ecNode(null,aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'ui');
 assert.equal(ecPublicScope(ecNode('/creator/123',aboutClasses),'text','https://ffxiv.eorzeacollection.com/about'),'user');

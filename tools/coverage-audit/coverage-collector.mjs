@@ -23,6 +23,7 @@ export function ecPublicScope(el,kind,url){
     if(card&&el.matches?.('img')&&el.closest?.('.collection-actions .b-tooltip .tooltip-trigger'))return 'ui';
     if(card&&el.matches?.('img.image.is-16x16')&&el.closest?.('.tag.is-background-dark'))return 'ui';
   }
+  if(kind==='attr:label'&&el.closest?.('#filter_form select optgroup[label]'))return 'ui';
   if(/^\/about\/?$/u.test(route.pathname)&&kind==='text'
     &&el.closest?.('.b-feature-box-text,.b-feature-box-text-primary,.b-feature-box-text-bold,.b-title-text,.b-text-box-text'))return 'ui';
   return null;
@@ -69,7 +70,9 @@ export const COLLECTOR_JS = String.raw`(() => {
       }
       p = p.parentElement;
     }
-    return collapsed ? 'collapsed' : (el.getClientRects().length > 0 || el.tagName === 'OPTION' ? 'visible' : null);
+    const nativeGroup = globalThis.location?.hostname === 'ffxiv.eorzeacollection.com'
+      && el.tagName === 'OPTGROUP' && !!el.closest('#filter_form select');
+    return collapsed ? 'collapsed' : (el.getClientRects().length > 0 || el.tagName === 'OPTION' || nativeGroup ? 'visible' : null);
   }
   function skipped(el) {
     if (!el || el.closest('script,style,noscript,template,iframe,svg,[contenteditable="true"]')) return true;
@@ -146,6 +149,10 @@ export const COLLECTOR_JS = String.raw`(() => {
     // A button's value is submitted state (e.g. Radix value="on"), not its
     // visible label. Only input buttons render their value as UI text.
     if (el.tagName === 'INPUT' && /^(button|submit|reset)$/i.test(el.getAttribute('type') || '')) push(el, el.value, 'attr:value');
+  }
+  if (globalThis.location?.hostname === 'ffxiv.eorzeacollection.com') {
+    for (const el of document.querySelectorAll('#filter_form select optgroup[label]'))
+      push(el, el.getAttribute('label'), 'attr:label');
   }
   if (document.title) out.push({ kind: 'document:title', text: document.title, path: 'head > title', ctx: { tag: 'title', cls: '', id: '', ui: false, user: false, ad: false } });
   return out;
